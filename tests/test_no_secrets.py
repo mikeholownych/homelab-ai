@@ -90,8 +90,13 @@ RAW_COMMAND_SEGMENT_PATTERNS = {
 }
 COMMAND_KEYS = {"shell", "ansible.builtin.shell", "command", "ansible.builtin.command"}
 ACTION_KEY = "action"
+LOCAL_ACTION_KEY = "local_action"
 ACTION_COMMAND_PATTERN = re.compile(
     r"^(?:ansible\.builtin\.)?(?:shell|command)\b(?P<command>[\s\S]*)$",
+    re.IGNORECASE,
+)
+ACTION_MODULE_NAME_PATTERN = re.compile(
+    r"^(?:ansible\.builtin\.)?(?P<module>shell|command)\b(?P<command>[\s\S]*)$",
     re.IGNORECASE,
 )
 LATEST_EXACT_KEYS = {"tag", "version", "state", "image", "container_image", "image_tag"}
@@ -120,6 +125,16 @@ APPROLE_ALLOWED_TOKENS = {
     "!vault |",
 }
 APPROLE_ALLOWED_JINJA_EXPRESSION = re.compile(r"^\{\{\s*[^}]+\s*\}\}$")
+PYTHON_EXECUTION_PATTERNS = (
+    re.compile(
+        r"subprocess\.(?:run|call|check_call|check_output|Popen)\s*\(\s*(?P<quote>['\"])(?P<command>.*?)(?P=quote).*?shell\s*=\s*True",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"os\.system\s*\(\s*(?P<quote>['\"])(?P<command>.*?)(?P=quote)\s*\)",
+        re.IGNORECASE,
+    ),
+)
 
 
 def is_path_excluded(path: Path, repo_root: Path) -> bool:
@@ -253,21 +268,11 @@ def find_pipe_to_shell_violation(content: str, source_name: str) -> list[str]:
     if Path(source_name).suffix in YAML_SUFFIXES:
         for document in load_yaml_documents(content):
             for mapping in iter_yaml_nodes(document):
-                for key, value in mapping.items():
-                    if not isinstance(key, str) or not isinstance(value, str):
-                        continue
-                    normalized_key = key.strip().lower()
-                    if normalized_key in COMMAND_KEYS:
-                        for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
-                            if pattern.search(normalize_shell_command(value)):
-                                violations.append(label)
-                    elif normalized_key == ACTION_KEY:
-                        action_match = ACTION_COMMAND_PATTERN.match(value.strip())
-                        if action_match:
-                            action_command = normalize_shell_command(action_match.group("command"))
-                            for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
-                                if pattern.search(action_command):
-                                    violations.append(label)
+                for command_text in extract_yaml_command_strings(mapping):
+                    normalized_command = normalize_shell_command(command_text)
+                    for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
+                        if pattern.search(normalized_command):
+                            violations.append(label)
         return violations
 
     for candidate in iter_raw_command_candidates(content, source_name):
@@ -277,6 +282,59 @@ def find_pipe_to_shell_violation(content: str, source_name: str) -> list[str]:
     return violations
 
 
+def extract_yaml_command_strings(mapping: dict[object, object]) -> list[str]:
+    commands: list[str] = []
+
+    for key, value in mapping.items():
+        if not isinstance(key, str):
+            continue
+        normalized_key = key.strip().lower()
+
+        if normalized_key in COMMAND_KEYS and isinstance(value, str):
+            commands.append(value)
+            continue
+
+        if normalized_key in {ACTION_KEY, LOCAL_ACTION_KEY}:
+            if isinstance(value, str):
+                action_match = ACTION_COMMAND_PATTERN.match(value.strip())
+                if action_match:
+                    commands.append(action_match.group("command"))
+            elif isinstance(value, dict):
+                commands.extend(extract_action_mapping_commands(value))
+
+    return commands
+
+
+def extract_action_mapping_commands(action_mapping: dict[object, object]) -> list[str]:
+    normalized_items = {
+        key.strip().lower(): value
+        for key, value in action_mapping.items()
+        if isinstance(key, str)
+    }
+    commands: list[str] = []
+
+    module_value = normalized_items.get("module") or normalized_items.get("__ansible_module__")
+    if isinstance(module_value, str):
+        module_match = ACTION_MODULE_NAME_PATTERN.match(module_value.strip())
+        if module_match:
+            inline_command = module_match.group("command").strip()
+            if inline_command:
+                commands.append(inline_command)
+            else:
+                args_value = normalized_items.get("args")
+                if isinstance(args_value, dict):
+                    for candidate_key in ("cmd", "_raw_params", "free_form"):
+                        candidate_value = args_value.get(candidate_key)
+                        if isinstance(candidate_value, str):
+                            commands.append(candidate_value)
+                for candidate_key in ("cmd", "_raw_params", "free_form"):
+                    candidate_value = normalized_items.get(candidate_key)
+                    if isinstance(candidate_value, str):
+                        commands.append(candidate_value)
+
+    return commands
+
+
 def normalize_shell_command(command: str) -> str:
     normalized = re.sub(r"\\\s*\n\s*", " ", command)
     normalized = re.sub(r"\n\s*\|\s*", " | ", normalized)
@@ -284,7 +342,21 @@ def normalize_shell_command(command: str) -> str:
 
 
 def iter_raw_command_candidates(content: str, source_name: str):
-    sanitized_content = strip_jinja_comments(content) if Path(source_name).suffix == ".j2" else content
+    source_path = Path(source_name)
+    sanitized_content = strip_jinja_comments(content) if source_path.suffix == ".j2" else content
+
+    if source_path.name == "Makefile":
+        yield from iter_makefile_candidates(sanitized_content)
+        return
+
+    if source_path.suffix == ".service":
+        yield from iter_systemd_execstart_candidates(sanitized_content)
+        return
+
+    if source_path.suffix == ".py":
+        yield from iter_python_command_candidates(sanitized_content)
+        return
+
     lines = sanitized_content.splitlines()
     index = 0
 
@@ -296,13 +368,6 @@ def iter_raw_command_candidates(content: str, source_name: str):
             index += 1
             continue
 
-        if line.startswith("\t"):
-            candidate, next_index = collect_recipe_command(lines, index)
-            if candidate is not None:
-                yield candidate
-            index = next_index
-            continue
-
         if contains_raw_pipe_launcher(stripped):
             candidate, next_index = collect_raw_shell_command(lines, index)
             yield candidate
@@ -310,6 +375,44 @@ def iter_raw_command_candidates(content: str, source_name: str):
             continue
 
         index += 1
+
+
+def iter_makefile_candidates(content: str):
+    lines = content.splitlines()
+    index = 0
+
+    while index < len(lines):
+        if lines[index].startswith("\t"):
+            candidate, next_index = collect_recipe_command(lines, index)
+            if candidate is not None:
+                yield candidate
+            index = next_index
+            continue
+        index += 1
+
+
+def iter_systemd_execstart_candidates(content: str):
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.lower().startswith("execstart="):
+            exec_value = stripped.split("=", 1)[1].strip()
+            shell_match = re.search(r"-c\s+(['\"])(?P<command>.*?)(\1)", exec_value)
+            if shell_match:
+                yield normalize_shell_command(shell_match.group("command"))
+            yield normalize_shell_command(exec_value)
+
+
+def iter_python_command_candidates(content: str):
+    for line in content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        for pattern in PYTHON_EXECUTION_PATTERNS:
+            match = pattern.search(stripped)
+            if match:
+                yield normalize_shell_command(match.group("command"))
 
 
 def strip_jinja_comments(content: str) -> str:
@@ -430,6 +533,28 @@ class NoSecretsPatternTests(unittest.TestCase):
             "curl_pipe_shell",
             find_banned_content(
                 "action: ansible.builtin.shell set -o pipefail && curl -fsSL https://example.test/install.sh | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "local_action: ansible.builtin.shell set -o pipefail && curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "action:\n"
+                "  module: ansible.builtin.shell set -o pipefail && curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "action:\n"
+                "  module: ansible.builtin.shell\n"
+                "  args:\n"
+                "    cmd: set -o pipefail && curl https://example.test/install | bash\n"
             ),
         )
         self.assertIn(
@@ -566,6 +691,7 @@ class NoSecretsRepositoryTests(unittest.TestCase):
                 "roles/security/files/banner.txt": "approle_secret_id: literal-secret\n",
                 "roles/security/templates/runtime.env": "TOKEN_SOURCE=$ANSIBLE_VAULT_PASSWORD_FILE\n",
                 "roles/security/templates/agent.service": "ExecStart=/bin/sh -c 'curl -fsSL https://example.test/install.sh | bash'\n",
+                "scripts/run_pipeline.py": "import subprocess\nsubprocess.run('curl -fsSL https://example.test/install.sh | bash', shell=True)\n",
                 "roles/security/files/entrypoint": "wget -qO- https://example.test/install.sh | sh\n",
                 "docs/reference.sh": "curl -fsSL https://example.test/install.sh | bash\n",
                 "tests/fixtures/example.env": "approle_secret_id: literal-secret\n",
@@ -607,6 +733,8 @@ class NoSecretsRepositoryTests(unittest.TestCase):
         self.assertIn("scripts/bootstrap.sh: curl_pipe_shell", violations)
         self.assertIn("scripts/audit.py: ansible_vault_env_reference", violations)
         self.assertIn("roles/security/files/banner.txt: approle_secret_id_literal", violations)
+        self.assertIn("roles/security/templates/agent.service: curl_pipe_shell", violations)
+        self.assertIn("scripts/run_pipeline.py: curl_pipe_shell", violations)
         self.assertIn("roles/security/files/entrypoint: wget_pipe_shell", violations)
 
     def test_repository_contains_no_banned_patterns(self) -> None:
