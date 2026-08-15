@@ -25,7 +25,7 @@
     },
     "git_sha": {
       "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$"
+      "pattern": "^[0-9A-Fa-f]{40}$"
     },
     "simulated": {
       "type": "boolean"
@@ -63,21 +63,81 @@
             }
           },
           "observed": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["summary", "path", "sha256", "observed_at"],
-            "properties": {
-              "summary": {"type": "string", "minLength": 1},
-              "path": {"type": "string", "minLength": 1},
-              "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-              "observed_at": {
-                "type": "string",
-                "format": "date-time",
-                "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+            "oneOf": [
+              {"$ref": "#/$defs/capturedObservation"},
+              {"$ref": "#/$defs/unavailableObservation"}
+            ]
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "captured"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "properties": {
+                "observed": {"$ref": "#/$defs/capturedObservation"}
               }
             }
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["missing", "incomplete"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "artifacts": {
+            "items": {
+              "properties": {
+                "observed": {"$ref": "#/$defs/unavailableObservation"}
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "capturedObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "path", "sha256", "observed_at"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+        }
+      }
+    },
+    "unavailableObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "status", "reason"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "const": "unavailable"},
+        "reason": {"type": "string", "minLength": 1}
       }
     }
   }

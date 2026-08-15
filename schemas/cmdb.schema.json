@@ -28,14 +28,14 @@
     },
     "git_sha": {
       "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$"
+      "pattern": "^[0-9A-Fa-f]{40}$"
     },
     "simulated": {
       "type": "boolean"
     },
     "status": {
       "type": "string",
-      "enum": ["DRAFT", "ACTIVE", "STALE"]
+      "enum": ["DRAFT", "ACTIVE", "VALIDATED"]
     },
     "node": {
       "type": "object",
@@ -53,7 +53,12 @@
       "required": ["expected", "observed"],
       "properties": {
         "expected": {"$ref": "#/$defs/configurationItemState"},
-        "observed": {"$ref": "#/$defs/configurationItemState"}
+        "observed": {
+          "oneOf": [
+            {"$ref": "#/$defs/configurationItemState"},
+            {"$ref": "#/$defs/unavailableState"}
+          ]
+        }
       }
     },
     "relationships": {
@@ -70,16 +75,39 @@
       }
     },
     "last_convergence_at": {
-      "type": "string",
+      "type": ["string", "null"],
       "format": "date-time",
       "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
     },
     "last_validation_at": {
-      "type": "string",
+      "type": ["string", "null"],
       "format": "date-time",
       "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": ["ACTIVE", "VALIDATED"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "configuration_item": {
+            "properties": {
+              "observed": {"$ref": "#/$defs/configurationItemState"}
+            }
+          },
+          "last_convergence_at": {"type": "string"},
+          "last_validation_at": {"type": "string"}
+        }
+      }
+    }
+  ],
   "$defs": {
     "configurationItemState": {
       "type": "object",
@@ -141,6 +169,14 @@
             "llama_commit": {"type": ["string", "null"]}
           }
         }
+      }
+    },
+    "unavailableState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason"],
+      "properties": {
+        "reason": {"type": "string", "minLength": 1}
       }
     }
   }

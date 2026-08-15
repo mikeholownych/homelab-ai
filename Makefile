@@ -37,10 +37,10 @@ test: bootstrap-tools
 	$(PYTEST) -q
 
 check: bootstrap-tools
-	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) --check playbooks/baseline.yml --tags foundation
+	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check playbooks/baseline.yml --tags foundation
 
 idempotency: bootstrap-tools
 	@echo "Foundation scaffold only; this target validates dry-run wiring and does not assert host convergence."
-	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) --check playbooks/baseline.yml --tags foundation
+	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check playbooks/baseline.yml --tags foundation
 
 quality: lint test syntax check idempotency

@@ -29,7 +29,7 @@
     },
     "git_sha": {
       "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$"
+      "pattern": "^[0-9A-Fa-f]{40}$"
     },
     "simulated": {
       "type": "boolean"
@@ -73,9 +73,7 @@
         "quantization": {"type": "string", "minLength": 1},
         "split_parameters": {
           "oneOf": [
-            {
-              "type": "null"
-            },
+            {"type": "null"},
             {
               "type": "object",
               "additionalProperties": false,
@@ -105,7 +103,7 @@
       "required": ["test_type", "seconds"],
       "properties": {
         "test_type": {"type": "string", "minLength": 1},
-        "seconds": {"type": "number", "exclusiveMinimum": 0}
+        "seconds": {"type": "number", "minimum": 0}
       }
     },
     "telemetry": {
@@ -135,7 +133,7 @@
       "additionalProperties": false,
       "required": ["status", "summary", "expected", "observed"],
       "properties": {
-        "status": {"type": "string", "enum": ["PASS", "FAIL"]},
+        "status": {"type": "string", "enum": ["PASS", "FAIL", "NOT_TESTED"]},
         "summary": {"type": "string", "minLength": 1},
         "expected": {
           "type": "object",
@@ -156,6 +154,58 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "NOT_RUN"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "correctness": {
+            "properties": {
+              "status": {"const": "NOT_TESTED"}
+            }
+          },
+          "telemetry": {
+            "properties": {
+              "prompt_tokens_per_second": {"$ref": "#/$defs/telemetryMetricUnavailable"},
+              "generation_tokens_per_second": {"$ref": "#/$defs/telemetryMetricUnavailable"},
+              "ttft_ms": {"$ref": "#/$defs/telemetryMetricUnavailable"},
+              "vram_gib_per_gpu": {"$ref": "#/$defs/telemetryMetricUnavailable"},
+              "system_ram_gib": {"$ref": "#/$defs/telemetryMetricUnavailable"},
+              "gpu_temperature_c": {"$ref": "#/$defs/telemetryMetricUnavailable"},
+              "gpu_power_watts": {"$ref": "#/$defs/telemetryMetricUnavailable"}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "correctness": {
+            "properties": {
+              "status": {
+                "enum": ["PASS", "FAIL"]
+              }
+            }
+          },
+          "telemetry": {
+            "properties": {
+              "prompt_tokens_per_second": {"$ref": "#/$defs/telemetryMetricMeasured"},
+              "generation_tokens_per_second": {"$ref": "#/$defs/telemetryMetricMeasured"},
+              "ttft_ms": {"$ref": "#/$defs/telemetryMetricMeasured"},
+              "vram_gib_per_gpu": {"$ref": "#/$defs/telemetryMetricMeasured"},
+              "system_ram_gib": {"$ref": "#/$defs/telemetryMetricMeasured"},
+              "gpu_temperature_c": {"$ref": "#/$defs/telemetryMetric"},
+              "gpu_power_watts": {"$ref": "#/$defs/telemetryMetric"}
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "telemetryMetric": {
       "type": "object",
@@ -166,27 +216,47 @@
         "observed": {"$ref": "#/$defs/telemetryValue"}
       }
     },
+    "telemetryMetricMeasured": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "properties": {
+        "expected": {"$ref": "#/$defs/telemetryValue"},
+        "observed": {"$ref": "#/$defs/measurementValue"}
+      }
+    },
+    "telemetryMetricUnavailable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "properties": {
+        "expected": {"$ref": "#/$defs/telemetryValue"},
+        "observed": {"$ref": "#/$defs/unavailableValue"}
+      }
+    },
     "telemetryValue": {
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["value", "unit"],
-          "properties": {
-            "value": {"type": "number"},
-            "unit": {"type": "string", "minLength": 1}
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["status", "reason"],
-          "properties": {
-            "status": {"type": "string", "const": "unavailable"},
-            "reason": {"type": "string", "minLength": 1}
-          }
-        }
+        {"$ref": "#/$defs/measurementValue"},
+        {"$ref": "#/$defs/unavailableValue"}
       ]
+    },
+    "measurementValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "unit"],
+      "properties": {
+        "value": {"type": "number"},
+        "unit": {"type": "string", "minLength": 1}
+      }
+    },
+    "unavailableValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {"type": "string", "const": "unavailable"},
+        "reason": {"type": "string", "minLength": 1}
+      }
     }
   }
 }

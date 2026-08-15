@@ -26,7 +26,7 @@
     },
     "git_sha": {
       "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$"
+      "pattern": "^[0-9A-Fa-f]{40}$"
     },
     "simulated": {
       "type": "boolean"
@@ -70,15 +70,72 @@
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["blocking_failures", "warnings", "not_tested", "classification"],
+      "required": ["blocking_failures", "failed_checks", "warnings", "not_tested", "classification"],
       "properties": {
         "blocking_failures": {"type": "integer", "minimum": 0},
+        "failed_checks": {"type": "integer", "minimum": 0},
         "warnings": {"type": "integer", "minimum": 0},
         "not_tested": {"type": "integer", "minimum": 0},
         "classification": {"type": "string", "enum": ["healthy", "degraded", "blocked", "incomplete"]}
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "PASS"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "summary": {
+            "properties": {
+              "blocking_failures": {"const": 0},
+              "failed_checks": {"const": 0}
+            }
+          }
+        },
+        "not": {
+          "properties": {
+            "checks": {
+              "contains": {
+                "properties": {
+                  "status": {
+                    "enum": ["FAIL", "BLOCKED"]
+                  }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "summary": {
+            "properties": {
+              "classification": {"const": "healthy"}
+            },
+            "required": ["classification"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "summary": {
+            "properties": {
+              "blocking_failures": {"const": 0},
+              "failed_checks": {"const": 0}
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "summaryValue": {
       "type": "object",

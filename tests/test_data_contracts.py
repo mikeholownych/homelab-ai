@@ -37,6 +37,10 @@ def load_json(path: Path) -> object:
 
 
 class DataContractTests(unittest.TestCase):
+    def test_repository_contains_contract_semantic_validator_script(self) -> None:
+        script_path = REPO_ROOT / "scripts" / "validate_contract.py"
+        self.assertTrue(script_path.exists(), "Expected scripts/validate_contract.py to exist")
+
     def test_hardware_profile_matches_requested_contract(self) -> None:
         profile = load_yaml(HARDWARE_PROFILE)
 
@@ -70,6 +74,26 @@ class DataContractTests(unittest.TestCase):
         self.assertEqual(False, patching["high_risk_components"]["kernel"]["auto_apply"])
         self.assertEqual(False, patching["high_risk_components"]["intel_gpu"]["auto_apply"])
         self.assertEqual(False, patching["high_risk_components"]["firmware_bios"]["auto_apply"])
+        routine_includes = set()
+        routine_excludes = set()
+        for component in patching["routine_components"].values():
+            routine_includes.update(component["package_allowlist"])
+            routine_excludes.update(component["package_exclusions"])
+            self.assertNotIn("os", component.get("scope", ""))
+            self.assertNotIn("security", component.get("scope", ""))
+
+        protected_patterns = set()
+        for component in patching["high_risk_components"].values():
+            protected_patterns.update(component["package_patterns"])
+
+        self.assertTrue({"apt", "dpkg"} <= set(patching["routine_package_managers"]))
+        self.assertTrue(routine_includes)
+        self.assertTrue(routine_excludes)
+        self.assertTrue(protected_patterns)
+        self.assertEqual(set(), routine_includes & protected_patterns)
+        self.assertTrue(any(pattern.startswith("linux-image") for pattern in protected_patterns))
+        self.assertTrue(any("intel" in pattern for pattern in protected_patterns))
+        self.assertTrue(any("vllm" in pattern for pattern in protected_patterns))
 
         for component_name in (
             "intel_gpu",
@@ -177,6 +201,7 @@ class DataContractTests(unittest.TestCase):
                 self.assertEqual("https://json-schema.org/draft/2020-12/schema", schema["$schema"])
                 jsonschema.Draft202012Validator.check_schema(schema)
                 jsonschema.validate(fixture, schema, format_checker=format_checker)
+                self.assertRegex(fixture["git_sha"], r"^[0-9A-Fa-f]{40}$")
 
     def test_schemas_reject_invalid_extra_properties_status_and_missing_expected_observed(self) -> None:
         format_checker = FormatChecker()
@@ -194,6 +219,10 @@ class DataContractTests(unittest.TestCase):
                 invalid_status_case["status"] = "invalid-status"
                 self.assertTrue(list(validator.iter_errors(invalid_status_case)))
 
+                invalid_sha_case = copy.deepcopy(fixture)
+                invalid_sha_case["git_sha"] = "abcdef0"
+                self.assertTrue(list(validator.iter_errors(invalid_sha_case)))
+
                 invalid_timestamp_case = copy.deepcopy(fixture)
                 invalid_timestamp_case["generated_at"] = "2026-99-99T25:61:61Z"
                 self.assertTrue(list(validator.iter_errors(invalid_timestamp_case)))
@@ -204,27 +233,69 @@ class DataContractTests(unittest.TestCase):
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["checks"][0]["expected"]["unexpected"] = True
                 elif schema_name == "evidence":
+                    missing_expected_observed_case["status"] = "captured"
                     del missing_expected_observed_case["artifacts"][0]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["artifacts"][0]["observed"]["unexpected"] = True
                     status_case = copy.deepcopy(fixture)
                     status_case["status"] = "incomplete"
+                    status_case["artifacts"][0]["observed"] = {
+                        "summary": "Artifact collection incomplete",
+                        "status": "unavailable",
+                        "reason": "collection interrupted"
+                    }
                     self.assertFalse(list(validator.iter_errors(status_case)))
+                    unavailable_case = copy.deepcopy(fixture)
+                    unavailable_case["status"] = "missing"
+                    unavailable_case["artifacts"][0]["observed"] = {
+                        "summary": "Artifact unavailable",
+                        "status": "unavailable",
+                        "reason": "command not run"
+                    }
+                    self.assertFalse(list(validator.iter_errors(unavailable_case)))
                 elif schema_name == "benchmark":
+                    missing_expected_observed_case["status"] = "PASS"
                     del missing_expected_observed_case["correctness"]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["telemetry"]["prompt_tokens_per_second"]["expected"]["unexpected"] = True
+                    not_run_case = copy.deepcopy(fixture)
+                    not_run_case["status"] = "NOT_RUN"
+                    for metric in not_run_case["telemetry"].values():
+                        metric["observed"] = {"status": "unavailable", "reason": "not run"}
+                    not_run_case["correctness"] = {
+                        "status": "NOT_TESTED",
+                        "summary": "Benchmark not run.",
+                        "expected": {"summary": "Correctness would be evaluated after execution."},
+                        "observed": {"summary": "No execution results were produced."}
+                    }
+                    self.assertFalse(list(validator.iter_errors(not_run_case)))
                 elif schema_name == "cmdb":
+                    missing_expected_observed_case["status"] = "ACTIVE"
                     del missing_expected_observed_case["configuration_item"]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["configuration_item"]["expected"]["runtime_versions"]["unexpected"] = True
                     extra_capability_case = copy.deepcopy(fixture)
                     extra_capability_case["configuration_item"]["expected"]["capabilities"]["arbitrary_future_command_capability"] = True
                     self.assertTrue(list(validator.iter_errors(extra_capability_case)))
+                    draft_case = copy.deepcopy(fixture)
+                    draft_case["configuration_item"]["observed"] = {
+                        "reason": "awaiting first live convergence"
+                    }
+                    draft_case["last_convergence_at"] = None
+                    draft_case["last_validation_at"] = None
+                    self.assertFalse(list(validator.iter_errors(draft_case)))
                 elif schema_name == "itsm":
                     del missing_expected_observed_case["execution_result"]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["validation_result"]["observed"]["unexpected"] = True
+                    implemented_case = copy.deepcopy(fixture)
+                    implemented_case["status"] = "IMPLEMENTED"
+                    implemented_case["approval_state"] = "APPROVED"
+                    implemented_case["selected_action"] = "PATCH"
+                    implemented_case["executed_action"] = "PATCH"
+                    implemented_case["execution_result"]["observed"]["status"] = "PASS"
+                    implemented_case["validation_result"]["observed"]["status"] = "PASS"
+                    self.assertFalse(list(validator.iter_errors(implemented_case)))
                 self.assertTrue(list(validator.iter_errors(missing_expected_observed_case)))
                 self.assertTrue(list(validator.iter_errors(nested_extra_property_case)))
 
@@ -244,6 +315,11 @@ class DataContractTests(unittest.TestCase):
     def test_evidence_schema_allows_incomplete_status(self) -> None:
         schema = load_json(SCHEMA_DIR / "evidence.schema.json")
         self.assertIn("incomplete", schema["properties"]["status"]["enum"])
+
+    def test_git_sha_patterns_are_exact_40_hex_characters_in_all_schemas(self) -> None:
+        for schema_name in SCHEMA_FIXTURES:
+            schema = load_json(SCHEMA_DIR / f"{schema_name}.schema.json")
+            self.assertEqual("^[0-9A-Fa-f]{40}$", schema["properties"]["git_sha"]["pattern"])
 
 
 if __name__ == "__main__":

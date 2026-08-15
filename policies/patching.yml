@@ -1,33 +1,98 @@
 ---
 schema_version: 1.0.0
 
+routine_package_managers:
+  - apt
+  - dpkg
+
 routine_components:
   os_packages:
     cadence: weekly
     auto_apply: true
+    scope: base_package_allowlist_only
+    package_allowlist:
+      - ca-certificates
+      - curl
+      - jq
+      - openssh-client
+      - openssh-server
+      - rsync
+      - sudo
+      - systemd
+    package_exclusions:
+      - linux-image
+      - linux-modules
+      - linux-headers
+      - intel-compute-runtime
+      - level-zero
+      - pytorch
+      - vllm
+      - llama
+      - firmware
+      - bios
   security_updates:
     cadence: daily
     auto_apply: true
+    scope: targeted_patch_allowlist_only
+    package_allowlist:
+      - openssl
+      - libssl3
+      - libsystemd0
+      - tzdata
+    package_exclusions:
+      - linux-image
+      - linux-modules
+      - linux-headers
+      - intel-compute-runtime
+      - level-zero
+      - pytorch
+      - vllm
+      - llama
+      - firmware
+      - bios
 
 high_risk_components:
   kernel:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - linux-image*
+      - linux-modules*
+      - linux-headers*
   intel_gpu:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - intel-compute-runtime*
+      - intel-gpu-tools*
+      - intel-opencl-icd*
   level_zero:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - level-zero*
+      - oneapi-level-zero*
   pytorch_xpu:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - torch*
+      - pytorch*
   vllm:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - vllm*
   llama_cpp:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - llama*
+      - llama-cpp*
   firmware_bios:
     auto_apply: false
     approval: manual
+    package_patterns:
+      - firmware*
+      - bios*
+      - microcode*

@@ -18,6 +18,8 @@
     "approval_state",
     "maintenance_window",
     "permitted_actions",
+    "selected_action",
+    "executed_action",
     "rollback_reference",
     "execution_result",
     "validation_result"
@@ -34,14 +36,14 @@
     },
     "git_sha": {
       "type": "string",
-      "pattern": "^[0-9a-f]{7,40}$"
+      "pattern": "^[0-9A-Fa-f]{40}$"
     },
     "simulated": {
       "type": "boolean"
     },
     "status": {
       "type": "string",
-      "enum": ["PENDING", "APPROVED", "IMPLEMENTED", "FAILED", "NOT_REQUIRED"]
+      "enum": ["PENDING", "APPROVED", "IMPLEMENTED", "FAILED", "NOT_REQUIRED", "REJECTED"]
     },
     "adapter": {"type": "string", "minLength": 1},
     "change_id": {"type": "string", "minLength": 1},
@@ -78,6 +80,14 @@
         "enum": ["PATCH", "UPGRADE", "ROLLBACK", "VALIDATE", "BENCHMARK", "RECONCILE"]
       }
     },
+    "selected_action": {
+      "type": ["string", "null"],
+      "enum": ["PATCH", "UPGRADE", "ROLLBACK", "VALIDATE", "BENCHMARK", "RECONCILE", null]
+    },
+    "executed_action": {
+      "type": ["string", "null"],
+      "enum": ["PATCH", "UPGRADE", "ROLLBACK", "VALIDATE", "BENCHMARK", "RECONCILE", null]
+    },
     "rollback_reference": {"type": "string", "minLength": 1},
     "execution_result": {
       "type": "object",
@@ -98,13 +108,69 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "IMPLEMENTED"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "approval_state": {"const": "APPROVED"},
+          "selected_action": {"type": "string"},
+          "executed_action": {"type": "string"},
+          "execution_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {
+                    "enum": ["PASS", "SUCCEEDED"]
+                  }
+                }
+              }
+            }
+          },
+          "validation_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "PASS"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "approval_state": {
+            "enum": ["PENDING", "REJECTED"]
+          }
+        },
+        "required": ["approval_state"]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "not": {
+              "const": "IMPLEMENTED"
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "resultState": {
       "type": "object",
       "additionalProperties": false,
       "required": ["status", "summary"],
       "properties": {
-        "status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "NOT_TESTED"]},
+        "status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "NOT_TESTED", "SUCCEEDED"]},
         "summary": {"type": "string", "minLength": 1}
       }
     }

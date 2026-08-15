@@ -31,6 +31,7 @@
   ],
   "summary": {
     "blocking_failures": 0,
+    "failed_checks": 0,
     "warnings": 0,
     "not_tested": 0,
     "classification": "healthy"

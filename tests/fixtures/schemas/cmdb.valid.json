@@ -41,34 +41,7 @@
       }
     },
     "observed": {
-      "ci_id": "ci-ai-p620-01",
-      "ci_type": "NODE",
-      "hardware_profile": "p620_dual_b65",
-      "capabilities": {
-        "gpu": true,
-        "inference": true,
-        "benchmarking": true,
-        "monitoring": true,
-        "cluster_eligible": true
-      },
-      "cluster_membership": {
-        "name": null,
-        "membership_state": "standalone",
-        "node_role": "worker",
-        "roles": {
-          "worker": true,
-          "api": false,
-          "scheduler": false,
-          "storage": false
-        }
-      },
-      "runtime_versions": {
-        "intel_runtime": null,
-        "level_zero": null,
-        "pytorch": null,
-        "vllm": null,
-        "llama_commit": null
-      }
+      "reason": "awaiting first live convergence"
     }
   },
   "relationships": [
@@ -78,6 +51,6 @@
       "direction": "OUTBOUND"
     }
   ],
-  "last_convergence_at": "2026-08-15T00:00:00Z",
-  "last_validation_at": "2026-08-15T00:00:00Z"
+  "last_convergence_at": null,
+  "last_validation_at": null
 }

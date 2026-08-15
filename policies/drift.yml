@@ -23,7 +23,16 @@ remediation:
   default_state: unresolved_drift
   auto_reconcile_allowed_for:
     - os_security_patches
+    - base_package_allowlist_only
   manual_approval_required_for:
+    - kernel
+    - intel_gpu
+    - level_zero
+    - pytorch_xpu
+    - vllm
+    - llama_cpp
+    - firmware_bios
+  protected_component_classes:
     - kernel
     - intel_gpu
     - level_zero

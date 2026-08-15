@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import json
 import os
 import subprocess
@@ -53,7 +54,31 @@ def run_ansible_inventory(inventory_path: Path) -> tuple[dict[str, object], str]
     return json.loads(output.stdout), output.stderr
 
 
+def run_playbook_list_hosts(inventory_path: Path, playbook_path: Path) -> str:
+    executable = REPO_ROOT / ".venv" / "bin" / "ansible-playbook"
+    command = [str(executable if executable.exists() else "ansible-playbook"), "-i", str(inventory_path), str(playbook_path), "--list-hosts"]
+    env = os.environ.copy()
+    env["ANSIBLE_CONFIG"] = str(REPO_ROOT / "ansible.cfg")
+    output = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return output.stdout
+
+
 class InventoryContractTests(unittest.TestCase):
+    def test_ansible_default_inventory_is_production_and_local_checks_use_fixture(self) -> None:
+        parser = configparser.ConfigParser()
+        parser.read(REPO_ROOT / "ansible.cfg", encoding="utf-8")
+        self.assertEqual("inventory/production/hosts.yml", parser["defaults"]["inventory"])
+
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("-i tests/fixtures/inventory/healthy.yml --check playbooks/baseline.yml --tags foundation", makefile)
+
     def test_required_inventory_contract_files_exist(self) -> None:
         missing = sorted(str(path.relative_to(REPO_ROOT)) for path in REQUIRED_PATHS if not path.exists())
         self.assertEqual([], missing, f"Missing inventory contract paths: {missing}")
@@ -141,6 +166,7 @@ class InventoryContractTests(unittest.TestCase):
         inventory, stderr = run_ansible_inventory(PRODUCTION_INVENTORY)
         self.assertEqual("", stderr.strip())
 
+        self.assertEqual(["production", "inference", "gpu", "cluster", "monitoring"], inventory["ai_hosts"]["children"])
         self.assertEqual(["ai-p620-01"], inventory["production"]["hosts"])
         self.assertEqual(["ai-p620-01"], inventory["inference"]["hosts"])
         self.assertEqual(["ai-p620-01"], inventory["gpu"]["hosts"])
@@ -162,6 +188,10 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual("unselected", hostvars["model_selection_controls"]["serving_model"]["selection_state"])
         self.assertEqual("disabled", hostvars["model_selection_controls"]["benchmark_model"]["execution_state"])
         self.assertIsNone(hostvars["cluster"]["endpoints"]["api_base_url"])
+
+    def test_production_site_playbook_list_hosts_resolves_ai_host(self) -> None:
+        output = run_playbook_list_hosts(PRODUCTION_INVENTORY, REPO_ROOT / "playbooks" / "site.yml")
+        self.assertIn("ai-p620-01", output)
 
     def test_lab_inventory_parses_without_declaring_hosts(self) -> None:
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
