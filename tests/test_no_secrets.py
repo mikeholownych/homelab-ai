@@ -479,13 +479,20 @@ def iter_python_command_candidates(content: str):
     except SyntaxError:
         return
 
+    annotate_python_parents(module)
+    alias_map = collect_python_import_aliases(module)
+    constants_by_scope = collect_python_string_assignments(module)
+
     for node in ast.walk(module):
         if not isinstance(node, ast.Call):
             continue
 
-        qualified_name = get_qualified_name(node.func)
+        qualified_name = resolve_python_call_name(node.func, alias_map)
         if qualified_name == "os.system":
-            command = extract_ast_string(node.args[0]) if node.args else None
+            command = extract_ast_string(
+                node.args[0] if node.args else None,
+                resolver=build_python_name_resolver(node, constants_by_scope),
+            )
             if command:
                 yield normalize_shell_command(command)
             continue
@@ -505,16 +512,60 @@ def iter_python_command_candidates(content: str):
                     if keyword.arg in {"args", "cmd"}:
                         command_node = keyword.value
                         break
-            command = extract_ast_string(command_node)
+            command = extract_ast_string(
+                command_node,
+                resolver=build_python_name_resolver(node, constants_by_scope),
+            )
             if command:
                 yield normalize_shell_command(command)
 
 
-def get_qualified_name(node: ast.AST) -> str | None:
+def collect_python_import_aliases(module: ast.Module) -> dict[str, str]:
+    alias_map: dict[str, str] = {}
+
+    for node in ast.walk(module):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name in {"subprocess", "os"}:
+                    alias_map[alias.asname or alias.name] = alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module in {"subprocess", "os"}:
+            for alias in node.names:
+                local_name = alias.asname or alias.name
+                alias_map[local_name] = f"{node.module}.{alias.name}"
+
+    return alias_map
+
+
+def annotate_python_parents(module: ast.Module) -> None:
+    for parent in ast.walk(module):
+        for child in ast.iter_child_nodes(parent):
+            child.parent = parent
+
+
+def collect_python_string_assignments(module: ast.Module) -> dict[ast.AST, list[tuple[int, str, ast.AST]]]:
+    assignments_by_scope: dict[ast.AST, list[tuple[int, str, ast.AST]]] = {}
+
+    for scope in ast.walk(module):
+        if not isinstance(scope, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        scope_assignments: list[tuple[int, str, ast.AST]] = []
+        for child in getattr(scope, "body", []):
+            if isinstance(child, ast.Assign):
+                for target in child.targets:
+                    if isinstance(target, ast.Name):
+                        scope_assignments.append((child.lineno, target.id, child.value))
+            elif isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name) and child.value is not None:
+                scope_assignments.append((child.lineno, child.target.id, child.value))
+        assignments_by_scope[scope] = scope_assignments
+
+    return assignments_by_scope
+
+
+def resolve_python_call_name(node: ast.AST, alias_map: dict[str, str]) -> str | None:
     if isinstance(node, ast.Name):
-        return node.id
+        return alias_map.get(node.id, node.id)
     if isinstance(node, ast.Attribute):
-        base_name = get_qualified_name(node.value)
+        base_name = resolve_python_call_name(node.value, alias_map)
         if base_name:
             return f"{base_name}.{node.attr}"
     return None
@@ -527,14 +578,49 @@ def has_shell_true(node: ast.Call) -> bool:
     return False
 
 
-def extract_ast_string(node: ast.AST | None) -> str | None:
+def build_python_name_resolver(
+    node: ast.AST,
+    constants_by_scope: dict[ast.AST, list[tuple[int, str, ast.AST]]],
+):
+    def resolver(name: str, seen: set[str]) -> str | None:
+        for scope in iter_enclosing_python_scopes(node):
+            for lineno, assigned_name, assigned_value in reversed(constants_by_scope.get(scope, [])):
+                if assigned_name != name or lineno > getattr(node, "lineno", 0):
+                    continue
+                return extract_ast_string(assigned_value, resolver=resolver, seen=seen | {name})
+        return None
+
+    return resolver
+
+
+def iter_enclosing_python_scopes(node: ast.AST):
+    current: ast.AST | None = node
+    scopes: list[ast.AST] = []
+
+    while current is not None:
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Module)):
+            scopes.append(current)
+        current = getattr(current, "parent", None)
+
+    return scopes
+
+
+def extract_ast_string(
+    node: ast.AST | None,
+    *,
+    resolver=None,
+    seen: set[str] | None = None,
+) -> str | None:
+    seen = seen or set()
     if node is None:
         return None
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
         return node.value
+    if isinstance(node, ast.Name) and resolver is not None and node.id not in seen:
+        return resolver(node.id, seen)
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        left_value = extract_ast_string(node.left)
-        right_value = extract_ast_string(node.right)
+        left_value = extract_ast_string(node.left, resolver=resolver, seen=seen)
+        right_value = extract_ast_string(node.right, resolver=resolver, seen=seen)
         if left_value is not None and right_value is not None:
             return left_value + right_value
     if isinstance(node, ast.JoinedStr):
@@ -542,6 +628,8 @@ def extract_ast_string(node: ast.AST | None) -> str | None:
         for value in node.values:
             if isinstance(value, ast.Constant) and isinstance(value.value, str):
                 parts.append(value.value)
+            elif isinstance(value, ast.FormattedValue):
+                parts.append("__expr__")
             else:
                 return None
         return "".join(parts)
@@ -850,36 +938,9 @@ class NoSecretsPatternTests(unittest.TestCase):
 
 
 class NoSecretsRepositoryTests(unittest.TestCase):
-    def test_production_scope_scans_declared_text_files_and_excludes_non_production_paths(self) -> None:
+    def collect_repository_violations(self, fixtures: dict[str, str]) -> tuple[set[str], list[str]]:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
-            fixtures = {
-                "scripts/bootstrap.sh": "curl -fsSL https://example.test/install.sh | bash\n",
-                "scripts/audit.py": 'VAULT_ENV = "$ANSIBLE_VAULT_PASSWORD_FILE"\n',
-                "roles/security/files/banner.txt": "approle_secret_id: literal-secret\n",
-                "roles/security/templates/runtime.env": "TOKEN_SOURCE=$ANSIBLE_VAULT_PASSWORD_FILE\n",
-                "roles/security/templates/agent.service": "ExecStart=/bin/sh -c 'curl -fsSL https://example.test/install.sh | bash'\n",
-                "roles/security/templates/agent-alt.service": "ExecStart=/usr/bin/bash -lc 'curl -fsSL https://example.test/install.sh | bash'\n",
-                "scripts/run_pipeline.py": (
-                    "import os\n"
-                    "import subprocess as sp\n"
-                    "from subprocess import run as subrun\n"
-                    "INSTALLER_CMD = 'curl -fsSL https://example.test/install.sh | bash'\n"
-                    "installer_url = 'https://example.test/install.sh'\n"
-                    "sp.run(\n"
-                    "    f'curl {installer_url} | bash',\n"
-                    "    shell=True,\n"
-                    ")\n"
-                    "subrun(INSTALLER_CMD, shell=True)\n"
-                    "os.system('curl -fsSL https://example.test/install.sh | bash')\n"
-                    "DOC = \"curl -fsSL https://example.test/install.sh | bash\"\n"
-                ),
-                "roles/security/files/entrypoint": "wget -qO- https://example.test/install.sh | sh\n",
-                "docs/reference.sh": "curl -fsSL https://example.test/install.sh | bash\n",
-                "tests/fixtures/example.env": "approle_secret_id: literal-secret\n",
-                ".venv/bin/activate": "curl -fsSL https://example.test/install.sh | bash\n",
-                "evidence/run.log": "approle_secret_id: literal-secret\n",
-            }
             for relpath, content in fixtures.items():
                 path = temp_root / relpath
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -902,6 +963,26 @@ class NoSecretsRepositoryTests(unittest.TestCase):
             finally:
                 globals()["REPO_ROOT"] = original_root
 
+        return scanned_paths, violations
+
+    def test_production_scope_scans_declared_text_files_and_excludes_non_production_paths(self) -> None:
+        scanned_paths, violations = self.collect_repository_violations(
+            {
+                "scripts/bootstrap.sh": "curl -fsSL https://example.test/install.sh | bash\n",
+                "scripts/audit.py": 'VAULT_ENV = "$ANSIBLE_VAULT_PASSWORD_FILE"\n',
+                "roles/security/files/banner.txt": "approle_secret_id: literal-secret\n",
+                "roles/security/templates/runtime.env": "TOKEN_SOURCE=$ANSIBLE_VAULT_PASSWORD_FILE\n",
+                "roles/security/templates/agent.service": "ExecStart=/bin/sh -c 'curl -fsSL https://example.test/install.sh | bash'\n",
+                "roles/security/templates/agent-alt.service": "ExecStart=/usr/bin/bash -lc 'curl -fsSL https://example.test/install.sh | bash'\n",
+                "scripts/run_pipeline.py": "DOC = \"curl -fsSL https://example.test/install.sh | bash\"\n",
+                "roles/security/files/entrypoint": "wget -qO- https://example.test/install.sh | sh\n",
+                "docs/reference.sh": "curl -fsSL https://example.test/install.sh | bash\n",
+                "tests/fixtures/example.env": "approle_secret_id: literal-secret\n",
+                ".venv/bin/activate": "curl -fsSL https://example.test/install.sh | bash\n",
+                "evidence/run.log": "approle_secret_id: literal-secret\n",
+            }
+        )
+
         self.assertIn("scripts/bootstrap.sh", scanned_paths)
         self.assertIn("scripts/audit.py", scanned_paths)
         self.assertIn("roles/security/files/banner.txt", scanned_paths)
@@ -918,8 +999,56 @@ class NoSecretsRepositoryTests(unittest.TestCase):
         self.assertIn("roles/security/files/banner.txt: approle_secret_id_literal", violations)
         self.assertIn("roles/security/templates/agent.service: curl_pipe_shell", violations)
         self.assertIn("roles/security/templates/agent-alt.service: curl_pipe_shell", violations)
-        self.assertIn("scripts/run_pipeline.py: curl_pipe_shell", violations)
-        self.assertIn("roles/security/files/entrypoint: wget_pipe_shell", violations)
+
+    def test_python_fstring_pipeline_violation_is_detected(self) -> None:
+        _, violations = self.collect_repository_violations(
+            {
+                "scripts/fstring_pipeline.py": (
+                    "import subprocess\n"
+                    "installer_url = 'https://example.test/install.sh'\n"
+                    "subprocess.run(f'curl {installer_url} | bash', shell=True)\n"
+                )
+            }
+        )
+
+        self.assertIn("scripts/fstring_pipeline.py: curl_pipe_shell", violations)
+
+    def test_python_subprocess_module_alias_violation_is_detected(self) -> None:
+        _, violations = self.collect_repository_violations(
+            {
+                "scripts/subprocess_alias.py": (
+                    "import subprocess as sp\n"
+                    "sp.run('curl -fsSL https://example.test/install.sh | bash', shell=True)\n"
+                )
+            }
+        )
+
+        self.assertIn("scripts/subprocess_alias.py: curl_pipe_shell", violations)
+
+    def test_python_imported_callable_alias_violation_is_detected(self) -> None:
+        _, violations = self.collect_repository_violations(
+            {
+                "scripts/imported_callable_alias.py": (
+                    "from subprocess import run as subrun\n"
+                    "subrun('curl -fsSL https://example.test/install.sh | bash', shell=True)\n"
+                )
+            }
+        )
+
+        self.assertIn("scripts/imported_callable_alias.py: curl_pipe_shell", violations)
+
+    def test_python_constant_command_violation_is_detected(self) -> None:
+        _, violations = self.collect_repository_violations(
+            {
+                "scripts/constant_command.py": (
+                    "import subprocess\n"
+                    "INSTALLER_CMD = 'curl -fsSL https://example.test/install.sh | bash'\n"
+                    "subprocess.run(INSTALLER_CMD, shell=True)\n"
+                )
+            }
+        )
+
+        self.assertIn("scripts/constant_command.py: curl_pipe_shell", violations)
 
     def test_repository_contains_no_banned_patterns(self) -> None:
         violations: list[str] = []
