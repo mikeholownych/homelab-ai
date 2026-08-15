@@ -158,6 +158,40 @@
     {
       "if": {
         "properties": {
+          "status": {"const": "PASS"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "correctness": {
+            "properties": {
+              "status": {"const": "PASS"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "FAIL"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "correctness": {
+            "properties": {
+              "status": {"const": "FAIL"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "status": {"const": "NOT_RUN"}
         },
         "required": ["status"]

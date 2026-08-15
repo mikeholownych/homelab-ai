@@ -93,7 +93,9 @@
           "summary": {
             "properties": {
               "blocking_failures": {"const": 0},
-              "failed_checks": {"const": 0}
+              "failed_checks": {"const": 0},
+              "not_tested": {"const": 0},
+              "classification": {"const": "healthy"}
             }
           }
         },
@@ -103,11 +105,121 @@
               "contains": {
                 "properties": {
                   "status": {
-                    "enum": ["FAIL", "BLOCKED"]
+                    "enum": ["FAIL", "BLOCKED", "NOT_TESTED"]
                   }
                 },
                 "required": ["status"]
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "checks": {
+            "contains": {
+              "properties": {
+                "status": {"const": "BLOCKED"}
+              },
+              "required": ["status"]
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "status": {"const": "BLOCKED"},
+          "summary": {
+            "properties": {
+              "classification": {"const": "blocked"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "not": {
+              "properties": {
+                "checks": {
+                  "contains": {
+                    "properties": {
+                      "status": {"const": "BLOCKED"}
+                    },
+                    "required": ["status"]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "checks": {
+                "contains": {
+                  "properties": {
+                    "status": {"const": "FAIL"}
+                  },
+                  "required": ["status"]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {"const": "FAIL"},
+          "summary": {
+            "properties": {
+              "classification": {"const": "degraded"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "not": {
+              "properties": {
+                "checks": {
+                  "contains": {
+                    "properties": {
+                      "status": {
+                        "enum": ["BLOCKED", "FAIL"]
+                      }
+                    },
+                    "required": ["status"]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "checks": {
+                "contains": {
+                  "properties": {
+                    "status": {"const": "NOT_TESTED"}
+                  },
+                  "required": ["status"]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "status": {"const": "NOT_TESTED"},
+          "summary": {
+            "properties": {
+              "classification": {"const": "incomplete"}
             }
           }
         }

@@ -112,6 +112,52 @@
     {
       "if": {
         "properties": {
+          "status": {"const": "PENDING"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "approval_state": {"const": "PENDING"},
+          "executed_action": {"type": "null"},
+          "execution_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          },
+          "validation_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "APPROVED"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "approval_state": {"const": "APPROVED"},
+          "executed_action": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
           "status": {"const": "IMPLEMENTED"}
         },
         "required": ["status"]
@@ -147,19 +193,178 @@
     {
       "if": {
         "properties": {
-          "approval_state": {
-            "enum": ["PENDING", "REJECTED"]
-          }
+          "status": {"const": "REJECTED"}
         },
-        "required": ["approval_state"]
+        "required": ["status"]
       },
       "then": {
         "properties": {
-          "status": {
-            "not": {
-              "const": "IMPLEMENTED"
+          "approval_state": {"const": "REJECTED"},
+          "executed_action": {"type": "null"},
+          "execution_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          },
+          "validation_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
             }
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "FAILED"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "approval_state": {"const": "APPROVED"},
+          "selected_action": {"type": "string"},
+          "executed_action": {"type": "string"}
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "execution_result": {
+                "properties": {
+                  "observed": {
+                    "properties": {
+                      "status": {
+                        "enum": ["FAIL", "BLOCKED"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "validation_result": {
+                "properties": {
+                  "observed": {
+                    "properties": {
+                      "status": {
+                        "enum": ["FAIL", "BLOCKED"]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "NOT_REQUIRED"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "approval_state": {"const": "NOT_REQUIRED"},
+          "selected_action": {"type": "null"},
+          "executed_action": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_action": {"const": "PATCH"}
+        },
+        "required": ["selected_action"]
+      },
+      "then": {
+        "properties": {
+          "permitted_actions": {"contains": {"const": "PATCH"}},
+          "executed_action": {"enum": ["PATCH", null]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_action": {"const": "UPGRADE"}
+        },
+        "required": ["selected_action"]
+      },
+      "then": {
+        "properties": {
+          "permitted_actions": {"contains": {"const": "UPGRADE"}},
+          "executed_action": {"enum": ["UPGRADE", null]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_action": {"const": "ROLLBACK"}
+        },
+        "required": ["selected_action"]
+      },
+      "then": {
+        "properties": {
+          "permitted_actions": {"contains": {"const": "ROLLBACK"}},
+          "executed_action": {"enum": ["ROLLBACK", null]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_action": {"const": "VALIDATE"}
+        },
+        "required": ["selected_action"]
+      },
+      "then": {
+        "properties": {
+          "permitted_actions": {"contains": {"const": "VALIDATE"}},
+          "executed_action": {"enum": ["VALIDATE", null]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_action": {"const": "BENCHMARK"}
+        },
+        "required": ["selected_action"]
+      },
+      "then": {
+        "properties": {
+          "permitted_actions": {"contains": {"const": "BENCHMARK"}},
+          "executed_action": {"enum": ["BENCHMARK", null]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "selected_action": {"const": "RECONCILE"}
+        },
+        "required": ["selected_action"]
+      },
+      "then": {
+        "properties": {
+          "permitted_actions": {"contains": {"const": "RECONCILE"}},
+          "executed_action": {"enum": ["RECONCILE", null]}
         }
       }
     }

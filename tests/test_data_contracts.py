@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import copy
+import fnmatch
+import importlib
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -11,6 +14,8 @@ from jsonschema import FormatChecker
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 HARDWARE_PROFILE = REPO_ROOT / "profiles" / "hardware" / "p620_dual_b65.yml"
 PATCHING_POLICY = REPO_ROOT / "policies" / "patching.yml"
 UPGRADES_POLICY = REPO_ROOT / "policies" / "upgrades.yml"
@@ -113,6 +118,48 @@ class DataContractTests(unittest.TestCase):
             self.assertIsNone(component["current"])
             self.assertIsNone(component["candidate"])
             self.assertIsNone(component["previous_known_good"])
+
+    def test_routine_patch_selection_rejects_protected_package_globs_even_when_explicitly_listed(self) -> None:
+        patching = load_yaml(PATCHING_POLICY)
+        contract_validator = importlib.import_module("scripts.validate_contract")
+        self.assertTrue(hasattr(contract_validator, "is_package_routine_allowed"))
+        protected_patterns = [
+            pattern
+            for component in patching["high_risk_components"].values()
+            for pattern in component["package_patterns"]
+        ]
+        routine_components = patching["routine_components"]
+
+        self.assertTrue(fnmatch.fnmatch("linux-image-6.8.0", "linux-image*"))
+        self.assertTrue(fnmatch.fnmatch("intel-level-zero-gpu", "*level-zero*"))
+        self.assertFalse(
+            contract_validator.is_package_routine_allowed(
+                package_name="linux-image-6.8.0",
+                routine_components=routine_components,
+                protected_patterns=protected_patterns,
+            )
+        )
+        self.assertFalse(
+            contract_validator.is_package_routine_allowed(
+                package_name="intel-level-zero-gpu",
+                routine_components=routine_components,
+                protected_patterns=protected_patterns,
+            )
+        )
+        self.assertFalse(
+            contract_validator.is_package_routine_allowed(
+                package_name="vllm-runtime",
+                routine_components=routine_components,
+                protected_patterns=protected_patterns,
+            )
+        )
+        self.assertTrue(
+            contract_validator.is_package_routine_allowed(
+                package_name="openssl",
+                routine_components=routine_components,
+                protected_patterns=protected_patterns,
+            )
+        )
 
     def test_drift_policy_defines_four_states_and_manual_remediation_for_high_risk_components(self) -> None:
         drift = load_yaml(DRIFT_POLICY)
@@ -244,7 +291,7 @@ class DataContractTests(unittest.TestCase):
                         "status": "unavailable",
                         "reason": "collection interrupted"
                     }
-                    self.assertFalse(list(validator.iter_errors(status_case)))
+                    self.assertTrue(list(validator.iter_errors(status_case)))
                     unavailable_case = copy.deepcopy(fixture)
                     unavailable_case["status"] = "missing"
                     unavailable_case["artifacts"][0]["observed"] = {
@@ -253,6 +300,27 @@ class DataContractTests(unittest.TestCase):
                         "reason": "command not run"
                     }
                     self.assertFalse(list(validator.iter_errors(unavailable_case)))
+                    mixed_incomplete_case = copy.deepcopy(fixture)
+                    mixed_incomplete_case["status"] = "incomplete"
+                    mixed_incomplete_case["artifacts"].append(
+                        {
+                            "id": "topology",
+                            "kind": "inventory_snapshot",
+                            "expected": {
+                                "summary": "Expected topology snapshot path",
+                                "path": "evidence/topology.json"
+                            },
+                            "observed": {
+                                "summary": "Topology capture failed during commissioning",
+                                "status": "unavailable",
+                                "reason": "host not yet converged"
+                            }
+                        }
+                    )
+                    self.assertFalse(list(validator.iter_errors(mixed_incomplete_case)))
+                    incomplete_all_captured_case = copy.deepcopy(fixture)
+                    incomplete_all_captured_case["status"] = "incomplete"
+                    self.assertTrue(list(validator.iter_errors(incomplete_all_captured_case)))
                 elif schema_name == "benchmark":
                     missing_expected_observed_case["status"] = "PASS"
                     del missing_expected_observed_case["correctness"]["observed"]
@@ -269,6 +337,13 @@ class DataContractTests(unittest.TestCase):
                         "observed": {"summary": "No execution results were produced."}
                     }
                     self.assertFalse(list(validator.iter_errors(not_run_case)))
+                    pass_with_failed_correctness = copy.deepcopy(fixture)
+                    pass_with_failed_correctness["correctness"]["status"] = "FAIL"
+                    self.assertTrue(list(validator.iter_errors(pass_with_failed_correctness)))
+                    fail_with_passed_correctness = copy.deepcopy(fixture)
+                    fail_with_passed_correctness["status"] = "FAIL"
+                    fail_with_passed_correctness["correctness"]["status"] = "PASS"
+                    self.assertTrue(list(validator.iter_errors(fail_with_passed_correctness)))
                 elif schema_name == "cmdb":
                     missing_expected_observed_case["status"] = "ACTIVE"
                     del missing_expected_observed_case["configuration_item"]["observed"]
@@ -296,6 +371,13 @@ class DataContractTests(unittest.TestCase):
                     implemented_case["execution_result"]["observed"]["status"] = "PASS"
                     implemented_case["validation_result"]["observed"]["status"] = "PASS"
                     self.assertFalse(list(validator.iter_errors(implemented_case)))
+                    mismatch_action_case = copy.deepcopy(implemented_case)
+                    mismatch_action_case["executed_action"] = "UPGRADE"
+                    self.assertTrue(list(validator.iter_errors(mismatch_action_case)))
+                    approved_with_rejected_approval_case = copy.deepcopy(fixture)
+                    approved_with_rejected_approval_case["status"] = "APPROVED"
+                    approved_with_rejected_approval_case["approval_state"] = "REJECTED"
+                    self.assertTrue(list(validator.iter_errors(approved_with_rejected_approval_case)))
                 self.assertTrue(list(validator.iter_errors(missing_expected_observed_case)))
                 self.assertTrue(list(validator.iter_errors(nested_extra_property_case)))
 

@@ -95,9 +95,7 @@
     {
       "if": {
         "properties": {
-          "status": {
-            "enum": ["missing", "incomplete"]
-          }
+          "status": {"const": "missing"}
         },
         "required": ["status"]
       },
@@ -111,6 +109,40 @@
             }
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {"const": "incomplete"}
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "allOf": [
+          {
+            "properties": {
+              "artifacts": {
+                "contains": {
+                  "properties": {
+                    "observed": {"$ref": "#/$defs/capturedObservation"}
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "artifacts": {
+                "contains": {
+                  "properties": {
+                    "observed": {"$ref": "#/$defs/unavailableObservation"}
+                  }
+                }
+              }
+            }
+          }
+        ]
       }
     }
   ],
