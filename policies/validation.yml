@@ -2,6 +2,12 @@
 schema_version: 1.0.0
 
 required_checks:
+  - id: machine_model
+    classification: hardware
+    severity: blocking
+    applies_when: always
+    expected:
+      value: 30E1S7NJ00
   - id: cpu_present
     classification: hardware
     severity: blocking
@@ -31,8 +37,9 @@ required_checks:
     severity: blocking
     applies_when: always
     expected:
-      minimum_gib: 2
+      minimum_gib: 28
       target_gib: 32
+      maximum_gib: 36
       tolerance_gib: 4
   - id: level_zero_device_count
     classification: runtime
@@ -64,6 +71,13 @@ required_checks:
     applies_when: always
     expected:
       value: true
+  - id: above_4g_decoding_enabled
+    classification: firmware
+    severity: blocking
+    applies_when: when_observable
+    undiscoverable_result: NOT_TESTED
+    expected:
+      value: true
   - id: vllm_health
     classification: runtime
     severity: blocking
@@ -79,7 +93,7 @@ required_checks:
   - id: dual_gpu_inference_configured
     classification: runtime
     severity: blocking
-    applies_when: when_distributed_vllm_enabled
+    applies_when: when_selected_inference_profile_tensor_parallel_size_equals_2
     expected:
       type: configured
   - id: llama_cpp_fallback_health

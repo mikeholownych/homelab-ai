@@ -18,12 +18,17 @@
     "model_id": "meta-llama/Llama-3.1-8B-Instruct",
     "revision": "2026-08-10",
     "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-    "quantization": "fp16"
+    "quantization": "fp16",
+    "split_parameters": null
   },
   "execution": {
     "gpu_count": 2,
     "tensor_parallelism": 2,
     "context_window_tokens": 8192
+  },
+  "duration": {
+    "test_type": "throughput",
+    "seconds": 300
   },
   "telemetry": {
     "prompt_tokens_per_second": {
@@ -57,6 +62,12 @@
   },
   "correctness": {
     "status": "PASS",
-    "summary": "Simulated benchmark output matched the expected response envelope."
+    "summary": "Simulated benchmark output matched the expected response envelope.",
+    "expected": {
+      "summary": "Response envelope should match the commissioning prompt set."
+    },
+    "observed": {
+      "summary": "Observed envelope matched the commissioning prompt set."
+    }
   }
 }

@@ -24,7 +24,8 @@ model_selection_controls:
     model_id: null
     revision: null
     model_path: null
-    config_path: CHANGE_ME
+    config_path: null
+    tensor_parallel_size: null
   benchmark_model:
     enabled: false
     commissioning_state: commissioning_required
@@ -33,4 +34,5 @@ model_selection_controls:
     model_id: null
     revision: null
     model_path: null
-    config_path: CHANGE_ME
+    config_path: null
+    tensor_parallel_size: null

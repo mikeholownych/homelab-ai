@@ -118,6 +118,7 @@ class DataContractTests(unittest.TestCase):
 
         self.assertEqual(
             {
+                "machine_model",
                 "cpu_present",
                 "cpu_model_match",
                 "gpu_count",
@@ -128,6 +129,7 @@ class DataContractTests(unittest.TestCase):
                 "per_device_tensor_operations",
                 "pcie_topology",
                 "resizable_bar_enabled",
+                "above_4g_decoding_enabled",
                 "vllm_health",
                 "single_gpu_inference_configured",
                 "dual_gpu_inference_configured",
@@ -138,20 +140,27 @@ class DataContractTests(unittest.TestCase):
             },
             set(checks),
         )
+        self.assertEqual("30E1S7NJ00", checks["machine_model"]["expected"]["value"])
+        self.assertEqual("blocking", checks["machine_model"]["severity"])
         self.assertEqual("hardware", checks["cpu_present"]["classification"])
         self.assertEqual("blocking", checks["cpu_model_match"]["severity"])
         self.assertEqual("blocking", checks["gpu_count"]["severity"])
         self.assertEqual("blocking", checks["gpu_model_match"]["severity"])
         self.assertEqual(32, checks["gpu_vram_per_card"]["expected"]["target_gib"])
+        self.assertEqual(28, checks["gpu_vram_per_card"]["expected"]["minimum_gib"])
+        self.assertEqual(36, checks["gpu_vram_per_card"]["expected"]["maximum_gib"])
         self.assertEqual(2, checks["level_zero_device_count"]["expected"]["value"])
         self.assertEqual(2, checks["pytorch_xpu_device_count"]["expected"]["value"])
         self.assertEqual("always", checks["per_device_tensor_operations"]["applies_when"])
         self.assertEqual("always", checks["pcie_topology"]["applies_when"])
         self.assertEqual("blocking", checks["resizable_bar_enabled"]["severity"])
+        self.assertEqual("blocking", checks["above_4g_decoding_enabled"]["severity"])
+        self.assertEqual("when_observable", checks["above_4g_decoding_enabled"]["applies_when"])
+        self.assertEqual("NOT_TESTED", checks["above_4g_decoding_enabled"]["undiscoverable_result"])
         self.assertEqual("when_vllm_enabled", checks["vllm_health"]["applies_when"])
         self.assertEqual("always", checks["single_gpu_inference_configured"]["applies_when"])
         self.assertEqual(
-            "when_distributed_vllm_enabled",
+            "when_selected_inference_profile_tensor_parallel_size_equals_2",
             checks["dual_gpu_inference_configured"]["applies_when"],
         )
         self.assertEqual("when_llama_cpp_enabled", checks["llama_cpp_fallback_health"]["applies_when"])
@@ -198,14 +207,20 @@ class DataContractTests(unittest.TestCase):
                     del missing_expected_observed_case["artifacts"][0]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["artifacts"][0]["observed"]["unexpected"] = True
+                    status_case = copy.deepcopy(fixture)
+                    status_case["status"] = "incomplete"
+                    self.assertFalse(list(validator.iter_errors(status_case)))
                 elif schema_name == "benchmark":
-                    del missing_expected_observed_case["telemetry"]["prompt_tokens_per_second"]["observed"]
+                    del missing_expected_observed_case["correctness"]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["telemetry"]["prompt_tokens_per_second"]["expected"]["unexpected"] = True
                 elif schema_name == "cmdb":
                     del missing_expected_observed_case["configuration_item"]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
                     nested_extra_property_case["configuration_item"]["expected"]["runtime_versions"]["unexpected"] = True
+                    extra_capability_case = copy.deepcopy(fixture)
+                    extra_capability_case["configuration_item"]["expected"]["capabilities"]["arbitrary_future_command_capability"] = True
+                    self.assertTrue(list(validator.iter_errors(extra_capability_case)))
                 elif schema_name == "itsm":
                     del missing_expected_observed_case["execution_result"]["observed"]
                     nested_extra_property_case = copy.deepcopy(fixture)
@@ -218,6 +233,17 @@ class DataContractTests(unittest.TestCase):
         self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED"], schema["properties"]["status"]["enum"])
         check_status_enum = schema["properties"]["checks"]["items"]["properties"]["status"]["enum"]
         self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED"], check_status_enum)
+
+    def test_benchmark_schema_requires_duration_and_model_split_parameters(self) -> None:
+        schema = load_json(SCHEMA_DIR / "benchmark.schema.json")
+        self.assertIn("duration", schema["required"])
+        self.assertIn("split_parameters", schema["properties"]["model"]["properties"])
+        correctness_required = schema["properties"]["correctness"]["required"]
+        self.assertEqual(["status", "summary", "expected", "observed"], correctness_required)
+
+    def test_evidence_schema_allows_incomplete_status(self) -> None:
+        schema = load_json(SCHEMA_DIR / "evidence.schema.json")
+        self.assertIn("incomplete", schema["properties"]["status"]["enum"])
 
 
 if __name__ == "__main__":

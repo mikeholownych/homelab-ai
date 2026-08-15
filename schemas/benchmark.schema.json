@@ -13,6 +13,7 @@
     "system",
     "model",
     "execution",
+    "duration",
     "telemetry",
     "correctness"
   ],
@@ -64,12 +65,28 @@
     "model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["model_id", "revision", "artifact_sha256", "quantization"],
+      "required": ["model_id", "revision", "artifact_sha256", "quantization", "split_parameters"],
       "properties": {
         "model_id": {"type": "string", "minLength": 1, "not": {"pattern": "^simulated://benchmark-placeholder$"}},
         "revision": {"type": "string", "minLength": 1},
         "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "quantization": {"type": "string", "minLength": 1}
+        "quantization": {"type": "string", "minLength": 1},
+        "split_parameters": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["strategy", "shard_count"],
+              "properties": {
+                "strategy": {"type": "string", "minLength": 1},
+                "shard_count": {"type": "integer", "minimum": 1}
+              }
+            }
+          ]
+        }
       }
     },
     "execution": {
@@ -80,6 +97,15 @@
         "gpu_count": {"type": "integer", "minimum": 1},
         "tensor_parallelism": {"type": "integer", "minimum": 1},
         "context_window_tokens": {"type": "integer", "minimum": 1}
+      }
+    },
+    "duration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["test_type", "seconds"],
+      "properties": {
+        "test_type": {"type": "string", "minLength": 1},
+        "seconds": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "telemetry": {
@@ -107,10 +133,26 @@
     "correctness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "summary"],
+      "required": ["status", "summary", "expected", "observed"],
       "properties": {
         "status": {"type": "string", "enum": ["PASS", "FAIL"]},
-        "summary": {"type": "string", "minLength": 1}
+        "summary": {"type": "string", "minLength": 1},
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary"],
+          "properties": {
+            "summary": {"type": "string", "minLength": 1}
+          }
+        },
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["summary"],
+          "properties": {
+            "summary": {"type": "string", "minLength": 1}
+          }
+        }
       }
     }
   },

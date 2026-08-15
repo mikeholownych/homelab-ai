@@ -114,10 +114,10 @@ class InventoryContractTests(unittest.TestCase):
                 "ray_enabled": False,
                 "distributed_vllm_enabled": False,
                 "endpoints": {
-                    "api_base_url": "CHANGE_ME",
-                    "scheduler_address": "CHANGE_ME",
-                    "ray_gcs_address": "CHANGE_ME",
-                    "object_storage_url": "CHANGE_ME",
+                    "api_base_url": None,
+                    "scheduler_address": None,
+                    "ray_gcs_address": None,
+                    "object_storage_url": None,
                 },
                 "fleet": {
                     "id": None,
@@ -130,9 +130,9 @@ class InventoryContractTests(unittest.TestCase):
         )
         self.assertEqual(
             {
-                "primary_bind_address": "CHANGE_ME",
-                "management_fqdn": "CHANGE_ME",
-                "metrics_endpoint": "CHANGE_ME",
+                "primary_bind_address": None,
+                "management_fqdn": None,
+                "metrics_endpoint": None,
             },
             host_vars["network_endpoints"],
         )
@@ -161,6 +161,7 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual("worker", hostvars["cluster"]["node_role"])
         self.assertEqual("unselected", hostvars["model_selection_controls"]["serving_model"]["selection_state"])
         self.assertEqual("disabled", hostvars["model_selection_controls"]["benchmark_model"]["execution_state"])
+        self.assertIsNone(hostvars["cluster"]["endpoints"]["api_base_url"])
 
     def test_lab_inventory_parses_without_declaring_hosts(self) -> None:
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
@@ -196,20 +197,35 @@ class InventoryContractTests(unittest.TestCase):
             self.assertIsNone(runtime_profile["previous_known_good"])
 
         self.assertEqual(
-            "disabled",
-            inference_vars["model_selection_controls"]["serving_model"]["execution_state"],
+            None,
+            inference_vars["model_selection_controls"]["serving_model"]["config_path"],
         )
         self.assertEqual(
             "unselected",
             inference_vars["model_selection_controls"]["benchmark_model"]["selection_state"],
         )
+        self.assertIsNone(inference_vars["model_selection_controls"]["benchmark_model"]["config_path"])
 
     def test_inventory_docs_explain_reserved_environment_key_and_operator_inputs(self) -> None:
         readme = INVENTORY_README.read_text(encoding="utf-8")
         self.assertIn("node_metadata.environment", readme)
         self.assertIn("Ansible reserves the flat variable name `environment`", readme)
-        self.assertIn("CHANGE_ME", readme)
+        self.assertIn("sole exception", readme)
         self.assertIn("operator input", readme)
+        self.assertIn("ansible_host", readme)
+
+    def test_change_me_occurs_only_for_ansible_host(self) -> None:
+        command = ["rg", "-n", "CHANGE_ME", "inventory"]
+        result = subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        self.assertEqual(1, len(lines))
+        self.assertTrue(lines[0].endswith("ansible_host: CHANGE_ME"), lines[0])
 
 
 if __name__ == "__main__":

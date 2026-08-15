@@ -16,7 +16,10 @@
       "hardware_profile": "p620_dual_b65",
       "capabilities": {
         "gpu": true,
-        "inference": true
+        "inference": true,
+        "benchmarking": true,
+        "monitoring": true,
+        "cluster_eligible": true
       },
       "cluster_membership": {
         "name": null,
@@ -43,7 +46,10 @@
       "hardware_profile": "p620_dual_b65",
       "capabilities": {
         "gpu": true,
-        "inference": true
+        "inference": true,
+        "benchmarking": true,
+        "monitoring": true,
+        "cluster_eligible": true
       },
       "cluster_membership": {
         "name": null,

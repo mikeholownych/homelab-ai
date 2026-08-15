@@ -32,7 +32,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["captured", "missing", "superseded"]
+      "enum": ["captured", "missing", "superseded", "incomplete"]
     },
     "collection_target": {
       "type": "object",
