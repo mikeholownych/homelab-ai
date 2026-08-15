@@ -1,9 +1,12 @@
 ---
 cluster_defaults:
   enabled: false
+  name: null
   membership_state: standalone
   allow_cmdb_export: false
   allow_itsm_integration: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
 
 cluster_secret_paths:
   cluster_bootstrap: secret/local-ai/cluster/bootstrap

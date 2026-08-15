@@ -16,8 +16,10 @@ PRODUCTION_INVENTORY = PRODUCTION_ROOT / "hosts.yml"
 LAB_INVENTORY = LAB_ROOT / "hosts.yml"
 PRODUCTION_HOST_VARS = PRODUCTION_ROOT / "host_vars" / "ai-p620-01.yml"
 PRODUCTION_GROUP_VARS = PRODUCTION_ROOT / "group_vars"
+INVENTORY_README = REPO_ROOT / "inventory" / "README.md"
 
 REQUIRED_PATHS = (
+    INVENTORY_README,
     PRODUCTION_INVENTORY,
     PRODUCTION_GROUP_VARS / "all.yml",
     PRODUCTION_GROUP_VARS / "inference.yml",
@@ -35,7 +37,7 @@ def load_yaml(path: Path) -> object:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
 
 
-def run_ansible_inventory(inventory_path: Path) -> dict[str, object]:
+def run_ansible_inventory(inventory_path: Path) -> tuple[dict[str, object], str]:
     executable = REPO_ROOT / ".venv" / "bin" / "ansible-inventory"
     command = [str(executable if executable.exists() else "ansible-inventory"), "-i", str(inventory_path), "--list"]
     env = os.environ.copy()
@@ -48,7 +50,7 @@ def run_ansible_inventory(inventory_path: Path) -> dict[str, object]:
         capture_output=True,
         text=True,
     )
-    return json.loads(output.stdout)
+    return json.loads(output.stdout), output.stderr
 
 
 class InventoryContractTests(unittest.TestCase):
@@ -60,9 +62,14 @@ class InventoryContractTests(unittest.TestCase):
         host_vars = load_yaml(PRODUCTION_HOST_VARS)
 
         self.assertEqual("CHANGE_ME", host_vars["ansible_host"])
-        self.assertEqual("production", host_vars["environment"])
+        self.assertEqual("production", host_vars["node_metadata"]["environment"])
         self.assertEqual("p620_dual_b65", host_vars["hardware_profile"])
         self.assertEqual({"inference": True, "gpu": True}, host_vars["node_roles"])
+        self.assertEqual("worker", host_vars["cluster"]["node_role"])
+        self.assertEqual(
+            {"worker": True, "api": False, "scheduler": False, "storage": False},
+            host_vars["cluster"]["roles"],
+        )
         self.assertEqual(
             {
                 "gpu": True,
@@ -80,6 +87,8 @@ class InventoryContractTests(unittest.TestCase):
                 "clustering": False,
                 "cmdb_export": False,
                 "itsm_integration": False,
+                "ray_enabled": False,
+                "distributed_vllm_enabled": False,
             },
             host_vars["features"],
         )
@@ -90,7 +99,26 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual(
             {
                 "enabled": False,
+                "name": None,
                 "membership_state": "standalone",
+                "node_role": "worker",
+                "roles": {"worker": True, "api": False, "scheduler": False, "storage": False},
+                "capabilities": {
+                    "ray": False,
+                    "distributed_vllm": False,
+                    "worker_service": True,
+                    "api_service": False,
+                    "scheduler_service": False,
+                    "storage_service": False,
+                },
+                "ray_enabled": False,
+                "distributed_vllm_enabled": False,
+                "endpoints": {
+                    "api_base_url": "CHANGE_ME",
+                    "scheduler_address": "CHANGE_ME",
+                    "ray_gcs_address": "CHANGE_ME",
+                    "object_storage_url": "CHANGE_ME",
+                },
                 "fleet": {
                     "id": None,
                     "coordinator": None,
@@ -100,25 +128,43 @@ class InventoryContractTests(unittest.TestCase):
             },
             host_vars["cluster"],
         )
+        self.assertEqual(
+            {
+                "primary_bind_address": "CHANGE_ME",
+                "management_fqdn": "CHANGE_ME",
+                "metrics_endpoint": "CHANGE_ME",
+            },
+            host_vars["network_endpoints"],
+        )
 
     def test_production_inventory_parses_and_keeps_host_metadata_authoritative(self) -> None:
-        inventory = run_ansible_inventory(PRODUCTION_INVENTORY)
+        inventory, stderr = run_ansible_inventory(PRODUCTION_INVENTORY)
+        self.assertEqual("", stderr.strip())
 
         self.assertEqual(["ai-p620-01"], inventory["production"]["hosts"])
         self.assertEqual(["ai-p620-01"], inventory["inference"]["hosts"])
         self.assertEqual(["ai-p620-01"], inventory["gpu"]["hosts"])
+        self.assertEqual(["ai-p620-01"], inventory["cluster"]["hosts"])
 
         hostvars = inventory["_meta"]["hostvars"]["ai-p620-01"]
-        self.assertEqual("production", hostvars["environment"])
+        self.assertEqual("production", hostvars["node_metadata"]["environment"])
         self.assertEqual("p620_dual_b65", hostvars["hardware_profile"])
         self.assertEqual("CHANGE_ME", hostvars["ansible_host"])
         self.assertEqual(False, hostvars["features"]["clustering"])
+        self.assertEqual(False, hostvars["features"]["ray_enabled"])
+        self.assertEqual(False, hostvars["features"]["distributed_vllm_enabled"])
         self.assertIn("inference_secret_paths", hostvars)
         self.assertIn("gpu_secret_paths", hostvars)
+        self.assertIn("cluster_secret_paths", hostvars)
         self.assertIn("monitoring_secret_paths", hostvars)
+        self.assertIn("cluster_defaults", hostvars)
+        self.assertEqual("worker", hostvars["cluster"]["node_role"])
+        self.assertEqual("unselected", hostvars["model_selection_controls"]["serving_model"]["selection_state"])
+        self.assertEqual("disabled", hostvars["model_selection_controls"]["benchmark_model"]["execution_state"])
 
     def test_lab_inventory_parses_without_declaring_hosts(self) -> None:
-        inventory = run_ansible_inventory(LAB_INVENTORY)
+        inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
+        self.assertEqual("", stderr.strip())
         self.assertEqual({}, inventory["_meta"]["hostvars"])
         self.assertEqual([], inventory.get("lab", {}).get("hosts", []))
 
@@ -148,6 +194,22 @@ class InventoryContractTests(unittest.TestCase):
             self.assertIsNone(runtime_profile["current"])
             self.assertIsNone(runtime_profile["candidate"])
             self.assertIsNone(runtime_profile["previous_known_good"])
+
+        self.assertEqual(
+            "disabled",
+            inference_vars["model_selection_controls"]["serving_model"]["execution_state"],
+        )
+        self.assertEqual(
+            "unselected",
+            inference_vars["model_selection_controls"]["benchmark_model"]["selection_state"],
+        )
+
+    def test_inventory_docs_explain_reserved_environment_key_and_operator_inputs(self) -> None:
+        readme = INVENTORY_README.read_text(encoding="utf-8")
+        self.assertIn("node_metadata.environment", readme)
+        self.assertIn("Ansible reserves the flat variable name `environment`", readme)
+        self.assertIn("CHANGE_ME", readme)
+        self.assertIn("operator input", readme)
 
 
 if __name__ == "__main__":

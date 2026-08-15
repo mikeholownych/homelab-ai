@@ -3,28 +3,60 @@
   "generated_at": "2026-08-15T00:00:00Z",
   "git_sha": "d0142970d0142970d0142970d0142970d0142970",
   "simulated": true,
-  "status": "pass",
-  "node": {
-    "id": "ai-p620-01",
-    "adapter": "synthetic"
+  "status": "PASS",
+  "system": {
+    "hostname": "ai-p620-01",
+    "bios_version": "S0KT99A",
+    "kernel_version": "6.8.0-local",
+    "intel_runtime_version": "1.5.0",
+    "level_zero_version": "1.18.5",
+    "pytorch_version": "2.8.0+xpu",
+    "vllm_version": "0.9.0",
+    "llama_commit": "abc1234def5678"
   },
-  "workload": {
-    "kind": "throughput",
-    "model_id": "simulated://benchmark-placeholder",
-    "scenario": "commissioning-dry-run"
+  "model": {
+    "model_id": "meta-llama/Llama-3.1-8B-Instruct",
+    "revision": "2026-08-10",
+    "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "quantization": "fp16"
   },
-  "measurements": [
-    {
-      "name": "tokens_per_second",
-      "unit": "tok/s",
-      "expected": {
-        "summary": "Synthetic throughput baseline",
-        "value": 1000
-      },
-      "observed": {
-        "summary": "Synthetic throughput met baseline",
-        "value": 1001
-      }
+  "execution": {
+    "gpu_count": 2,
+    "tensor_parallelism": 2,
+    "context_window_tokens": 8192
+  },
+  "telemetry": {
+    "prompt_tokens_per_second": {
+      "expected": {"value": 1000, "unit": "tok/s"},
+      "observed": {"value": 1001, "unit": "tok/s"}
+    },
+    "generation_tokens_per_second": {
+      "expected": {"value": 120, "unit": "tok/s"},
+      "observed": {"value": 122, "unit": "tok/s"}
+    },
+    "ttft_ms": {
+      "expected": {"value": 2500, "unit": "ms"},
+      "observed": {"value": 2400, "unit": "ms"}
+    },
+    "vram_gib_per_gpu": {
+      "expected": {"value": 32, "unit": "GiB"},
+      "observed": {"value": 31.5, "unit": "GiB"}
+    },
+    "system_ram_gib": {
+      "expected": {"value": 48, "unit": "GiB"},
+      "observed": {"value": 48, "unit": "GiB"}
+    },
+    "gpu_temperature_c": {
+      "expected": {"status": "unavailable", "reason": "sensor optional in simulation"},
+      "observed": {"status": "unavailable", "reason": "sensor optional in simulation"}
+    },
+    "gpu_power_watts": {
+      "expected": {"status": "unavailable", "reason": "telemetry not wired in simulation"},
+      "observed": {"status": "unavailable", "reason": "telemetry not wired in simulation"}
     }
-  ]
+  },
+  "correctness": {
+    "status": "PASS",
+    "summary": "Simulated benchmark output matched the expected response envelope."
+  }
 }

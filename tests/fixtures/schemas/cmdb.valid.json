@@ -3,25 +3,75 @@
   "generated_at": "2026-08-15T00:00:00Z",
   "git_sha": "d0142970d0142970d0142970d0142970d0142970",
   "simulated": true,
-  "status": "draft",
+  "status": "DRAFT",
   "node": {
-    "id": "ai-p620-01",
+    "node_id": "ai-p620-01",
+    "hostname": "ai-p620-01",
     "environment": "production"
   },
-  "inventory": {
+  "configuration_item": {
     "expected": {
+      "ci_id": "ci-ai-p620-01",
+      "ci_type": "NODE",
       "hardware_profile": "p620_dual_b65",
       "capabilities": {
         "gpu": true,
         "inference": true
+      },
+      "cluster_membership": {
+        "name": null,
+        "membership_state": "standalone",
+        "node_role": "worker",
+        "roles": {
+          "worker": true,
+          "api": false,
+          "scheduler": false,
+          "storage": false
+        }
+      },
+      "runtime_versions": {
+        "intel_runtime": null,
+        "level_zero": null,
+        "pytorch": null,
+        "vllm": null,
+        "llama_commit": null
       }
     },
     "observed": {
+      "ci_id": "ci-ai-p620-01",
+      "ci_type": "NODE",
       "hardware_profile": "p620_dual_b65",
       "capabilities": {
         "gpu": true,
         "inference": true
+      },
+      "cluster_membership": {
+        "name": null,
+        "membership_state": "standalone",
+        "node_role": "worker",
+        "roles": {
+          "worker": true,
+          "api": false,
+          "scheduler": false,
+          "storage": false
+        }
+      },
+      "runtime_versions": {
+        "intel_runtime": null,
+        "level_zero": null,
+        "pytorch": null,
+        "vllm": null,
+        "llama_commit": null
       }
     }
-  }
+  },
+  "relationships": [
+    {
+      "relationship_type": "member_of",
+      "target_ci_id": "fleet-local-ai",
+      "direction": "OUTBOUND"
+    }
+  ],
+  "last_convergence_at": "2026-08-15T00:00:00Z",
+  "last_validation_at": "2026-08-15T00:00:00Z"
 }

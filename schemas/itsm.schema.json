@@ -10,8 +10,17 @@
     "git_sha",
     "simulated",
     "status",
-    "node",
-    "change_request"
+    "adapter",
+    "change_id",
+    "request_id",
+    "affected_ci_ids",
+    "risk",
+    "approval_state",
+    "maintenance_window",
+    "permitted_actions",
+    "rollback_reference",
+    "execution_result",
+    "validation_result"
   ],
   "properties": {
     "schema_version": {
@@ -20,7 +29,8 @@
     },
     "generated_at": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
     },
     "git_sha": {
       "type": "string",
@@ -31,41 +41,71 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pending", "approved", "implemented", "failed", "not_required"]
+      "enum": ["PENDING", "APPROVED", "IMPLEMENTED", "FAILED", "NOT_REQUIRED"]
     },
-    "node": {
+    "adapter": {"type": "string", "minLength": 1},
+    "change_id": {"type": "string", "minLength": 1},
+    "request_id": {"type": "string", "minLength": 1},
+    "affected_ci_ids": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH"]},
+    "approval_state": {"type": "string", "enum": ["NOT_REQUIRED", "PENDING", "APPROVED", "REJECTED"]},
+    "maintenance_window": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "environment"],
+      "required": ["start", "end"],
       "properties": {
-        "id": {"type": "string", "minLength": 1},
-        "environment": {"type": "string", "minLength": 1}
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+        }
       }
     },
-    "change_request": {
+    "permitted_actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["PATCH", "UPGRADE", "ROLLBACK", "VALIDATE", "BENCHMARK", "RECONCILE"]
+      }
+    },
+    "rollback_reference": {"type": "string", "minLength": 1},
+    "execution_result": {
       "type": "object",
       "additionalProperties": false,
       "required": ["expected", "observed"],
       "properties": {
-        "expected": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["category", "approval"],
-          "properties": {
-            "category": {"type": "string", "minLength": 1},
-            "approval": {"type": "string", "minLength": 1}
-          }
-        },
-        "observed": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["category", "approval", "ticket_id"],
-          "properties": {
-            "category": {"type": "string", "minLength": 1},
-            "approval": {"type": "string", "minLength": 1},
-            "ticket_id": {"type": "string", "minLength": 1}
-          }
-        }
+        "expected": {"$ref": "#/$defs/resultState"},
+        "observed": {"$ref": "#/$defs/resultState"}
+      }
+    },
+    "validation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "properties": {
+        "expected": {"$ref": "#/$defs/resultState"},
+        "observed": {"$ref": "#/$defs/resultState"}
+      }
+    }
+  },
+  "$defs": {
+    "resultState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "summary"],
+      "properties": {
+        "status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "NOT_TESTED"]},
+        "summary": {"type": "string", "minLength": 1}
       }
     }
   }

@@ -1,6 +1,9 @@
 ---
+# CHANGE_ME placeholders are intentional operator inputs resolved at commissioning time.
 ansible_host: CHANGE_ME
-environment: production
+node_metadata:
+  environment: production
+  hostname: ai-p620-01
 hardware_profile: p620_dual_b65
 
 node_roles:
@@ -20,10 +23,38 @@ features:
   clustering: false
   cmdb_export: false
   itsm_integration: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+
+network_endpoints:
+  primary_bind_address: CHANGE_ME
+  management_fqdn: CHANGE_ME
+  metrics_endpoint: CHANGE_ME
 
 cluster:
   enabled: false
+  name: null
   membership_state: standalone
+  node_role: worker
+  roles:
+    worker: true
+    api: false
+    scheduler: false
+    storage: false
+  capabilities:
+    ray: false
+    distributed_vllm: false
+    worker_service: true
+    api_service: false
+    scheduler_service: false
+    storage_service: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+  endpoints:
+    api_base_url: CHANGE_ME
+    scheduler_address: CHANGE_ME
+    ray_gcs_address: CHANGE_ME
+    object_storage_url: CHANGE_ME
   fleet:
     id: null
     coordinator: null

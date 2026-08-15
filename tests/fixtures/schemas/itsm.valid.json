@@ -3,20 +3,37 @@
   "generated_at": "2026-08-15T00:00:00Z",
   "git_sha": "d0142970d0142970d0142970d0142970d0142970",
   "simulated": true,
-  "status": "pending",
-  "node": {
-    "id": "ai-p620-01",
-    "environment": "production"
+  "status": "PENDING",
+  "adapter": "generic",
+  "change_id": "CHG-100",
+  "request_id": "REQ-100",
+  "affected_ci_ids": ["ci-ai-p620-01"],
+  "risk": "MEDIUM",
+  "approval_state": "PENDING",
+  "maintenance_window": {
+    "start": "2026-08-16T01:00:00Z",
+    "end": "2026-08-16T03:00:00Z"
   },
-  "change_request": {
+  "permitted_actions": ["PATCH", "VALIDATE", "ROLLBACK"],
+  "rollback_reference": "rollback://ci-ai-p620-01/prechange",
+  "execution_result": {
     "expected": {
-      "category": "upgrade",
-      "approval": "manual"
+      "status": "NOT_TESTED",
+      "summary": "Execution has not started."
     },
     "observed": {
-      "category": "upgrade",
-      "approval": "manual",
-      "ticket_id": "SIM-100"
+      "status": "NOT_TESTED",
+      "summary": "Execution has not started."
+    }
+  },
+  "validation_result": {
+    "expected": {
+      "status": "PASS",
+      "summary": "Validation should pass after the approved window."
+    },
+    "observed": {
+      "status": "NOT_TESTED",
+      "summary": "Validation not yet executed."
     }
   }
 }

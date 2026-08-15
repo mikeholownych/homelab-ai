@@ -2,17 +2,25 @@
 schema_version: 1.0.0
 
 states:
-  in_sync:
+  no_drift:
+    classification: healthy
     terminal: true
-  drift_detected:
-    terminal: false
-  reconciliation_pending:
-    terminal: false
-  exception_approved:
+    remediation_mode: none
+  remediated_drift:
+    classification: recovered
     terminal: true
+    remediation_mode: verified_reconcile
+  unresolved_drift:
+    classification: pending_action
+    terminal: false
+    remediation_mode: manual_review
+  blocking_drift:
+    classification: blocked
+    terminal: false
+    remediation_mode: manual_block
 
 remediation:
-  default_state: drift_detected
+  default_state: unresolved_drift
   auto_reconcile_allowed_for:
     - os_security_patches
   manual_approval_required_for:
@@ -23,3 +31,7 @@ remediation:
     - vllm
     - llama_cpp
     - firmware_bios
+  state_transitions:
+    auto_reconcile_success: remediated_drift
+    manual_fix_pending: unresolved_drift
+    unsafe_or_material_regression: blocking_drift

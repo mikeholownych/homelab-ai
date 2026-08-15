@@ -21,7 +21,8 @@
     },
     "generated_at": {
       "type": "string",
-      "format": "date-time"
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
     },
     "git_sha": {
       "type": "string",
@@ -32,7 +33,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pass", "fail", "warning", "not_tested"]
+      "enum": ["PASS", "FAIL", "BLOCKED", "NOT_TESTED"]
     },
     "node": {
       "type": "object",
@@ -50,12 +51,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "category", "severity", "status", "expected", "observed", "evidence_refs"],
+        "required": ["id", "category", "classification", "severity", "status", "expected", "observed", "evidence_refs"],
         "properties": {
           "id": {"type": "string", "minLength": 1},
           "category": {"type": "string", "minLength": 1},
+          "classification": {"type": "string", "enum": ["hardware", "runtime", "service", "access", "operations", "firmware"]},
           "severity": {"type": "string", "enum": ["information", "warning", "blocking"]},
-          "status": {"type": "string", "enum": ["pass", "fail", "warning", "not_tested"]},
+          "status": {"type": "string", "enum": ["PASS", "FAIL", "BLOCKED", "NOT_TESTED"]},
           "expected": {"$ref": "#/$defs/summaryValue"},
           "observed": {"$ref": "#/$defs/summaryValue"},
           "evidence_refs": {
@@ -68,11 +70,12 @@
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["blocking_failures", "warnings", "not_tested"],
+      "required": ["blocking_failures", "warnings", "not_tested", "classification"],
       "properties": {
         "blocking_failures": {"type": "integer", "minimum": 0},
         "warnings": {"type": "integer", "minimum": 0},
-        "not_tested": {"type": "integer", "minimum": 0}
+        "not_tested": {"type": "integer", "minimum": 0},
+        "classification": {"type": "string", "enum": ["healthy", "degraded", "blocked", "incomplete"]}
       }
     }
   },

@@ -14,3 +14,23 @@ model_profiles:
     commissioning_state: commissioning_required
     model_id: null
     source_ref: null
+
+model_selection_controls:
+  serving_model:
+    enabled: false
+    commissioning_state: commissioning_required
+    selection_state: unselected
+    execution_state: disabled
+    model_id: null
+    revision: null
+    model_path: null
+    config_path: CHANGE_ME
+  benchmark_model:
+    enabled: false
+    commissioning_state: commissioning_required
+    selection_state: unselected
+    execution_state: disabled
+    model_id: null
+    revision: null
+    model_path: null
+    config_path: CHANGE_ME

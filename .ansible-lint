@@ -5,5 +5,4 @@ exclude_paths:
   - .worktrees/
   - docs/
   - evidence/
-  - inventory/production/host_vars/ai-p620-01.yml
   - tests/fixtures/

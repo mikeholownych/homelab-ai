@@ -3,7 +3,7 @@
   "generated_at": "2026-08-15T00:00:00Z",
   "git_sha": "d0142970d0142970d0142970d0142970d0142970",
   "simulated": true,
-  "status": "pass",
+  "status": "PASS",
   "node": {
     "id": "ai-p620-01",
     "environment": "production",
@@ -13,8 +13,9 @@
     {
       "id": "gpu_count",
       "category": "hardware",
+      "classification": "hardware",
       "severity": "blocking",
-      "status": "pass",
+      "status": "PASS",
       "expected": {
         "summary": "Two discrete GPUs expected",
         "value": 2
@@ -31,6 +32,7 @@
   "summary": {
     "blocking_failures": 0,
     "warnings": 0,
-    "not_tested": 0
+    "not_tested": 0,
+    "classification": "healthy"
   }
 }

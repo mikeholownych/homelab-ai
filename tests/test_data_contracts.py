@@ -7,6 +7,7 @@ from pathlib import Path
 
 import jsonschema
 import yaml
+from jsonschema import FormatChecker
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -93,11 +94,13 @@ class DataContractTests(unittest.TestCase):
         drift = load_yaml(DRIFT_POLICY)
 
         self.assertEqual(
-            {"in_sync", "drift_detected", "reconciliation_pending", "exception_approved"},
+            {"no_drift", "remediated_drift", "unresolved_drift", "blocking_drift"},
             set(drift["states"]),
         )
-        self.assertEqual("drift_detected", drift["remediation"]["default_state"])
+        self.assertEqual("unresolved_drift", drift["remediation"]["default_state"])
         self.assertIn("os_security_patches", drift["remediation"]["auto_reconcile_allowed_for"])
+        self.assertEqual("healthy", drift["states"]["no_drift"]["classification"])
+        self.assertEqual("manual_block", drift["states"]["blocking_drift"]["remediation_mode"])
         for component_name in (
             "kernel",
             "intel_gpu",
@@ -113,29 +116,66 @@ class DataContractTests(unittest.TestCase):
         validation = load_yaml(VALIDATION_POLICY)
         checks = {check["id"]: check for check in validation["required_checks"]}
 
+        self.assertEqual(
+            {
+                "cpu_present",
+                "cpu_model_match",
+                "gpu_count",
+                "gpu_model_match",
+                "gpu_vram_per_card",
+                "level_zero_device_count",
+                "pytorch_xpu_device_count",
+                "per_device_tensor_operations",
+                "pcie_topology",
+                "resizable_bar_enabled",
+                "vllm_health",
+                "single_gpu_inference_configured",
+                "dual_gpu_inference_configured",
+                "llama_cpp_fallback_health",
+                "required_services",
+                "scheduled_reconciliation",
+                "vault_access",
+            },
+            set(checks),
+        )
+        self.assertEqual("hardware", checks["cpu_present"]["classification"])
+        self.assertEqual("blocking", checks["cpu_model_match"]["severity"])
         self.assertEqual("blocking", checks["gpu_count"]["severity"])
         self.assertEqual("blocking", checks["gpu_model_match"]["severity"])
+        self.assertEqual(32, checks["gpu_vram_per_card"]["expected"]["target_gib"])
+        self.assertEqual(2, checks["level_zero_device_count"]["expected"]["value"])
+        self.assertEqual(2, checks["pytorch_xpu_device_count"]["expected"]["value"])
+        self.assertEqual("always", checks["per_device_tensor_operations"]["applies_when"])
+        self.assertEqual("always", checks["pcie_topology"]["applies_when"])
         self.assertEqual("blocking", checks["resizable_bar_enabled"]["severity"])
-        self.assertEqual("blocking", checks["level_zero_detected"]["severity"])
-        self.assertEqual("blocking", checks["pcie_link_health"]["severity"])
-        self.assertEqual("warning", checks["memory_capacity"]["severity"])
-        self.assertEqual("information", checks["dimm_topology_observed"]["severity"])
+        self.assertEqual("when_vllm_enabled", checks["vllm_health"]["applies_when"])
+        self.assertEqual("always", checks["single_gpu_inference_configured"]["applies_when"])
+        self.assertEqual(
+            "when_distributed_vllm_enabled",
+            checks["dual_gpu_inference_configured"]["applies_when"],
+        )
+        self.assertEqual("when_llama_cpp_enabled", checks["llama_cpp_fallback_health"]["applies_when"])
+        self.assertEqual("warning", checks["required_services"]["severity"])
+        self.assertEqual("information", checks["scheduled_reconciliation"]["severity"])
+        self.assertEqual("blocking", checks["vault_access"]["severity"])
 
     def test_schema_fixtures_validate_against_draft_2020_12_contracts(self) -> None:
+        format_checker = FormatChecker()
         for schema_name, fixture_path in SCHEMA_FIXTURES.items():
             with self.subTest(schema=schema_name):
                 schema = load_json(SCHEMA_DIR / f"{schema_name}.schema.json")
                 fixture = load_json(fixture_path)
                 self.assertEqual("https://json-schema.org/draft/2020-12/schema", schema["$schema"])
                 jsonschema.Draft202012Validator.check_schema(schema)
-                jsonschema.validate(fixture, schema)
+                jsonschema.validate(fixture, schema, format_checker=format_checker)
 
     def test_schemas_reject_invalid_extra_properties_status_and_missing_expected_observed(self) -> None:
+        format_checker = FormatChecker()
         for schema_name, fixture_path in SCHEMA_FIXTURES.items():
             with self.subTest(schema=schema_name):
                 schema = load_json(SCHEMA_DIR / f"{schema_name}.schema.json")
                 fixture = load_json(fixture_path)
-                validator = jsonschema.Draft202012Validator(schema)
+                validator = jsonschema.Draft202012Validator(schema, format_checker=format_checker)
 
                 extra_property_case = copy.deepcopy(fixture)
                 extra_property_case["unexpected"] = True
@@ -145,18 +185,39 @@ class DataContractTests(unittest.TestCase):
                 invalid_status_case["status"] = "invalid-status"
                 self.assertTrue(list(validator.iter_errors(invalid_status_case)))
 
+                invalid_timestamp_case = copy.deepcopy(fixture)
+                invalid_timestamp_case["generated_at"] = "2026-99-99T25:61:61Z"
+                self.assertTrue(list(validator.iter_errors(invalid_timestamp_case)))
+
                 missing_expected_observed_case = copy.deepcopy(fixture)
                 if schema_name == "validation":
                     del missing_expected_observed_case["checks"][0]["expected"]
+                    nested_extra_property_case = copy.deepcopy(fixture)
+                    nested_extra_property_case["checks"][0]["expected"]["unexpected"] = True
                 elif schema_name == "evidence":
                     del missing_expected_observed_case["artifacts"][0]["observed"]
+                    nested_extra_property_case = copy.deepcopy(fixture)
+                    nested_extra_property_case["artifacts"][0]["observed"]["unexpected"] = True
                 elif schema_name == "benchmark":
-                    del missing_expected_observed_case["measurements"][0]["expected"]
+                    del missing_expected_observed_case["telemetry"]["prompt_tokens_per_second"]["observed"]
+                    nested_extra_property_case = copy.deepcopy(fixture)
+                    nested_extra_property_case["telemetry"]["prompt_tokens_per_second"]["expected"]["unexpected"] = True
                 elif schema_name == "cmdb":
-                    del missing_expected_observed_case["inventory"]["observed"]
+                    del missing_expected_observed_case["configuration_item"]["observed"]
+                    nested_extra_property_case = copy.deepcopy(fixture)
+                    nested_extra_property_case["configuration_item"]["expected"]["runtime_versions"]["unexpected"] = True
                 elif schema_name == "itsm":
-                    del missing_expected_observed_case["change_request"]["observed"]
+                    del missing_expected_observed_case["execution_result"]["observed"]
+                    nested_extra_property_case = copy.deepcopy(fixture)
+                    nested_extra_property_case["validation_result"]["observed"]["unexpected"] = True
                 self.assertTrue(list(validator.iter_errors(missing_expected_observed_case)))
+                self.assertTrue(list(validator.iter_errors(nested_extra_property_case)))
+
+    def test_validation_schema_uses_uppercase_terminal_statuses(self) -> None:
+        schema = load_json(SCHEMA_DIR / "validation.schema.json")
+        self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED"], schema["properties"]["status"]["enum"])
+        check_status_enum = schema["properties"]["checks"]["items"]["properties"]["status"]["enum"]
+        self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED"], check_status_enum)
 
 
 if __name__ == "__main__":

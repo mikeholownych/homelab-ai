@@ -2,19 +2,110 @@
 schema_version: 1.0.0
 
 required_checks:
+  - id: cpu_present
+    classification: hardware
+    severity: blocking
+    applies_when: always
+    expected:
+      type: present
+  - id: cpu_model_match
+    classification: hardware
+    severity: blocking
+    applies_when: always
+    expected:
+      type: profile_match
   - id: gpu_count
+    classification: hardware
     severity: blocking
+    applies_when: always
+    expected:
+      value: 2
   - id: gpu_model_match
+    classification: hardware
     severity: blocking
+    applies_when: always
+    expected:
+      type: profile_match
+  - id: gpu_vram_per_card
+    classification: hardware
+    severity: blocking
+    applies_when: always
+    expected:
+      minimum_gib: 2
+      target_gib: 32
+      tolerance_gib: 4
+  - id: level_zero_device_count
+    classification: runtime
+    severity: blocking
+    applies_when: always
+    expected:
+      value: 2
+  - id: pytorch_xpu_device_count
+    classification: runtime
+    severity: blocking
+    applies_when: always
+    expected:
+      value: 2
+  - id: per_device_tensor_operations
+    classification: runtime
+    severity: blocking
+    applies_when: always
+    expected:
+      type: available_per_device
+  - id: pcie_topology
+    classification: hardware
+    severity: blocking
+    applies_when: always
+    expected:
+      type: no_material_degradation
   - id: resizable_bar_enabled
+    classification: firmware
     severity: blocking
-  - id: above_4g_decoding_enabled
+    applies_when: always
+    expected:
+      value: true
+  - id: vllm_health
+    classification: runtime
     severity: blocking
-  - id: level_zero_detected
+    applies_when: when_vllm_enabled
+    expected:
+      type: healthy_endpoint
+  - id: single_gpu_inference_configured
+    classification: runtime
     severity: blocking
-  - id: pcie_link_health
+    applies_when: always
+    expected:
+      type: configured
+  - id: dual_gpu_inference_configured
+    classification: runtime
     severity: blocking
-  - id: memory_capacity
+    applies_when: when_distributed_vllm_enabled
+    expected:
+      type: configured
+  - id: llama_cpp_fallback_health
+    classification: runtime
     severity: warning
-  - id: dimm_topology_observed
+    applies_when: when_llama_cpp_enabled
+    expected:
+      type: healthy_fallback
+  - id: required_services
+    classification: service
+    severity: warning
+    applies_when: always
+    expected:
+      services:
+        - ssh
+        - scheduled_ansible
+        - monitoring
+  - id: scheduled_reconciliation
+    classification: operations
     severity: information
+    applies_when: when_monitoring_enabled
+    expected:
+      value: true
+  - id: vault_access
+    classification: access
+    severity: blocking
+    applies_when: always
+    expected:
+      type: token_or_approle_reference_available
