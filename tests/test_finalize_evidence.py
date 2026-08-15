@@ -332,7 +332,88 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
             self.assertNotEqual(0, result.returncode)
             finalized_manifest = load_json(run_dir / "manifest.json")
             self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
+            self.assertEqual("incomplete", finalized_manifest["status"])
+            self.assertIsNone(finalized_manifest["run"]["ansible"]["recap"])
             self.assertIn("recap", finalized_manifest["finalization"]["reason"].lower())
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_handles_malformed_validation_json_without_traceback_and_keeps_sums(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            manifest = make_manifest(status="captured", validation_status="NOT_TESTED", validation_classification="incomplete")
+            manifest["artifacts"].append(
+                {
+                    "id": "validation",
+                    "kind": "application/json",
+                    "expected": {
+                        "summary": "Validation contract output",
+                        "path": "validation.json",
+                    },
+                    "observed": {
+                        "summary": "Pending finalization",
+                        "status": "unavailable",
+                        "reason": "pending finalization",
+                    },
+                }
+            )
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": manifest["run"]["ansible"]["recap"],
+                },
+            )
+            (run_dir / "validation.json").write_text("{not-json}\n", encoding="utf-8")
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertNotIn("Traceback", result.stderr)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
+            self.assertIn("validation.json", finalized_manifest["finalization"]["reason"])
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_rejects_empty_recap_object_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            manifest = make_manifest(status="captured", recap={})
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": {},
+                },
+            )
+            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertNotIn("Traceback", result.stderr)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
+            self.assertEqual("incomplete", finalized_manifest["status"])
+            self.assertIsNone(finalized_manifest["run"]["ansible"]["recap"])
+            self.assertIn("/run/ansible/recap", finalized_manifest["finalization"]["reason"])
             self.assertTrue((run_dir / "SHA256SUMS").exists())
 
     def test_finalize_rejects_supplied_recap_totals_mismatch(self) -> None:
@@ -485,6 +566,41 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
             checksums_text = (run_dir / "SHA256SUMS").read_text(encoding="utf-8")
             self.assertNotIn("linked.txt", checksums_text)
             self.assertIn("manifest.json", checksums_text)
+
+    def test_finalize_ignores_orphan_tmp_files_when_writing_checksums(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            manifest = make_manifest(
+                status="captured",
+                validation_status="PASS",
+                validation_classification="healthy",
+            )
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": manifest["run"]["ansible"]["recap"],
+                },
+            )
+            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+            (run_dir / ".tmp-orphan").write_text("ignore me\n", encoding="utf-8")
+            (run_dir / "ansible.log.swp").write_text("ignore me too\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            checksums_text = (run_dir / "SHA256SUMS").read_text(encoding="utf-8")
+            self.assertNotIn(".tmp-orphan", checksums_text)
+            self.assertNotIn("ansible.log.swp", checksums_text)
 
     def test_atomic_json_writer_replaces_target_without_leaving_temp_files(self) -> None:
         module = __import__("scripts.finalize_evidence", fromlist=["atomic_write_json"])

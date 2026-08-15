@@ -252,7 +252,11 @@ def validate_manifest_payload(payload: dict[str, object]) -> list[str]:
         errors.append("/run/ansible must be an object")
     else:
         recap = ansible.get("recap")
-        errors.extend(validate_recap_structure(recap, pointer="/run/ansible/recap"))
+        if recap is None:
+            if payload.get("status") != "incomplete":
+                errors.append("/run/ansible/recap must be present unless status is incomplete")
+        else:
+            errors.extend(validate_recap_structure(recap, pointer="/run/ansible/recap"))
 
     state = finalization.get("state")
     status = payload.get("status")
@@ -261,13 +265,16 @@ def validate_manifest_payload(payload: dict[str, object]) -> list[str]:
     if state == "incomplete" and finalization.get("reason") in (None, ""):
         errors.append("/finalization/reason must be present when finalization is incomplete")
 
-    if state == "complete" and isinstance(ansible, dict) and isinstance(recap, dict):
-        exit_code = ansible.get("exit_code")
-        if exit_code != 0:
-            errors.append("/run/ansible/exit_code must be 0 when finalization is complete")
-        totals = recap.get("totals", {})
-        if isinstance(totals, dict) and (totals.get("failed") != 0 or totals.get("unreachable") != 0):
-            errors.append("/run/ansible/recap totals failed and unreachable must be 0 when finalization is complete")
+    if state == "complete":
+        if not isinstance(ansible, dict) or not isinstance(recap, dict):
+            errors.append("/run/ansible/recap must be present when finalization is complete")
+        else:
+            exit_code = ansible.get("exit_code")
+            if exit_code != 0:
+                errors.append("/run/ansible/exit_code must be 0 when finalization is complete")
+            totals = recap.get("totals", {})
+            if isinstance(totals, dict) and (totals.get("failed") != 0 or totals.get("unreachable") != 0):
+                errors.append("/run/ansible/recap totals failed and unreachable must be 0 when finalization is complete")
 
     return errors
 

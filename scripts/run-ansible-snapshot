@@ -5,6 +5,10 @@ readonly LOCK_CONTENTION_EXIT=73
 readonly ARGUMENT_EXIT=64
 readonly DIRTY_TREE_EXIT=65
 readonly FINALIZATION_FAILURE_EXIT=66
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
+WRAPPER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+readonly WRAPPER_ROOT
 
 repo_root=""
 schema_root=""
@@ -28,21 +32,33 @@ timestamp_dir_name=""
 playbook_name=""
 inventory_resolved=""
 playbook_resolved=""
+ansible_config=""
 
 utc_timestamp() {
   python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))'
 }
 
+run_wrapper_python() {
+  PYTHONPATH="$WRAPPER_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 "$@"
+}
+
 resolve_path() {
-  python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$1"
+  run_wrapper_python -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$1"
 }
 
 require_containment() {
-  python3 -c 'import sys; from pathlib import Path; Path(sys.argv[1]).resolve().relative_to(Path(sys.argv[2]).resolve())' "$1" "$2" >/dev/null 2>&1
+  run_wrapper_python -c 'import sys; from pathlib import Path; Path(sys.argv[1]).resolve().relative_to(Path(sys.argv[2]).resolve())' "$1" "$2" >/dev/null 2>&1
 }
 
 safe_child_path() {
-  python3 -c 'import sys; from pathlib import Path; root = Path(sys.argv[1]).resolve(); child = (root / sys.argv[2]).resolve(strict=False); child.relative_to(root); print(child)' "$1" "$2"
+  run_wrapper_python -c 'import sys; from pathlib import Path; root = Path(sys.argv[1]).resolve(); child = (root / sys.argv[2]).resolve(strict=False); child.relative_to(root); print(child)' "$1" "$2"
+}
+
+run_ansible_playbook() {
+  ANSIBLE_CONFIG="$ansible_config" \
+  ANSIBLE_DISPLAY_ARGS_TO_STDOUT=False \
+  ANSIBLE_NOCOLOR=True \
+  ansible-playbook "$@"
 }
 
 # shellcheck disable=SC2317
@@ -58,7 +74,7 @@ finalize_on_exit() {
     finished_at="$(utc_timestamp)"
   fi
 
-  python3 - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$primary_exit" "$finished_at" "$repo_root" "$git_status_output" <<'PY'
+  run_wrapper_python - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$primary_exit" "$finished_at" "$repo_root" "$git_status_output" <<'PY'
 import sys
 from pathlib import Path
 
@@ -107,7 +123,7 @@ atomic_write_json(run_dir / "ansible-run.json", ansible_run)
 PY
 
   set +e
-  python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/finalize-evidence.py" --run-dir "$run_dir" --repo-root "$repo_root" --schema-root "$schema_root"
+  run_wrapper_python "$SCRIPT_DIR/finalize-evidence.py" --run-dir "$run_dir" --repo-root "$repo_root" --schema-root "$schema_root"
   local finalizer_exit=$?
   set -e
 
@@ -178,6 +194,7 @@ fi
 repo_root="$(resolve_path "$repo_root")"
 schema_root="$(resolve_path "$schema_root")"
 evidence_root="$(resolve_path "$evidence_root")"
+ansible_config="$repo_root/ansible.cfg"
 deployed_root="${LOCAL_AI_DEPLOYED_ROOT:-$repo_root}"
 deployed_root="$(resolve_path "$deployed_root")"
 
@@ -274,7 +291,7 @@ trap finalize_on_exit EXIT
 
 export LOCAL_AI_EVIDENCE_RUN_DIR="$run_dir"
 
-python3 - "$run_dir" "$repo_root" "$target" "$inventory_arg" "$playbook_name" "$lock_path" "$git_sha" "$simulate" "$timestamp_dir_name" "$validate_after_site" <<'PY'
+run_wrapper_python - "$run_dir" "$repo_root" "$target" "$inventory_arg" "$playbook_name" "$lock_path" "$git_sha" "$simulate" "$timestamp_dir_name" "$validate_after_site" <<'PY'
 import sys
 from pathlib import Path
 
@@ -395,7 +412,7 @@ PY
 
 log_path="$run_dir/ansible.log"
 start_ts="$(utc_timestamp)"
-python3 - "$run_dir" "$start_ts" <<'PY'
+run_wrapper_python - "$run_dir" "$start_ts" <<'PY'
 import sys
 from pathlib import Path
 from scripts.finalize_evidence import atomic_write_json, load_json
@@ -420,7 +437,7 @@ if [[ "$simulate" == "true" ]]; then
   ansible_args+=(--check)
 fi
 ansible_args+=("$playbook_resolved")
-ANSIBLE_DISPLAY_ARGS_TO_STDOUT=False ANSIBLE_NOCOLOR=True ansible-playbook "${ansible_args[@]}" >"$log_path" 2>&1
+run_ansible_playbook "${ansible_args[@]}" >"$log_path" 2>&1
 primary_exit=$?
 
 if [[ "$playbook_name" == "site.yml" && "$validate_after_site" == "true" && "$primary_exit" -eq 0 ]]; then
@@ -429,7 +446,7 @@ if [[ "$playbook_name" == "site.yml" && "$validate_after_site" == "true" && "$pr
     validation_args+=(--check)
   fi
   validation_args+=("$repo_root/playbooks/validate.yml")
-  ANSIBLE_DISPLAY_ARGS_TO_STDOUT=False ANSIBLE_NOCOLOR=True ansible-playbook "${validation_args[@]}" >>"$log_path" 2>&1
+  run_ansible_playbook "${validation_args[@]}" >>"$log_path" 2>&1
   validation_command_exit=$?
 fi
 

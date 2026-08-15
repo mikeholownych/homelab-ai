@@ -188,21 +188,28 @@
           "properties": {
             "exit_code": {"type": "integer", "minimum": 0},
             "recap": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["totals", "hosts"],
-              "properties": {
-                "totals": {
-                  "$ref": "#/$defs/recapCounters"
-                },
-                "hosts": {
+              "oneOf": [
+                {
                   "type": "object",
-                  "minProperties": 1,
-                  "additionalProperties": {
-                    "$ref": "#/$defs/recapCounters"
+                  "additionalProperties": false,
+                  "required": ["totals", "hosts"],
+                  "properties": {
+                    "totals": {
+                      "$ref": "#/$defs/recapCounters"
+                    },
+                    "hosts": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "$ref": "#/$defs/recapCounters"
+                      }
+                    }
                   }
+                },
+                {
+                  "type": "null"
                 }
-              }
+              ]
             }
           }
         },
