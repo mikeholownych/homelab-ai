@@ -1,6 +1,9 @@
 ---
 name: quality
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -15,6 +18,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -25,7 +30,7 @@ jobs:
         run: python -m venv .venv
 
       - name: Install Python dependencies
-        run: .venv/bin/python -m pip install -r requirements.txt
+        run: .venv/bin/python -m pip install --require-hashes -r requirements.txt
 
       - name: Install Ansible collections
         run: .venv/bin/ansible-galaxy collection install -r requirements.yml

@@ -4,6 +4,8 @@ import configparser
 import unittest
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -12,6 +14,7 @@ REQUIRED_ROOT_FILES = (
     ".yamllint",
     "Makefile",
     "ansible.cfg",
+    "requirements.in",
     "requirements.txt",
     "requirements.yml",
 )
@@ -117,6 +120,29 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertNotIn("become", parser["defaults"])
         self.assertNotIn("become_method", parser["defaults"])
         self.assertNotIn("become_user", parser["defaults"])
+
+    def test_python_lockfile_and_install_commands_use_hash_enforcement(self) -> None:
+        requirements_in = (REPO_ROOT / "requirements.in").read_text(encoding="utf-8")
+        requirements_txt = (REPO_ROOT / "requirements.txt").read_text(encoding="utf-8")
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        workflow = (REPO_ROOT / WORKFLOW_PATH).read_text(encoding="utf-8")
+
+        self.assertIn("ansible-core==2.21.3", requirements_in)
+        self.assertIn("--hash=sha256:", requirements_txt)
+        self.assertIn("install --require-hashes -r requirements.txt", makefile)
+        self.assertIn("install --require-hashes -r requirements.txt", workflow)
+
+    def test_ci_workflow_uses_read_only_permissions_and_non_persistent_checkout(self) -> None:
+        workflow_data = yaml.safe_load((REPO_ROOT / WORKFLOW_PATH).read_text(encoding="utf-8"))
+
+        self.assertEqual({"contents": "read"}, workflow_data.get("permissions"))
+        checkout_steps = [
+            step
+            for step in workflow_data["jobs"]["quality"]["steps"]
+            if step.get("uses", "").startswith("actions/checkout@")
+        ]
+        self.assertEqual(1, len(checkout_steps))
+        self.assertEqual(False, checkout_steps[0].get("with", {}).get("persist-credentials"))
 
 
 if __name__ == "__main__":

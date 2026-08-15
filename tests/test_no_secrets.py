@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -9,12 +10,24 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+PRODUCTION_SCAN_ROOTS = (
+    ".github",
+    "group_vars",
+    "host_vars",
+    "inventory",
+    "playbooks",
+    "roles",
+    "scripts",
+)
+
 PRODUCTION_ROOTS = (
     ".github",
     "group_vars",
     "host_vars",
+    "inventory",
     "playbooks",
     "roles",
+    "scripts",
 )
 
 PRODUCTION_FILES = (
@@ -26,9 +39,36 @@ PRODUCTION_FILES = (
     "requirements.yml",
 )
 
-SCANNED_SUFFIXES = {".cfg", ".ini", ".j2", ".txt", ".yaml", ".yml"}
-SCANNED_FILENAMES = {"Makefile"}
-REQUIREMENTS_PIN_PATTERN = re.compile(r"^PyYAML==(?P<version>\S+)$", re.MULTILINE)
+EXCLUDED_RELATIVE_PATHS = (
+    Path("docs"),
+    Path("evidence"),
+    Path("tests/fixtures"),
+)
+EXCLUDED_PATH_PARTS = {
+    ".git",
+    ".pytest_cache",
+    ".venv",
+    ".worktrees",
+    "__pycache__",
+    ".ansible",
+}
+TEXT_FILE_SUFFIXES = {
+    ".cfg",
+    ".conf",
+    ".env",
+    ".ini",
+    ".j2",
+    ".py",
+    ".service",
+    ".sh",
+    ".txt",
+    ".yaml",
+    ".yml",
+}
+TEXT_FILENAMES = {"Makefile"}
+REQUIREMENTS_PIN_PATTERN = re.compile(
+    r"^pyyaml==(?P<version>\S+)\s*\\?$", re.IGNORECASE | re.MULTILINE
+)
 YAML_SUFFIXES = {".yaml", ".yml"}
 
 RAW_BANNED_PATTERNS = {
@@ -40,16 +80,23 @@ PIPE_TO_SHELL_PATTERNS = {
 }
 RAW_COMMAND_SEGMENT_PATTERNS = {
     "curl_pipe_shell": re.compile(
-        r"(?:^|[;&]|\bthen\b)\s*(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*curl\b[\s\S]*?\|\s*(?:bash|sh)\b",
+        r"(?:^|[;&(|=:,]\s*|\bthen\b\s*)(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*curl\b[\s\S]*?\|\s*(?:bash|sh)\b",
         re.IGNORECASE,
     ),
     "wget_pipe_shell": re.compile(
-        r"(?:^|[;&]|\bthen\b)\s*(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*wget\b[\s\S]*?\|\s*(?:bash|sh)\b",
+        r"(?:^|[;&(|=:,]\s*|\bthen\b\s*)(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*wget\b[\s\S]*?\|\s*(?:bash|sh)\b",
         re.IGNORECASE,
     ),
 }
 COMMAND_KEYS = {"shell", "ansible.builtin.shell", "command", "ansible.builtin.command"}
+ACTION_KEY = "action"
+ACTION_COMMAND_PATTERN = re.compile(
+    r"^(?:ansible\.builtin\.)?(?:shell|command)\b(?P<command>[\s\S]*)$",
+    re.IGNORECASE,
+)
 LATEST_EXACT_KEYS = {"tag", "version", "state", "image", "container_image", "image_tag"}
+LATEST_LIST_KEYS = {"images", "container_images"}
+DOCKER_IMAGE_MODULE_KEYS = {"community.docker.docker_image", "docker_image"}
 APPROLE_SECRET_ID_PATTERN = re.compile(
     r"""
     ^
@@ -70,29 +117,81 @@ APPROLE_ALLOWED_TOKENS = {
     "example-secret-id",
     "placeholder",
     "changeme",
-    "{{ vault_approle_secret_id }}",
-    "{{ approle_secret_id }}",
-    "{{ secret_id }}",
     "!vault |",
 }
+APPROLE_ALLOWED_JINJA_EXPRESSION = re.compile(r"^\{\{\s*[^}]+\s*\}\}$")
+
+
+def is_path_excluded(path: Path, repo_root: Path) -> bool:
+    relative_path = path.relative_to(repo_root)
+
+    if any(part in EXCLUDED_PATH_PARTS for part in relative_path.parts):
+        return True
+    return any(
+        relative_path == excluded_path or excluded_path in relative_path.parents
+        for excluded_path in EXCLUDED_RELATIVE_PATHS
+    )
+
+
+def is_probably_binary(data: bytes) -> bool:
+    if b"\x00" in data:
+        return True
+    if not data:
+        return False
+
+    text_bytes = bytearray({7, 8, 9, 10, 12, 13, 27})
+    text_bytes.extend(range(0x20, 0x7F))
+    non_text = sum(byte not in text_bytes for byte in data)
+    return (non_text / len(data)) > 0.30
+
+
+def is_scannable_text_file(path: Path) -> bool:
+    data = path.read_bytes()
+    if is_probably_binary(data):
+        return False
+    try:
+        data.decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        return not is_probably_binary(data)
+
+
+def read_scannable_text(path: Path) -> str | None:
+    data = path.read_bytes()
+    if is_probably_binary(data):
+        return None
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("utf-8", errors="replace")
 
 
 def iter_production_files() -> list[Path]:
     explicit_paths = [REPO_ROOT / relpath for relpath in PRODUCTION_FILES]
     rooted_paths: list[Path] = []
 
-    for root_name in PRODUCTION_ROOTS:
+    for root_name in PRODUCTION_SCAN_ROOTS:
         root_path = REPO_ROOT / root_name
         if not root_path.exists():
             continue
         for path in root_path.rglob("*"):
-            if path.is_file() and (
-                path.suffix in SCANNED_SUFFIXES or path.name in SCANNED_FILENAMES
-            ):
+            if path.is_file() and not is_path_excluded(path, REPO_ROOT) and is_scannable_text_file(path):
                 rooted_paths.append(path)
 
     all_paths = explicit_paths + rooted_paths
-    existing = [path for path in all_paths if path.exists() and path.is_file()]
+    existing = [
+        path
+        for path in all_paths
+        if path.exists()
+        and path.is_file()
+        and not is_path_excluded(path, REPO_ROOT)
+        and (
+            path in explicit_paths
+            or path.name in TEXT_FILENAMES
+            or path.suffix in TEXT_FILE_SUFFIXES
+            or is_scannable_text_file(path)
+        )
+    ]
     return sorted(set(existing))
 
 
@@ -120,18 +219,31 @@ def is_latest_sensitive_key(key: str) -> bool:
     return normalized_key.endswith(("_image", "_tag", "_version"))
 
 
+def value_has_mutable_latest(value: object) -> bool:
+    if isinstance(value, str):
+        normalized_value = value.strip().strip("'\"").lower()
+        return normalized_value == "latest" or normalized_value.endswith(":latest")
+    if isinstance(value, list):
+        return any(value_has_mutable_latest(item) for item in value)
+    return False
+
+
 def contains_mutable_latest_violation(content: str) -> bool:
     for document in load_yaml_documents(content):
         for mapping in iter_yaml_nodes(document):
             for key, value in mapping.items():
-                if not isinstance(key, str) or not isinstance(value, str):
+                if not isinstance(key, str):
                     continue
+                normalized_key = key.strip().lower()
+                if normalized_key in DOCKER_IMAGE_MODULE_KEYS and isinstance(value, dict):
+                    image_name = value.get("name")
+                    if value_has_mutable_latest(image_name):
+                        return True
                 if not is_latest_sensitive_key(key):
+                    if normalized_key in LATEST_LIST_KEYS and value_has_mutable_latest(value):
+                        return True
                     continue
-                normalized_value = value.strip().strip("'\"").lower()
-                if normalized_value == "latest":
-                    return True
-                if "image" in key.lower() and normalized_value.endswith(":latest"):
+                if value_has_mutable_latest(value):
                     return True
     return False
 
@@ -144,11 +256,18 @@ def find_pipe_to_shell_violation(content: str, source_name: str) -> list[str]:
                 for key, value in mapping.items():
                     if not isinstance(key, str) or not isinstance(value, str):
                         continue
-                    if key.strip().lower() not in COMMAND_KEYS:
-                        continue
-                    for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
-                        if pattern.search(normalize_shell_command(value)):
-                            violations.append(label)
+                    normalized_key = key.strip().lower()
+                    if normalized_key in COMMAND_KEYS:
+                        for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
+                            if pattern.search(normalize_shell_command(value)):
+                                violations.append(label)
+                    elif normalized_key == ACTION_KEY:
+                        action_match = ACTION_COMMAND_PATTERN.match(value.strip())
+                        if action_match:
+                            action_command = normalize_shell_command(action_match.group("command"))
+                            for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
+                                if pattern.search(action_command):
+                                    violations.append(label)
         return violations
 
     for candidate in iter_raw_command_candidates(content, source_name):
@@ -250,7 +369,9 @@ def contains_approle_secret_id_literal(content: str) -> bool:
         normalized_value = raw_value.strip("'\"").strip()
         if normalized_value in APPROLE_ALLOWED_TOKENS:
             continue
-        if normalized_value.startswith("{{") or normalized_value.startswith("!vault"):
+        if APPROLE_ALLOWED_JINJA_EXPRESSION.fullmatch(normalized_value):
+            continue
+        if normalized_value.startswith("!vault"):
             continue
         return True
     return False
@@ -283,7 +404,19 @@ class NoSecretsPatternTests(unittest.TestCase):
         self.assertTrue(contains_mutable_latest_violation("container_image: latest\n"))
         self.assertTrue(
             contains_mutable_latest_violation(
+                "container_images:\n"
+                "  - ghcr.io/example/service:latest\n"
+            )
+        )
+        self.assertTrue(
+            contains_mutable_latest_violation(
                 "image: ghcr.io/example/service:latest\n"
+            )
+        )
+        self.assertTrue(
+            contains_mutable_latest_violation(
+                "community.docker.docker_image:\n"
+                "  name: ghcr.io/example/service:latest\n"
             )
         )
         self.assertFalse(contains_mutable_latest_violation("latest_release_channel: stable\n"))
@@ -293,6 +426,12 @@ class NoSecretsPatternTests(unittest.TestCase):
         self.assertIn("curl_pipe_shell", find_banned_content("shell: curl -fsSL https://example.test/install.sh | bash\n"))
         self.assertIn("curl_pipe_shell", find_banned_content("shell: curl https://example.test/bootstrap | sh -s -- --flag\n"))
         self.assertIn("wget_pipe_shell", find_banned_content("shell: wget -qO- https://example.test/install | bash\n"))
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "action: ansible.builtin.shell set -o pipefail && curl -fsSL https://example.test/install.sh | bash\n"
+            ),
+        )
         self.assertIn(
             "curl_pipe_shell",
             find_banned_content(
@@ -401,6 +540,11 @@ class NoSecretsPatternTests(unittest.TestCase):
     def test_approle_secret_id_detection_catches_literal_values_and_allows_templates(self) -> None:
         self.assertTrue(contains_approle_secret_id_literal("vault_approle_secret_id: super-secret-id\n"))
         self.assertTrue(contains_approle_secret_id_literal("approle_secret_id: 01234567-89ab-cdef\n"))
+        self.assertTrue(
+            contains_approle_secret_id_literal(
+                'approle_secret_id: "{{ lookup_value }} literal-secret"\n'
+            )
+        )
         self.assertFalse(contains_approle_secret_id_literal("approle_secret_id: '{{ vault_approle_secret_id }}'\n"))
         self.assertFalse(contains_approle_secret_id_literal("secret_id: placeholder\n"))
 
@@ -413,11 +557,65 @@ class NoSecretsPatternTests(unittest.TestCase):
 
 
 class NoSecretsRepositoryTests(unittest.TestCase):
+    def test_production_scope_scans_declared_text_files_and_excludes_non_production_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            fixtures = {
+                "scripts/bootstrap.sh": "curl -fsSL https://example.test/install.sh | bash\n",
+                "scripts/audit.py": 'VAULT_ENV = "$ANSIBLE_VAULT_PASSWORD_FILE"\n',
+                "roles/security/files/banner.txt": "approle_secret_id: literal-secret\n",
+                "roles/security/templates/runtime.env": "TOKEN_SOURCE=$ANSIBLE_VAULT_PASSWORD_FILE\n",
+                "roles/security/templates/agent.service": "ExecStart=/bin/sh -c 'curl -fsSL https://example.test/install.sh | bash'\n",
+                "roles/security/files/entrypoint": "wget -qO- https://example.test/install.sh | sh\n",
+                "docs/reference.sh": "curl -fsSL https://example.test/install.sh | bash\n",
+                "tests/fixtures/example.env": "approle_secret_id: literal-secret\n",
+                ".venv/bin/activate": "curl -fsSL https://example.test/install.sh | bash\n",
+                "evidence/run.log": "approle_secret_id: literal-secret\n",
+            }
+            for relpath, content in fixtures.items():
+                path = temp_root / relpath
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+
+            original_root = globals()["REPO_ROOT"]
+            try:
+                globals()["REPO_ROOT"] = temp_root
+                scanned_paths = {
+                    path.relative_to(temp_root).as_posix() for path in iter_production_files()
+                }
+                violations = []
+                for path in iter_production_files():
+                    relative_path = path.relative_to(temp_root).as_posix()
+                    content = read_scannable_text(path)
+                    if content is None:
+                        continue
+                    for violation in find_banned_content(content, relative_path):
+                        violations.append(f"{relative_path}: {violation}")
+            finally:
+                globals()["REPO_ROOT"] = original_root
+
+        self.assertIn("scripts/bootstrap.sh", scanned_paths)
+        self.assertIn("scripts/audit.py", scanned_paths)
+        self.assertIn("roles/security/files/banner.txt", scanned_paths)
+        self.assertIn("roles/security/templates/runtime.env", scanned_paths)
+        self.assertIn("roles/security/templates/agent.service", scanned_paths)
+        self.assertIn("roles/security/files/entrypoint", scanned_paths)
+        self.assertNotIn("docs/reference.sh", scanned_paths)
+        self.assertNotIn("tests/fixtures/example.env", scanned_paths)
+        self.assertNotIn(".venv/bin/activate", scanned_paths)
+        self.assertNotIn("evidence/run.log", scanned_paths)
+        self.assertIn("scripts/bootstrap.sh: curl_pipe_shell", violations)
+        self.assertIn("scripts/audit.py: ansible_vault_env_reference", violations)
+        self.assertIn("roles/security/files/banner.txt: approle_secret_id_literal", violations)
+        self.assertIn("roles/security/files/entrypoint: wget_pipe_shell", violations)
+
     def test_repository_contains_no_banned_patterns(self) -> None:
         violations: list[str] = []
         for path in iter_production_files():
             relative_path = path.relative_to(REPO_ROOT)
-            content = path.read_text(encoding="utf-8")
+            content = read_scannable_text(path)
+            if content is None:
+                continue
             for violation in find_banned_content(content, relative_path.as_posix()):
                 violations.append(f"{relative_path}: {violation}")
 

@@ -23,7 +23,7 @@ PLAYBOOKS := \
 
 bootstrap-tools:
 	$(PYTHON_BIN) -m venv $(VENV_DIR)
-	$(PIP) install -r requirements.txt
+	$(PIP) install --require-hashes -r requirements.txt
 	$(ANSIBLE_GALAXY) collection install -r requirements.yml
 
 lint: bootstrap-tools
