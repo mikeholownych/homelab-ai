@@ -236,7 +236,7 @@ class RunWrapperTests(unittest.TestCase):
             for line in env_lines:
                 invocation = json.loads(line)
                 self.assertEqual(str(repo_root / "ansible.cfg"), invocation["ANSIBLE_CONFIG"])
-                self.assertEqual(str(temp_root), invocation["cwd"])
+                self.assertEqual(str(repo_root), invocation["cwd"])
 
     def test_wrapper_finalizes_and_returns_primary_ansible_exit_code_when_validation_is_malformed(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -583,6 +583,105 @@ class RunWrapperTests(unittest.TestCase):
 
             result = run_wrapper(repo_root, evidence_root, lock_path, env=env, playbook="site.yml")
             self.assertNotEqual(0, result.returncode)
+
+    def test_wrapper_does_not_import_malicious_caller_cwd_scripts_module(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_path = temp_root / "ansible.lock"
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+            hostile_cwd = temp_root / "hostile-cwd"
+            (hostile_cwd / "scripts").mkdir(parents=True)
+            sentinel_path = hostile_cwd / "shadowed.txt"
+            (hostile_cwd / "scripts" / "__init__.py").write_text("", encoding="utf-8")
+            (hostile_cwd / "scripts" / "finalize_evidence.py").write_text(
+                textwrap.dedent(
+                    f"""\
+                    from pathlib import Path
+                    Path({str(sentinel_path)!r}).write_text("shadowed\\n", encoding="utf-8")
+                    raise SystemExit("malicious import should never run")
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "FAKE_ANSIBLE_STDOUT": textwrap.dedent(
+                    """\
+                    PLAY RECAP *********************************************************************
+                    ai-p620-01 : ok=1 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+                    """
+                ),
+                "FAKE_WRITE_VALIDATION": "1",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(
+                repo_root,
+                evidence_root,
+                lock_path,
+                cwd=hostile_cwd,
+                env=env,
+                playbook="validate.yml",
+            )
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertFalse(sentinel_path.exists())
+            run_dir = next((evidence_root / "ai-p620-01").iterdir())
+            self.assertTrue((run_dir / "manifest.json").exists())
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_wrapper_rejects_missing_repo_ansible_config_before_creating_run_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            (repo_root / "ansible.cfg").unlink()
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_path = temp_root / "ansible.lock"
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+            hostile_cwd = temp_root / "hostile-cwd"
+            (hostile_cwd / "scripts").mkdir(parents=True)
+            sentinel_path = hostile_cwd / "shadowed.txt"
+            (hostile_cwd / "scripts" / "__init__.py").write_text("", encoding="utf-8")
+            (hostile_cwd / "scripts" / "finalize_evidence.py").write_text(
+                textwrap.dedent(
+                    f"""\
+                    from pathlib import Path
+                    Path({str(sentinel_path)!r}).write_text("shadowed\\n", encoding="utf-8")
+                    raise SystemExit("malicious import should never run")
+                    """
+                ),
+                encoding="utf-8",
+            )
+
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(
+                repo_root,
+                evidence_root,
+                lock_path,
+                cwd=hostile_cwd,
+                env=env,
+                playbook="validate.yml",
+            )
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("ansible.cfg", result.stderr)
+            self.assertEqual([], list(evidence_root.iterdir()))
+            self.assertFalse(sentinel_path.exists())
 
     def test_wrapper_source_contains_no_git_mutation_or_network_commands(self) -> None:
         wrapper_text = WRAPPER_PATH.read_text(encoding="utf-8")

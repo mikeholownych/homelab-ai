@@ -7,8 +7,6 @@ readonly DIRTY_TREE_EXIT=65
 readonly FINALIZATION_FAILURE_EXIT=66
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
-WRAPPER_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-readonly WRAPPER_ROOT
 
 repo_root=""
 schema_root=""
@@ -35,23 +33,19 @@ playbook_resolved=""
 ansible_config=""
 
 utc_timestamp() {
-  python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))'
-}
-
-run_wrapper_python() {
-  PYTHONPATH="$WRAPPER_ROOT${PYTHONPATH:+:$PYTHONPATH}" python3 "$@"
+  python3 -I -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))'
 }
 
 resolve_path() {
-  run_wrapper_python -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$1"
+  python3 -I -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$1"
 }
 
 require_containment() {
-  run_wrapper_python -c 'import sys; from pathlib import Path; Path(sys.argv[1]).resolve().relative_to(Path(sys.argv[2]).resolve())' "$1" "$2" >/dev/null 2>&1
+  python3 -I -c 'import sys; from pathlib import Path; Path(sys.argv[1]).resolve().relative_to(Path(sys.argv[2]).resolve())' "$1" "$2" >/dev/null 2>&1
 }
 
 safe_child_path() {
-  run_wrapper_python -c 'import sys; from pathlib import Path; root = Path(sys.argv[1]).resolve(); child = (root / sys.argv[2]).resolve(strict=False); child.relative_to(root); print(child)' "$1" "$2"
+  python3 -I -c 'import sys; from pathlib import Path; root = Path(sys.argv[1]).resolve(); child = (root / sys.argv[2]).resolve(strict=False); child.relative_to(root); print(child)' "$1" "$2"
 }
 
 run_ansible_playbook() {
@@ -74,11 +68,38 @@ finalize_on_exit() {
     finished_at="$(utc_timestamp)"
   fi
 
-  run_wrapper_python - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$primary_exit" "$finished_at" "$repo_root" "$git_status_output" <<'PY'
+  python3 -I - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$primary_exit" "$finished_at" "$repo_root" "$git_status_output" <<'PY'
+import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
-from scripts.finalize_evidence import atomic_write_json, load_json
+
+def load_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def atomic_write_json(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    temp_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".tmp-",
+        delete=False,
+    )
+    try:
+        with temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_file.name, path)
+    finally:
+        temp_path = Path(temp_file.name)
+        if temp_path.exists():
+            temp_path.unlink()
 
 run_dir = Path(sys.argv[1])
 git_sha = sys.argv[2]
@@ -123,7 +144,7 @@ atomic_write_json(run_dir / "ansible-run.json", ansible_run)
 PY
 
   set +e
-  run_wrapper_python "$SCRIPT_DIR/finalize-evidence.py" --run-dir "$run_dir" --repo-root "$repo_root" --schema-root "$schema_root"
+  python3 -I "$SCRIPT_DIR/finalize-evidence.py" --run-dir "$run_dir" --repo-root "$repo_root" --schema-root "$schema_root"
   local finalizer_exit=$?
   set -e
 
@@ -203,6 +224,13 @@ require_containment "$repo_root" "$deployed_root" || {
   exit "$ARGUMENT_EXIT"
 }
 
+if [[ ! -f "$ansible_config" ]]; then
+  echo "ansible.cfg must exist under the repo root" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+
+cd -- "$repo_root"
+
 readonly ALLOWLISTED_PLAYBOOKS=("site.yml" "drift-check.yml" "patch.yml" "validate.yml" "benchmark.yml" "facts-export.yml")
 playbook_name="$(basename "$playbook_arg")"
 if [[ "$playbook_arg" != "$playbook_name" ]]; then
@@ -271,7 +299,7 @@ if ((${#dirty_entries[@]} > 0)); then
   exit "$DIRTY_TREE_EXIT"
 fi
 
-timestamp_dir_name="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ"))')"
+timestamp_dir_name="$(python3 -I -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ"))')"
 host_dir="$(safe_child_path "$evidence_root" "$target")" || {
   echo "target path escapes evidence root" >&2
   exit "$ARGUMENT_EXIT"
@@ -291,11 +319,34 @@ trap finalize_on_exit EXIT
 
 export LOCAL_AI_EVIDENCE_RUN_DIR="$run_dir"
 
-run_wrapper_python - "$run_dir" "$repo_root" "$target" "$inventory_arg" "$playbook_name" "$lock_path" "$git_sha" "$simulate" "$timestamp_dir_name" "$validate_after_site" <<'PY'
+python3 -I - "$run_dir" "$repo_root" "$target" "$inventory_arg" "$playbook_name" "$lock_path" "$git_sha" "$simulate" "$timestamp_dir_name" "$validate_after_site" <<'PY'
+import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
-from scripts.finalize_evidence import atomic_write_json
+
+def atomic_write_json(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    temp_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".tmp-",
+        delete=False,
+    )
+    try:
+        with temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_file.name, path)
+    finally:
+        temp_path = Path(temp_file.name)
+        if temp_path.exists():
+            temp_path.unlink()
 
 run_dir = Path(sys.argv[1])
 repo_root = sys.argv[2]
@@ -412,10 +463,38 @@ PY
 
 log_path="$run_dir/ansible.log"
 start_ts="$(utc_timestamp)"
-run_wrapper_python - "$run_dir" "$start_ts" <<'PY'
+python3 -I - "$run_dir" "$start_ts" <<'PY'
+import json
+import os
 import sys
+import tempfile
 from pathlib import Path
-from scripts.finalize_evidence import atomic_write_json, load_json
+
+
+def load_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def atomic_write_json(path: Path, payload) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    temp_file = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=".tmp-",
+        delete=False,
+    )
+    try:
+        with temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_file.name, path)
+    finally:
+        temp_path = Path(temp_file.name)
+        if temp_path.exists():
+            temp_path.unlink()
 
 run_dir = Path(sys.argv[1])
 started_at = sys.argv[2]
