@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-08-15T00:00:00Z",
+  "git_sha": "d0142970d0142970d0142970d0142970d0142970",
+  "simulated": true,
+  "status": "draft",
+  "node": {
+    "id": "ai-p620-01",
+    "environment": "production"
+  },
+  "inventory": {
+    "expected": {
+      "hardware_profile": "p620_dual_b65",
+      "capabilities": {
+        "gpu": true,
+        "inference": true
+      }
+    },
+    "observed": {
+      "hardware_profile": "p620_dual_b65",
+      "capabilities": {
+        "gpu": true,
+        "inference": true
+      }
+    }
+  }
+}

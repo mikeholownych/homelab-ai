@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-08-15T00:00:00Z",
+  "git_sha": "d0142970d0142970d0142970d0142970d0142970",
+  "simulated": true,
+  "status": "pending",
+  "node": {
+    "id": "ai-p620-01",
+    "environment": "production"
+  },
+  "change_request": {
+    "expected": {
+      "category": "upgrade",
+      "approval": "manual"
+    },
+    "observed": {
+      "category": "upgrade",
+      "approval": "manual",
+      "ticket_id": "SIM-100"
+    }
+  }
+}

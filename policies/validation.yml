@@ -1,0 +1,20 @@
+---
+schema_version: 1.0.0
+
+required_checks:
+  - id: gpu_count
+    severity: blocking
+  - id: gpu_model_match
+    severity: blocking
+  - id: resizable_bar_enabled
+    severity: blocking
+  - id: above_4g_decoding_enabled
+    severity: blocking
+  - id: level_zero_detected
+    severity: blocking
+  - id: pcie_link_health
+    severity: blocking
+  - id: memory_capacity
+    severity: warning
+  - id: dimm_topology_observed
+    severity: information

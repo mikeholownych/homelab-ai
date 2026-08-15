@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/benchmark.schema.json",
+  "title": "Benchmark Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "git_sha",
+    "simulated",
+    "status",
+    "node",
+    "workload",
+    "measurements"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail", "not_run"]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "adapter"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "adapter": {"type": "string", "minLength": 1}
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "model_id", "scenario"],
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "model_id": {"type": "string", "minLength": 1},
+        "scenario": {"type": "string", "minLength": 1}
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "unit", "expected", "observed"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "unit": {"type": "string", "minLength": 1},
+          "expected": {"$ref": "#/$defs/metricValue"},
+          "observed": {"$ref": "#/$defs/metricValue"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "metricValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary", "value"],
+      "properties": {
+        "summary": {"type": "string", "minLength": 1},
+        "value": {"type": "number"}
+      }
+    }
+  }
+}

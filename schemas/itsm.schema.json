@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/itsm.schema.json",
+  "title": "ITSM Change Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "git_sha",
+    "simulated",
+    "status",
+    "node",
+    "change_request"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "approved", "implemented", "failed", "not_required"]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "environment"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "environment": {"type": "string", "minLength": 1}
+      }
+    },
+    "change_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "properties": {
+        "expected": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category", "approval"],
+          "properties": {
+            "category": {"type": "string", "minLength": 1},
+            "approval": {"type": "string", "minLength": 1}
+          }
+        },
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["category", "approval", "ticket_id"],
+          "properties": {
+            "category": {"type": "string", "minLength": 1},
+            "approval": {"type": "string", "minLength": 1},
+            "ticket_id": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+---
+schema_version: 1.0.0
+
+routine_components:
+  os_packages:
+    cadence: weekly
+    auto_apply: true
+  security_updates:
+    cadence: daily
+    auto_apply: true
+
+high_risk_components:
+  kernel:
+    auto_apply: false
+    approval: manual
+  intel_gpu:
+    auto_apply: false
+    approval: manual
+  level_zero:
+    auto_apply: false
+    approval: manual
+  pytorch_xpu:
+    auto_apply: false
+    approval: manual
+  vllm:
+    auto_apply: false
+    approval: manual
+  llama_cpp:
+    auto_apply: false
+    approval: manual
+  firmware_bios:
+    auto_apply: false
+    approval: manual

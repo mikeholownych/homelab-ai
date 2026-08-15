@@ -1,0 +1,30 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-08-15T00:00:00Z",
+  "git_sha": "d0142970d0142970d0142970d0142970d0142970",
+  "simulated": true,
+  "status": "pass",
+  "node": {
+    "id": "ai-p620-01",
+    "adapter": "synthetic"
+  },
+  "workload": {
+    "kind": "throughput",
+    "model_id": "simulated://benchmark-placeholder",
+    "scenario": "commissioning-dry-run"
+  },
+  "measurements": [
+    {
+      "name": "tokens_per_second",
+      "unit": "tok/s",
+      "expected": {
+        "summary": "Synthetic throughput baseline",
+        "value": 1000
+      },
+      "observed": {
+        "summary": "Synthetic throughput met baseline",
+        "value": 1001
+      }
+    }
+  ]
+}

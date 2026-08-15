@@ -1,0 +1,16 @@
+---
+inference_secret_paths:
+  model_registry: secret/local-ai/inference/model-registry
+  inference_runtime: secret/local-ai/inference/runtime
+
+model_profiles:
+  default_serving:
+    enabled: false
+    commissioning_state: commissioning_required
+    model_id: null
+    source_ref: null
+  benchmark_reference:
+    enabled: false
+    commissioning_state: commissioning_required
+    model_id: null
+    source_ref: null

@@ -1,0 +1,9 @@
+---
+monitoring_defaults:
+  enabled: true
+  scheduled_reconciliation: true
+  adapter: ansible
+
+monitoring_secret_paths:
+  metrics_endpoint: secret/local-ai/monitoring/metrics
+  alerting: secret/local-ai/monitoring/alerting

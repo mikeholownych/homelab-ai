@@ -1,0 +1,46 @@
+---
+schema_version: 1.0.0
+
+lifecycle_components:
+  kernel:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  intel_gpu:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  level_zero:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  pytorch_xpu:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  vllm:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  llama_cpp:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  firmware_bios:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null

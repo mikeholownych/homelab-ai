@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-08-15T00:00:00Z",
+  "git_sha": "d0142970d0142970d0142970d0142970d0142970",
+  "simulated": true,
+  "status": "captured",
+  "collection_target": {
+    "node_id": "ai-p620-01",
+    "adapter": "ansible"
+  },
+  "artifacts": [
+    {
+      "id": "gpu-inventory",
+      "kind": "command_output",
+      "expected": {
+        "summary": "lspci inventory should exist",
+        "path": "evidence/simulated/lspci.txt"
+      },
+      "observed": {
+        "summary": "Simulated lspci output captured",
+        "path": "evidence/simulated/lspci.txt",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observed_at": "2026-08-15T00:00:00Z"
+      }
+    }
+  ]
+}

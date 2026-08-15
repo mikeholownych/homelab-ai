@@ -1,0 +1,36 @@
+---
+gpu_secret_paths:
+  intel_gpu_stack: secret/local-ai/gpu/intel
+  benchmark_artifacts: secret/local-ai/gpu/benchmarks
+
+runtime_profiles:
+  intel_gpu:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  level_zero:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  pytorch_xpu:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  vllm:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null
+  llama_cpp:
+    enabled: false
+    commissioning_state: commissioning_required
+    current: null
+    candidate: null
+    previous_known_good: null

@@ -1,0 +1,21 @@
+---
+secret_paths:
+  shared: secret/local-ai/shared
+  automation: secret/local-ai/automation
+  vault_bootstrap: secret/local-ai/bootstrap
+
+execution_tag_catalog:
+  foundation:
+    enabled: true
+  patching:
+    enabled: true
+  upgrades:
+    enabled: true
+  validation:
+    enabled: true
+  benchmarking:
+    enabled: true
+
+runtime_commissioning_policy:
+  allow_mutable_channels: false
+  null_pins_allowed_only_when_disabled: true

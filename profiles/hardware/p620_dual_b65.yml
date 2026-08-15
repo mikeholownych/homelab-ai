@@ -1,0 +1,85 @@
+---
+schema_version: 1.0.0
+profile_name: p620_dual_b65
+
+platform:
+  manufacturer: Lenovo
+  product_family: ThinkStation P620
+  machine_type_model: 30E1S7NJ00
+  product_name_patterns:
+    - ThinkStation P620
+
+cpu:
+  vendor: AMD
+  model_patterns:
+    - AMD Ryzen Threadripper PRO 3945WX
+    - AMD Ryzen Threadripper PRO 3945WX 12-Cores
+  sockets_expected: 1
+
+gpu:
+  count_expected: 2
+  expected_models:
+    - vendor: Intel
+      model: Intel Arc Pro B65
+      memory_gib:
+        approximate: 32
+        tolerance_gib: 4
+    - vendor: Intel
+      model: Intel Arc Pro B65
+      memory_gib:
+        approximate: 32
+        tolerance_gib: 4
+
+pcie:
+  host_link:
+    max_generation: 4
+    expected_negotiated_generation: 4
+  width_expectations:
+    desired_when_slot_supports: x16
+    allow_slot_limited_width: true
+  material_degradation:
+    default_severity: blocking
+    minimum_negotiated_to_slot_ratio: 0.5
+
+firmware:
+  above_4g_decoding:
+    required: true
+    missing_severity: blocking
+    undiscoverable_status: not_tested
+  resizable_bar:
+    required: true
+    missing_severity: blocking
+
+memory:
+  installed_gib:
+    expected: 48
+    tolerance_gib: 4
+    out_of_tolerance_severity: warning
+    classification: initial_commissioning
+
+discovery_fields:
+  record:
+    - dimm_topology
+    - nvme_devices
+    - nic_inventory
+    - bios_version
+    - firmware_inventory
+    - power_supply_inventory
+  asset_identifiers:
+    - serial_number
+    - asset_tag
+    - service_tag
+
+severity_rules:
+  information:
+    - dimm_topology_observed
+    - firmware_inventory_observed
+  warning:
+    - memory_capacity
+  blocking:
+    - gpu_count
+    - gpu_model_match
+    - resizable_bar_enabled
+    - above_4g_decoding_enabled
+    - level_zero_detected
+    - pcie_link_health

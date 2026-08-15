@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/cmdb.schema.json",
+  "title": "CMDB Export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "generated_at",
+    "git_sha",
+    "simulated",
+    "status",
+    "node",
+    "inventory"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "simulated": {
+      "type": "boolean"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "active", "stale"]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "environment"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "environment": {"type": "string", "minLength": 1}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected", "observed"],
+      "properties": {
+        "expected": {"$ref": "#/$defs/inventoryState"},
+        "observed": {"$ref": "#/$defs/inventoryState"}
+      }
+    }
+  },
+  "$defs": {
+    "inventoryState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hardware_profile", "capabilities"],
+      "properties": {
+        "hardware_profile": {"type": "string", "minLength": 1},
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": {"type": "boolean"},
+          "minProperties": 1
+        }
+      }
+    }
+  }
+}

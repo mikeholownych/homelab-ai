@@ -1,0 +1,31 @@
+---
+ansible_host: CHANGE_ME
+environment: production
+hardware_profile: p620_dual_b65
+
+node_roles:
+  inference: true
+  gpu: true
+
+capabilities:
+  gpu: true
+  inference: true
+  benchmarking: true
+  monitoring: true
+  cluster_eligible: true
+
+features:
+  monitoring: true
+  scheduled_reconciliation: true
+  clustering: false
+  cmdb_export: false
+  itsm_integration: false
+
+cluster:
+  enabled: false
+  membership_state: standalone
+  fleet:
+    id: null
+    coordinator: null
+    peer_hosts: []
+    quorum_size: null

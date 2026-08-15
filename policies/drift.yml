@@ -1,0 +1,25 @@
+---
+schema_version: 1.0.0
+
+states:
+  in_sync:
+    terminal: true
+  drift_detected:
+    terminal: false
+  reconciliation_pending:
+    terminal: false
+  exception_approved:
+    terminal: true
+
+remediation:
+  default_state: drift_detected
+  auto_reconcile_allowed_for:
+    - os_security_patches
+  manual_approval_required_for:
+    - kernel
+    - intel_gpu
+    - level_zero
+    - pytorch_xpu
+    - vllm
+    - llama_cpp
+    - firmware_bios
