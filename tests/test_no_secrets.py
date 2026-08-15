@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import tempfile
 import unittest
@@ -283,26 +284,50 @@ def find_pipe_to_shell_violation(content: str, source_name: str) -> list[str]:
 
 
 def extract_yaml_command_strings(mapping: dict[object, object]) -> list[str]:
+    normalized_items = {
+        key.strip().lower(): value
+        for key, value in mapping.items()
+        if isinstance(key, str)
+    }
     commands: list[str] = []
 
-    for key, value in mapping.items():
-        if not isinstance(key, str):
-            continue
-        normalized_key = key.strip().lower()
+    for module_key in COMMAND_KEYS:
+        module_value = normalized_items.get(module_key)
+        if isinstance(module_value, str):
+            commands.append(module_value)
+        elif isinstance(module_value, dict):
+            commands.extend(extract_command_fields(module_value))
 
-        if normalized_key in COMMAND_KEYS and isinstance(value, str):
-            commands.append(value)
-            continue
-
-        if normalized_key in {ACTION_KEY, LOCAL_ACTION_KEY}:
-            if isinstance(value, str):
-                action_match = ACTION_COMMAND_PATTERN.match(value.strip())
-                if action_match:
-                    commands.append(action_match.group("command"))
-            elif isinstance(value, dict):
-                commands.extend(extract_action_mapping_commands(value))
+    for action_key in (ACTION_KEY, LOCAL_ACTION_KEY):
+        action_value = normalized_items.get(action_key)
+        if action_value is not None:
+            commands.extend(resolve_action_commands(action_value, normalized_items))
 
     return commands
+
+
+def resolve_action_commands(
+    action_value: object, sibling_items: dict[str, object]
+) -> list[str]:
+    if isinstance(action_value, str):
+        action_match = ACTION_COMMAND_PATTERN.match(action_value.strip())
+        if action_match:
+            inline_command = action_match.group("command").strip()
+            if inline_command:
+                return [inline_command]
+            return extract_command_fields(sibling_items)
+        return []
+
+    if isinstance(action_value, dict):
+        merged_mapping = dict(action_value)
+        if "args" not in merged_mapping and isinstance(sibling_items.get("args"), dict):
+            merged_mapping["args"] = sibling_items["args"]
+        for candidate_key in ("cmd", "_raw_params", "free_form"):
+            if candidate_key not in merged_mapping and isinstance(sibling_items.get(candidate_key), str):
+                merged_mapping[candidate_key] = sibling_items[candidate_key]
+        return extract_action_mapping_commands(merged_mapping)
+
+    return []
 
 
 def extract_action_mapping_commands(action_mapping: dict[object, object]) -> list[str]:
@@ -321,16 +346,30 @@ def extract_action_mapping_commands(action_mapping: dict[object, object]) -> lis
             if inline_command:
                 commands.append(inline_command)
             else:
-                args_value = normalized_items.get("args")
-                if isinstance(args_value, dict):
-                    for candidate_key in ("cmd", "_raw_params", "free_form"):
-                        candidate_value = args_value.get(candidate_key)
-                        if isinstance(candidate_value, str):
-                            commands.append(candidate_value)
-                for candidate_key in ("cmd", "_raw_params", "free_form"):
-                    candidate_value = normalized_items.get(candidate_key)
-                    if isinstance(candidate_value, str):
-                        commands.append(candidate_value)
+                commands.extend(extract_command_fields(normalized_items))
+
+    return commands
+
+
+def extract_command_fields(mapping: dict[object, object]) -> list[str]:
+    normalized_items = {
+        key.strip().lower(): value
+        for key, value in mapping.items()
+        if isinstance(key, str)
+    }
+    commands: list[str] = []
+
+    for candidate_key in ("cmd", "_raw_params", "free_form"):
+        candidate_value = normalized_items.get(candidate_key)
+        if isinstance(candidate_value, str):
+            commands.append(candidate_value)
+
+    args_value = normalized_items.get("args")
+    if isinstance(args_value, dict):
+        for candidate_key in ("cmd", "_raw_params", "free_form"):
+            candidate_value = args_value.get(candidate_key)
+            if isinstance(candidate_value, str):
+                commands.append(candidate_value)
 
     return commands
 
@@ -392,27 +431,114 @@ def iter_makefile_candidates(content: str):
 
 
 def iter_systemd_execstart_candidates(content: str):
-    for line in content.splitlines():
+    logical_lines: list[str] = []
+    current_line = ""
+
+    for raw_line in content.splitlines():
+        line = raw_line.rstrip()
+        if current_line:
+            current_line = f"{current_line} {line.lstrip()}"
+        else:
+            current_line = line
+
+        if current_line.endswith("\\"):
+            current_line = current_line[:-1].rstrip()
+            continue
+
+        logical_lines.append(current_line)
+        current_line = ""
+
+    if current_line:
+        logical_lines.append(current_line)
+
+    for line in logical_lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         if stripped.lower().startswith("execstart="):
             exec_value = stripped.split("=", 1)[1].strip()
-            shell_match = re.search(r"-c\s+(['\"])(?P<command>.*?)(\1)", exec_value)
+            shell_match = re.search(
+                r"(?:^|\s)(?:/bin/)?(?:sh|bash)\s+-[A-Za-z]*c[A-Za-z]*\s+(['\"])(?P<command>.*?)(\1)",
+                exec_value,
+            )
             if shell_match:
                 yield normalize_shell_command(shell_match.group("command"))
             yield normalize_shell_command(exec_value)
 
 
 def iter_python_command_candidates(content: str):
-    for line in content.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+    try:
+        module = ast.parse(content)
+    except SyntaxError:
+        return
+
+    for node in ast.walk(module):
+        if not isinstance(node, ast.Call):
             continue
-        for pattern in PYTHON_EXECUTION_PATTERNS:
-            match = pattern.search(stripped)
-            if match:
-                yield normalize_shell_command(match.group("command"))
+
+        qualified_name = get_qualified_name(node.func)
+        if qualified_name == "os.system":
+            command = extract_ast_string(node.args[0]) if node.args else None
+            if command:
+                yield normalize_shell_command(command)
+            continue
+
+        if qualified_name in {
+            "subprocess.run",
+            "subprocess.call",
+            "subprocess.check_call",
+            "subprocess.check_output",
+            "subprocess.Popen",
+        } and has_shell_true(node):
+            command_node = None
+            if node.args:
+                command_node = node.args[0]
+            else:
+                for keyword in node.keywords:
+                    if keyword.arg in {"args", "cmd"}:
+                        command_node = keyword.value
+                        break
+            command = extract_ast_string(command_node)
+            if command:
+                yield normalize_shell_command(command)
+
+
+def get_qualified_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base_name = get_qualified_name(node.value)
+        if base_name:
+            return f"{base_name}.{node.attr}"
+    return None
+
+
+def has_shell_true(node: ast.Call) -> bool:
+    for keyword in node.keywords:
+        if keyword.arg == "shell" and isinstance(keyword.value, ast.Constant):
+            return keyword.value.value is True
+    return False
+
+
+def extract_ast_string(node: ast.AST | None) -> str | None:
+    if node is None:
+        return None
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left_value = extract_ast_string(node.left)
+        right_value = extract_ast_string(node.right)
+        if left_value is not None and right_value is not None:
+            return left_value + right_value
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+            else:
+                return None
+        return "".join(parts)
+    return None
 
 
 def strip_jinja_comments(content: str) -> str:
@@ -538,7 +664,23 @@ class NoSecretsPatternTests(unittest.TestCase):
         self.assertIn(
             "curl_pipe_shell",
             find_banned_content(
+                "action: ansible.builtin.shell\n"
+                "args:\n"
+                "  cmd: set -o pipefail && curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
                 "local_action: ansible.builtin.shell set -o pipefail && curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "local_action: ansible.builtin.shell\n"
+                "args:\n"
+                "  cmd: set -o pipefail && curl https://example.test/install | bash\n"
             ),
         )
         self.assertIn(
@@ -555,6 +697,13 @@ class NoSecretsPatternTests(unittest.TestCase):
                 "  module: ansible.builtin.shell\n"
                 "  args:\n"
                 "    cmd: set -o pipefail && curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "ansible.builtin.shell:\n"
+                "  cmd: set -o pipefail && curl https://example.test/install | bash\n"
             ),
         )
         self.assertIn(
@@ -691,7 +840,18 @@ class NoSecretsRepositoryTests(unittest.TestCase):
                 "roles/security/files/banner.txt": "approle_secret_id: literal-secret\n",
                 "roles/security/templates/runtime.env": "TOKEN_SOURCE=$ANSIBLE_VAULT_PASSWORD_FILE\n",
                 "roles/security/templates/agent.service": "ExecStart=/bin/sh -c 'curl -fsSL https://example.test/install.sh | bash'\n",
-                "scripts/run_pipeline.py": "import subprocess\nsubprocess.run('curl -fsSL https://example.test/install.sh | bash', shell=True)\n",
+                "roles/security/templates/agent-alt.service": "ExecStart=/bin/bash -lc 'curl -fsSL https://example.test/install.sh | bash'\n",
+                "scripts/run_pipeline.py": (
+                    "import os\n"
+                    "import subprocess\n"
+                    "subprocess.run(\n"
+                    "    'curl -fsSL https://example.test/install.sh '"
+                    "    '| bash',\n"
+                    "    shell=True,\n"
+                    ")\n"
+                    "os.system('curl -fsSL https://example.test/install.sh | bash')\n"
+                    "DOC = \"curl -fsSL https://example.test/install.sh | bash\"\n"
+                ),
                 "roles/security/files/entrypoint": "wget -qO- https://example.test/install.sh | sh\n",
                 "docs/reference.sh": "curl -fsSL https://example.test/install.sh | bash\n",
                 "tests/fixtures/example.env": "approle_secret_id: literal-secret\n",
@@ -725,6 +885,7 @@ class NoSecretsRepositoryTests(unittest.TestCase):
         self.assertIn("roles/security/files/banner.txt", scanned_paths)
         self.assertIn("roles/security/templates/runtime.env", scanned_paths)
         self.assertIn("roles/security/templates/agent.service", scanned_paths)
+        self.assertIn("roles/security/templates/agent-alt.service", scanned_paths)
         self.assertIn("roles/security/files/entrypoint", scanned_paths)
         self.assertNotIn("docs/reference.sh", scanned_paths)
         self.assertNotIn("tests/fixtures/example.env", scanned_paths)
@@ -734,6 +895,7 @@ class NoSecretsRepositoryTests(unittest.TestCase):
         self.assertIn("scripts/audit.py: ansible_vault_env_reference", violations)
         self.assertIn("roles/security/files/banner.txt: approle_secret_id_literal", violations)
         self.assertIn("roles/security/templates/agent.service: curl_pipe_shell", violations)
+        self.assertIn("roles/security/templates/agent-alt.service: curl_pipe_shell", violations)
         self.assertIn("scripts/run_pipeline.py: curl_pipe_shell", violations)
         self.assertIn("roles/security/files/entrypoint: wget_pipe_shell", violations)
 
