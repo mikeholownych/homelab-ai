@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import configparser
 import unittest
 from pathlib import Path
 
@@ -16,15 +17,15 @@ REQUIRED_ROOT_FILES = (
 )
 
 REQUIRED_PLAYBOOKS = (
-    "baseline.yml",
-    "benchmark.yml",
-    "bootstrap.yml",
-    "drift-check.yml",
-    "facts-export.yml",
-    "patch.yml",
-    "site.yml",
-    "upgrade.yml",
-    "validate.yml",
+    "playbooks/baseline.yml",
+    "playbooks/benchmark.yml",
+    "playbooks/bootstrap.yml",
+    "playbooks/drift-check.yml",
+    "playbooks/facts-export.yml",
+    "playbooks/patch.yml",
+    "playbooks/site.yml",
+    "playbooks/upgrade.yml",
+    "playbooks/validate.yml",
 )
 
 REQUIRED_ROLE_NAMES = (
@@ -81,6 +82,17 @@ class RepositoryContractTests(unittest.TestCase):
 
         self.assertEqual([], missing, f"Missing required repository paths: {missing}")
 
+    def test_playbooks_live_under_playbooks_directory(self) -> None:
+        misplaced = sorted(
+            path.name for path in REPO_ROOT.glob("*.yml") if path.name in {p.split("/")[-1] for p in REQUIRED_PLAYBOOKS}
+        )
+
+        self.assertEqual(
+            [],
+            misplaced,
+            f"Playbooks must live under playbooks/: {misplaced}",
+        )
+
     def test_evidence_artifacts_are_ignored_except_gitkeep(self) -> None:
         gitignore_path = REPO_ROOT / ".gitignore"
         self.assertTrue(gitignore_path.exists(), "Expected .gitignore to exist")
@@ -93,6 +105,18 @@ class RepositoryContractTests(unittest.TestCase):
 
         self.assertIn("evidence/*", gitignore_lines)
         self.assertIn("!evidence/.gitkeep", gitignore_lines)
+
+    def test_privilege_escalation_defaults_are_active_via_dedicated_section(self) -> None:
+        parser = configparser.ConfigParser()
+        parser.read(REPO_ROOT / "ansible.cfg", encoding="utf-8")
+
+        self.assertIn("privilege_escalation", parser.sections())
+        self.assertEqual("true", parser["privilege_escalation"].get("become"))
+        self.assertEqual("sudo", parser["privilege_escalation"].get("become_method"))
+        self.assertEqual("root", parser["privilege_escalation"].get("become_user"))
+        self.assertNotIn("become", parser["defaults"])
+        self.assertNotIn("become_method", parser["defaults"])
+        self.assertNotIn("become_user", parser["defaults"])
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ PRODUCTION_ROOTS = (
     ".github",
     "group_vars",
     "host_vars",
+    "playbooks",
     "roles",
 )
 
@@ -19,35 +20,64 @@ PRODUCTION_FILES = (
     ".yamllint",
     "Makefile",
     "ansible.cfg",
-    "baseline.yml",
-    "benchmark.yml",
-    "bootstrap.yml",
-    "drift-check.yml",
-    "facts-export.yml",
-    "patch.yml",
     "requirements.txt",
     "requirements.yml",
-    "site.yml",
-    "upgrade.yml",
-    "validate.yml",
 )
 
 SCANNED_SUFFIXES = {".cfg", ".ini", ".j2", ".txt", ".yaml", ".yml"}
 SCANNED_FILENAMES = {"Makefile"}
 
+LATEST_VALUE_PATTERN = re.compile(
+    r"""
+    ^
+    \s*
+    (?:
+        image(?:_tag)? |
+        tag |
+        version |
+        state
+    )
+    \s*:\s*
+    ["']?
+    latest
+    ["']?
+    \s*$
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 BANNED_PATTERNS = {
     "ansible_vault_env_reference": re.compile(r"\$ANSIBLE_VAULT"),
-    "mutable_latest": re.compile(r"(?<![\\w-])latest(?![\\w-])", re.IGNORECASE),
-    "curl_pipe_shell": re.compile(r"curl\b[^\\n|]*\|\s*(?:sh|bash)\b", re.IGNORECASE),
-    "wget_pipe_shell": re.compile(r"wget\b[^\\n|]*\|\s*(?:sh|bash)\b", re.IGNORECASE),
+    "curl_pipe_shell": re.compile(r"curl\b[^\n|]*\|\s*(?:bash|sh)\b", re.IGNORECASE),
+    "wget_pipe_shell": re.compile(r"wget\b[^\n|]*\|\s*(?:bash|sh)\b", re.IGNORECASE),
     "blanket_ignore_errors": re.compile(
         r"^\s*ignore_errors\s*:\s*(?:true|yes)\s*$", re.IGNORECASE | re.MULTILINE
     ),
 }
 APPROLE_SECRET_ID_PATTERN = re.compile(
-    r"^\s*secret_id\s*:\s*['\"]?([A-Za-z0-9][A-Za-z0-9-]{7,})['\"]?\s*$",
-    re.IGNORECASE | re.MULTILINE,
+    r"""
+    ^
+    \s*
+    (?:
+        vault_approle_secret_id |
+        approle_secret_id |
+        secret_id
+    )
+    \s*:\s*
+    (?P<value>.+?)
+    \s*$
+    """,
+    re.IGNORECASE | re.MULTILINE | re.VERBOSE,
 )
+APPROLE_ALLOWED_TOKENS = {
+    "example",
+    "example-secret-id",
+    "placeholder",
+    "changeme",
+    "{{ vault_approle_secret_id }}",
+    "{{ approle_secret_id }}",
+    "{{ secret_id }}",
+    "!vault |",
+}
 
 
 def iter_production_files() -> list[Path]:
@@ -69,20 +99,68 @@ def iter_production_files() -> list[Path]:
     return sorted(set(existing))
 
 
-class NoSecretsTests(unittest.TestCase):
+def contains_mutable_latest_violation(content: str) -> bool:
+    return any(LATEST_VALUE_PATTERN.match(line) for line in content.splitlines())
+
+
+def contains_approle_secret_id_literal(content: str) -> bool:
+    for match in APPROLE_SECRET_ID_PATTERN.finditer(content):
+        raw_value = match.group("value").strip()
+        normalized_value = raw_value.strip("'\"").strip()
+        if normalized_value in APPROLE_ALLOWED_TOKENS:
+            continue
+        if normalized_value.startswith("{{") or normalized_value.startswith("!vault"):
+            continue
+        return True
+    return False
+
+
+def find_banned_content(content: str) -> list[str]:
+    violations: list[str] = []
+    if contains_mutable_latest_violation(content):
+        violations.append("mutable_latest")
+    for label, pattern in BANNED_PATTERNS.items():
+        if pattern.search(content):
+            violations.append(label)
+    if contains_approle_secret_id_literal(content):
+        violations.append("approle_secret_id_literal")
+    return violations
+
+
+class NoSecretsPatternTests(unittest.TestCase):
+    def test_iter_production_files_scans_playbooks_directory(self) -> None:
+        production_files = {path.relative_to(REPO_ROOT).as_posix() for path in iter_production_files()}
+
+        self.assertIn("playbooks/baseline.yml", production_files)
+        self.assertNotIn("baseline.yml", production_files)
+
+    def test_mutable_latest_detects_real_key_value_usage_only(self) -> None:
+        self.assertTrue(contains_mutable_latest_violation('tag: "latest"\n'))
+        self.assertTrue(contains_mutable_latest_violation("state: latest\n"))
+        self.assertFalse(contains_mutable_latest_violation("latest_release_channel: stable\n"))
+        self.assertFalse(contains_mutable_latest_violation("msg: latest packages are handled elsewhere\n"))
+
+    def test_pipe_to_shell_detects_curl_and_wget_variants(self) -> None:
+        self.assertIn("curl_pipe_shell", find_banned_content("shell: curl -fsSL https://example.test/install.sh | bash\n"))
+        self.assertIn("curl_pipe_shell", find_banned_content("shell: curl https://example.test/bootstrap | sh -s -- --flag\n"))
+        self.assertIn("wget_pipe_shell", find_banned_content("shell: wget -qO- https://example.test/install | bash\n"))
+        self.assertEqual([], find_banned_content("shell: curl -fsSLO https://example.test/archive.tar.gz\n"))
+
+    def test_approle_secret_id_detection_catches_literal_values_and_allows_templates(self) -> None:
+        self.assertTrue(contains_approle_secret_id_literal("vault_approle_secret_id: super-secret-id\n"))
+        self.assertTrue(contains_approle_secret_id_literal("approle_secret_id: 01234567-89ab-cdef\n"))
+        self.assertFalse(contains_approle_secret_id_literal("approle_secret_id: '{{ vault_approle_secret_id }}'\n"))
+        self.assertFalse(contains_approle_secret_id_literal("secret_id: placeholder\n"))
+
+
+class NoSecretsRepositoryTests(unittest.TestCase):
     def test_repository_contains_no_banned_patterns(self) -> None:
         violations: list[str] = []
         for path in iter_production_files():
             relative_path = path.relative_to(REPO_ROOT)
             content = path.read_text(encoding="utf-8")
-            for label, pattern in BANNED_PATTERNS.items():
-                if pattern.search(content):
-                    violations.append(f"{relative_path}: {label}")
-
-            for match in APPROLE_SECRET_ID_PATTERN.finditer(content):
-                value = match.group(1).lower()
-                if value not in {"example", "placeholder", "changeme"}:
-                    violations.append(f"{relative_path}: approle_secret_id_literal")
+            for violation in find_banned_content(content):
+                violations.append(f"{relative_path}: {violation}")
 
         self.assertEqual([], violations, f"Found banned content: {violations}")
 

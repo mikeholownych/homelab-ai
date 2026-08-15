@@ -9,15 +9,15 @@ PYTEST := $(VENV_DIR)/bin/pytest
 YAMLLINT := $(VENV_DIR)/bin/yamllint
 
 PLAYBOOKS := \
-	bootstrap.yml \
-	baseline.yml \
-	site.yml \
-	drift-check.yml \
-	patch.yml \
-	upgrade.yml \
-	validate.yml \
-	benchmark.yml \
-	facts-export.yml
+	playbooks/bootstrap.yml \
+	playbooks/baseline.yml \
+	playbooks/site.yml \
+	playbooks/drift-check.yml \
+	playbooks/patch.yml \
+	playbooks/upgrade.yml \
+	playbooks/validate.yml \
+	playbooks/benchmark.yml \
+	playbooks/facts-export.yml
 
 .PHONY: bootstrap-tools lint syntax test check idempotency quality
 
@@ -37,10 +37,10 @@ test: bootstrap-tools
 	$(PYTEST) -q
 
 check: bootstrap-tools
-	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) --check baseline.yml --tags foundation
+	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) --check playbooks/baseline.yml --tags foundation
 
 idempotency: bootstrap-tools
 	@echo "Foundation scaffold only; this target validates dry-run wiring and does not assert host convergence."
-	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) --check baseline.yml --tags foundation
+	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) --check playbooks/baseline.yml --tags foundation
 
 quality: lint test syntax check idempotency
