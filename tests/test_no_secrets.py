@@ -89,15 +89,22 @@ RAW_COMMAND_SEGMENT_PATTERNS = {
         re.IGNORECASE,
     ),
 }
-COMMAND_KEYS = {"shell", "ansible.builtin.shell", "command", "ansible.builtin.command"}
+COMMAND_KEYS = {
+    "shell",
+    "ansible.builtin.shell",
+    "command",
+    "ansible.builtin.command",
+    "raw",
+    "ansible.builtin.raw",
+}
 ACTION_KEY = "action"
 LOCAL_ACTION_KEY = "local_action"
 ACTION_COMMAND_PATTERN = re.compile(
-    r"^(?:ansible\.builtin\.)?(?:shell|command)\b(?P<command>[\s\S]*)$",
+    r"^(?:ansible\.builtin\.)?(?:shell|command|raw)\b(?P<command>[\s\S]*)$",
     re.IGNORECASE,
 )
 ACTION_MODULE_NAME_PATTERN = re.compile(
-    r"^(?:ansible\.builtin\.)?(?P<module>shell|command)\b(?P<command>[\s\S]*)$",
+    r"^(?:ansible\.builtin\.)?(?P<module>shell|command|raw)\b(?P<command>[\s\S]*)$",
     re.IGNORECASE,
 )
 LATEST_EXACT_KEYS = {"tag", "version", "state", "image", "container_image", "image_tag"}
@@ -458,7 +465,7 @@ def iter_systemd_execstart_candidates(content: str):
         if stripped.lower().startswith("execstart="):
             exec_value = stripped.split("=", 1)[1].strip()
             shell_match = re.search(
-                r"(?:^|\s)(?:/bin/)?(?:sh|bash)\s+-[A-Za-z]*c[A-Za-z]*\s+(['\"])(?P<command>.*?)(\1)",
+                r"(?:^|\s)(?:\S*/)?(?:sh|bash)\s+-[A-Za-z]*c[A-Za-z]*\s+(['\"])(?P<command>.*?)(\1)",
                 exec_value,
             )
             if shell_match:
@@ -658,6 +665,12 @@ class NoSecretsPatternTests(unittest.TestCase):
         self.assertIn(
             "curl_pipe_shell",
             find_banned_content(
+                "raw: curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
                 "action: ansible.builtin.shell set -o pipefail && curl -fsSL https://example.test/install.sh | bash\n"
             ),
         )
@@ -704,6 +717,12 @@ class NoSecretsPatternTests(unittest.TestCase):
             find_banned_content(
                 "ansible.builtin.shell:\n"
                 "  cmd: set -o pipefail && curl https://example.test/install | bash\n"
+            ),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "action: ansible.builtin.raw curl https://example.test/install | bash\n"
             ),
         )
         self.assertIn(
@@ -840,15 +859,18 @@ class NoSecretsRepositoryTests(unittest.TestCase):
                 "roles/security/files/banner.txt": "approle_secret_id: literal-secret\n",
                 "roles/security/templates/runtime.env": "TOKEN_SOURCE=$ANSIBLE_VAULT_PASSWORD_FILE\n",
                 "roles/security/templates/agent.service": "ExecStart=/bin/sh -c 'curl -fsSL https://example.test/install.sh | bash'\n",
-                "roles/security/templates/agent-alt.service": "ExecStart=/bin/bash -lc 'curl -fsSL https://example.test/install.sh | bash'\n",
+                "roles/security/templates/agent-alt.service": "ExecStart=/usr/bin/bash -lc 'curl -fsSL https://example.test/install.sh | bash'\n",
                 "scripts/run_pipeline.py": (
                     "import os\n"
-                    "import subprocess\n"
-                    "subprocess.run(\n"
-                    "    'curl -fsSL https://example.test/install.sh '"
-                    "    '| bash',\n"
+                    "import subprocess as sp\n"
+                    "from subprocess import run as subrun\n"
+                    "INSTALLER_CMD = 'curl -fsSL https://example.test/install.sh | bash'\n"
+                    "installer_url = 'https://example.test/install.sh'\n"
+                    "sp.run(\n"
+                    "    f'curl {installer_url} | bash',\n"
                     "    shell=True,\n"
                     ")\n"
+                    "subrun(INSTALLER_CMD, shell=True)\n"
                     "os.system('curl -fsSL https://example.test/install.sh | bash')\n"
                     "DOC = \"curl -fsSL https://example.test/install.sh | bash\"\n"
                 ),
