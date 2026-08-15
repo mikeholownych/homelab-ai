@@ -29,6 +29,7 @@ PRODUCTION_FILES = (
 SCANNED_SUFFIXES = {".cfg", ".ini", ".j2", ".txt", ".yaml", ".yml"}
 SCANNED_FILENAMES = {"Makefile"}
 REQUIREMENTS_PIN_PATTERN = re.compile(r"^PyYAML==(?P<version>\S+)$", re.MULTILINE)
+YAML_SUFFIXES = {".yaml", ".yml"}
 
 RAW_BANNED_PATTERNS = {
     "ansible_vault_env_reference": re.compile(r"\$ANSIBLE_VAULT"),
@@ -36,6 +37,16 @@ RAW_BANNED_PATTERNS = {
 PIPE_TO_SHELL_PATTERNS = {
     "curl_pipe_shell": re.compile(r"\bcurl\b[\s\S]*?\|\s*(?:bash|sh)\b", re.IGNORECASE),
     "wget_pipe_shell": re.compile(r"\bwget\b[\s\S]*?\|\s*(?:bash|sh)\b", re.IGNORECASE),
+}
+RAW_COMMAND_SEGMENT_PATTERNS = {
+    "curl_pipe_shell": re.compile(
+        r"(?:^|[;&]|\bthen\b)\s*(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*curl\b[\s\S]*?\|\s*(?:bash|sh)\b",
+        re.IGNORECASE,
+    ),
+    "wget_pipe_shell": re.compile(
+        r"(?:^|[;&]|\bthen\b)\s*(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*wget\b[\s\S]*?\|\s*(?:bash|sh)\b",
+        re.IGNORECASE,
+    ),
 }
 COMMAND_KEYS = {"shell", "ansible.builtin.shell", "command", "ansible.builtin.command"}
 LATEST_EXACT_KEYS = {"tag", "version", "state", "image", "container_image", "image_tag"}
@@ -125,20 +136,23 @@ def contains_mutable_latest_violation(content: str) -> bool:
     return False
 
 
-def find_pipe_to_shell_violation(content: str) -> list[str]:
+def find_pipe_to_shell_violation(content: str, source_name: str) -> list[str]:
     violations: list[str] = []
-    for document in load_yaml_documents(content):
-        for mapping in iter_yaml_nodes(document):
-            for key, value in mapping.items():
-                if not isinstance(key, str) or not isinstance(value, str):
-                    continue
-                if key.strip().lower() not in COMMAND_KEYS:
-                    continue
-                for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
-                    if pattern.search(normalize_shell_command(value)):
-                        violations.append(label)
-    for candidate in iter_raw_command_candidates(content):
-        for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
+    if Path(source_name).suffix in YAML_SUFFIXES:
+        for document in load_yaml_documents(content):
+            for mapping in iter_yaml_nodes(document):
+                for key, value in mapping.items():
+                    if not isinstance(key, str) or not isinstance(value, str):
+                        continue
+                    if key.strip().lower() not in COMMAND_KEYS:
+                        continue
+                    for label, pattern in PIPE_TO_SHELL_PATTERNS.items():
+                        if pattern.search(normalize_shell_command(value)):
+                            violations.append(label)
+        return violations
+
+    for candidate in iter_raw_command_candidates(content, source_name):
+        for label, pattern in RAW_COMMAND_SEGMENT_PATTERNS.items():
             if pattern.search(candidate):
                 violations.append(label)
     return violations
@@ -150,8 +164,9 @@ def normalize_shell_command(command: str) -> str:
     return normalized
 
 
-def iter_raw_command_candidates(content: str):
-    lines = content.splitlines()
+def iter_raw_command_candidates(content: str, source_name: str):
+    sanitized_content = strip_jinja_comments(content) if Path(source_name).suffix == ".j2" else content
+    lines = sanitized_content.splitlines()
     index = 0
 
     while index < len(lines):
@@ -169,13 +184,28 @@ def iter_raw_command_candidates(content: str):
             index = next_index
             continue
 
-        if stripped.startswith(("curl ", "wget ")):
+        if contains_raw_pipe_launcher(stripped):
             candidate, next_index = collect_raw_shell_command(lines, index)
             yield candidate
             index = next_index
             continue
 
         index += 1
+
+
+def strip_jinja_comments(content: str) -> str:
+    return re.sub(r"{#.*?#}", "", content, flags=re.DOTALL)
+
+
+def contains_raw_pipe_launcher(command: str) -> bool:
+    normalized = command.strip()
+    return bool(
+        re.search(
+            r"(?:^|[;&]|\bthen\b)\s*(?:sudo\s+)?(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*(?:curl|wget)\b",
+            normalized,
+            re.IGNORECASE,
+        )
+    )
 
 
 def collect_recipe_command(lines: list[str], start_index: int) -> tuple[str | None, int]:
@@ -226,14 +256,14 @@ def contains_approle_secret_id_literal(content: str) -> bool:
     return False
 
 
-def find_banned_content(content: str) -> list[str]:
+def find_banned_content(content: str, source_name: str = "inline.yml") -> list[str]:
     violations: list[str] = []
     if contains_mutable_latest_violation(content):
         violations.append("mutable_latest")
     for label, pattern in RAW_BANNED_PATTERNS.items():
         if pattern.search(content):
             violations.append(label)
-    violations.extend(find_pipe_to_shell_violation(content))
+    violations.extend(find_pipe_to_shell_violation(content, source_name))
     if re.search(r"^\s*ignore_errors\s*:\s*(?:true|yes)\s*$", content, re.IGNORECASE | re.MULTILINE):
         violations.append("blanket_ignore_errors")
     if contains_approle_secret_id_literal(content):
@@ -296,12 +326,20 @@ class NoSecretsPatternTests(unittest.TestCase):
             [],
             find_banned_content(
                 '@echo "Avoid curl https://example.test/install.sh | bash in docs."\n'
-            ),
+            , source_name="Makefile"),
         )
         self.assertEqual(
             [],
             find_banned_content(
                 '{# Example only: curl https://example.test/install.sh | bash #}\n'
+            ),
+        )
+        self.assertEqual(
+            [],
+            find_banned_content(
+                "notes: |\n"
+                "  curl https://example.test/install.sh | bash\n"
+                "  is forbidden in real commands but this field is explanatory.\n"
             ),
         )
 
@@ -311,7 +349,7 @@ class NoSecretsPatternTests(unittest.TestCase):
             find_banned_content(
                 "install:\n"
                 "\tcurl -fsSL https://example.test/install.sh | bash\n"
-            ),
+            , source_name="Makefile"),
         )
         self.assertIn(
             "wget_pipe_shell",
@@ -319,7 +357,7 @@ class NoSecretsPatternTests(unittest.TestCase):
                 "install:\n"
                 "\twget -qO- https://example.test/install.sh \\\n"
                 "\t| sh\n"
-            ),
+            , source_name="Makefile"),
         )
 
     def test_pipe_to_shell_detects_j2_shell_templates_and_skips_j2_comments(self) -> None:
@@ -328,13 +366,36 @@ class NoSecretsPatternTests(unittest.TestCase):
             find_banned_content(
                 "#!/usr/bin/env bash\n"
                 "curl -fsSL {{ installer_url }} | bash\n"
-            ),
+            , source_name="templates/install.sh.j2"),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "#!/usr/bin/env bash\n"
+                "sudo curl -fsSL {{ installer_url }} | bash\n"
+            , source_name="templates/install.sh.j2"),
+        )
+        self.assertIn(
+            "curl_pipe_shell",
+            find_banned_content(
+                "#!/usr/bin/env bash\n"
+                "if command -v curl >/dev/null; then curl -fsSL {{ installer_url }} | bash; fi\n"
+            , source_name="templates/install.sh.j2"),
         )
         self.assertEqual(
             [],
             find_banned_content(
                 "{# curl https://example.test/install.sh | bash #}\n"
-            ),
+            , source_name="templates/install.sh.j2"),
+        )
+        self.assertEqual(
+            [],
+            find_banned_content(
+                "{#\n"
+                "curl https://example.test/install.sh | bash\n"
+                "#}\n"
+                "printf 'safe template'\n"
+            , source_name="templates/install.sh.j2"),
         )
 
     def test_approle_secret_id_detection_catches_literal_values_and_allows_templates(self) -> None:
@@ -357,7 +418,7 @@ class NoSecretsRepositoryTests(unittest.TestCase):
         for path in iter_production_files():
             relative_path = path.relative_to(REPO_ROOT)
             content = path.read_text(encoding="utf-8")
-            for violation in find_banned_content(content):
+            for violation in find_banned_content(content, relative_path.as_posix()):
                 violations.append(f"{relative_path}: {violation}")
 
         self.assertEqual([], violations, f"Found banned content: {violations}")
