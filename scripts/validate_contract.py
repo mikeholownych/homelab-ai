@@ -13,13 +13,18 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = REPO_ROOT / "schemas"
-SCHEMA_PATHS = {
-    "validation": SCHEMA_DIR / "validation.schema.json",
-    "evidence": SCHEMA_DIR / "evidence.schema.json",
-    "benchmark": SCHEMA_DIR / "benchmark.schema.json",
-    "cmdb": SCHEMA_DIR / "cmdb.schema.json",
-    "itsm": SCHEMA_DIR / "itsm.schema.json",
-}
+CONTRACT_TYPES = ("validation", "evidence", "benchmark", "cmdb", "itsm")
+
+
+def get_schema_paths(schema_root: Path | None = None) -> dict[str, Path]:
+    resolved_root = schema_root if schema_root is not None else SCHEMA_DIR
+    return {
+        "validation": resolved_root / "validation.schema.json",
+        "evidence": resolved_root / "evidence.schema.json",
+        "benchmark": resolved_root / "benchmark.schema.json",
+        "cmdb": resolved_root / "cmdb.schema.json",
+        "itsm": resolved_root / "itsm.schema.json",
+    }
 
 
 def load_json(path: Path) -> object:
@@ -54,8 +59,13 @@ def is_package_routine_allowed(
     return not any(package_matches_rule(package_name, exclusion) for exclusion in exclusions)
 
 
-def collect_schema_errors(contract_type: str, payload: dict[str, object]) -> list[str]:
-    schema = load_json(SCHEMA_PATHS[contract_type])
+def collect_schema_errors(
+    contract_type: str,
+    payload: dict[str, object],
+    *,
+    schema_root: Path | None = None,
+) -> list[str]:
+    schema = load_json(get_schema_paths(schema_root)[contract_type])
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.absolute_path))
@@ -119,6 +129,50 @@ def validate_validation_payload(payload: dict[str, object]) -> list[str]:
 
     if expected_status == "PASS" and (blocking_failures != 0 or failed_checks != 0 or not_tested != 0):
         errors.append("PASS status requires zero failed, blocked, and NOT_TESTED checks")
+
+    return errors
+
+
+def validate_evidence_payload(payload: dict[str, object]) -> list[str]:
+    run = payload.get("run")
+    finalization = payload.get("finalization")
+    if not isinstance(run, dict) or not isinstance(finalization, dict):
+        return []
+
+    errors: list[str] = []
+    ansible = run.get("ansible")
+    if not isinstance(ansible, dict):
+        return ["run.ansible must be an object"]
+
+    recap = ansible.get("recap")
+    if recap is None:
+        errors.append("run.ansible.recap is required for durable evidence manifests")
+        return errors
+    if not isinstance(recap, dict):
+        errors.append("run.ansible.recap must be an object")
+        return errors
+
+    totals = recap.get("totals")
+    hosts = recap.get("hosts")
+    if not isinstance(totals, dict):
+        errors.append("run.ansible.recap.totals must be an object")
+    if not isinstance(hosts, dict) or not hosts:
+        errors.append("run.ansible.recap.hosts must be a non-empty object")
+
+    state = finalization.get("state")
+    status = payload.get("status")
+    exit_code = ansible.get("exit_code")
+    failed = totals.get("failed") if isinstance(totals, dict) else None
+    unreachable = totals.get("unreachable") if isinstance(totals, dict) else None
+
+    if state == "complete" and status != "captured":
+        errors.append("finalization.state complete requires top-level status captured")
+    if state == "complete" and exit_code != 0:
+        errors.append("finalization.state complete requires ansible exit_code 0")
+    if state == "complete" and (failed != 0 or unreachable != 0):
+        errors.append("finalization.state complete requires zero failed and unreachable recap totals")
+    if state == "incomplete" and finalization.get("reason") in (None, ""):
+        errors.append("finalization.state incomplete requires a non-empty reason")
 
     return errors
 
@@ -213,16 +267,20 @@ def validate_itsm_payload(payload: dict[str, object]) -> list[str]:
 
 SEMANTIC_VALIDATORS: dict[str, Callable[[dict[str, object]], list[str]]] = {
     "validation": validate_validation_payload,
-    "evidence": lambda payload: [],
+    "evidence": validate_evidence_payload,
     "benchmark": lambda payload: [],
     "cmdb": lambda payload: [],
     "itsm": validate_itsm_payload,
 }
 
 
+def collect_semantic_errors(contract_type: str, payload: dict[str, object]) -> list[str]:
+    return SEMANTIC_VALIDATORS[contract_type](payload)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("contract_type", choices=tuple(SCHEMA_PATHS))
+    parser.add_argument("contract_type", choices=CONTRACT_TYPES)
     parser.add_argument("json_path")
     args = parser.parse_args(argv)
 
@@ -237,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
             print(error, file=sys.stderr)
         return 1
 
-    semantic_errors = SEMANTIC_VALIDATORS[args.contract_type](payload)
+    semantic_errors = collect_semantic_errors(args.contract_type, payload)
     if semantic_errors:
         for error in semantic_errors:
             print(error, file=sys.stderr)

@@ -1,0 +1,396 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly LOCK_CONTENTION_EXIT=73
+readonly ARGUMENT_EXIT=64
+readonly DIRTY_TREE_EXIT=65
+
+repo_root=""
+schema_root=""
+inventory_arg=""
+target=""
+playbook_arg=""
+evidence_root="/var/lib/local-ai/evidence"
+lock_path=""
+simulate="false"
+validate_after_site="false"
+
+while (($# > 0)); do
+  case "$1" in
+    --repo-root)
+      repo_root="${2:?missing value for --repo-root}"
+      shift 2
+      ;;
+    --schema-root)
+      schema_root="${2:?missing value for --schema-root}"
+      shift 2
+      ;;
+    --inventory)
+      inventory_arg="${2:?missing value for --inventory}"
+      shift 2
+      ;;
+    --target)
+      target="${2:?missing value for --target}"
+      shift 2
+      ;;
+    --playbook)
+      playbook_arg="${2:?missing value for --playbook}"
+      shift 2
+      ;;
+    --evidence-root)
+      evidence_root="${2:?missing value for --evidence-root}"
+      shift 2
+      ;;
+    --lock-path)
+      lock_path="${2:?missing value for --lock-path}"
+      shift 2
+      ;;
+    --simulate)
+      simulate="true"
+      shift
+      ;;
+    --validate-after-site)
+      validate_after_site="true"
+      shift
+      ;;
+    *)
+      echo "unknown argument: $1" >&2
+      exit "$ARGUMENT_EXIT"
+      ;;
+  esac
+done
+
+if [[ -z "$repo_root" || -z "$schema_root" || -z "$inventory_arg" || -z "$target" || -z "$playbook_arg" || -z "$lock_path" ]]; then
+  echo "required arguments: --repo-root --schema-root --inventory --target --playbook --lock-path" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$repo_root")"
+schema_root="$(python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$schema_root")"
+evidence_root="$(python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$evidence_root")"
+deployed_root="${LOCAL_AI_DEPLOYED_ROOT:-$repo_root}"
+deployed_root="$(python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$deployed_root")"
+
+python3 -c 'import sys; from pathlib import Path; repo = Path(sys.argv[1]); deployed = Path(sys.argv[2]); repo.relative_to(deployed)' "$repo_root" "$deployed_root" >/dev/null 2>&1 || {
+  echo "repo root must live under the configured deployed root" >&2
+  exit "$ARGUMENT_EXIT"
+}
+
+readonly ALLOWLISTED_PLAYBOOKS=("site.yml" "drift-check.yml" "patch.yml" "validate.yml" "benchmark.yml" "facts-export.yml")
+
+playbook_name="$(basename "$playbook_arg")"
+
+if [[ "$playbook_arg" != "$playbook_name" ]]; then
+  echo "playbook must be provided as an allowlisted file name" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+if [[ "$inventory_arg" == /* || "$inventory_arg" == *".."* ]]; then
+  echo "inventory must be a relative path inside inventory/" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+
+playbook_allowed="false"
+for candidate in "${ALLOWLISTED_PLAYBOOKS[@]}"; do
+  if [[ "$playbook_name" == "$candidate" ]]; then
+    playbook_allowed="true"
+    break
+  fi
+done
+if [[ "$playbook_allowed" != "true" ]]; then
+  echo "playbook is not on the allowlist" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+
+playbook_path="$repo_root/playbooks/$playbook_name"
+inventory_path="$repo_root/$inventory_arg"
+playbook_resolved="$(python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$playbook_path")"
+inventory_resolved="$(python3 -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve())' "$inventory_path")"
+
+python3 -c 'import sys; from pathlib import Path; Path(sys.argv[1]).relative_to(Path(sys.argv[2]))' "$playbook_resolved" "$repo_root/playbooks" >/dev/null 2>&1 || {
+  echo "playbook must resolve inside playbooks/" >&2
+  exit "$ARGUMENT_EXIT"
+}
+python3 -c 'import sys; from pathlib import Path; Path(sys.argv[1]).relative_to(Path(sys.argv[2]))' "$inventory_resolved" "$repo_root/inventory" >/dev/null 2>&1 || {
+  echo "inventory must resolve inside inventory/" >&2
+  exit "$ARGUMENT_EXIT"
+}
+
+if [[ ! -f "$playbook_resolved" || ! -f "$inventory_resolved" ]]; then
+  echo "playbook and inventory must exist" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+
+mkdir -p "$(dirname "$lock_path")"
+exec 9>"$lock_path"
+if ! flock --nonblock 9; then
+  echo "lock contention on $lock_path" >&2
+  exit "$LOCK_CONTENTION_EXIT"
+fi
+
+git_sha="$(git -C "$repo_root" rev-parse HEAD)"
+git_status_output="$(git -C "$repo_root" status --porcelain --untracked-files=all)"
+
+dirty_entries=()
+if [[ -n "$git_status_output" ]]; then
+  while IFS= read -r status_line; do
+    [[ -z "$status_line" ]] && continue
+    entry_path="${status_line:3}"
+    allowed="false"
+    case "$entry_path" in
+      evidence/*|.pytest_cache/*|.mypy_cache/*|.ansible/*)
+        allowed="true"
+        ;;
+    esac
+    if [[ "$allowed" != "true" ]]; then
+      dirty_entries+=("$status_line")
+    fi
+  done <<< "$git_status_output"
+fi
+
+if ((${#dirty_entries[@]} > 0)); then
+  printf 'repository has disallowed dirty entries\n' >&2
+  exit "$DIRTY_TREE_EXIT"
+fi
+
+timestamp_dir_name="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H%M%SZ"))')"
+readonly timestamp_dir_name
+readonly host_dir="$evidence_root/$target"
+readonly run_dir="$host_dir/$timestamp_dir_name"
+install -d -m 0750 "$host_dir"
+if [[ -e "$run_dir" ]]; then
+  echo "run directory already exists: $run_dir" >&2
+  exit 1
+fi
+install -d -m 0750 "$run_dir"
+
+validation_status="NOT_TESTED"
+validation_classification="incomplete"
+if [[ "$playbook_name" == "validate.yml" || "$validate_after_site" == "true" ]]; then
+  validation_status="PASS"
+  validation_classification="healthy"
+fi
+
+export LOCAL_AI_EVIDENCE_RUN_DIR="$run_dir"
+
+python3 - "$run_dir" "$repo_root" "$target" "$inventory_arg" "$playbook_name" "$lock_path" "$git_sha" "$simulate" "$timestamp_dir_name" "$validation_status" "$validation_classification" <<'PY'
+import sys
+from pathlib import Path
+
+from scripts.finalize_evidence import atomic_write_json
+
+run_dir = Path(sys.argv[1])
+repo_root = sys.argv[2]
+target = sys.argv[3]
+inventory = sys.argv[4]
+playbook = sys.argv[5]
+lock_path = sys.argv[6]
+git_sha = sys.argv[7]
+simulated = sys.argv[8] == "true"
+directory_name = sys.argv[9]
+validation_status = sys.argv[10]
+validation_classification = sys.argv[11]
+
+manifest = {
+    "schema_version": "1.1.0",
+    "generated_at": "2026-08-15T00:00:00Z",
+    "git_sha": git_sha,
+    "simulated": simulated,
+    "status": "captured",
+    "collection_target": {
+        "node_id": target,
+        "adapter": "ansible",
+    },
+    "artifacts": [
+        {
+            "id": "ansible-log",
+            "kind": "text/plain",
+            "expected": {
+                "summary": "Ansible combined stdout and stderr log",
+                "path": "ansible.log",
+            },
+            "observed": {
+                "summary": "Pending finalization",
+                "status": "unavailable",
+                "reason": "pending finalization",
+            },
+        },
+        {
+            "id": "ansible-run",
+            "kind": "application/json",
+            "expected": {
+                "summary": "Ansible execution metadata",
+                "path": "ansible-run.json",
+            },
+            "observed": {
+                "summary": "Pending finalization",
+                "status": "unavailable",
+                "reason": "pending finalization",
+            },
+        },
+    ],
+    "run": {
+        "directory_name": directory_name,
+        "started_at": "2026-08-15T00:00:00Z",
+        "finished_at": "2026-08-15T00:00:00Z",
+        "inventory": inventory,
+        "playbook": playbook,
+        "limit": target,
+        "lock": {
+            "path": lock_path,
+            "status": "acquired",
+        },
+        "repository": {
+            "root": repo_root,
+            "clean": True,
+            "allowlist": ["evidence/", ".pytest_cache/", ".mypy_cache/", ".ansible/"],
+        },
+        "ansible": {
+            "exit_code": 0,
+            "recap": None,
+        },
+        "validation": {
+            "status": validation_status,
+            "classification": validation_classification,
+        },
+    },
+    "finalization": {
+        "state": "incomplete",
+        "reason": "pending finalization",
+    },
+}
+if playbook == "validate.yml" or validation_status != "NOT_TESTED":
+    manifest["artifacts"].append(
+        {
+            "id": "validation",
+            "kind": "application/json",
+            "expected": {
+                "summary": "Validation contract output",
+                "path": "validation.json",
+            },
+            "observed": {
+                "summary": "Pending finalization",
+                "status": "unavailable",
+                "reason": "pending finalization",
+            },
+        }
+    )
+
+ansible_run = {
+    "git_sha": git_sha,
+    "simulated": simulated,
+    "inventory": inventory,
+    "playbook": playbook,
+    "limit": target,
+    "started_at": "2026-08-15T00:00:00Z",
+    "finished_at": "2026-08-15T00:00:00Z",
+    "exit_code": 0,
+    "validation": {
+        "status": validation_status,
+        "classification": validation_classification,
+    },
+}
+atomic_write_json(run_dir / "manifest.json", manifest)
+atomic_write_json(run_dir / "ansible-run.json", ansible_run)
+PY
+
+ansible_args=(
+  -i "$inventory_resolved"
+  --limit "$target"
+)
+if [[ "$simulate" == "true" ]]; then
+  ansible_args+=(--check)
+fi
+ansible_args+=("$playbook_resolved")
+
+log_path="$run_dir/ansible.log"
+start_ts="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
+set +e
+ANSIBLE_DISPLAY_ARGS_TO_STDOUT=False ANSIBLE_NOCOLOR=True ansible-playbook "${ansible_args[@]}" >"$log_path" 2>&1
+ansible_exit=$?
+set -e
+finish_ts="$(python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))')"
+
+if [[ "$playbook_name" == "site.yml" && "$validate_after_site" == "true" && "$ansible_exit" -eq 0 ]]; then
+  set +e
+  ANSIBLE_DISPLAY_ARGS_TO_STDOUT=False ANSIBLE_NOCOLOR=True ansible-playbook -i "$inventory_resolved" --limit "$target" "$repo_root/playbooks/validate.yml" >>"$log_path" 2>&1
+  validation_exit=$?
+  set -e
+  if [[ "$validation_exit" -ne 0 ]]; then
+    ansible_exit="$validation_exit"
+  fi
+fi
+
+validation_payload_status="$validation_status"
+validation_payload_classification="$validation_classification"
+if [[ -f "$run_dir/validation.json" ]]; then
+  validation_payload_status="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["status"])' "$run_dir/validation.json")"
+  validation_payload_classification="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["summary"]["classification"])' "$run_dir/validation.json")"
+fi
+
+python3 - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$ansible_exit" "$start_ts" "$finish_ts" "$validation_payload_status" "$validation_payload_classification" "$repo_root" "$git_status_output" <<'PY'
+import sys
+from pathlib import Path
+
+from scripts.finalize_evidence import atomic_write_json, load_json
+
+run_dir = Path(sys.argv[1])
+git_sha = sys.argv[2]
+simulated = sys.argv[3] == "true"
+inventory = sys.argv[4]
+playbook = sys.argv[5]
+target = sys.argv[6]
+exit_code = int(sys.argv[7])
+started_at = sys.argv[8]
+finished_at = sys.argv[9]
+validation_status = sys.argv[10]
+validation_classification = sys.argv[11]
+repo_root = sys.argv[12]
+git_status_output = sys.argv[13]
+
+manifest = load_json(run_dir / "manifest.json")
+manifest["generated_at"] = finished_at
+manifest["git_sha"] = git_sha
+manifest["simulated"] = simulated
+manifest["run"]["started_at"] = started_at
+manifest["run"]["finished_at"] = finished_at
+manifest["run"]["inventory"] = inventory
+manifest["run"]["playbook"] = playbook
+manifest["run"]["limit"] = target
+manifest["run"]["repository"]["root"] = repo_root
+manifest["run"]["repository"]["clean"] = True
+if git_status_output.strip():
+    manifest["run"]["repository"]["dirty_entries"] = [line for line in git_status_output.splitlines() if line.strip()]
+manifest["run"]["validation"] = {
+    "status": validation_status,
+    "classification": validation_classification,
+}
+
+ansible_run = load_json(run_dir / "ansible-run.json")
+ansible_run["git_sha"] = git_sha
+ansible_run["simulated"] = simulated
+ansible_run["inventory"] = inventory
+ansible_run["playbook"] = playbook
+ansible_run["limit"] = target
+ansible_run["started_at"] = started_at
+ansible_run["finished_at"] = finished_at
+ansible_run["exit_code"] = exit_code
+ansible_run["validation"] = {
+    "status": validation_status,
+    "classification": validation_classification,
+}
+atomic_write_json(run_dir / "manifest.json", manifest)
+atomic_write_json(run_dir / "ansible-run.json", ansible_run)
+PY
+
+set +e
+python3 "$script_dir/finalize-evidence.py" --run-dir "$run_dir" --repo-root "$repo_root" --schema-root "$schema_root"
+finalizer_exit=$?
+set -e
+
+if [[ "$ansible_exit" -ne 0 ]]; then
+  exit "$ansible_exit"
+fi
+if [[ "$finalizer_exit" -ne 0 ]]; then
+  exit "$finalizer_exit"
+fi

@@ -48,6 +48,7 @@ REQUIRED_ROLE_NAMES = (
     "llama_cpp_sycl",
     "monitoring",
     "scheduled_ansible",
+    "evidence",
     "vault_integration",
     "validation",
     "benchmarking",
@@ -66,6 +67,9 @@ WORKFLOW_PATH = Path(".github/workflows/quality.yml")
 FIXTURE_PATH = Path("tests/fixtures/inventory/healthy.yml")
 EVIDENCE_DIR = Path("evidence")
 EVIDENCE_KEEP = EVIDENCE_DIR / ".gitkeep"
+FINALIZE_EVIDENCE_SCRIPT = Path("scripts/finalize-evidence.py")
+FINALIZE_EVIDENCE_MODULE = Path("scripts/finalize_evidence.py")
+RUN_WRAPPER_SCRIPT = Path("scripts/run-ansible-snapshot")
 
 
 class RepositoryContractTests(unittest.TestCase):
@@ -77,7 +81,16 @@ class RepositoryContractTests(unittest.TestCase):
             for role_name in REQUIRED_ROLE_NAMES
             for subfile in ROLE_SUBFILES
         )
-        required_paths.extend((WORKFLOW_PATH, FIXTURE_PATH, EVIDENCE_KEEP))
+        required_paths.extend(
+            (
+                WORKFLOW_PATH,
+                FIXTURE_PATH,
+                EVIDENCE_KEEP,
+                FINALIZE_EVIDENCE_SCRIPT,
+                FINALIZE_EVIDENCE_MODULE,
+                RUN_WRAPPER_SCRIPT,
+            )
+        )
 
         missing = sorted(
             str(path) for path in required_paths if not (REPO_ROOT / path).exists()
@@ -143,6 +156,11 @@ class RepositoryContractTests(unittest.TestCase):
         ]
         self.assertEqual(1, len(checkout_steps))
         self.assertEqual(False, checkout_steps[0].get("with", {}).get("persist-credentials"))
+
+    def test_ansible_snapshot_wrapper_is_executable(self) -> None:
+        wrapper_path = REPO_ROOT / RUN_WRAPPER_SCRIPT
+        self.assertTrue(wrapper_path.exists(), "Expected run-ansible-snapshot to exist")
+        self.assertTrue(wrapper_path.stat().st_mode & 0o111, "run-ansible-snapshot must be executable")
 
 
 if __name__ == "__main__":

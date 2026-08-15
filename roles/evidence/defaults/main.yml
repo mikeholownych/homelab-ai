@@ -1,0 +1,7 @@
+---
+evidence_root: /var/lib/local-ai/evidence
+evidence_owner: root
+evidence_group: root
+evidence_directory_mode: "0750"
+evidence_host_directory_mode: "0750"
+evidence_target_name: "{{ inventory_hostname }}"
