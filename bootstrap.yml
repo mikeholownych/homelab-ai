@@ -1,0 +1,15 @@
+---
+- name: Bootstrap foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - bootstrap
+    - foundation
+  tasks:
+    - name: Report bootstrap scaffold status
+      ansible.builtin.debug:
+        msg: Bootstrap scaffolding only; host bootstrap behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - bootstrap
+        - foundation

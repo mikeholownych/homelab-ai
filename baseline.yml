@@ -1,0 +1,15 @@
+---
+- name: Baseline foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - baseline
+    - foundation
+  tasks:
+    - name: Report baseline scaffold status
+      ansible.builtin.debug:
+        msg: Baseline scaffolding only; host baseline behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - baseline
+        - foundation

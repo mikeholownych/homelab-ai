@@ -1,0 +1,15 @@
+---
+- name: Validate foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - validate
+    - foundation
+  tasks:
+    - name: Report validate scaffold status
+      ansible.builtin.debug:
+        msg: Validate scaffolding only; validation behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - validate
+        - foundation

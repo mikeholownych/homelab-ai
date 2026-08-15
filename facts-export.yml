@@ -1,0 +1,15 @@
+---
+- name: Facts export foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - facts_export
+    - foundation
+  tasks:
+    - name: Report facts-export scaffold status
+      ansible.builtin.debug:
+        msg: Facts-export scaffolding only; export behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - facts_export
+        - foundation

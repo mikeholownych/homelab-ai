@@ -1,0 +1,8 @@
+---
+exclude_paths:
+  - .git/
+  - .venv/
+  - .worktrees/
+  - docs/
+  - evidence/
+  - tests/fixtures/

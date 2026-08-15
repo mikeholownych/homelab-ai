@@ -1,0 +1,15 @@
+---
+- name: Patch foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - patch
+    - foundation
+  tasks:
+    - name: Report patch scaffold status
+      ansible.builtin.debug:
+        msg: Patch scaffolding only; patching behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - patch
+        - foundation

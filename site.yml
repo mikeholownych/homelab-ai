@@ -1,0 +1,15 @@
+---
+- name: Site foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - site
+    - foundation
+  tasks:
+    - name: Report site scaffold status
+      ansible.builtin.debug:
+        msg: Site scaffolding only; orchestration behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - site
+        - foundation

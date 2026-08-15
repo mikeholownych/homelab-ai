@@ -1,0 +1,15 @@
+---
+- name: Drift check foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - drift_check
+    - foundation
+  tasks:
+    - name: Report drift-check scaffold status
+      ansible.builtin.debug:
+        msg: Drift-check scaffolding only; drift detection behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - drift_check
+        - foundation

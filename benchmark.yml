@@ -1,0 +1,15 @@
+---
+- name: Benchmark foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - benchmark
+    - foundation
+  tasks:
+    - name: Report benchmark scaffold status
+      ansible.builtin.debug:
+        msg: Benchmark scaffolding only; benchmarking behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - benchmark
+        - foundation

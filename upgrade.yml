@@ -1,0 +1,15 @@
+---
+- name: Upgrade foundation scaffold
+  hosts: ai_hosts
+  gather_facts: false
+  tags:
+    - upgrade
+    - foundation
+  tasks:
+    - name: Report upgrade scaffold status
+      ansible.builtin.debug:
+        msg: Upgrade scaffolding only; upgrade behavior is not implemented yet.
+      changed_when: false
+      tags:
+        - upgrade
+        - foundation
