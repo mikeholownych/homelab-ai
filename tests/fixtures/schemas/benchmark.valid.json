@@ -69,5 +69,6 @@
     "observed": {
       "summary": "Observed envelope matched the commissioning prompt set."
     }
-  }
+  },
+  "failure_criteria": []
 }

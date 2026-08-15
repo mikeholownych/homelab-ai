@@ -167,6 +167,10 @@ def validate_itsm_payload(payload: dict[str, object]) -> list[str]:
             errors.append("APPROVED status requires approval_state APPROVED")
         if executed_action is not None:
             errors.append("APPROVED status requires executed_action to be null before execution starts")
+        if execution_status != "NOT_TESTED":
+            errors.append("APPROVED status requires execution_result observed status NOT_TESTED")
+        if validation_status != "NOT_TESTED":
+            errors.append("APPROVED status requires validation_result observed status NOT_TESTED")
     elif status == "IMPLEMENTED":
         if approval_state != "APPROVED":
             errors.append("IMPLEMENTED status requires approval_state APPROVED")
@@ -199,6 +203,10 @@ def validate_itsm_payload(payload: dict[str, object]) -> list[str]:
             errors.append("NOT_REQUIRED status requires approval_state NOT_REQUIRED")
         if selected_action is not None or executed_action is not None:
             errors.append("NOT_REQUIRED status requires selected_action and executed_action to be null")
+        if execution_status != "NOT_TESTED":
+            errors.append("NOT_REQUIRED status requires execution_result observed status NOT_TESTED")
+        if validation_status != "NOT_TESTED":
+            errors.append("NOT_REQUIRED status requires validation_result observed status NOT_TESTED")
 
     return errors
 

@@ -22,8 +22,8 @@ states:
 remediation:
   default_state: unresolved_drift
   auto_reconcile_allowed_for:
-    - os_security_patches
     - base_package_allowlist_only
+    - targeted_patch_allowlist_only
   manual_approval_required_for:
     - kernel
     - intel_gpu
@@ -40,6 +40,7 @@ remediation:
     - vllm
     - llama_cpp
     - firmware_bios
+  protected_classes_precedence: deny_wins
   state_transitions:
     auto_reconcile_success: remediated_drift
     manual_fix_pending: unresolved_drift

@@ -151,7 +151,25 @@
       "then": {
         "properties": {
           "approval_state": {"const": "APPROVED"},
-          "executed_action": {"type": "null"}
+          "executed_action": {"type": "null"},
+          "execution_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          },
+          "validation_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -280,7 +298,25 @@
         "properties": {
           "approval_state": {"const": "NOT_REQUIRED"},
           "selected_action": {"type": "null"},
-          "executed_action": {"type": "null"}
+          "executed_action": {"type": "null"},
+          "execution_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          },
+          "validation_result": {
+            "properties": {
+              "observed": {
+                "properties": {
+                  "status": {"const": "NOT_TESTED"}
+                }
+              }
+            }
+          }
         }
       }
     },

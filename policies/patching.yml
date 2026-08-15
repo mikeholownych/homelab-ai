@@ -70,6 +70,8 @@ high_risk_components:
     auto_apply: false
     approval: manual
     package_patterns:
+      - intel-level-zero-gpu*
+      - libze-intel-gpu*
       - level-zero*
       - oneapi-level-zero*
   pytorch_xpu:

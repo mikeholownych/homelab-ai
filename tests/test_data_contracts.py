@@ -128,13 +128,23 @@ class DataContractTests(unittest.TestCase):
             for component in patching["high_risk_components"].values()
             for pattern in component["package_patterns"]
         ]
-        routine_components = patching["routine_components"]
+        routine_components = copy.deepcopy(patching["routine_components"])
+        routine_components["os_packages"]["package_allowlist"].extend(
+            [
+                "linux-image-generic",
+                "intel-level-zero-gpu",
+                "libze-intel-gpu1",
+                "intel-compute-runtime",
+            ]
+        )
 
-        self.assertTrue(fnmatch.fnmatch("linux-image-6.8.0", "linux-image*"))
-        self.assertTrue(fnmatch.fnmatch("intel-level-zero-gpu", "*level-zero*"))
+        self.assertTrue(any(fnmatch.fnmatch("linux-image-generic", pattern) for pattern in protected_patterns))
+        self.assertTrue(any(fnmatch.fnmatch("intel-level-zero-gpu", pattern) for pattern in protected_patterns))
+        self.assertTrue(any(fnmatch.fnmatch("libze-intel-gpu1", pattern) for pattern in protected_patterns))
+        self.assertTrue(any(fnmatch.fnmatch("intel-compute-runtime", pattern) for pattern in protected_patterns))
         self.assertFalse(
             contract_validator.is_package_routine_allowed(
-                package_name="linux-image-6.8.0",
+                package_name="linux-image-generic",
                 routine_components=routine_components,
                 protected_patterns=protected_patterns,
             )
@@ -148,7 +158,14 @@ class DataContractTests(unittest.TestCase):
         )
         self.assertFalse(
             contract_validator.is_package_routine_allowed(
-                package_name="vllm-runtime",
+                package_name="libze-intel-gpu1",
+                routine_components=routine_components,
+                protected_patterns=protected_patterns,
+            )
+        )
+        self.assertFalse(
+            contract_validator.is_package_routine_allowed(
+                package_name="intel-compute-runtime",
                 routine_components=routine_components,
                 protected_patterns=protected_patterns,
             )
@@ -169,7 +186,11 @@ class DataContractTests(unittest.TestCase):
             set(drift["states"]),
         )
         self.assertEqual("unresolved_drift", drift["remediation"]["default_state"])
-        self.assertIn("os_security_patches", drift["remediation"]["auto_reconcile_allowed_for"])
+        self.assertEqual(
+            {"base_package_allowlist_only", "targeted_patch_allowlist_only"},
+            set(drift["remediation"]["auto_reconcile_allowed_for"]),
+        )
+        self.assertEqual("deny_wins", drift["remediation"]["protected_classes_precedence"])
         self.assertEqual("healthy", drift["states"]["no_drift"]["classification"])
         self.assertEqual("manual_block", drift["states"]["blocking_drift"]["remediation_mode"])
         for component_name in (
@@ -340,10 +361,38 @@ class DataContractTests(unittest.TestCase):
                     pass_with_failed_correctness = copy.deepcopy(fixture)
                     pass_with_failed_correctness["correctness"]["status"] = "FAIL"
                     self.assertTrue(list(validator.iter_errors(pass_with_failed_correctness)))
-                    fail_with_passed_correctness = copy.deepcopy(fixture)
-                    fail_with_passed_correctness["status"] = "FAIL"
-                    fail_with_passed_correctness["correctness"]["status"] = "PASS"
-                    self.assertTrue(list(validator.iter_errors(fail_with_passed_correctness)))
+                    fail_without_criteria = copy.deepcopy(fixture)
+                    fail_without_criteria["status"] = "FAIL"
+                    fail_without_criteria["correctness"]["status"] = "PASS"
+                    self.assertTrue(list(validator.iter_errors(fail_without_criteria)))
+                    fail_with_performance_criteria = copy.deepcopy(fixture)
+                    fail_with_performance_criteria["status"] = "FAIL"
+                    fail_with_performance_criteria["correctness"]["status"] = "PASS"
+                    fail_with_performance_criteria["failure_criteria"] = [
+                        {
+                            "criterion": "thermal_limit",
+                            "status": "triggered",
+                            "reason": "GPU temperature exceeded operating guardrail.",
+                            "expected": {"summary": "Temperature should remain at or below 85C."},
+                            "observed": {"summary": "GPU 1 reached 91C during load."}
+                        }
+                    ]
+                    self.assertFalse(list(validator.iter_errors(fail_with_performance_criteria)))
+                    fail_with_correctness_criteria = copy.deepcopy(fail_with_performance_criteria)
+                    fail_with_correctness_criteria["correctness"]["status"] = "FAIL"
+                    fail_with_correctness_criteria["failure_criteria"][0]["criterion"] = "correctness_mismatch"
+                    self.assertFalse(list(validator.iter_errors(fail_with_correctness_criteria)))
+                    pass_with_failure_criteria = copy.deepcopy(fixture)
+                    pass_with_failure_criteria["failure_criteria"] = [
+                        {
+                            "criterion": "unexpected",
+                            "status": "triggered",
+                            "reason": "Should be empty on PASS.",
+                            "expected": {"summary": "No failures expected."},
+                            "observed": {"summary": "Failure recorded unexpectedly."}
+                        }
+                    ]
+                    self.assertTrue(list(validator.iter_errors(pass_with_failure_criteria)))
                 elif schema_name == "cmdb":
                     missing_expected_observed_case["status"] = "ACTIVE"
                     del missing_expected_observed_case["configuration_item"]["observed"]
@@ -378,6 +427,24 @@ class DataContractTests(unittest.TestCase):
                     approved_with_rejected_approval_case["status"] = "APPROVED"
                     approved_with_rejected_approval_case["approval_state"] = "REJECTED"
                     self.assertTrue(list(validator.iter_errors(approved_with_rejected_approval_case)))
+                    for nonexecuted_status, approval_state in (
+                        ("PENDING", "PENDING"),
+                        ("APPROVED", "APPROVED"),
+                        ("REJECTED", "REJECTED"),
+                        ("NOT_REQUIRED", "NOT_REQUIRED"),
+                    ):
+                        contradiction_case = copy.deepcopy(fixture)
+                        contradiction_case["status"] = nonexecuted_status
+                        contradiction_case["approval_state"] = approval_state
+                        contradiction_case["executed_action"] = None
+                        contradiction_case["execution_result"]["observed"]["status"] = "PASS"
+                        contradiction_case["validation_result"]["observed"]["status"] = "PASS"
+                        if nonexecuted_status == "NOT_REQUIRED":
+                            contradiction_case["selected_action"] = None
+                        self.assertTrue(
+                            list(validator.iter_errors(contradiction_case)),
+                            f"{nonexecuted_status} should reject executed outcomes",
+                        )
                 self.assertTrue(list(validator.iter_errors(missing_expected_observed_case)))
                 self.assertTrue(list(validator.iter_errors(nested_extra_property_case)))
 
@@ -390,6 +457,7 @@ class DataContractTests(unittest.TestCase):
     def test_benchmark_schema_requires_duration_and_model_split_parameters(self) -> None:
         schema = load_json(SCHEMA_DIR / "benchmark.schema.json")
         self.assertIn("duration", schema["required"])
+        self.assertIn("failure_criteria", schema["required"])
         self.assertIn("split_parameters", schema["properties"]["model"]["properties"])
         correctness_required = schema["properties"]["correctness"]["required"]
         self.assertEqual(["status", "summary", "expected", "observed"], correctness_required)

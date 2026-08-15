@@ -192,6 +192,49 @@ class ContractSemanticValidationTests(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("NOT_TESTED", result.stderr)
 
+    def test_itsm_semantics_require_pending_status_to_reject_executed_outcomes(self) -> None:
+        payload = load_json(ITSM_FIXTURE)
+        payload["status"] = "PENDING"
+        payload["approval_state"] = "PENDING"
+        payload["execution_result"]["observed"]["status"] = "SUCCEEDED"
+        payload["validation_result"]["observed"]["status"] = "PASS"
+        temp_path = REPO_ROOT / "evidence" / "itsm.invalid-pending-executed.json"
+        temp_path.write_text(json.dumps(payload), encoding="utf-8")
+        self.addCleanup(temp_path.unlink)
+
+        result = run_contract_validator("itsm", temp_path)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("NOT_TESTED", result.stderr)
+
+    def test_itsm_semantics_require_approved_status_to_reject_executed_outcomes(self) -> None:
+        payload = load_json(ITSM_FIXTURE)
+        payload["status"] = "APPROVED"
+        payload["approval_state"] = "APPROVED"
+        payload["execution_result"]["observed"]["status"] = "SUCCEEDED"
+        payload["validation_result"]["observed"]["status"] = "PASS"
+        temp_path = REPO_ROOT / "evidence" / "itsm.invalid-approved-executed.json"
+        temp_path.write_text(json.dumps(payload), encoding="utf-8")
+        self.addCleanup(temp_path.unlink)
+
+        result = run_contract_validator("itsm", temp_path)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("NOT_TESTED", result.stderr)
+
+    def test_itsm_semantics_require_not_required_status_to_reject_executed_outcomes(self) -> None:
+        payload = load_json(ITSM_FIXTURE)
+        payload["status"] = "NOT_REQUIRED"
+        payload["approval_state"] = "NOT_REQUIRED"
+        payload["selected_action"] = None
+        payload["execution_result"]["observed"]["status"] = "SUCCEEDED"
+        payload["validation_result"]["observed"]["status"] = "PASS"
+        temp_path = REPO_ROOT / "evidence" / "itsm.invalid-not-required-executed.json"
+        temp_path.write_text(json.dumps(payload), encoding="utf-8")
+        self.addCleanup(temp_path.unlink)
+
+        result = run_contract_validator("itsm", temp_path)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("NOT_TESTED", result.stderr)
+
     def test_itsm_semantics_require_failed_status_to_include_failure_result(self) -> None:
         payload = load_json(ITSM_FIXTURE)
         payload["status"] = "FAILED"
