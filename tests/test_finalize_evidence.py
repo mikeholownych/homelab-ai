@@ -15,6 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "schemas"
 VALIDATION_FIXTURE = FIXTURE_DIR / "validation.valid.json"
 FINALIZE_CLI = REPO_ROOT / "scripts" / "finalize-evidence.py"
+SECRET_SENTINEL = "SENTINEL-DO-NOT-LEAK-7429"
 
 
 def load_json(path: Path) -> object:
@@ -181,6 +182,34 @@ ai-p620-02 : ok=8 changed=0 unreachable=1 failed=2 skipped=0 rescued=0 ignored=1
         self.assertEqual(1, recap["hosts"]["ai-p620-02"]["unreachable"])
         self.assertEqual(2, recap["hosts"]["ai-p620-02"]["failed"])
 
+    def test_recap_parser_aggregates_multiple_play_recap_blocks(self) -> None:
+        module = __import__("scripts.finalize_evidence", fromlist=["parse_recap"])
+        recap = module.parse_recap(
+            """
+PLAY RECAP *********************************************************************
+ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0
+PLAY RECAP *********************************************************************
+ai-p620-01 : ok=2 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+ai-p620-02 : ok=1 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+            """.strip()
+        )
+
+        self.assertEqual(15, recap["totals"]["ok"])
+        self.assertEqual(4, recap["totals"]["changed"])
+        self.assertEqual(14, recap["hosts"]["ai-p620-01"]["ok"])
+        self.assertEqual(1, recap["hosts"]["ai-p620-02"]["changed"])
+
+    def test_recap_parser_rejects_malformed_recap_like_line(self) -> None:
+        module = __import__("scripts.finalize_evidence", fromlist=["parse_recap"])
+
+        with self.assertRaisesRegex(ValueError, "recap"):
+            module.parse_recap(
+                """
+PLAY RECAP *********************************************************************
+ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
+                """.strip()
+            )
+
     def test_finalize_marks_manifest_complete_and_writes_sorted_checksums(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir)
@@ -273,7 +302,7 @@ ai-p620-02 : ok=8 changed=0 unreachable=1 failed=2 skipped=0 rescued=0 ignored=1
             self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
             self.assertIn("validation.json", finalized_manifest["finalization"]["reason"])
             self.assertNotIn("healthy", finalized_manifest["finalization"]["reason"])
-            self.assertFalse((run_dir / "SHA256SUMS").exists())
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
             self.assertTrue((run_dir / "ansible.log").exists())
             self.assertIn("validation.json", result.stderr)
 
@@ -304,7 +333,158 @@ ai-p620-02 : ok=8 changed=0 unreachable=1 failed=2 skipped=0 rescued=0 ignored=1
             finalized_manifest = load_json(run_dir / "manifest.json")
             self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
             self.assertIn("recap", finalized_manifest["finalization"]["reason"].lower())
-            self.assertFalse((run_dir / "SHA256SUMS").exists())
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_rejects_supplied_recap_totals_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            recap = {
+                "totals": {
+                    "ok": 99,
+                    "changed": 3,
+                    "unreachable": 0,
+                    "failed": 0,
+                    "skipped": 2,
+                    "rescued": 0,
+                    "ignored": 0,
+                },
+                "hosts": {
+                    "ai-p620-01": {
+                        "ok": 12,
+                        "changed": 3,
+                        "unreachable": 0,
+                        "failed": 0,
+                        "skipped": 2,
+                        "rescued": 0,
+                        "ignored": 0,
+                    }
+                },
+            }
+            manifest = make_manifest(status="captured", recap=recap)
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": recap,
+                },
+            )
+            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
+            self.assertIn("/run/ansible/recap", finalized_manifest["finalization"]["reason"])
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_rejects_short_git_sha_and_preserves_failure_sums(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            manifest = make_manifest(status="captured", validation_status="PASS", validation_classification="healthy")
+            manifest["git_sha"] = "abcdef0"
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": "abcdef0",
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": manifest["run"]["ansible"]["recap"],
+                },
+            )
+            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
+            self.assertIn("manifest.json", finalized_manifest["finalization"]["reason"])
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_redacts_invalid_values_from_stderr_and_manifest_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            manifest = make_manifest(status="captured")
+            write_json(run_dir / "manifest.json", manifest)
+            invalid_validation = copy.deepcopy(load_json(VALIDATION_FIXTURE))
+            invalid_validation["checks"][0]["observed"]["summary"] = SECRET_SENTINEL
+            invalid_validation["summary"]["classification"] = SECRET_SENTINEL
+            write_json(run_dir / "validation.json", invalid_validation)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": manifest["run"]["ansible"]["recap"],
+                },
+            )
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertNotIn(SECRET_SENTINEL, finalized_manifest["finalization"]["reason"])
+            self.assertNotIn(SECRET_SENTINEL, result.stderr)
+            self.assertIn("validation.json", finalized_manifest["finalization"]["reason"])
+
+    def test_finalize_rejects_external_symlink_and_keeps_checksums_for_regular_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            outside_dir = Path(tmpdir) / "outside"
+            outside_dir.mkdir()
+            outside_file = outside_dir / "secret.txt"
+            outside_file.write_text("external\n", encoding="utf-8")
+            manifest = make_manifest(status="captured", validation_status="PASS", validation_classification="healthy")
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": manifest["run"]["ansible"]["recap"],
+                },
+            )
+            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+            (run_dir / "linked.txt").symlink_to(outside_file)
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+            checksums_text = (run_dir / "SHA256SUMS").read_text(encoding="utf-8")
+            self.assertNotIn("linked.txt", checksums_text)
+            self.assertIn("manifest.json", checksums_text)
 
     def test_atomic_json_writer_replaces_target_without_leaving_temp_files(self) -> None:
         module = __import__("scripts.finalize_evidence", fromlist=["atomic_write_json"])

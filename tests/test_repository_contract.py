@@ -70,6 +70,7 @@ EVIDENCE_KEEP = EVIDENCE_DIR / ".gitkeep"
 FINALIZE_EVIDENCE_SCRIPT = Path("scripts/finalize-evidence.py")
 FINALIZE_EVIDENCE_MODULE = Path("scripts/finalize_evidence.py")
 RUN_WRAPPER_SCRIPT = Path("scripts/run-ansible-snapshot")
+MANIFEST_SCHEMA_PATH = Path("schemas/manifest.schema.json")
 
 
 class RepositoryContractTests(unittest.TestCase):
@@ -89,6 +90,7 @@ class RepositoryContractTests(unittest.TestCase):
                 FINALIZE_EVIDENCE_SCRIPT,
                 FINALIZE_EVIDENCE_MODULE,
                 RUN_WRAPPER_SCRIPT,
+                MANIFEST_SCHEMA_PATH,
             )
         )
 

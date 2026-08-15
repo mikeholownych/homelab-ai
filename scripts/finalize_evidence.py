@@ -22,8 +22,8 @@ RECAP_PATTERN = re.compile(
     r"rescued=(?P<rescued>\d+)\s+"
     r"ignored=(?P<ignored>\d+)\s*$"
 )
+RECAP_COUNTER_KEYS = ("ok", "changed", "unreachable", "failed", "skipped", "rescued", "ignored")
 SUPPORTED_CONTRACTS = {
-    "evidence.json": "evidence",
     "validation.json": "validation",
     "benchmark.json": "benchmark",
     "cmdb.json": "cmdb",
@@ -76,39 +76,39 @@ def sha256_file(path: Path) -> str:
 
 
 def parse_recap(text: str) -> dict[str, dict[str, object]]:
-    in_recap = False
+    totals = {key: 0 for key in RECAP_COUNTER_KEYS}
     hosts: dict[str, dict[str, int]] = {}
-    totals: dict[str, int] = {}
+    seen_recap = False
+    in_recap = False
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line:
             continue
         if line.startswith("PLAY RECAP"):
+            seen_recap = True
             in_recap = True
-            hosts = {}
-            totals = {
-                "ok": 0,
-                "changed": 0,
-                "unreachable": 0,
-                "failed": 0,
-                "skipped": 0,
-                "rescued": 0,
-                "ignored": 0,
-            }
             continue
         if not in_recap:
             continue
-        match = RECAP_PATTERN.match(line)
-        if not match:
-            continue
-        counters = {key: int(match.group(key)) for key in totals}
-        host = match.group("host")
-        hosts[host] = counters
-        for key, value in counters.items():
-            totals[key] += value
 
-    if not hosts:
+        match = RECAP_PATTERN.match(line)
+        if match:
+            counters = {key: int(match.group(key)) for key in RECAP_COUNTER_KEYS}
+            host = match.group("host")
+            host_totals = hosts.setdefault(host, {key: 0 for key in RECAP_COUNTER_KEYS})
+            for key, value in counters.items():
+                host_totals[key] += value
+                totals[key] += value
+            continue
+
+        if any(token in line for token in ("ok=", "changed=", "unreachable=", "failed=", "skipped=", "rescued=", "ignored=")):
+            raise ValueError("ansible recap contains a malformed host line")
+
+        if line.startswith(("PLAY ", "TASK ", "RUN ", "META:")):
+            in_recap = False
+
+    if not seen_recap or not hosts:
         raise ValueError("ansible recap was not found or could not be parsed")
 
     return {
@@ -119,6 +119,114 @@ def parse_recap(text: str) -> dict[str, dict[str, object]]:
 
 def sanitize_reason(message: str) -> str:
     return " ".join(message.strip().split())
+
+
+def expected_validation_artifact(manifest: dict[str, Any]) -> bool:
+    return any(
+        artifact.get("expected", {}).get("path") == "validation.json"
+        for artifact in manifest.get("artifacts", [])
+        if isinstance(artifact, dict)
+    )
+
+
+def is_safe_regular_file(path: Path, run_dir: Path) -> bool:
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        path.resolve(strict=True).relative_to(run_dir.resolve())
+    except (FileNotFoundError, ValueError):
+        return False
+    return True
+
+
+def update_artifact_observations(manifest: dict[str, Any], run_dir: Path) -> None:
+    observed_at = manifest["generated_at"]
+    for artifact in manifest["artifacts"]:
+        expected_path = artifact["expected"]["path"]
+        artifact_path = run_dir / expected_path
+        if artifact_path.exists() and is_safe_regular_file(artifact_path, run_dir):
+            artifact["observed"] = {
+                "summary": f"Captured {artifact['id']}",
+                "path": expected_path,
+                "sha256": sha256_file(artifact_path),
+                "observed_at": observed_at,
+            }
+        else:
+            artifact["observed"] = {
+                "summary": f"Expected artifact missing for {artifact['id']}",
+                "status": "unavailable",
+                "reason": f"missing file: {expected_path}",
+            }
+
+
+def component_files_for_checksums(run_dir: Path) -> tuple[list[Path], list[str]]:
+    files: list[Path] = []
+    issues: list[str] = []
+    resolved_run_dir = run_dir.resolve()
+    for path in sorted(run_dir.rglob("*"), key=lambda item: item.relative_to(run_dir).as_posix()):
+        relative_path = path.relative_to(run_dir).as_posix()
+        if relative_path == "SHA256SUMS":
+            continue
+        if TRANSIENT_PATTERN.search(relative_path):
+            continue
+        if path.is_symlink():
+            issues.append(f"{relative_path} symlink_not_allowed")
+            continue
+        if not path.is_file():
+            continue
+        try:
+            path.resolve(strict=True).relative_to(resolved_run_dir)
+        except (FileNotFoundError, ValueError):
+            issues.append(f"{relative_path} outside_run_dir")
+            continue
+        files.append(path)
+    return files, issues
+
+
+def write_checksums(run_dir: Path) -> list[str]:
+    files, issues = component_files_for_checksums(run_dir)
+    lines = [f"{sha256_file(path)}  {path.relative_to(run_dir).as_posix()}" for path in files]
+    atomic_write_text(run_dir / "SHA256SUMS", "\n".join(lines) + ("\n" if lines else ""))
+    return issues
+
+
+def validate_component_json(run_dir: Path, schema_root: Path) -> list[str]:
+    errors: list[str] = []
+    for path in sorted(run_dir.glob("*.json")):
+        contract_type = SUPPORTED_CONTRACTS.get(path.name)
+        if contract_type is None:
+            continue
+        payload = load_json(path)
+        if not isinstance(payload, dict):
+            errors.append(f"{path.name} / keyword=type")
+            continue
+        schema_errors = validate_contract.collect_schema_errors(contract_type, payload, schema_root=schema_root)
+        semantic_errors = validate_contract.collect_semantic_errors(contract_type, payload)
+        for error in schema_errors + semantic_errors:
+            errors.append(f"{path.name} {sanitize_reason(error)}")
+    return errors
+
+
+def validate_manifest_payload(manifest: dict[str, Any], schema_root: Path) -> list[str]:
+    schema_errors = validate_contract.collect_schema_errors("manifest", manifest, schema_root=schema_root)
+    semantic_errors = validate_contract.collect_semantic_errors("manifest", manifest)
+    return [f"manifest.json {sanitize_reason(error)}" for error in schema_errors + semantic_errors]
+
+
+def discover_recap(run_dir: Path, manifest: dict[str, Any], ansible_run: dict[str, Any]) -> dict[str, Any]:
+    for source in (
+        ansible_run.get("recap"),
+        manifest.get("run", {}).get("ansible", {}).get("recap"),
+    ):
+        if isinstance(source, dict):
+            return source
+        if isinstance(source, str) and source.strip():
+            return parse_recap(source)
+
+    log_path = run_dir / "ansible.log"
+    if log_path.exists():
+        return parse_recap(log_path.read_text(encoding="utf-8"))
+    raise ValueError("ansible recap is missing")
 
 
 def classify_manifest_status(manifest: dict[str, Any], recap: dict[str, Any]) -> tuple[str, str | None]:
@@ -135,101 +243,23 @@ def classify_manifest_status(manifest: dict[str, Any], recap: dict[str, Any]) ->
 
     reasons: list[str] = []
     if exit_code != 0:
-        reasons.append(f"ansible exit_code {exit_code}")
+        reasons.append(f"/run/ansible/exit_code nonzero")
     if failed:
-        reasons.append(f"recap failed={failed}")
+        reasons.append(f"/run/ansible/recap/totals/failed nonzero")
     if unreachable:
-        reasons.append(f"recap unreachable={unreachable}")
+        reasons.append(f"/run/ansible/recap/totals/unreachable nonzero")
     if missing_artifacts:
-        reasons.append(f"missing artifacts: {', '.join(sorted(missing_artifacts))}")
+        reasons.append(f"/artifacts missing {', '.join(sorted(missing_artifacts))}")
     return "incomplete", "; ".join(reasons)
-
-
-def discover_recap(run_dir: Path, manifest: dict[str, Any], ansible_run: dict[str, Any]) -> dict[str, Any]:
-    recap = ansible_run.get("recap")
-    if isinstance(recap, dict):
-        return recap
-    if isinstance(recap, str) and recap.strip():
-        return parse_recap(recap)
-    manifest_recap = manifest.get("run", {}).get("ansible", {}).get("recap")
-    if isinstance(manifest_recap, dict):
-        return manifest_recap
-    log_path = run_dir / "ansible.log"
-    if log_path.exists():
-        return parse_recap(log_path.read_text(encoding="utf-8"))
-    raise ValueError("ansible recap is missing")
-
-
-def update_artifact_observations(manifest: dict[str, Any], run_dir: Path) -> None:
-    observed_at = manifest["generated_at"]
-    for artifact in manifest["artifacts"]:
-        expected_path = artifact["expected"]["path"]
-        artifact_path = run_dir / expected_path
-        if artifact_path.exists() and artifact_path.is_file():
-            artifact["observed"] = {
-                "summary": f"Captured {artifact['id']}",
-                "path": expected_path,
-                "sha256": sha256_file(artifact_path),
-                "observed_at": observed_at,
-            }
-        else:
-            artifact["observed"] = {
-                "summary": f"Expected artifact missing for {artifact['id']}",
-                "status": "unavailable",
-                "reason": f"missing file: {expected_path}",
-            }
-
-
-def component_files_for_checksums(run_dir: Path) -> list[Path]:
-    files: list[Path] = []
-    for path in run_dir.rglob("*"):
-        if not path.is_file():
-            continue
-        relative_path = path.relative_to(run_dir).as_posix()
-        if relative_path == "SHA256SUMS":
-            continue
-        if TRANSIENT_PATTERN.search(relative_path):
-            continue
-        files.append(path)
-    return sorted(files, key=lambda path: path.relative_to(run_dir).as_posix())
-
-
-def write_checksums(run_dir: Path) -> None:
-    lines = [
-        f"{sha256_file(path)}  {path.relative_to(run_dir).as_posix()}"
-        for path in component_files_for_checksums(run_dir)
-    ]
-    atomic_write_text(run_dir / "SHA256SUMS", "\n".join(lines) + ("\n" if lines else ""))
-
-
-def validate_component_json(run_dir: Path, repo_root: Path, schema_root: Path) -> list[str]:
-    errors: list[str] = []
-    for path in sorted(run_dir.glob("*.json")):
-        contract_type = SUPPORTED_CONTRACTS.get(path.name)
-        if contract_type is None:
-            continue
-        payload = load_json(path)
-        if not isinstance(payload, dict):
-            errors.append(f"{path.name}: payload must be a JSON object")
-            continue
-        schema_errors = validate_contract.collect_schema_errors(
-            contract_type,
-            payload,
-            schema_root=schema_root,
-        )
-        semantic_errors = validate_contract.collect_semantic_errors(contract_type, payload)
-        for error in schema_errors + semantic_errors:
-            errors.append(f"{path.name}: {sanitize_reason(error)}")
-    return errors
 
 
 def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int, dict[str, Any]]:
     manifest_path = run_dir / "manifest.json"
     ansible_run_path = run_dir / "ansible-run.json"
     manifest = load_json(manifest_path)
+    ansible_run = load_json(ansible_run_path)
     if not isinstance(manifest, dict):
         raise ValueError("manifest.json must contain a JSON object")
-    ansible_run = load_json(ansible_run_path)
     if not isinstance(ansible_run, dict):
         raise ValueError("ansible-run.json must contain a JSON object")
 
@@ -242,44 +272,86 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
     manifest["run"]["started_at"] = ansible_run.get("started_at", manifest["run"]["started_at"])
     manifest["run"]["finished_at"] = ansible_run.get("finished_at", manifest["run"]["finished_at"])
     manifest["run"]["ansible"]["exit_code"] = int(ansible_run.get("exit_code", manifest["run"]["ansible"]["exit_code"]))
-    if "validation" in ansible_run and isinstance(ansible_run["validation"], dict):
-        manifest["run"]["validation"] = ansible_run["validation"]
+    manifest["run"]["validation"] = {
+        "status": "NOT_TESTED",
+        "classification": "incomplete",
+    }
 
+    errors: list[str] = []
     try:
         recap = discover_recap(run_dir, manifest, ansible_run)
+        errors.extend(validate_contract.validate_recap_structure(recap, pointer="/run/ansible/recap"))
     except ValueError as exc:
-        manifest["status"] = "incomplete"
-        manifest["finalization"] = {
-            "state": "incomplete",
-            "reason": sanitize_reason(str(exc)),
-            "completed_at": utc_timestamp_now(),
+        recap = {
+            "totals": {key: 0 for key in RECAP_COUNTER_KEYS},
+            "hosts": {manifest["collection_target"]["node_id"]: {key: 0 for key in RECAP_COUNTER_KEYS}},
         }
-        atomic_write_json(manifest_path, manifest)
-        return 1, manifest
+        errors.append(sanitize_reason(str(exc)))
 
     manifest["run"]["ansible"]["recap"] = recap
-    update_artifact_observations(manifest, run_dir)
-    manifest["status"], incomplete_reason = classify_manifest_status(manifest, recap)
 
-    component_errors = validate_component_json(run_dir, repo_root, schema_root)
+    validation_path = run_dir / "validation.json"
+    if validation_path.exists():
+        validation_payload = load_json(validation_path)
+        if not isinstance(validation_payload, dict):
+            errors.append("validation.json / keyword=type")
+        else:
+            validation_errors = validate_contract.collect_schema_errors("validation", validation_payload, schema_root=schema_root)
+            validation_errors.extend(validate_contract.collect_semantic_errors("validation", validation_payload))
+            if validation_errors:
+                errors.append(f"validation.json {sanitize_reason(validation_errors[0])}")
+            else:
+                manifest["run"]["validation"] = {
+                    "status": validation_payload["status"],
+                    "classification": validation_payload["summary"]["classification"],
+                }
+    elif expected_validation_artifact(manifest):
+        errors.append("validation.json / missing")
+
+    update_artifact_observations(manifest, run_dir)
+    manifest_status, status_reason = classify_manifest_status(manifest, recap)
+    manifest["status"] = manifest_status
+    finalization_reason = errors[0] if errors else status_reason
+    manifest["finalization"] = {
+        "state": "complete" if not errors and manifest_status == "captured" else "incomplete",
+        "reason": finalization_reason,
+        "completed_at": utc_timestamp_now(),
+    }
+
+    component_errors = validate_component_json(run_dir, schema_root)
     if component_errors:
+        errors.append(component_errors[0])
         manifest["status"] = "incomplete"
         manifest["finalization"] = {
             "state": "incomplete",
-            "reason": sanitize_reason(component_errors[0]),
+            "reason": component_errors[0],
+            "completed_at": utc_timestamp_now(),
+        }
+
+    manifest_errors = validate_manifest_payload(manifest, schema_root)
+    if manifest_errors:
+        errors.append(manifest_errors[0])
+        manifest["status"] = "incomplete"
+        manifest["finalization"] = {
+            "state": "incomplete",
+            "reason": manifest_errors[0],
+            "completed_at": utc_timestamp_now(),
+        }
+
+    atomic_write_json(manifest_path, manifest)
+    checksum_issues = write_checksums(run_dir)
+    if checksum_issues:
+        errors.append(checksum_issues[0])
+        manifest["status"] = "incomplete"
+        manifest["finalization"] = {
+            "state": "incomplete",
+            "reason": checksum_issues[0],
             "completed_at": utc_timestamp_now(),
         }
         atomic_write_json(manifest_path, manifest)
-        return 1, manifest
+        write_checksums(run_dir)
 
-    manifest["finalization"] = {
-        "state": "complete" if manifest["status"] == "captured" else "incomplete",
-        "reason": incomplete_reason,
-        "completed_at": utc_timestamp_now(),
-    }
-    atomic_write_json(manifest_path, manifest)
-    write_checksums(run_dir)
-    return 0, manifest
+    return (0 if not errors and manifest["finalization"]["state"] == "complete" else 1), manifest
 
 
 def main(argv: list[str] | None = None) -> int:

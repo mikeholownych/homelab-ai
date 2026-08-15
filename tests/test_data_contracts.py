@@ -471,6 +471,15 @@ class DataContractTests(unittest.TestCase):
             schema = load_json(SCHEMA_DIR / f"{schema_name}.schema.json")
             self.assertEqual("^[0-9A-Fa-f]{40}$", schema["properties"]["git_sha"]["pattern"])
 
+    def test_manifest_schema_requires_strict_run_metadata_and_full_sha(self) -> None:
+        schema = load_json(SCHEMA_DIR / "manifest.schema.json")
+        self.assertEqual("https://json-schema.org/draft/2020-12/schema", schema["$schema"])
+        jsonschema.Draft202012Validator.check_schema(schema)
+        self.assertEqual("^[0-9A-Fa-f]{40}$", schema["properties"]["git_sha"]["pattern"])
+        self.assertEqual(["complete", "incomplete"], schema["properties"]["finalization"]["properties"]["state"]["enum"])
+        self.assertIn("run", schema["required"])
+        self.assertIn("finalization", schema["required"])
+
 
 if __name__ == "__main__":
     unittest.main()

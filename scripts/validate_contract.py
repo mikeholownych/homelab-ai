@@ -13,7 +13,8 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = REPO_ROOT / "schemas"
-CONTRACT_TYPES = ("validation", "evidence", "benchmark", "cmdb", "itsm")
+CONTRACT_TYPES = ("validation", "evidence", "benchmark", "cmdb", "itsm", "manifest")
+RECAP_COUNTER_KEYS = ("ok", "changed", "unreachable", "failed", "skipped", "rescued", "ignored")
 
 
 def get_schema_paths(schema_root: Path | None = None) -> dict[str, Path]:
@@ -24,6 +25,7 @@ def get_schema_paths(schema_root: Path | None = None) -> dict[str, Path]:
         "benchmark": resolved_root / "benchmark.schema.json",
         "cmdb": resolved_root / "cmdb.schema.json",
         "itsm": resolved_root / "itsm.schema.json",
+        "manifest": resolved_root / "manifest.schema.json",
     }
 
 
@@ -69,10 +71,17 @@ def collect_schema_errors(
     Draft202012Validator.check_schema(schema)
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     errors = sorted(validator.iter_errors(payload), key=lambda error: list(error.absolute_path))
-    return [
-        f"schema validation failed at {'/'.join(map(str, error.absolute_path)) or '<root>'}: {error.message}"
-        for error in errors
-    ]
+    return [format_schema_error(error) for error in errors]
+
+
+def format_schema_error(error: jsonschema.ValidationError) -> str:
+    pointer = ('/' + '/'.join(map(str, error.absolute_path))) if error.absolute_path else '/'
+    detail = f"schema validation failed at {pointer} keyword={error.validator}"
+    if error.validator == "const":
+        detail += f" expected={error.validator_value}"
+    elif error.validator == "enum":
+        detail += f" expected={','.join(map(str, error.validator_value))}"
+    return detail
 
 
 def expected_validation_truth_table(payload: dict[str, object]) -> tuple[str, str]:
@@ -177,6 +186,92 @@ def validate_evidence_payload(payload: dict[str, object]) -> list[str]:
     return errors
 
 
+def validate_recap_structure(recap: object, *, pointer: str) -> list[str]:
+    if not isinstance(recap, dict):
+        return [f"{pointer} must be an object"]
+
+    allowed_keys = {"totals", "hosts"}
+    recap_keys = set(recap)
+    errors: list[str] = []
+    if recap_keys != allowed_keys:
+        errors.append(f"{pointer} must contain exactly totals and hosts")
+
+    totals = recap.get("totals")
+    hosts = recap.get("hosts")
+    if not isinstance(totals, dict):
+        errors.append(f"{pointer}/totals must be an object")
+        return errors
+    if not isinstance(hosts, dict) or not hosts:
+        errors.append(f"{pointer}/hosts must be a non-empty object")
+        return errors
+
+    if set(totals) != set(RECAP_COUNTER_KEYS):
+        errors.append(f"{pointer}/totals must contain exactly the supported recap counters")
+
+    computed_totals = {key: 0 for key in RECAP_COUNTER_KEYS}
+    for host_name, host_counters in hosts.items():
+        if not isinstance(host_name, str) or not host_name:
+            errors.append(f"{pointer}/hosts must use non-empty string host names")
+            continue
+        if not isinstance(host_counters, dict):
+            errors.append(f"{pointer}/hosts/{host_name} must be an object")
+            continue
+        if set(host_counters) != set(RECAP_COUNTER_KEYS):
+            errors.append(f"{pointer}/hosts/{host_name} must contain exactly the supported recap counters")
+            continue
+        for key in RECAP_COUNTER_KEYS:
+            value = host_counters.get(key)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                errors.append(f"{pointer}/hosts/{host_name}/{key} must be a non-negative integer")
+                continue
+            computed_totals[key] += value
+
+    for key in RECAP_COUNTER_KEYS:
+        value = totals.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            errors.append(f"{pointer}/totals/{key} must be a non-negative integer")
+            continue
+        if computed_totals[key] != value:
+            errors.append(f"{pointer}/totals/{key} must equal the sum of per-host recap counters")
+
+    return errors
+
+
+def validate_manifest_payload(payload: dict[str, object]) -> list[str]:
+    errors: list[str] = []
+    run = payload.get("run")
+    finalization = payload.get("finalization")
+    if not isinstance(run, dict):
+        return ["run must be an object"]
+    if not isinstance(finalization, dict):
+        return ["finalization must be an object"]
+
+    recap = None
+    ansible = run.get("ansible")
+    if not isinstance(ansible, dict):
+        errors.append("/run/ansible must be an object")
+    else:
+        recap = ansible.get("recap")
+        errors.extend(validate_recap_structure(recap, pointer="/run/ansible/recap"))
+
+    state = finalization.get("state")
+    status = payload.get("status")
+    if state == "complete" and status != "captured":
+        errors.append("/finalization/state complete requires top-level status captured")
+    if state == "incomplete" and finalization.get("reason") in (None, ""):
+        errors.append("/finalization/reason must be present when finalization is incomplete")
+
+    if state == "complete" and isinstance(ansible, dict) and isinstance(recap, dict):
+        exit_code = ansible.get("exit_code")
+        if exit_code != 0:
+            errors.append("/run/ansible/exit_code must be 0 when finalization is complete")
+        totals = recap.get("totals", {})
+        if isinstance(totals, dict) and (totals.get("failed") != 0 or totals.get("unreachable") != 0):
+            errors.append("/run/ansible/recap totals failed and unreachable must be 0 when finalization is complete")
+
+    return errors
+
+
 def get_nested_status(payload: dict[str, object], key: str) -> Any:
     section = payload.get(key)
     if not isinstance(section, dict):
@@ -271,6 +366,7 @@ SEMANTIC_VALIDATORS: dict[str, Callable[[dict[str, object]], list[str]]] = {
     "benchmark": lambda payload: [],
     "cmdb": lambda payload: [],
     "itsm": validate_itsm_payload,
+    "manifest": validate_manifest_payload,
 }
 
 
@@ -290,13 +386,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     schema_errors = collect_schema_errors(args.contract_type, payload)
-    if schema_errors:
+    semantic_errors = collect_semantic_errors(args.contract_type, payload)
+    if schema_errors or semantic_errors:
         for error in schema_errors:
             print(error, file=sys.stderr)
-        return 1
-
-    semantic_errors = collect_semantic_errors(args.contract_type, payload)
-    if semantic_errors:
         for error in semantic_errors:
             print(error, file=sys.stderr)
         return 1
