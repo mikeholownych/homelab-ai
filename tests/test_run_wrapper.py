@@ -95,6 +95,13 @@ def build_fake_tools(bin_dir: Path, log_path: Path) -> None:
                         "cwd": os.getcwd(),
                         "playbook": playbook,
                     }}) + "\\n")
+            artifact_size_mb = int(os.environ.get("FAKE_EXTRA_ARTIFACT_MB", "0"))
+            if artifact_size_mb > 0:
+                artifact_path = run_dir / "artifact.bin"
+                chunk = b"x" * (1024 * 1024)
+                with artifact_path.open("wb") as handle:
+                    for _ in range(artifact_size_mb):
+                        handle.write(chunk)
             if playbook == "validate.yml":
                 sys.stdout.write(os.environ.get("FAKE_VALIDATE_STDOUT", os.environ.get("FAKE_ANSIBLE_STDOUT", "")))
                 sys.stderr.write(os.environ.get("FAKE_VALIDATE_STDERR", ""))
@@ -211,6 +218,41 @@ def start_wrapper(
         env=merged_env,
         preexec_fn=(lambda: os.umask(umask_value)) if umask_value is not None else None,
     )
+
+
+def find_descendant_pid_with_needle(root_pid: int, needle: str) -> int | None:
+    ps_result = subprocess.run(
+        ["ps", "-eo", "pid=,ppid=,args="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    process_rows: dict[int, tuple[int, str]] = {}
+    for line in ps_result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        pid_text, ppid_text, args = stripped.split(None, 2)
+        process_rows[int(pid_text)] = (int(ppid_text), args)
+
+    descendants = {root_pid}
+    changed = True
+    while changed:
+        changed = False
+        for pid, (ppid, _args) in process_rows.items():
+            if pid in descendants:
+                continue
+            if ppid in descendants:
+                descendants.add(pid)
+                changed = True
+
+    for pid in sorted(descendants):
+        if pid == root_pid:
+            continue
+        args = process_rows[pid][1]
+        if needle in args:
+            return pid
+    return None
 
 
 class RunWrapperTests(unittest.TestCase):
@@ -970,8 +1012,6 @@ class RunWrapperTests(unittest.TestCase):
             bin_dir.mkdir()
             tool_log = temp_root / "tool.log"
             build_fake_tools(bin_dir, tool_log)
-            hold_ready = temp_root / "hold-ready.txt"
-            hold_release = temp_root / "hold-release.txt"
 
             env = {
                 "PATH": f"{bin_dir}:{os.environ['PATH']}",
@@ -982,9 +1022,8 @@ class RunWrapperTests(unittest.TestCase):
                     """
                 ),
                 "FAKE_WRITE_VALIDATION": "1",
+                "FAKE_EXTRA_ARTIFACT_MB": "256",
                 "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
-                "LOCAL_AI_TEST_HOLD_READY_FILE": str(hold_ready),
-                "LOCAL_AI_TEST_HOLD_RELEASE_FILE": str(hold_release),
             }
 
             first = start_wrapper(
@@ -996,31 +1035,46 @@ class RunWrapperTests(unittest.TestCase):
             )
             try:
                 deadline = time.time() + 10
-                while not hold_ready.exists():
+                run_dir: Path | None = None
+                while True:
                     if first.poll() is not None:
                         stdout, stderr = first.communicate(timeout=1)
-                        self.fail(f"first wrapper exited before hold point\nstdout={stdout}\nstderr={stderr}")
+                        self.fail(f"first wrapper exited before finalizer observation\nstdout={stdout}\nstderr={stderr}")
                     if time.time() >= deadline:
                         first.kill()
                         stdout, stderr = first.communicate(timeout=1)
-                        self.fail(f"timed out waiting for hold point\nstdout={stdout}\nstderr={stderr}")
-                    time.sleep(0.05)
+                        self.fail(f"timed out waiting for finalizer observation\nstdout={stdout}\nstderr={stderr}")
+                    host_runs = list((evidence_root / "ai-p620-01").iterdir()) if (evidence_root / "ai-p620-01").exists() else []
+                    if len(host_runs) == 1:
+                        run_dir = host_runs[0]
+                    tool_log_text = tool_log.read_text(encoding="utf-8") if tool_log.exists() else ""
+                    ansible_child_pid = find_descendant_pid_with_needle(first.pid, "ansible-playbook")
+                    if (
+                        run_dir is not None
+                        and "ansible-playbook" in tool_log_text
+                        and ansible_child_pid is None
+                        and not (run_dir / "SHA256SUMS").exists()
+                    ):
+                        break
+                    time.sleep(0.01)
 
-                run_dir = Path(hold_ready.read_text(encoding="utf-8").strip())
-                self.assertTrue((run_dir / "SHA256SUMS").exists())
+                assert run_dir is not None
                 self.assertTrue((run_dir / "manifest.json").exists())
-                self.assertEqual(0, (run_dir / "SHA256SUMS").stat().st_mode & stat.S_IWGRP)
-                self.assertEqual(0, (run_dir / "SHA256SUMS").stat().st_mode & stat.S_IRWXO)
-                self.assertEqual(0, (run_dir / "manifest.json").stat().st_mode & stat.S_IWGRP)
-                self.assertEqual(0, (run_dir / "manifest.json").stat().st_mode & stat.S_IRWXO)
+                self.assertFalse((run_dir / "SHA256SUMS").exists())
 
                 second = run_wrapper(repo_root, evidence_root, lock_root, env=env, playbook="validate.yml")
                 self.assertEqual(73, second.returncode, second.stderr)
                 self.assertEqual([run_dir], list((evidence_root / "ai-p620-01").iterdir()))
             finally:
-                hold_release.write_text("release\n", encoding="utf-8")
                 stdout, stderr = first.communicate(timeout=10)
                 self.assertEqual(0, first.returncode, f"stdout={stdout}\nstderr={stderr}")
+                if (evidence_root / "ai-p620-01").exists():
+                    run_dir = next((evidence_root / "ai-p620-01").iterdir())
+                    self.assertTrue((run_dir / "SHA256SUMS").exists())
+                    self.assertEqual(0, (run_dir / "SHA256SUMS").stat().st_mode & stat.S_IWGRP)
+                    self.assertEqual(0, (run_dir / "SHA256SUMS").stat().st_mode & stat.S_IRWXO)
+                    self.assertEqual(0, (run_dir / "manifest.json").stat().st_mode & stat.S_IWGRP)
+                    self.assertEqual(0, (run_dir / "manifest.json").stat().st_mode & stat.S_IRWXO)
 
 
 if __name__ == "__main__":

@@ -88,26 +88,6 @@ cleanup_lock_helper() {
   fi
 }
 
-# shellcheck disable=SC2317
-hold_lock_for_test_if_requested() {
-  local ready_file="${LOCAL_AI_TEST_HOLD_READY_FILE:-}"
-  local release_file="${LOCAL_AI_TEST_HOLD_RELEASE_FILE:-}"
-  if [[ -z "$ready_file" ]]; then
-    return
-  fi
-
-  printf '%s\n' "$run_dir" >"$ready_file"
-  if [[ -z "$release_file" ]]; then
-    return
-  fi
-
-  local attempts=0
-  while [[ ! -f "$release_file" && "$attempts" -lt 200 ]]; do
-    attempts=$((attempts + 1))
-    sleep 0.05
-  done
-}
-
 acquire_lock_file() {
   lock_helper_status_file="$(mktemp "$lock_root/.lock-status.XXXXXX")"
   lock_helper_release_file="$lock_root/.lock-release.$$.$RANDOM"
@@ -307,7 +287,6 @@ PY
     final_exit="$FINALIZATION_FAILURE_EXIT"
   fi
 
-  hold_lock_for_test_if_requested
   cleanup_lock_helper
   exit "$final_exit"
 }

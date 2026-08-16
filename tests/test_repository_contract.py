@@ -164,6 +164,19 @@ class RepositoryContractTests(unittest.TestCase):
         self.assertTrue(wrapper_path.exists(), "Expected run-ansible-snapshot to exist")
         self.assertTrue(wrapper_path.stat().st_mode & 0o111, "run-ansible-snapshot must be executable")
 
+    def test_production_scripts_do_not_contain_test_only_evidence_hooks(self) -> None:
+        blocked_tokens = (
+            "LOCAL_AI_TEST_",
+            "hold_lock_for_test_if_requested",
+            "hold-ready",
+            "hold-release",
+        )
+        for script_path in (RUN_WRAPPER_SCRIPT, FINALIZE_EVIDENCE_SCRIPT, FINALIZE_EVIDENCE_MODULE):
+            with self.subTest(script=str(script_path)):
+                script_text = (REPO_ROOT / script_path).read_text(encoding="utf-8")
+                for token in blocked_tokens:
+                    self.assertNotIn(token, script_text)
+
 
 if __name__ == "__main__":
     unittest.main()
