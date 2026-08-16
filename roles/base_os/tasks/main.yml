@@ -95,6 +95,7 @@
     - "{{ (base_os_root_dir | default('')) ~ '/etc/logrotate.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/default' }}"
+    - "{{ base_os_package_holds_state_path | dirname }}"
 
 - name: Render deb822 Ubuntu package sources when explicitly enabled
   ansible.builtin.template:
@@ -193,6 +194,43 @@
     - base_os_mutating_operations_enabled | bool
     - base_os_kernel_sysctl | length > 0
 
+- name: Read previous managed package policy state
+  ansible.builtin.stat:
+    path: "{{ base_os_package_holds_state_path }}"
+  register: base_os_package_state_manifest
+
+- name: Slurp previous managed package policy state
+  ansible.builtin.slurp:
+    src: "{{ base_os_package_holds_state_path }}"
+  register: base_os_package_state_manifest_content
+  when: base_os_package_state_manifest.stat.exists | default(false)
+
+- name: Record previous managed package policy state
+  ansible.builtin.set_fact:
+    base_os_package_policy_previous: >-
+      {{
+        (
+          base_os_package_state_manifest_content.content
+          | default('')
+          | b64decode
+          | from_json
+        ) if (base_os_package_state_manifest.stat.exists | default(false)) else {'holds': [], 'pin_packages': []}
+      }}
+
+- name: Record previous managed package transition lists
+  ansible.builtin.set_fact:
+    base_os_package_holds_previous: "{{ base_os_package_policy_previous.holds | default([]) }}"
+    base_os_pin_packages_previous: "{{ base_os_package_policy_previous.pin_packages | default([]) }}"
+
+- name: Unhold previously managed packages removed from policy
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: install
+  loop: "{{ base_os_package_holds_previous | difference(base_os_package_holds) }}"
+  when:
+    - base_os_mutating_operations_enabled | bool
+    - (base_os_package_holds_previous | difference(base_os_package_holds) | length) > 0
+
 - name: Hold selected high-risk packages
   ansible.builtin.dpkg_selections:
     name: "{{ item }}"
@@ -202,15 +240,36 @@
     - base_os_mutating_operations_enabled | bool
     - base_os_package_holds | length > 0
 
-- name: Render selected apt pin preferences
+- name: Remove legacy role-owned apt pin preferences
+  ansible.builtin.file:
+    path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d/' ~ item ~ '.pref' }}"
+    state: absent
+  loop: "{{ base_os_pin_packages_previous }}"
+
+- name: Render managed apt pin preferences
   ansible.builtin.template:
-    src: package-pin.pref.j2
-    dest: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d/' ~ item.package ~ '.pref' }}"
+    src: aihost-managed.pref.j2
+    dest: "{{ base_os_package_preferences_path }}"
     mode: "0644"
-  loop: "{{ base_os_package_pins }}"
-  loop_control:
-    label: "{{ item.package }}"
   when: base_os_package_pins | length > 0
+
+- name: Remove managed apt pin preferences when no pins remain
+  ansible.builtin.file:
+    path: "{{ base_os_package_preferences_path }}"
+    state: absent
+  when: base_os_package_pins | length == 0
+
+- name: Persist managed package policy state
+  ansible.builtin.copy:
+    dest: "{{ base_os_package_holds_state_path }}"
+    mode: "0600"
+    content: >-
+      {{
+        {
+          'holds': base_os_package_holds,
+          'pin_packages': (base_os_package_pins | map(attribute='package') | list)
+        } | to_nice_json
+      }}
 
 - name: Gather installed package facts for unattended-upgrades checks
   ansible.builtin.package_facts:

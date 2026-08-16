@@ -1,0 +1,6 @@
+{% for item in base_os_package_pins %}
+Package: {{ item.package }}
+Pin: {{ item.pin }}
+Pin-Priority: {{ item.priority }}
+
+{% endfor %}

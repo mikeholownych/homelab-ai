@@ -42,48 +42,69 @@
     mode: "0755"
   when: networking_manage_netplan | bool
 
-- name: Ensure staged netplan configuration directories exist
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    mode: "0700"
-  loop:
-    - "{{ networking_staging_root }}"
-    - "{{ networking_staging_root ~ '/etc' }}"
-    - "{{ networking_staging_root ~ '/etc/netplan' }}"
+- name: Validate staged netplan configuration in a temporary workspace
   when: networking_manage_netplan | bool
-  check_mode: false
+  block:
+    - name: Ensure temporary netplan staging parent exists
+      ansible.builtin.file:
+        path: "{{ networking_staging_root }}"
+        state: directory
+        mode: "0700"
+      check_mode: false
 
-- name: Render staged netplan configuration
-  ansible.builtin.template:
-    src: 60-aihost.yaml.j2
-    dest: "{{ networking_staging_netplan_file }}"
-    mode: "0600"
-  when: networking_manage_netplan | bool
-  check_mode: false
-  changed_when: false
+    - name: Create temporary staged netplan workspace
+      ansible.builtin.tempfile:
+        state: directory
+        path: "{{ networking_staging_root }}"
+        prefix: netplan-
+      register: networking_staging_workspace
+      check_mode: false
 
-- name: Validate staged netplan configuration
-  ansible.builtin.command:
-    argv:
-      - "{{ networking_netplan_binary }}"
-      - generate
-      - --root-dir
-      - "{{ networking_staging_root }}"
-  changed_when: false
-  check_mode: false
-  when:
-    - networking_manage_netplan | bool
-    - networking_manage_runtime | bool
+    - name: Ensure staged netplan configuration directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0700"
+      loop:
+        - "{{ networking_staging_workspace.path ~ '/etc' }}"
+        - "{{ networking_staging_workspace.path ~ '/etc/netplan' }}"
+      check_mode: false
 
-- name: Install validated netplan configuration
-  ansible.builtin.copy:
-    src: "{{ networking_staging_netplan_file }}"
-    dest: "{{ networking_netplan_file }}"
-    mode: "0600"
-    remote_src: true
-  when: networking_manage_netplan | bool
-  notify: Apply validated netplan configuration
+    - name: Render staged netplan configuration
+      ansible.builtin.template:
+        src: 60-aihost.yaml.j2
+        dest: "{{ networking_staging_workspace.path ~ '/etc/netplan/60-aihost.yaml' }}"
+        mode: "0600"
+      check_mode: false
+      changed_when: false
+
+    - name: Validate staged netplan configuration
+      ansible.builtin.command:
+        argv:
+          - "{{ networking_netplan_binary }}"
+          - generate
+          - --root-dir
+          - "{{ networking_staging_workspace.path }}"
+      changed_when: false
+      check_mode: false
+      when: networking_manage_runtime | bool
+
+    - name: Install validated netplan configuration
+      ansible.builtin.copy:
+        src: "{{ networking_staging_workspace.path ~ '/etc/netplan/60-aihost.yaml' }}"
+        dest: "{{ networking_netplan_file }}"
+        mode: "0600"
+        remote_src: true
+      notify: Apply validated netplan configuration
+  always:
+    - name: Remove staged netplan configuration workspace
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ networking_staging_workspace.path | default(omit) }}"
+        - "{{ networking_staging_root }}"
+      check_mode: false
 
 - name: Check SSH safety before applying netplan changes
   ansible.builtin.assert:

@@ -16,4 +16,5 @@ users_local_ai_service_account:
   shell: /usr/sbin/nologin
   home: /var/lib/local-ai
   create_home: true
+  preserved_groups: []
 operator_users: [] # noqa var-naming[no-role-prefix]

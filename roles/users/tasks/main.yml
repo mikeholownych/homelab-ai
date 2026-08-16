@@ -21,6 +21,7 @@
       - item.sudo | default(false) is boolean
       - item.sudo_passwordless_all | default(false) is boolean
       - item.sudo_nopasswd | default(false) is boolean
+      - item.preserved_groups | default([]) is iterable
       - item.password is not defined
       - >-
         not (item.enabled | default(true) | bool)
@@ -68,11 +69,18 @@
   ansible.builtin.set_fact:
     users_local_ai_effective_groups: >-
       {{
-        users_local_ai_device_groups
+        (
+          users_local_ai_device_groups
+          + (users_local_ai_service_account.preserved_groups | default([]))
+        )
+        | unique
         if users_local_ai_manage_device_groups | bool
         else
         (
-          users_local_ai_device_groups
+          (
+            users_local_ai_device_groups
+            + (users_local_ai_service_account.preserved_groups | default([]))
+          )
           | select("in", (ansible_facts.getent_group | default({})).keys() | list)
           | list
         )
@@ -87,7 +95,7 @@
     home: "{{ users_local_ai_service_account.home }}"
     create_home: "{{ users_local_ai_service_account.create_home | default(true) }}"
     groups: "{{ (users_local_ai_effective_groups | default([])) | join(',') or omit }}"
-    append: true
+    append: false
     state: present
   when:
     - users_manage_runtime | bool
@@ -117,8 +125,8 @@
     name: "{{ item.name }}"
     comment: "{{ item.comment | default(omit) }}"
     shell: "{{ item.shell | default(users_operator_default_shell) }}"
-    groups: "{{ (item.groups | default([])) | join(',') or omit }}"
-    append: true
+    groups: "{{ ((item.groups | default([])) + (item.preserved_groups | default([]))) | unique | join(',') or omit }}"
+    append: false
     create_home: true
     home: "{{ item.home | default(omit) }}"
     state: present
@@ -201,21 +209,16 @@
         )
       }}
 
-- name: Install enabled operator authorized keys
+- name: Install enabled operator authorized keys authoritatively
   ansible.posix.authorized_key:
-    user: "{{ item.0.name }}"
-    key: "{{ item.1 }}"
+    user: "{{ item.name }}"
+    key: "{{ (item.ssh_authorized_keys | default([])) | join('\n') }}"
     state: present
-    exclusive: false
+    exclusive: true
     manage_dir: false
-  loop: >-
-    {{
-      users_enabled_operator_key_records
-      | default([])
-      | subelements('ssh_authorized_keys', skip_missing=True)
-    }}
+  loop: "{{ users_enabled_operator_key_records | default([]) }}"
   loop_control:
-    label: "{{ item.0.name }}"
+    label: "{{ item.name }}"
   when: users_manage_runtime | bool
 
 - name: Secure enabled operator authorized_keys files

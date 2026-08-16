@@ -2,9 +2,10 @@
 ssh_root_dir: ""
 ssh_main_config_path: "{{ (ssh_root_dir | default('')) ~ '/etc/ssh/sshd_config' }}"
 ssh_dropin_dir: "{{ (ssh_root_dir | default('')) ~ '/etc/ssh/sshd_config.d' }}"
-ssh_dropin_path: "{{ ssh_dropin_dir ~ '/60-aihost-hardening.conf' }}"
+ssh_dropin_path: "{{ ssh_dropin_dir ~ '/00-aihost-hardening.conf' }}"
 ssh_validate_command: "/usr/sbin/sshd -t -f {{ ssh_main_config_path }} -o Include=%s"
 ssh_reload_validate_command: "/usr/sbin/sshd -t -f {{ ssh_main_config_path }} -o Include={{ ssh_dropin_path }}"
+ssh_effective_config_command: "/usr/sbin/sshd -T -f {{ ssh_main_config_path }}"
 ssh_disable_password_auth: false
 ssh_permit_root_login: "no"
 ssh_allow_tcp_forwarding: true

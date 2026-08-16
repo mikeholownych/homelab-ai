@@ -9,6 +9,8 @@ security_auditd_enabled: true
 security_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
 security_auditd_package: auditd
 security_firewall_package: ufw
+security_ufw_state_path: "{{ (security_root_dir | default('')) ~ '/var/lib/aihost/security-ufw-state.json' }}"
+security_ufw_module: community.general.ufw
 security_sudoers_validate_command: /usr/sbin/visudo -cf %s
 security_sudoers_path: "{{ (security_root_dir | default('')) ~ '/etc/sudoers.d/90-aihost-operators' }}"
 security_auditd_rules_path: "{{ (security_root_dir | default('')) ~ '/etc/audit/rules.d/60-aihost-baseline.rules' }}"

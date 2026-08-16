@@ -17,17 +17,38 @@
     state: directory
     mode: "0755"
 
+- name: Inspect SSH main configuration path for effective-check gating
+  ansible.builtin.stat:
+    path: "{{ ssh_main_config_path }}"
+  register: ssh_main_config_stat
+
+- name: Select enabled managed SSH operators
+  ansible.builtin.set_fact:
+    ssh_enabled_operator_users: >-
+      {{
+        (
+          ssh_operator_users
+          | selectattr('enabled', 'undefined')
+          | list
+        )
+        + (
+          ssh_operator_users
+          | selectattr('enabled', 'defined')
+          | selectattr('enabled')
+          | list
+        )
+      }}
+
 - name: Inspect managed operator authorized_keys files for lockout protection
   ansible.builtin.stat:
     path: "{{ item.home | default('/home/' ~ item.name) }}/.ssh/authorized_keys"
     follow: false
-  loop: "{{ ssh_operator_users }}"
+  loop: "{{ ssh_enabled_operator_users }}"
   loop_control:
     label: "{{ item.name }}"
   register: ssh_operator_authorized_keys
   when:
     - ssh_disable_password_auth | bool
-    - item.enabled | default(true) | bool
 
 - name: Slurp managed operator authorized_keys files for lockout proof
   ansible.builtin.slurp:
@@ -42,6 +63,68 @@
     - item.stat.isreg | default(false)
     - not item.stat.islnk | default(false)
 
+- name: Create temporary SSH proof workspace
+  ansible.builtin.tempfile:
+    state: directory
+    prefix: aihost-ssh-proof-
+  register: ssh_proof_workspace
+  when: ssh_disable_password_auth | bool
+
+- name: Write declared managed SSH proof keys to temporary files
+  ansible.builtin.copy:
+    dest: "{{ ssh_proof_workspace.path }}/declared-{{ item.name }}.pub"
+    mode: "0600"
+    content: "{{ (item.ssh_authorized_keys | default([])) | join('\n') ~ '\n' }}"
+  loop: "{{ ssh_enabled_operator_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ssh_declared_key_files
+  when: ssh_disable_password_auth | bool
+
+- name: Validate declared managed SSH proof keys with ssh-keygen
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -l
+      - -f
+      - "{{ item.dest }}"
+  changed_when: false
+  failed_when: false
+  loop: "{{ ssh_declared_key_files.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  register: ssh_declared_key_fingerprints
+  when: ssh_disable_password_auth | bool
+
+- name: Validate installed authorized_keys files with ssh-keygen
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -l
+      - -f
+      - "{{ item.stat.path }}"
+  changed_when: false
+  failed_when: false
+  loop: "{{ ssh_operator_authorized_keys.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  register: ssh_installed_key_fingerprints
+  when:
+    - ssh_disable_password_auth | bool
+    - item.stat.exists | default(false)
+    - item.stat.isreg | default(false)
+    - not item.stat.islnk | default(false)
+
+- name: Assert declared managed SSH proof keys parse with ssh-keygen
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+    fail_msg: managed SSH proof keys must parse with ssh-keygen before password authentication can be disabled.
+  loop: "{{ ssh_declared_key_fingerprints.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.item.name }}"
+  when: ssh_disable_password_auth | bool
+
 - name: Build SSH key-access proof candidates
   ansible.builtin.set_fact:
     ssh_key_access_proof_candidates: >-
@@ -50,7 +133,6 @@
         + [
           {
             'name': ssh_operator_authorized_keys.results[item].item.name,
-            'enabled': ssh_operator_authorized_keys.results[item].item.enabled | default(true),
             'exists': ssh_operator_authorized_keys.results[item].stat.exists | default(false),
             'isreg': ssh_operator_authorized_keys.results[item].stat.isreg | default(false),
             'islnk': ssh_operator_authorized_keys.results[item].stat.islnk | default(false),
@@ -63,17 +145,23 @@
                 == ssh_operator_authorized_keys.results[item].item.name
               )
             ),
+            'declared_parse_ok': ssh_declared_key_fingerprints.results[item].rc | default(1) == 0,
+            'installed_parse_ok': (
+              ssh_installed_key_fingerprints.results[item].rc | default(1) == 0
+            ),
             'content_ok': (
               (
-                (
-                  ssh_operator_authorized_keys_content.results[item].content
-                  | default('')
-                  | b64decode
-                ).splitlines()
-                | intersect(ssh_operator_authorized_keys.results[item].item.ssh_authorized_keys | default([]))
-                | length
-              ) > 0
-            )
+                ssh_declared_key_fingerprints.results[item].stdout_lines | default([])
+                | map('regex_replace', '^\\S+\\s+(\\S+).*$','\\1')
+                | list
+              )
+              | intersect(
+                ssh_installed_key_fingerprints.results[item].stdout_lines | default([])
+                | map('regex_replace', '^\\S+\\s+(\\S+).*$','\\1')
+                | list
+              )
+              | length
+            ) > 0
           }
         ]
       }}
@@ -85,15 +173,7 @@
     that:
       - >-
         (
-          ssh_operator_users
-          | selectattr('enabled', 'undefined')
-          | list
-          | length
-        ) + (
-          ssh_operator_users
-          | selectattr('enabled', 'defined')
-          | selectattr('enabled')
-          | list
+          ssh_enabled_operator_users
           | length
         ) > 0
       - >-
@@ -105,6 +185,8 @@
           | selectattr('mode', 'in', ssh_proof_allowed_modes)
           | selectattr('size', 'gt', 0)
           | selectattr('owner_ok')
+          | selectattr('declared_parse_ok')
+          | selectattr('installed_parse_ok')
           | selectattr('content_ok')
           | list
           | length
@@ -121,3 +203,52 @@
     mode: "0644"
     validate: "{{ ssh_validate_command }}"
   notify: Reload SSH daemon
+
+- name: Validate effective SSH daemon configuration after rendering hardening
+  ansible.builtin.command:
+    cmd: "{{ ssh_effective_config_command }}"
+  changed_when: false
+  register: ssh_effective_config_probe
+  when:
+    - ssh_main_config_stat.stat.exists | default(false)
+    - ssh_effective_config_command | length > 0
+
+- name: Assert effective SSH daemon configuration matches managed hardening intent
+  ansible.builtin.assert:
+    that:
+      - >-
+        ('passwordauthentication ' ~ ('no' if ssh_disable_password_auth | bool else 'yes'))
+        in (ssh_effective_config_probe.stdout | lower)
+      - ('permitrootlogin ' ~ ssh_permit_root_login) in (ssh_effective_config_probe.stdout | lower)
+      - >-
+        (
+          'kbdinteractiveauthentication '
+          ~ ('yes' if ssh_kbd_interactive_authentication | bool else 'no')
+        ) in (ssh_effective_config_probe.stdout | lower)
+      - >-
+        (
+          'allowtcpforwarding '
+          ~ ('yes' if ssh_allow_tcp_forwarding | bool else 'no')
+        ) in (ssh_effective_config_probe.stdout | lower)
+      - >-
+        (
+          'allowagentforwarding '
+          ~ ('yes' if ssh_allow_agent_forwarding | bool else 'no')
+        ) in (ssh_effective_config_probe.stdout | lower)
+      - >-
+        (
+          'x11forwarding '
+          ~ ('yes' if ssh_x11_forwarding | bool else 'no')
+        ) in (ssh_effective_config_probe.stdout | lower)
+    fail_msg: Effective SSH daemon configuration does not match managed hardening intent.
+  when:
+    - ssh_main_config_stat.stat.exists | default(false)
+    - ssh_effective_config_probe is defined
+
+- name: Remove temporary SSH proof workspace
+  ansible.builtin.file:
+    path: "{{ ssh_proof_workspace.path }}"
+    state: absent
+  when:
+    - ssh_disable_password_auth | bool
+    - ssh_proof_workspace.path is defined

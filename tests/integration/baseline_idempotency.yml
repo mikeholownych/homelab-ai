@@ -1,0 +1,123 @@
+---
+- name: Localhost-safe baseline idempotency probe
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  vars:
+    baseline_localhost_safe_mode: true
+    baseline_skip_platform_guard: true
+    localhost_safe_root: >-
+      {{
+        lookup('env', 'LOCALHOST_SAFE_ROOT')
+        | default(playbook_dir ~ '/../../.ansible/idempotency', true)
+      }}
+    localhost_safe_rootfs: "{{ localhost_safe_root }}/root"
+    localhost_safe_key: >-
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFiDLmPBUEMperCkBsXkwpK6gBLzg4RJLBzrkAQpQ58D
+      mike@mike-dev
+    base_os_root_dir: "{{ localhost_safe_rootfs }}"
+    base_os_manage_ubuntu_sources: false
+    base_os_mutating_operations_enabled: false
+    base_os_logrotate_validate_command: "/usr/bin/env true %s"
+    time_sync_root_dir: "{{ localhost_safe_rootfs }}"
+    time_sync_manage_runtime: false
+    storage_manage_runtime: false
+    networking_root_dir: "{{ localhost_safe_root }}"
+    networking_manage_runtime: false
+    networking_manage_netplan: false
+    networking_apply: false
+    users_root_dir: "{{ localhost_safe_rootfs }}"
+    users_manage_runtime: false
+    ssh_root_dir: "{{ localhost_safe_rootfs }}"
+    ssh_manage_runtime: false
+    ssh_validate_command: "/usr/bin/env true %s"
+    ssh_effective_config_command: "/bin/sh {{ localhost_safe_root }}/print-effective-ssh.sh"
+    security_root_dir: "{{ localhost_safe_rootfs }}"
+    security_manage_runtime: false
+    security_firewall_enabled: false
+    security_auditd_enabled: false
+    security_sudoers_validate_command: "/usr/bin/env true %s"
+    operator_users:
+      - name: ops
+        enabled: true
+        home: "{{ localhost_safe_rootfs }}/home/ops"
+        ssh_authorized_keys:
+          - "{{ localhost_safe_key }}"
+        sudo: false
+  pre_tasks:
+    - name: Ensure localhost-safe idempotency root exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ localhost_safe_root }}"
+        - "{{ localhost_safe_rootfs }}"
+        - "{{ localhost_safe_rootfs }}/etc"
+        - "{{ localhost_safe_rootfs }}/etc/apt"
+        - "{{ localhost_safe_rootfs }}/etc/apt/apt.conf.d"
+        - "{{ localhost_safe_rootfs }}/etc/apt/preferences.d"
+        - "{{ localhost_safe_rootfs }}/etc/apt/sources.list.d"
+        - "{{ localhost_safe_rootfs }}/etc/chrony"
+        - "{{ localhost_safe_rootfs }}/etc/chrony/sources.d"
+        - "{{ localhost_safe_rootfs }}/etc/default"
+        - "{{ localhost_safe_rootfs }}/etc/logrotate.d"
+        - "{{ localhost_safe_rootfs }}/etc/ssh"
+        - "{{ localhost_safe_rootfs }}/etc/ssh/sshd_config.d"
+        - "{{ localhost_safe_rootfs }}/etc/sudoers.d"
+        - "{{ localhost_safe_rootfs }}/etc/systemd"
+        - "{{ localhost_safe_rootfs }}/etc/systemd/journald.conf.d"
+        - "{{ localhost_safe_rootfs }}/etc/systemd/timesyncd.conf.d"
+      check_mode: false
+
+    - name: Write localhost-safe SSH main config for effective checks
+      ansible.builtin.copy:
+        dest: "{{ localhost_safe_rootfs }}/etc/ssh/sshd_config"
+        mode: "0644"
+        content: |
+          Include {{ localhost_safe_rootfs }}/etc/ssh/sshd_config.d/*.conf
+      check_mode: false
+
+    - name: Write localhost-safe effective SSH probe
+      ansible.builtin.copy:
+        dest: "{{ localhost_safe_root }}/print-effective-ssh.sh"
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          printf '%s\n' \
+            'passwordauthentication yes' \
+            'permitrootlogin no' \
+            'kbdinteractiveauthentication no' \
+            'allowtcpforwarding yes' \
+            'allowagentforwarding no' \
+            'x11forwarding no'
+      check_mode: false
+  tasks:
+    - name: Include base OS role
+      ansible.builtin.include_role:
+        name: base_os
+
+    - name: Include time sync role
+      ansible.builtin.include_role:
+        name: time_sync
+
+    - name: Include storage role
+      ansible.builtin.include_role:
+        name: storage
+
+    - name: Include networking role
+      ansible.builtin.include_role:
+        name: networking
+
+    - name: Include users role
+      ansible.builtin.include_role:
+        name: users
+
+    - name: Include SSH role
+      ansible.builtin.include_role:
+        name: ssh
+
+    - name: Include security role
+      ansible.builtin.include_role:
+        name: security

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
 import tempfile
 import textwrap
 import unittest
+import getpass
 from pathlib import Path
 
 import yaml
@@ -92,22 +94,45 @@ def load_filter_module():
     return module
 
 
+def ssh_keygen_bin() -> str:
+    discovered = shutil.which("ssh-keygen")
+    if discovered:
+        return discovered
+    raise AssertionError("ssh-keygen is required for SSH proof probes")
+
+
+def generate_ed25519_public_key(workspace: Path, *, stem: str = "id_ed25519") -> str:
+    private_key = workspace / stem
+    result = subprocess.run(
+        [ssh_keygen_bin(), "-q", "-t", "ed25519", "-N", "", "-f", str(private_key)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise AssertionError(result.stdout + result.stderr)
+    return private_key.with_suffix(".pub").read_text(encoding="utf-8").strip()
+
+
 def run_local_role_probe(
     playbook_text: str,
     *,
     workspace: Path | None = None,
     check: bool = False,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if workspace is None:
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_root = Path(tmpdir)
-            return run_local_role_probe(playbook_text, workspace=temp_root, check=check)
+            return run_local_role_probe(playbook_text, workspace=temp_root, check=check, extra_env=extra_env)
 
     playbook_path = workspace / "probe.yml"
     playbook_path.write_text(playbook_text, encoding="utf-8")
     env = os.environ.copy()
     env["ANSIBLE_CONFIG"] = str(REPO_ROOT / "ansible.cfg")
     env["ANSIBLE_ROLES_PATH"] = str(REPO_ROOT / "roles")
+    if extra_env:
+        env.update(extra_env)
     command = [
         ansible_playbook_bin(),
         "-i",
@@ -180,18 +205,24 @@ class BaselineContractTests(unittest.TestCase):
         self.assertEqual("local-ai", users_defaults.get("users_local_ai_service_account", {}).get("name"))
         self.assertEqual("/usr/sbin/nologin", users_defaults.get("users_local_ai_service_account", {}).get("shell"))
         self.assertIn("ssh_authorized_keys", users_tasks)
+        self.assertIn("exclusive: true", users_tasks)
+        self.assertIn("append: false", users_tasks)
+        self.assertIn("preserved_groups", users_tasks)
         self.assertIn("sudo_passwordless_all", users_tasks)
         self.assertIn("sudo_commands", users_tasks)
         self.assertNotIn("password:", users_tasks)
 
         self.assertEqual(False, ssh_defaults.get("ssh_disable_password_auth"))
+        self.assertIn("/00-aihost-hardening.conf", str(ssh_defaults.get("ssh_dropin_path")))
         self.assertEqual("no", ssh_defaults.get("ssh_permit_root_login"))
         self.assertEqual(False, ssh_defaults.get("ssh_kbd_interactive_authentication"))
         self.assertEqual(False, ssh_defaults.get("ssh_x11_forwarding"))
         self.assertIn("operator_users", ssh_tasks)
         self.assertIn("authorized_keys", ssh_tasks)
         self.assertIn("slurp", ssh_tasks)
+        self.assertIn("ssh-keygen", ssh_tasks)
         self.assertIn("sshd -t", str(ssh_defaults.get("ssh_validate_command")))
+        self.assertIn("sshd -T", str(ssh_defaults.get("ssh_effective_config_command")))
         self.assertIn("Include=", str(ssh_defaults.get("ssh_validate_command")))
         self.assertIn("PasswordAuthentication", ssh_template)
         self.assertIn("PermitEmptyPasswords no", ssh_template)
@@ -203,7 +234,11 @@ class BaselineContractTests(unittest.TestCase):
         self.assertEqual([], security_defaults.get("security_management_cidrs"))
         self.assertEqual(False, security_defaults.get("security_inference_api_firewall_enabled"))
         self.assertEqual([], security_defaults.get("security_inference_api_ports"))
+        self.assertIn("security_ufw_module", security_defaults)
+        self.assertIn("security_ufw_state_path", security_defaults)
         self.assertIn("community.general.ufw", security_tasks)
+        self.assertIn("Delete obsolete managed UFW rules", security_tasks)
+        self.assertIn("security_ufw_state_previous", security_tasks)
         self.assertIn("visudo -cf %s", str(security_defaults.get("security_sudoers_validate_command")))
         self.assertIn("operator_users", sudoers_template)
         self.assertIn("NOPASSWD:ALL", sudoers_template)
@@ -232,11 +267,14 @@ class BaselineContractTests(unittest.TestCase):
         base_os_logrotate_template = read_text(ROLE_ROOT / "base_os" / "templates" / "aihost-logrotate.j2")
         security_tasks = read_text(ROLE_ROOT / "security" / "tasks" / "main.yml")
         security_handlers = read_text(ROLE_ROOT / "security" / "handlers" / "main.yml")
+        time_sync_tasks = read_text(ROLE_ROOT / "time_sync" / "tasks" / "main.yml")
 
         self.assertEqual("networkd", networking_defaults.get("networking_renderer"))
         self.assertIn("networking_staging_root", networking_tasks)
         self.assertIn("--root-dir", networking_tasks)
         self.assertIn("check_mode: false", networking_tasks)
+        self.assertIn("always:", networking_tasks)
+        self.assertIn("Remove staged netplan configuration workspace", networking_tasks)
         self.assertLess(networking_tasks.index("networking_staging_root"), networking_tasks.index("networking_netplan_file"))
         self.assertLess(networking_tasks.index("Validate staged netplan configuration"), networking_tasks.index("Install validated netplan configuration"))
         self.assertNotIn("notify:", networking_tasks.split("Validate staged netplan configuration", 1)[0])
@@ -251,6 +289,12 @@ class BaselineContractTests(unittest.TestCase):
         self.assertNotIn("/var/log/*.log", base_os_logrotate_template)
         self.assertNotIn("sysctl --system", base_os_handlers)
         self.assertIn("base_os_update_grub_command", base_os_handlers)
+        self.assertIn("base_os_package_holds_state_path", base_os_defaults)
+        self.assertIn("base_os_package_selection_module", base_os_defaults)
+        self.assertIn("base_os_package_preferences_path", base_os_defaults)
+        self.assertIn("selection: install", base_os_tasks)
+        self.assertIn("Remove managed apt pin preferences when no pins remain", base_os_tasks)
+        self.assertIn("base_os_package_holds_previous", base_os_tasks)
 
         self.assertLess(
             security_tasks.index("Allow SSH only from configured management CIDRs"),
@@ -268,6 +312,7 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("security_inference_api_ports_invalid", security_tasks)
         self.assertNotIn("sysctl --system", security_handlers)
         self.assertIn("aihost_invalid_logrotate_paths", read_text(REPO_ROOT / "filter_plugins" / "aihost_validators.py"))
+        self.assertNotIn("not ansible_check_mode", time_sync_tasks)
 
     def test_baseline_roles_avoid_shell_and_keep_command_usage_narrow(self) -> None:
         for role in ROLE_NAMES:
@@ -301,16 +346,20 @@ class BaselineContractTests(unittest.TestCase):
     def test_local_check_fixture_is_repo_local_and_honest(self) -> None:
         makefile = read_text(REPO_ROOT / "Makefile")
         scenario_path = REPO_ROOT / "tests" / "integration" / "baseline_os.yml"
+        idempotency_path = REPO_ROOT / "tests" / "integration" / "baseline_idempotency.yml"
         scenario_text = read_text(scenario_path)
         self.assertTrue(scenario_path.exists(), "Expected tests/integration/baseline_os.yml to exist")
+        self.assertTrue(idempotency_path.exists(), "Expected tests/integration/baseline_idempotency.yml to exist")
         self.assertIn("tests/integration/baseline_os.yml", makefile)
         self.assertIn("localhost-safe", makefile)
-        self.assertNotIn("idempotency probe", makefile)
+        self.assertIn("idempotency:", makefile)
+        self.assertIn("baseline_idempotency.yml", makefile)
         self.assertIn("Ubuntu 24.04", scenario_text)
         self.assertIn("check_mode: true", scenario_text)
         for required in ("base_os", "time_sync", "storage", "networking"):
             self.assertIn(required, scenario_text)
         self.assertIn("does not assert host convergence", makefile)
+        self.assertIn("quality: lint test syntax check check idempotency", makefile)
 
     def test_staged_netplan_validation_fails_before_destination_mutation_even_in_check_mode(self) -> None:
         workspace = make_probe_workspace()
@@ -716,87 +765,648 @@ class BaselineContractTests(unittest.TestCase):
         self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
 
     def test_disabling_password_auth_without_managed_key_fails_with_lockout_message(self) -> None:
-        playbook_text = textwrap.dedent(
-            """
-            ---
-            - name: SSH lockout guard negative probe
-              hosts: localhost
-              connection: local
-              gather_facts: false
-              become: false
-              vars:
-                ssh_root_dir: "{{ playbook_dir }}/root"
-                ssh_manage_runtime: false
-                ssh_disable_password_auth: true
-                ssh_validate_command: "/usr/bin/env true %s"
-                operator_users:
-                  - name: ops
-                    enabled: true
-                    ssh_authorized_keys:
-                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAnegative negative@example
-                    sudo: false
-              pre_tasks:
-                - name: Create empty localhost-safe SSH directories
-                  ansible.builtin.file:
-                    path: "{{ playbook_dir }}/root/etc/ssh/sshd_config.d"
-                    state: directory
-                    mode: "0755"
-              tasks:
-                - name: Include SSH role
-                  ansible.builtin.include_role:
-                    name: ssh
-            """
-        )
+        workspace = make_probe_workspace()
+        try:
+            public_key = generate_ed25519_public_key(workspace)
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: SSH lockout guard negative probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{{{ playbook_dir }}}}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_validate_command: "/usr/bin/env true %s"
+                    operator_users:
+                      - name: ops
+                        enabled: true
+                        ssh_authorized_keys:
+                          - "{public_key}"
+                        sudo: false
+                  pre_tasks:
+                    - name: Create empty localhost-safe SSH directories
+                      ansible.builtin.file:
+                        path: "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d"
+                        state: directory
+                        mode: "0755"
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
 
-        result = run_local_role_probe(playbook_text)
-        self.assertNotEqual(0, result.returncode)
-        self.assertIn("ssh_disable_password_auth=true requires at least one managed operator", result.stdout + result.stderr)
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("ssh_disable_password_auth=true requires at least one managed operator", result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
 
-    def test_disabling_password_auth_with_temp_key_proof_succeeds_without_touching_etc(self) -> None:
-        playbook_text = textwrap.dedent(
-            """
-            ---
-            - name: SSH lockout guard positive probe
-              hosts: localhost
-              connection: local
-              gather_facts: false
-              become: false
-              vars:
-                ssh_root_dir: "{{ playbook_dir }}/root"
-                ssh_manage_runtime: false
-                ssh_disable_password_auth: true
-                ssh_validate_command: "/usr/bin/env true %s"
-                operator_users:
-                  - name: ops
-                    enabled: true
-                    home: "{{ playbook_dir }}/root/home/ops"
-                    ssh_authorized_keys:
-                      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIApositive positive@example
-                    sudo: false
-              pre_tasks:
-                - name: Create localhost-safe SSH tree
-                  ansible.builtin.file:
-                    path: "{{ item }}"
-                    state: directory
-                    mode: "0755"
-                  loop:
-                    - "{{ playbook_dir }}/root/etc/ssh/sshd_config.d"
-                    - "{{ playbook_dir }}/root/home/ops/.ssh"
-                - name: Write managed authorized_keys proof
-                  ansible.builtin.copy:
-                    dest: "{{ playbook_dir }}/root/home/ops/.ssh/authorized_keys"
-                    mode: "0600"
-                    content: |
-                      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIApositive positive@example
-              tasks:
-                - name: Include SSH role
-                  ansible.builtin.include_role:
-                    name: ssh
-            """
-        )
+    def test_invalid_managed_ssh_key_fails_even_if_file_contains_same_malformed_line(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            malformed_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAbroken broken@example"
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: SSH malformed key proof probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{{{ playbook_dir }}}}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_validate_command: "/usr/bin/env true %s"
+                    ssh_effective_config_command: "/usr/bin/env printf 'passwordauthentication no\\npermitrootlogin no\\nkbdinteractiveauthentication no\\nallowtcpforwarding yes\\nallowagentforwarding no\\nx11forwarding no\\n'"
+                    operator_users:
+                      - name: ops
+                        enabled: true
+                        home: "{{{{ playbook_dir }}}}/root/home/ops"
+                        ssh_authorized_keys:
+                          - "{malformed_key}"
+                        sudo: false
+                  pre_tasks:
+                    - name: Create localhost-safe SSH tree
+                      ansible.builtin.file:
+                        path: "{{{{ item }}}}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh"
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d"
+                        - "{{{{ playbook_dir }}}}/root/home/ops/.ssh"
+                    - name: Write SSH main config
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config"
+                        mode: "0644"
+                        content: |
+                          Include {{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d/*.conf
+                    - name: Write malformed authorized_keys proof
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/home/ops/.ssh/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          {malformed_key}
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
 
-        result = run_local_role_probe(playbook_text)
-        self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("managed SSH proof keys must parse with ssh-keygen", result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_disabling_password_auth_with_generated_ed25519_key_proof_succeeds_without_touching_etc(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            public_key = generate_ed25519_public_key(workspace)
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: SSH lockout guard positive probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{{{ playbook_dir }}}}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_validate_command: "/usr/bin/env true %s"
+                    ssh_effective_config_command: "/usr/bin/env printf 'passwordauthentication no\\npermitrootlogin no\\nkbdinteractiveauthentication no\\nallowtcpforwarding yes\\nallowagentforwarding no\\nx11forwarding no\\n'"
+                    operator_users:
+                      - name: ops
+                        enabled: true
+                        home: "{{{{ playbook_dir }}}}/root/home/ops"
+                        ssh_authorized_keys:
+                          - "{public_key}"
+                        sudo: false
+                  pre_tasks:
+                    - name: Create localhost-safe SSH tree
+                      ansible.builtin.file:
+                        path: "{{{{ item }}}}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh"
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d"
+                        - "{{{{ playbook_dir }}}}/root/home/ops/.ssh"
+                    - name: Write SSH main config
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config"
+                        mode: "0644"
+                        content: |
+                          Include {{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d/*.conf
+                    - name: Write managed authorized_keys proof
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/home/ops/.ssh/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          {public_key}
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_conflicting_effective_ssh_config_fails_before_reload(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            public_key = generate_ed25519_public_key(workspace)
+            fake_sshd = workspace / "fake-sshd.sh"
+            fake_sshd.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/bin/sh
+                    case "$1" in
+                      -T)
+                        printf '%s\n' \
+                          'passwordauthentication yes' \
+                          'permitrootlogin yes' \
+                          'kbdinteractiveauthentication yes' \
+                          'allowtcpforwarding yes' \
+                          'allowagentforwarding yes' \
+                          'x11forwarding yes'
+                        ;;
+                      *)
+                        exit 0
+                        ;;
+                    esac
+                    """
+                ),
+                encoding="utf-8",
+            )
+            fake_sshd.chmod(0o755)
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: SSH effective config conflict probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{{{ playbook_dir }}}}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_validate_command: "/usr/bin/env true %s"
+                    ssh_effective_config_command: "/bin/sh {fake_sshd} -T"
+                    operator_users:
+                      - name: ops
+                        enabled: true
+                        home: "{{{{ playbook_dir }}}}/root/home/ops"
+                        ssh_authorized_keys:
+                          - "{public_key}"
+                        sudo: false
+                  pre_tasks:
+                    - name: Create localhost-safe SSH tree
+                      ansible.builtin.file:
+                        path: "{{{{ item }}}}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh"
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d"
+                        - "{{{{ playbook_dir }}}}/root/home/ops/.ssh"
+                    - name: Write conflicting SSH main config
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config"
+                        mode: "0644"
+                        content: |
+                          PasswordAuthentication yes
+                          PermitRootLogin yes
+                          KbdInteractiveAuthentication yes
+                          Include {{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d/*.conf
+                    - name: Write managed authorized_keys proof
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/home/ops/.ssh/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          {public_key}
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("Effective SSH daemon configuration does not match managed hardening intent", result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_networking_staging_workspace_is_cleaned_after_validation(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            staging_root = workspace / "staging"
+            fake_netplan = workspace / "netplan"
+            fake_netplan.write_text(
+                "#!/bin/sh\nexit 0\n",
+                encoding="utf-8",
+            )
+            fake_netplan.chmod(0o755)
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: Networking staging cleanup probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    networking_root_dir: "{{{{ playbook_dir }}}}/root"
+                    networking_staging_root: "{{{{ playbook_dir }}}}/staging"
+                    networking_manage_runtime: true
+                    networking_manage_netplan: true
+                    networking_apply: false
+                    networking_renderer: networkd
+                    networking_netplan_binary: "{fake_netplan}"
+                    networking_ethernets:
+                      eno1:
+                        dhcp4: true
+                  pre_tasks:
+                    - name: Create netplan destination directories
+                      ansible.builtin.file:
+                        path: "{{{{ playbook_dir }}}}/root/etc/netplan"
+                        state: directory
+                        mode: "0755"
+                  tasks:
+                    - name: Include networking role
+                      ansible.builtin.include_role:
+                        name: networking
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertFalse(staging_root.exists(), "Expected staged netplan workspace to be removed after validation")
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_authorized_key_module_probe_removes_undeclared_keys_exclusively(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            operator_name = getpass.getuser()
+            retained_key = generate_ed25519_public_key(workspace, stem="retained")
+            removed_key = generate_ed25519_public_key(workspace, stem="removed")
+            authorized_keys_path = workspace / "authorized_keys"
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: Authorized key exclusive transition probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  tasks:
+                    - name: Seed temporary authorized_keys file
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          {retained_key}
+                          {removed_key}
+                      check_mode: false
+                    - name: Apply authoritative authorized_key state
+                      ansible.posix.authorized_key:
+                        user: "{operator_name}"
+                        path: "{{{{ playbook_dir }}}}/authorized_keys"
+                        key: "{retained_key}"
+                        state: present
+                        exclusive: true
+                        manage_dir: false
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            final_keys = authorized_keys_path.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual([retained_key], final_keys)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_base_os_pin_transition_removes_legacy_preferences_and_persists_empty_state(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            preferences_dir = workspace / "root" / "etc" / "apt" / "preferences.d"
+            state_path = workspace / "root" / "var" / "lib" / "aihost" / "base-os-package-policy-state.json"
+            legacy_pin = preferences_dir / "intel-compute-runtime.pref"
+            managed_pin = preferences_dir / "90-aihost-managed.pref"
+            preferences_dir.mkdir(parents=True, exist_ok=True)
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            legacy_pin.write_text("Package: intel-compute-runtime\n", encoding="utf-8")
+            managed_pin.write_text("legacy managed pins\n", encoding="utf-8")
+            state_path.write_text(
+                json.dumps({"holds": ["intel-compute-runtime"], "pin_packages": ["intel-compute-runtime"]}),
+                encoding="utf-8",
+            )
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Base OS package-policy transition probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: true
+                  become: false
+                  vars:
+                    baseline_skip_platform_guard: true
+                    base_os_root_dir: "{{ playbook_dir }}/root"
+                    base_os_mutating_operations_enabled: false
+                    base_os_package_holds: []
+                    base_os_package_pins: []
+                    base_os_logrotate_validate_command: "/usr/bin/env true %s"
+                  pre_tasks:
+                    - name: Create base OS probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc"
+                        - "{{ playbook_dir }}/root/etc/apt"
+                        - "{{ playbook_dir }}/root/etc/apt/apt.conf.d"
+                        - "{{ playbook_dir }}/root/etc/apt/preferences.d"
+                        - "{{ playbook_dir }}/root/etc/apt/sources.list.d"
+                        - "{{ playbook_dir }}/root/etc/default"
+                        - "{{ playbook_dir }}/root/etc/logrotate.d"
+                        - "{{ playbook_dir }}/root/etc/systemd"
+                        - "{{ playbook_dir }}/root/etc/systemd/journald.conf.d"
+                        - "{{ playbook_dir }}/root/var/lib/aihost"
+                  tasks:
+                    - name: Include base OS role
+                      ansible.builtin.include_role:
+                        name: base_os
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertFalse(legacy_pin.exists(), "Expected prior per-package pin file to be removed")
+            self.assertFalse(managed_pin.exists(), "Expected managed aggregate pin file to be removed when pins are empty")
+            self.assertEqual(
+                {"holds": [], "pin_packages": []},
+                json.loads(state_path.read_text(encoding="utf-8")),
+            )
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_security_ufw_reconciliation_records_obsolete_and_desired_rule_plans(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            state_path = workspace / "root" / "var" / "lib" / "aihost" / "security-ufw-state.json"
+            plan_path = workspace / "plan.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "scope": "management",
+                                "src": "10.0.0.0/24",
+                                "port": "22",
+                                "proto": "tcp",
+                                "comment": "Managed SSH access",
+                            },
+                            {
+                                "scope": "inference",
+                                "src": "10.2.0.0/24",
+                                "port": "8000",
+                                "proto": "tcp",
+                                "comment": "Managed inference API access",
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Security UFW reconciliation probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    security_root_dir: "{{ playbook_dir }}/root"
+                    security_manage_runtime: false
+                    security_firewall_enabled: true
+                    security_management_cidrs:
+                      - 10.1.0.0/24
+                    security_inference_api_firewall_enabled: true
+                    security_inference_api_cidrs:
+                      - 10.3.0.0/24
+                    security_inference_api_ports:
+                      - 8001
+                    security_auditd_enabled: false
+                    security_sudoers_validate_command: "/usr/bin/env true %s"
+                  pre_tasks:
+                    - name: Create security probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc"
+                        - "{{ playbook_dir }}/root/etc/sudoers.d"
+                        - "{{ playbook_dir }}/root/etc/audit/rules.d"
+                        - "{{ playbook_dir }}/root/var/lib/aihost"
+                  tasks:
+                    - name: Include security role
+                      ansible.builtin.include_role:
+                        name: security
+                    - name: Persist computed UFW action plan
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/plan.json"
+                        mode: "0600"
+                        content: >-
+                          {{
+                            {
+                              'desired': security_ufw_desired_rules,
+                              'obsolete': security_ufw_obsolete_rules,
+                              'previous': security_ufw_previous_rules
+                            } | to_nice_json
+                          }}
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [
+                    {
+                        "scope": "management",
+                        "src": "10.1.0.0/24",
+                        "port": "22",
+                        "proto": "tcp",
+                        "comment": "Managed SSH access",
+                    },
+                    {
+                        "scope": "inference",
+                        "src": "10.3.0.0/24",
+                        "port": "8001",
+                        "proto": "tcp",
+                        "comment": "Managed inference API access",
+                    },
+                ],
+                plan["desired"],
+            )
+            self.assertEqual(
+                [
+                    {
+                        "scope": "management",
+                        "src": "10.0.0.0/24",
+                        "port": "22",
+                        "proto": "tcp",
+                        "comment": "Managed SSH access",
+                    },
+                    {
+                        "scope": "inference",
+                        "src": "10.2.0.0/24",
+                        "port": "8000",
+                        "proto": "tcp",
+                        "comment": "Managed inference API access",
+                    },
+                ],
+                plan["obsolete"],
+            )
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_security_ufw_disable_transition_persists_disabled_empty_state(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            state_path = workspace / "root" / "var" / "lib" / "aihost" / "security-ufw-state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(
+                json.dumps(
+                    {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "scope": "management",
+                                "src": "10.0.0.0/24",
+                                "port": "22",
+                                "proto": "tcp",
+                                "comment": "Managed SSH access",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Security UFW disable transition probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    security_root_dir: "{{ playbook_dir }}/root"
+                    security_manage_runtime: false
+                    security_firewall_enabled: false
+                    security_management_cidrs: []
+                    security_inference_api_firewall_enabled: false
+                    security_inference_api_cidrs: []
+                    security_inference_api_ports: []
+                    security_auditd_enabled: false
+                    security_sudoers_validate_command: "/usr/bin/env true %s"
+                  pre_tasks:
+                    - name: Create security probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc"
+                        - "{{ playbook_dir }}/root/etc/sudoers.d"
+                        - "{{ playbook_dir }}/root/etc/audit/rules.d"
+                        - "{{ playbook_dir }}/root/var/lib/aihost"
+                  tasks:
+                    - name: Include security role
+                      ansible.builtin.include_role:
+                        name: security
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertEqual({"enabled": False, "rules": []}, json.loads(state_path.read_text(encoding="utf-8")))
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_time_sync_provider_transition_replaces_chrony_config_with_timesyncd(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            timesyncd_path = workspace / "root" / "etc" / "systemd" / "timesyncd.conf.d" / "60-aihost.conf"
+            chrony_path = workspace / "root" / "etc" / "chrony" / "sources.d" / "60-aihost.sources"
+            timesyncd_path.parent.mkdir(parents=True, exist_ok=True)
+            chrony_path.parent.mkdir(parents=True, exist_ok=True)
+            chrony_path.write_text("server old-chrony.example iburst\n", encoding="utf-8")
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Time sync provider transition probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    time_sync_root_dir: "{{ playbook_dir }}/root"
+                    time_sync_manage_runtime: false
+                    time_sync_provider: systemd-timesyncd
+                    time_sync_servers:
+                      - time.example.com
+                    time_sync_fallback_servers:
+                      - backup.example.com
+                  pre_tasks:
+                    - name: Create time-sync probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc/systemd/timesyncd.conf.d"
+                        - "{{ playbook_dir }}/root/etc/chrony/sources.d"
+                  tasks:
+                    - name: Include time sync role
+                      ansible.builtin.include_role:
+                        name: time_sync
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertTrue(timesyncd_path.exists(), "Expected systemd-timesyncd config to be rendered")
+            self.assertIn("time.example.com", timesyncd_path.read_text(encoding="utf-8"))
+            self.assertFalse(chrony_path.exists(), "Expected prior chrony config to be removed")
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_make_idempotency_target_bounds_each_ansible_run(self) -> None:
+        makefile = read_text(REPO_ROOT / "Makefile")
+        self.assertIn("timeout -k 5s 60s", makefile)
 
 
 if __name__ == "__main__":

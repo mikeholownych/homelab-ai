@@ -47,6 +47,102 @@
   loop:
     - "{{ (security_root_dir | default('')) ~ '/etc/sudoers.d' }}"
     - "{{ (security_root_dir | default('')) ~ '/etc/audit/rules.d' }}"
+    - "{{ security_ufw_state_path | dirname }}"
+
+- name: Read previous managed UFW state
+  ansible.builtin.stat:
+    path: "{{ security_ufw_state_path }}"
+  register: security_ufw_state_manifest
+
+- name: Slurp previous managed UFW state
+  ansible.builtin.slurp:
+    src: "{{ security_ufw_state_path }}"
+  register: security_ufw_state_manifest_content
+  when: security_ufw_state_manifest.stat.exists | default(false)
+
+- name: Record previous managed UFW state
+  ansible.builtin.set_fact:
+    security_ufw_state_previous: >-
+      {{
+        (
+          security_ufw_state_manifest_content.content
+          | default('')
+          | b64decode
+          | from_json
+        ) if (security_ufw_state_manifest.stat.exists | default(false)) else {'enabled': false, 'rules': []}
+      }}
+
+- name: Build desired managed UFW rule sets
+  ansible.builtin.set_fact:
+    security_ufw_management_rules: []
+    security_ufw_inference_rules: []
+
+- name: Build desired managed SSH UFW rules
+  ansible.builtin.set_fact:
+    security_ufw_management_rules: >-
+      {{
+        security_ufw_management_rules
+        + [
+          {
+            'scope': 'management',
+            'src': item,
+            'port': '22',
+            'proto': 'tcp',
+            'comment': 'Managed SSH access'
+          }
+        ]
+      }}
+  loop: "{{ security_management_cidrs }}"
+
+- name: Build desired managed inference UFW rules
+  ansible.builtin.set_fact:
+    security_ufw_inference_rules: >-
+      {{
+        security_ufw_inference_rules | default([])
+        + [
+          {
+            'scope': 'inference',
+            'src': item.0,
+            'port': item.1 | string,
+            'proto': 'tcp',
+            'comment': 'Managed inference API access'
+          }
+        ]
+      }}
+  loop: "{{ security_inference_api_cidrs | product(security_inference_api_ports) | list }}"
+  when: security_inference_api_firewall_enabled | bool
+
+- name: Record desired managed UFW policy state
+  ansible.builtin.set_fact:
+    security_ufw_desired_rules: >-
+      {{
+        (security_ufw_management_rules | default([]))
+        + (security_ufw_inference_rules | default([]))
+      }}
+    security_ufw_previous_rules: "{{ security_ufw_state_previous.rules | default([]) }}"
+    security_ufw_previous_rule_tokens: >-
+      {{ (security_ufw_state_previous.rules | default([])) | map('to_json') | list }}
+    security_ufw_desired_rule_tokens: >-
+      {{
+        (
+          (security_ufw_management_rules | default([]))
+          + (security_ufw_inference_rules | default([]))
+        ) | map('to_json') | list
+      }}
+
+- name: Initialize obsolete managed UFW rules
+  ansible.builtin.set_fact:
+    security_ufw_obsolete_rules: []
+
+- name: Record obsolete managed UFW rules in previous-state order
+  ansible.builtin.set_fact:
+    security_ufw_obsolete_rules: >-
+      {{
+        security_ufw_obsolete_rules
+        + [item]
+      }}
+  loop: "{{ security_ufw_previous_rules | default([]) }}"
+  when: (item | to_json) not in security_ufw_desired_rule_tokens
 
 - name: Install auditd package when enabled
   ansible.builtin.apt:
@@ -102,11 +198,11 @@
 - name: Allow SSH only from configured management CIDRs
   community.general.ufw:
     rule: allow
-    port: "22"
-    proto: tcp
-    src: "{{ item }}"
-    comment: Managed SSH access
-  loop: "{{ security_management_cidrs }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    src: "{{ item.src }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ security_ufw_management_rules | default([]) }}"
   when:
     - security_manage_runtime | bool
     - security_firewall_enabled | bool
@@ -114,15 +210,42 @@
 - name: Allow inference API only from configured CIDRs
   community.general.ufw:
     rule: allow
-    port: "{{ item.1 }}"
-    proto: tcp
-    src: "{{ item.0 }}"
-    comment: Managed inference API access
-  loop: "{{ security_inference_api_cidrs | product(security_inference_api_ports) | list }}"
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    src: "{{ item.src }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ security_ufw_inference_rules | default([]) }}"
   when:
     - security_manage_runtime | bool
     - security_firewall_enabled | bool
     - security_inference_api_firewall_enabled | bool
+
+- name: Delete obsolete managed UFW rules
+  community.general.ufw:
+    rule: allow
+    delete: true
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    src: "{{ item.src }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ security_ufw_obsolete_rules | default([]) }}"
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Delete managed UFW rules when firewall feature is disabled
+  community.general.ufw:
+    rule: allow
+    delete: true
+    port: "{{ item.port }}"
+    proto: "{{ item.proto }}"
+    src: "{{ item.src }}"
+    comment: "{{ item.comment }}"
+  loop: "{{ security_ufw_previous_rules | default([]) }}"
+  when:
+    - security_manage_runtime | bool
+    - not security_firewall_enabled | bool
+    - (security_ufw_state_previous.enabled | default(false) | bool)
 
 - name: Set UFW default deny incoming policy
   community.general.ufw:
@@ -153,3 +276,27 @@
   when:
     - security_manage_runtime | bool
     - security_firewall_enabled | bool
+
+- name: Disable managed UFW policy when firewall feature is disabled
+  community.general.ufw:
+    state: disabled
+  when:
+    - security_manage_runtime | bool
+    - not security_firewall_enabled | bool
+    - security_ufw_state_previous.enabled | default(false) | bool
+
+- name: Persist managed UFW state manifest
+  ansible.builtin.copy:
+    dest: "{{ security_ufw_state_path }}"
+    mode: "0600"
+    content: >-
+      {{
+        {
+          'enabled': (security_firewall_enabled | bool),
+          'rules': (
+            security_ufw_desired_rules
+            if security_firewall_enabled | bool
+            else []
+          )
+        } | to_nice_json
+      }}
