@@ -34,6 +34,9 @@ base_os_logrotate_paths:
 base_os_locale_path: "{{ (base_os_root_dir | default('')) ~ '/etc/default/locale' }}"
 base_os_grub_dropin_path: "{{ (base_os_root_dir | default('')) ~ '/etc/default/grub.d/90-aihost.cfg' }}"
 base_os_grub_shell_validate_command: /bin/sh -n %s
+base_os_update_grub_command:
+  - /usr/sbin/update-grub
+base_os_update_grub_manage_runtime: "{{ base_os_mutating_operations_enabled | bool }}"
 base_os_admin_packages:
   - auditd
   - ca-certificates

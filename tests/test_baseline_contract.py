@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -79,6 +80,16 @@ def ansible_playbook_bin() -> str:
 
 def make_probe_workspace() -> Path:
     return Path(tempfile.mkdtemp(prefix="aihost-baseline-probe-"))
+
+
+def load_filter_module():
+    module_path = REPO_ROOT / "filter_plugins" / "aihost_validators.py"
+    spec = importlib.util.spec_from_file_location("aihost_validators", module_path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("Unable to load aihost_validators filter plugin")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_local_role_probe(
@@ -239,6 +250,7 @@ class BaselineContractTests(unittest.TestCase):
         self.assertEqual(["/var/log/local-ai/*.log"], base_os_defaults.get("base_os_logrotate_paths"))
         self.assertNotIn("/var/log/*.log", base_os_logrotate_template)
         self.assertNotIn("sysctl --system", base_os_handlers)
+        self.assertIn("base_os_update_grub_command", base_os_handlers)
 
         self.assertLess(
             security_tasks.index("Allow SSH only from configured management CIDRs"),
@@ -255,6 +267,7 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("security_management_cidrs_invalid", security_tasks)
         self.assertIn("security_inference_api_ports_invalid", security_tasks)
         self.assertNotIn("sysctl --system", security_handlers)
+        self.assertIn("aihost_invalid_logrotate_paths", read_text(REPO_ROOT / "filter_plugins" / "aihost_validators.py"))
 
     def test_baseline_roles_avoid_shell_and_keep_command_usage_narrow(self) -> None:
         for role in ROLE_NAMES:
@@ -299,7 +312,7 @@ class BaselineContractTests(unittest.TestCase):
             self.assertIn(required, scenario_text)
         self.assertIn("does not assert host convergence", makefile)
 
-    def test_invalid_networking_renderer_fails_before_destination_mutation_even_in_check_mode(self) -> None:
+    def test_staged_netplan_validation_fails_before_destination_mutation_even_in_check_mode(self) -> None:
         workspace = make_probe_workspace()
         try:
             destination_path = workspace / "root" / "etc" / "netplan" / "60-aihost.yaml"
@@ -319,11 +332,12 @@ class BaselineContractTests(unittest.TestCase):
                     networking_manage_runtime: true
                     networking_manage_netplan: true
                     networking_apply: false
-                    networking_renderer: invalid
+                    networking_renderer: networkd
                     networking_netplan_binary: "{{ playbook_dir }}/bin/netplan"
                     networking_ethernets:
                       eno1:
                         dhcp4: true
+                        gateway4: 300.0.0.1
                   pre_tasks:
                     - name: Create staged netplan probe directories
                       ansible.builtin.file:
@@ -334,19 +348,28 @@ class BaselineContractTests(unittest.TestCase):
                         - "{{ playbook_dir }}/bin"
                         - "{{ playbook_dir }}/root/etc/netplan"
                         - "{{ playbook_dir }}/staging"
+                      check_mode: false
                     - name: Install fake netplan validator
                       ansible.builtin.copy:
                         dest: "{{ playbook_dir }}/bin/netplan"
                         mode: "0755"
                         content: |
                           #!/bin/sh
-                          case "$*" in
-                            *"renderer: invalid"*)
-                              echo "renderer invalid" >&2
-                              exit 12
-                              ;;
-                          esac
+                          root_dir=""
+                          prev=""
+                          for arg in "$@"; do
+                            if [ "$prev" = "--root-dir" ]; then
+                              root_dir="$arg"
+                            fi
+                            prev="$arg"
+                          done
+                          probe_file="$root_dir/etc/netplan/60-aihost.yaml"
+                          if grep -q "gateway4: 300.0.0.1" "$probe_file"; then
+                            echo "semantic netplan failure" >&2
+                            exit 12
+                          fi
                           exit 0
+                      check_mode: false
                   tasks:
                     - name: Include networking role
                       ansible.builtin.include_role:
@@ -356,7 +379,7 @@ class BaselineContractTests(unittest.TestCase):
 
             result = run_local_role_probe(playbook_text, workspace=workspace, check=True)
             self.assertNotEqual(0, result.returncode)
-            self.assertIn("networking renderer must be one of", result.stdout + result.stderr)
+            self.assertIn("semantic netplan failure", result.stdout + result.stderr)
             self.assertEqual("sentinel: keep\n", destination_path.read_text(encoding="utf-8"))
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
@@ -418,7 +441,7 @@ class BaselineContractTests(unittest.TestCase):
                 security_inference_api_cidrs:
                   - 10.1.0.0/24
                 security_inference_api_ports:
-                  - 70000
+                  - "22"
                 security_auditd_enabled: false
                 security_sudoers_validate_command: "/usr/bin/env true %s"
               pre_tasks:
@@ -440,7 +463,69 @@ class BaselineContractTests(unittest.TestCase):
 
         result = run_local_role_probe(playbook_text)
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("security_inference_api_ports must be integers between 1 and 65535", result.stdout + result.stderr)
+        self.assertIn("security_inference_api_ports must be YAML integers between 1 and 65535", result.stdout + result.stderr)
+
+    def test_port_and_logrotate_filters_reject_invalid_values(self) -> None:
+        validators = load_filter_module()
+        self.assertEqual(
+            ["True", "1.5", "22", "0", "65536"],
+            validators.invalid_ports([True, 1.5, "22", 0, 65536, 22]),
+        )
+        self.assertEqual(
+            ["/var/log/local-ai/../auth.log", "relative.log", "/var/log/*.log"],
+            validators.invalid_logrotate_paths(
+                [
+                    "/var/log/local-ai/app.log",
+                    "/var/log/local-ai/*.log",
+                    "/var/log/local-ai/../auth.log",
+                    "relative.log",
+                    "/var/log/*.log",
+                ]
+            ),
+        )
+
+    def test_invalid_logrotate_escape_path_fails_with_specific_message(self) -> None:
+        playbook_text = textwrap.dedent(
+            """
+            ---
+            - name: Base OS invalid logrotate path probe
+              hosts: localhost
+              connection: local
+              gather_facts: true
+              become: false
+              vars:
+                baseline_skip_platform_guard: true
+                base_os_root_dir: "{{ playbook_dir }}/root"
+                base_os_mutating_operations_enabled: false
+                base_os_logrotate_validate_command: "/usr/bin/env true %s"
+                base_os_logrotate_paths:
+                  - /var/log/local-ai/../auth.log
+              pre_tasks:
+                - name: Create base OS probe directories
+                  ansible.builtin.file:
+                    path: "{{ item }}"
+                    state: directory
+                    mode: "0755"
+                  loop:
+                    - "{{ playbook_dir }}/root/etc"
+                    - "{{ playbook_dir }}/root/etc/apt"
+                    - "{{ playbook_dir }}/root/etc/apt/apt.conf.d"
+                    - "{{ playbook_dir }}/root/etc/apt/preferences.d"
+                    - "{{ playbook_dir }}/root/etc/apt/sources.list.d"
+                    - "{{ playbook_dir }}/root/etc/default"
+                    - "{{ playbook_dir }}/root/etc/logrotate.d"
+                    - "{{ playbook_dir }}/root/etc/systemd"
+                    - "{{ playbook_dir }}/root/etc/systemd/journald.conf.d"
+              tasks:
+                - name: Include base OS role
+                  ansible.builtin.include_role:
+                    name: base_os
+            """
+        )
+
+        result = run_local_role_probe(playbook_text)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("base_os_logrotate_paths must stay within /var/log/local-ai", result.stdout + result.stderr)
 
     def test_boot_parameter_probe_writes_validated_dropin_only_when_enabled(self) -> None:
         workspace = make_probe_workspace()
@@ -494,6 +579,62 @@ class BaselineContractTests(unittest.TestCase):
             dropin_text = dropin_path.read_text(encoding="utf-8")
             self.assertIn("intel_iommu=on", dropin_text)
             self.assertIn("iommu=pt", dropin_text)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_boot_parameter_disable_removes_dropin_and_invokes_update_grub(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            dropin_path = workspace / "root" / "etc" / "default" / "grub.d" / "90-aihost.cfg"
+            grub_marker = workspace / "update-grub.called"
+            dropin_path.parent.mkdir(parents=True, exist_ok=True)
+            dropin_path.write_text("legacy dropin\n", encoding="utf-8")
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Base OS boot parameter removal probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: true
+                  become: false
+                  vars:
+                    baseline_skip_platform_guard: true
+                    base_os_root_dir: "{{ playbook_dir }}/root"
+                    base_os_mutating_operations_enabled: false
+                    base_os_manage_boot_parameters: false
+                    base_os_logrotate_validate_command: "/usr/bin/env true %s"
+                    base_os_update_grub_manage_runtime: true
+                    base_os_update_grub_command:
+                      - /usr/bin/touch
+                      - "{{ playbook_dir }}/update-grub.called"
+                  pre_tasks:
+                    - name: Create base OS probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc"
+                        - "{{ playbook_dir }}/root/etc/apt"
+                        - "{{ playbook_dir }}/root/etc/apt/apt.conf.d"
+                        - "{{ playbook_dir }}/root/etc/apt/preferences.d"
+                        - "{{ playbook_dir }}/root/etc/apt/sources.list.d"
+                        - "{{ playbook_dir }}/root/etc/default"
+                        - "{{ playbook_dir }}/root/etc/default/grub.d"
+                        - "{{ playbook_dir }}/root/etc/logrotate.d"
+                        - "{{ playbook_dir }}/root/etc/systemd"
+                        - "{{ playbook_dir }}/root/etc/systemd/journald.conf.d"
+                  tasks:
+                    - name: Include base OS role
+                      ansible.builtin.include_role:
+                        name: base_os
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertFalse(dropin_path.exists(), "Expected disabled boot-parameter path to remove prior drop-in")
+            self.assertTrue(grub_marker.exists(), "Expected disabled transition to invoke update-grub handler")
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
 

@@ -37,7 +37,7 @@
   ansible.builtin.assert:
     that:
       - security_inference_api_ports_invalid | length == 0
-    fail_msg: security_inference_api_ports must be integers between 1 and 65535.
+    fail_msg: security_inference_api_ports must be YAML integers between 1 and 65535.
 
 - name: Ensure security configuration directories exist
   ansible.builtin.file:

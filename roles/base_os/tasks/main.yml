@@ -37,14 +37,10 @@
 - name: Validate declared logrotate paths stay within local-ai log ownership
   ansible.builtin.assert:
     that:
-      - item is match("^/var/log/local-ai/.+")
-      - item != "/var/log/*.log"
+      - (base_os_logrotate_paths | aihost_invalid_logrotate_paths | length) == 0
     fail_msg: >-
       base_os_logrotate_paths must stay within /var/log/local-ai and must not
       target /var/log/*.log.
-  loop: "{{ base_os_logrotate_paths }}"
-  loop_control:
-    label: "{{ item }}"
 
 - name: Validate allowed boot parameters
   ansible.builtin.assert:
@@ -181,6 +177,7 @@
     path: "{{ base_os_grub_dropin_path }}"
     state: absent
   when: not base_os_manage_boot_parameters | bool
+  notify: Apply grub configuration update
 
 - name: Apply baseline sysctl values
   ansible.posix.sysctl:

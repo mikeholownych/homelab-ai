@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+from pathlib import PurePosixPath
 from typing import Iterable
 
 
@@ -17,13 +18,45 @@ def invalid_cidrs(values: Iterable[object]) -> list[str]:
 def invalid_ports(values: Iterable[object]) -> list[str]:
     invalid: list[str] = []
     for value in values:
-        try:
-            port = int(value)
-        except (TypeError, ValueError):
+        if isinstance(value, bool) or not isinstance(value, int):
             invalid.append(str(value))
             continue
+        port = value
         if port < 1 or port > 65535:
             invalid.append(str(value))
+    return invalid
+
+
+def invalid_logrotate_paths(values: Iterable[object]) -> list[str]:
+    invalid: list[str] = []
+    allowed_root = PurePosixPath("/var/log/local-ai")
+
+    for value in values:
+        if not isinstance(value, str):
+            invalid.append(str(value))
+            continue
+
+        candidate = PurePosixPath(value)
+        if not candidate.is_absolute():
+            invalid.append(value)
+            continue
+
+        if candidate == PurePosixPath("/var/log/*.log"):
+            invalid.append(value)
+            continue
+
+        if candidate.parent != allowed_root:
+            invalid.append(value)
+            continue
+
+        if candidate.name in {"", ".", ".."}:
+            invalid.append(value)
+            continue
+
+        if "/" in candidate.name:
+            invalid.append(value)
+            continue
+
     return invalid
 
 
@@ -32,6 +65,7 @@ class FilterModule:
         return {
             "aihost_invalid_cidrs": invalid_cidrs,
             "aihost_invalid_ports": invalid_ports,
+            "aihost_invalid_logrotate_paths": invalid_logrotate_paths,
             "aihost_boot_param_allowed": self.boot_param_allowed,
         }
 

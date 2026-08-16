@@ -5,11 +5,11 @@
     state: restarted
   when: base_os_mutating_operations_enabled | bool
 
-- name: Apply grub configuration update
+- name: Apply update-grub configuration update
+  listen: Apply grub configuration update
   ansible.builtin.command:
-    argv:
-      - /usr/sbin/update-grub
+    argv: "{{ base_os_update_grub_command }}"
   changed_when: false
   when:
-    - base_os_mutating_operations_enabled | bool
+    - base_os_update_grub_manage_runtime | bool
     - not ansible_check_mode
