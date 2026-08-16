@@ -3,4 +3,6 @@
   ansible.builtin.systemd:
     name: "{{ 'systemd-timesyncd.service' if time_sync_provider == 'systemd-timesyncd' else 'chrony.service' }}"
     state: restarted
-  when: time_sync_manage_runtime | bool
+  when:
+    - time_sync_manage_runtime | bool
+    - not ansible_check_mode

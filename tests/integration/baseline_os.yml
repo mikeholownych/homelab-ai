@@ -1,0 +1,85 @@
+---
+- name: Localhost-safe Ubuntu 24.04 baseline OS scenario
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  vars:
+    baseline_localhost_safe_mode: true
+    baseline_skip_platform_guard: true
+    localhost_safe_root: "{{ playbook_dir }}/../../.ansible/localhost-safe"
+    localhost_safe_rootfs: "{{ localhost_safe_root }}/root"
+    base_os_root_dir: "{{ localhost_safe_rootfs }}"
+    base_os_manage_ubuntu_sources: false
+    base_os_mutating_operations_enabled: false
+    time_sync_root_dir: "{{ localhost_safe_rootfs }}"
+    time_sync_manage_runtime: false
+    storage_manage_runtime: false
+    networking_root_dir: "{{ localhost_safe_root }}"
+    networking_manage_runtime: false
+    networking_manage_netplan: false
+    networking_apply: false
+  pre_tasks:
+    - name: Validate Ubuntu 24.04 localhost-safe baseline OS scenario
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Ubuntu"
+          - ansible_facts.distribution_version is version("24.04", "==")
+          - ansible_check_mode
+        fail_msg: baseline_os localhost-safe checks require an Ubuntu 24.04 controller in check mode.
+      check_mode: true
+
+    - name: Ensure localhost-safe baseline OS root exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ localhost_safe_root }}"
+        - "{{ localhost_safe_rootfs }}"
+        - "{{ localhost_safe_rootfs }}/etc"
+        - "{{ localhost_safe_rootfs }}/etc/apt"
+        - "{{ localhost_safe_rootfs }}/etc/apt/apt.conf.d"
+        - "{{ localhost_safe_rootfs }}/etc/apt/preferences.d"
+        - "{{ localhost_safe_rootfs }}/etc/apt/sources.list.d"
+        - "{{ localhost_safe_rootfs }}/etc/chrony"
+        - "{{ localhost_safe_rootfs }}/etc/chrony/sources.d"
+        - "{{ localhost_safe_rootfs }}/etc/default"
+        - "{{ localhost_safe_rootfs }}/etc/logrotate.d"
+        - "{{ localhost_safe_rootfs }}/etc/systemd"
+        - "{{ localhost_safe_rootfs }}/etc/systemd/journald.conf.d"
+        - "{{ localhost_safe_rootfs }}/etc/systemd/timesyncd.conf.d"
+      check_mode: false
+      tags:
+        - baseline
+        - foundation
+  tasks:
+    - name: Include base OS integration role
+      ansible.builtin.include_role:
+        name: base_os
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include time synchronization integration role
+      ansible.builtin.include_role:
+        name: time_sync
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include storage integration role
+      ansible.builtin.include_role:
+        name: storage
+      tags:
+        - baseline
+        - storage
+        - foundation
+
+    - name: Include networking integration role
+      ansible.builtin.include_role:
+        name: networking
+      tags:
+        - baseline
+        - network
+        - foundation

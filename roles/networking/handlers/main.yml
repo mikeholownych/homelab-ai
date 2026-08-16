@@ -1,2 +1,12 @@
 ---
-[]
+- name: Apply validated netplan configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/netplan
+      - apply
+  changed_when: false
+  when:
+    - networking_manage_netplan | bool
+    - networking_apply | bool
+    - networking_manage_runtime | bool
+    - not ansible_check_mode

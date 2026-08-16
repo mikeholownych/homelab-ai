@@ -3,12 +3,12 @@
   ansible.builtin.assert:
     that:
       - item.path is match("^/")
-      - item.src is match("^(UUID=[A-Fa-f0-9-]+|/dev/[A-Za-z0-9._/-]+)$")
+      - item.src is match("^(UUID=[A-Fa-f0-9-]+|LABEL=[A-Za-z0-9._-]+|/dev/[A-Za-z0-9._/-]+)$")
       - item.fstype in storage_allowed_fstypes
       - (item.opts | default("defaults")) is string
       - (item.state | default("mounted")) in ["mounted", "present"]
     fail_msg: >-
-      storage mounts must declare an absolute path, a UUID=/dev source, a
+      storage mounts must declare an absolute path, a UUID=/LABEL=/dev source, a
       supported filesystem, and a safe mount state.
   loop: "{{ storage_mounts }}"
   loop_control:

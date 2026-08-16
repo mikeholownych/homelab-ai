@@ -44,6 +44,7 @@
     src: 60-aihost.yaml.j2
     dest: "{{ networking_netplan_file }}"
     mode: "0600"
+  notify: Apply validated netplan configuration
   when: networking_manage_netplan | bool
 
 - name: Validate generated netplan configuration
@@ -70,17 +71,3 @@
     - networking_manage_netplan | bool
     - networking_apply | bool
     - networking_manage_runtime | bool
-
-- name: Validate SSH safety and apply generated netplan configuration
-  ansible.builtin.command:
-    argv:
-      - /usr/sbin/netplan
-      - apply
-      - --state
-      - "{{ networking_root_dir }}"
-  changed_when: false
-  when:
-    - networking_manage_netplan | bool
-    - networking_apply | bool
-    - networking_manage_runtime | bool
-    - not ansible_check_mode

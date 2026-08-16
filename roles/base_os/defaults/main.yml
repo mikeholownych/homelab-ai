@@ -3,12 +3,9 @@ base_os_supported_distribution: Ubuntu
 base_os_supported_release: "24.04"
 base_os_enforce_platform_guard: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
 base_os_root_dir: ""
-base_os_manage_installer_sources: false
-base_os_archive_uri: http://archive.ubuntu.com/ubuntu
-base_os_security_uri: http://security.ubuntu.com/ubuntu
-base_os_apt_uris:
-  - http://archive.ubuntu.com/ubuntu
-  - http://security.ubuntu.com/ubuntu
+base_os_manage_ubuntu_sources: false
+base_os_archive_uri: https://archive.ubuntu.com/ubuntu
+base_os_security_uri: https://security.ubuntu.com/ubuntu
 base_os_apt_suites:
   - noble
   - noble-updates
@@ -24,16 +21,7 @@ base_os_allowed_architectures:
   - arm64
 base_os_apt_architectures:
   - amd64
-base_os_sources_path: >-
-  {{
-    (base_os_root_dir | default(''))
-    ~
-    (
-      '/etc/apt/sources.list.d/ubuntu.sources'
-      if base_os_manage_installer_sources | bool
-      else '/etc/apt/sources.list.d/aihost-baseline.sources'
-    )
-  }}
+base_os_sources_path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/sources.list.d/ubuntu.sources' }}"
 base_os_proxy_enabled: false
 base_os_proxy_environment: {}
 base_os_proxy_path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d/90-aihost-proxy' }}"
@@ -67,9 +55,31 @@ base_os_journald_max_file_sec: 1month
 base_os_journald_max_retention_sec: 1month
 base_os_logrotate_size: 100M
 base_os_logrotate_rotate: 12
-base_os_sysctl:
-  fs.inotify.max_user_watches: "1048576"
-  vm.swappiness: "10"
+base_os_allowed_sysctl:
+  - fs.inotify.max_user_watches
+  - vm.swappiness
+base_os_kernel_sysctl: {}
+base_os_manage_boot_parameters: false
+base_os_boot_parameters: []
+base_os_high_risk_packages:
+  - linux-image
+  - linux-modules
+  - linux-headers
+  - intel-compute-runtime
+  - intel-gpu-tools
+  - intel-opencl-icd
+  - intel-level-zero-gpu
+  - libze-intel-gpu
+  - level-zero
+  - oneapi-level-zero
+  - torch
+  - pytorch
+  - vllm
+  - llama
+  - llama-cpp
+  - firmware
+  - bios
+  - microcode
 base_os_package_holds: []
 base_os_package_pins: []
 base_os_mutating_operations_enabled: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"

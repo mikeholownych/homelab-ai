@@ -2,10 +2,10 @@
 - name: Validate Ubuntu 24.04 base OS target
   ansible.builtin.assert:
     that:
-      - not base_os_enforce_platform_guard | bool or ansible_distribution == base_os_supported_distribution
+      - not base_os_enforce_platform_guard | bool or ansible_facts.distribution == base_os_supported_distribution
       - >-
         not base_os_enforce_platform_guard | bool
-        or ansible_distribution_version is version(base_os_supported_release, "==")
+        or ansible_facts.distribution_version is version(base_os_supported_release, "==")
     fail_msg: >-
       base_os supports only Ubuntu 24.04 hosts unless the localhost-safe
       override is enabled.
@@ -13,23 +13,54 @@
 - name: Validate base OS package source inputs
   ansible.builtin.assert:
     that:
-      - base_os_archive_uri is match("^https?://")
-      - base_os_security_uri is match("^https?://")
+      - base_os_archive_uri is match("^https://")
+      - base_os_security_uri is match("^https://")
       - base_os_apt_architectures | length > 0
       - (base_os_apt_architectures | difference(base_os_allowed_architectures)) | length == 0
       - base_os_apt_suites | length > 0
-      - >-
-        (base_os_apt_suites | select("match", "^[A-Za-z0-9][A-Za-z0-9.+-]*$")
-        | list | length) == (base_os_apt_suites | length)
+      - (base_os_apt_suites | difference(["noble", "noble-updates", "noble-backports", "noble-security"])) | length == 0
       - base_os_apt_components | length > 0
-      - >-
-        (base_os_apt_components | select("match", "^[a-z0-9-]+$")
-        | list | length) == (base_os_apt_components | length)
+      - (base_os_apt_components | difference(["main", "restricted", "universe", "multiverse"])) | length == 0
+      - base_os_allowed_sysctl is iterable
+      - base_os_kernel_sysctl is mapping
+      - (base_os_kernel_sysctl.keys() | list | difference(base_os_allowed_sysctl)) | length == 0
+      - base_os_manage_boot_parameters is boolean
+      - base_os_boot_parameters is iterable
+      - not base_os_manage_boot_parameters | bool or base_os_boot_parameters | length > 0
       - base_os_package_holds is iterable
       - base_os_package_pins is iterable
     fail_msg: >-
       base_os package source inputs must declare explicit URIs, valid suites,
-      components, and supported architectures.
+      components, supported architectures, and allowlisted kernel settings.
+
+- name: Validate high-risk package holds stay within policy inventory
+  ansible.builtin.assert:
+    that:
+      - item is string
+      - item is match("^((" ~ (base_os_high_risk_packages | join(")|(")) ~ ").*)$")
+    fail_msg: >-
+      base_os package holds must target only explicitly configured high-risk
+      packages from policy inventory.
+  loop: "{{ base_os_package_holds }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Validate high-risk package pins stay within policy inventory
+  ansible.builtin.assert:
+    that:
+      - item.package is defined
+      - item.package is string
+      - item.package is match("^((" ~ (base_os_high_risk_packages | join(")|(")) ~ ").*)$")
+      - item.pin is defined
+      - item.pin is string
+      - item.priority is defined
+      - item.priority | string is match("^-?[0-9]+$")
+    fail_msg: >-
+      base_os package pins must target only explicitly configured high-risk
+      packages from policy inventory.
+  loop: "{{ base_os_package_pins }}"
+  loop_control:
+    label: "{{ item.package | default('undefined') }}"
 
 - name: Ensure base OS configuration directories exist
   ansible.builtin.file:
@@ -43,11 +74,12 @@
     - "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/default' }}"
 
-- name: Render deb822 Ubuntu package sources
+- name: Render deb822 Ubuntu package sources when explicitly enabled
   ansible.builtin.template:
     src: aihost-baseline.sources.j2
     dest: "{{ base_os_sources_path }}"
     mode: "0644"
+  when: base_os_manage_ubuntu_sources | bool
 
 - name: Disable unattended apt mutation
   ansible.builtin.template:
@@ -115,10 +147,12 @@
     state: present
     sysctl_set: true
     reload: false
-  loop: "{{ base_os_sysctl | dict2items }}"
+  loop: "{{ base_os_kernel_sysctl | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-  when: base_os_mutating_operations_enabled | bool
+  when:
+    - base_os_mutating_operations_enabled | bool
+    - base_os_kernel_sysctl | length > 0
   notify: Validate base OS sysctl settings
 
 - name: Hold selected high-risk packages
@@ -145,6 +179,10 @@
     manager: auto
   when: base_os_mutating_operations_enabled | bool
 
+- name: Gather service facts for unattended-upgrades checks
+  ansible.builtin.service_facts:
+  when: base_os_mutating_operations_enabled | bool
+
 - name: Stop unattended-upgrades service when installed
   ansible.builtin.systemd:
     name: unattended-upgrades.service
@@ -154,3 +192,4 @@
   when:
     - base_os_mutating_operations_enabled | bool
     - "'unattended-upgrades' in ansible_facts.packages"
+    - "'unattended-upgrades.service' in ansible_facts.services"

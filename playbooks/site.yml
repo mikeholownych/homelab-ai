@@ -1,89 +1,14 @@
 ---
-- name: Converge site baseline and optional host services
+- name: Import baseline playbook
+  import_playbook: baseline.yml
+
+- name: Converge optional host services
   hosts: ai_hosts
   gather_facts: true
   tags:
     - site
-    - baseline
     - foundation
-  pre_tasks:
-    - name: Validate Ubuntu 24.04 site target
-      ansible.builtin.assert:
-        that:
-          - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
-          - not baseline_platform_guard_enabled | bool or ansible_distribution_version is version("24.04", "==")
-        fail_msg: >-
-          Site convergence is supported only for Ubuntu 24.04 hosts unless the
-          localhost-safe override is enabled.
-      vars:
-        baseline_platform_guard_enabled: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
-      tags:
-        - site
-        - baseline
-        - foundation
-        - validation
   tasks:
-    - name: Include base OS site role
-      ansible.builtin.include_role:
-        name: base_os
-      vars:
-        base_os_phase: site
-      tags:
-        - site
-        - baseline
-        - foundation
-
-    - name: Include time synchronization site role
-      ansible.builtin.include_role:
-        name: time_sync
-      tags:
-        - site
-        - baseline
-        - foundation
-
-    - name: Include storage site role
-      ansible.builtin.include_role:
-        name: storage
-      tags:
-        - site
-        - baseline
-        - storage
-        - foundation
-
-    - name: Include networking site role
-      ansible.builtin.include_role:
-        name: networking
-      tags:
-        - site
-        - baseline
-        - network
-        - foundation
-
-    - name: Include local user site role
-      ansible.builtin.include_role:
-        name: users
-      tags:
-        - site
-        - baseline
-        - foundation
-
-    - name: Include SSH site role
-      ansible.builtin.include_role:
-        name: ssh
-      tags:
-        - site
-        - baseline
-        - foundation
-
-    - name: Include host security site role
-      ansible.builtin.include_role:
-        name: security
-      tags:
-        - site
-        - baseline
-        - security
-        - foundation
-
     - name: Include monitoring role when the feature is enabled
       ansible.builtin.include_role:
         name: monitoring

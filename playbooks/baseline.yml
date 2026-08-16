@@ -9,8 +9,8 @@
     - name: Validate Ubuntu 24.04 baseline target
       ansible.builtin.assert:
         that:
-          - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
-          - not baseline_platform_guard_enabled | bool or ansible_distribution_version is version("24.04", "==")
+          - not baseline_platform_guard_enabled | bool or ansible_facts.distribution == "Ubuntu"
+          - not baseline_platform_guard_enabled | bool or ansible_facts.distribution_version is version("24.04", "==")
         fail_msg: >-
           Baseline convergence is supported only for Ubuntu 24.04 hosts unless
           the localhost-safe override is enabled.
@@ -40,6 +40,7 @@
     - name: Include storage baseline role
       ansible.builtin.include_role:
         name: storage
+      when: storage_mounts | default([]) | length > 0
       tags:
         - baseline
         - storage
@@ -48,29 +49,10 @@
     - name: Include networking baseline role
       ansible.builtin.include_role:
         name: networking
+      when: >-
+        networking_manage_netplan | default(false) | bool
+        or networking_ethernets | default({}) | length > 0
       tags:
         - baseline
         - network
-        - foundation
-
-    - name: Include local user baseline role
-      ansible.builtin.include_role:
-        name: users
-      tags:
-        - baseline
-        - foundation
-
-    - name: Include SSH baseline role
-      ansible.builtin.include_role:
-        name: ssh
-      tags:
-        - baseline
-        - foundation
-
-    - name: Include host security baseline role
-      ansible.builtin.include_role:
-        name: security
-      tags:
-        - baseline
-        - security
         - foundation
