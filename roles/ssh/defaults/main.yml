@@ -1,2 +1,18 @@
 ---
-{}
+ssh_root_dir: ""
+ssh_dropin_dir: "{{ (ssh_root_dir | default('')) ~ '/etc/ssh/sshd_config.d' }}"
+ssh_dropin_path: "{{ ssh_dropin_dir ~ '/60-aihost-hardening.conf' }}"
+ssh_validate_command: "/usr/sbin/sshd -t -f /etc/ssh/sshd_config -o Include=%s"
+ssh_reload_validate_command:
+  - /usr/sbin/sshd
+  - -t
+  - -f
+  - /etc/ssh/sshd_config
+ssh_disable_password_auth: false
+ssh_permit_root_login: "no"
+ssh_allow_tcp_forwarding: true
+ssh_allow_agent_forwarding: false
+ssh_x11_forwarding: false
+ssh_kbd_interactive_authentication: false
+ssh_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+ssh_managed_operator_accounts: "{{ users_operator_accounts | default([]) }}"

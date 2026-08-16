@@ -1,2 +1,20 @@
 ---
-{}
+time_sync_supported_providers:
+  - systemd-timesyncd
+  - chrony
+time_sync_provider: systemd-timesyncd
+time_sync_servers:
+  - ntp.ubuntu.com
+  - time.cloudflare.com
+time_sync_fallback_servers:
+  - time.google.com
+  - pool.ntp.org
+time_sync_root_dir: ""
+time_sync_timesyncd_path: "{{ (time_sync_root_dir | default('')) ~ '/etc/systemd/timesyncd.conf.d/60-aihost.conf' }}"
+time_sync_chrony_path: "{{ (time_sync_root_dir | default('')) ~ '/etc/chrony/sources.d/60-aihost.sources' }}"
+time_sync_provider_packages:
+  systemd-timesyncd:
+    - systemd-timesyncd
+  chrony:
+    - chrony
+time_sync_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"

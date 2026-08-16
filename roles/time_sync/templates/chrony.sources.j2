@@ -1,0 +1,6 @@
+{% for server in time_sync_servers %}
+server {{ server }} iburst
+{% endfor %}
+{% for server in time_sync_fallback_servers %}
+pool {{ server }} iburst
+{% endfor %}

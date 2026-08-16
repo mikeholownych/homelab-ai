@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Applies practical host security with validated sudoers, auditd, firewall controls, and sysctls.
   license: MIT
   min_ansible_version: "2.19"
   platforms:

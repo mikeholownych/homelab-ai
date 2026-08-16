@@ -1,2 +1,8 @@
 ---
-{}
+storage_mounts: []
+storage_allowed_fstypes:
+  - ext4
+  - xfs
+  - btrfs
+  - vfat
+storage_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"

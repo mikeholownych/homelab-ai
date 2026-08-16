@@ -1,0 +1,91 @@
+---
+- name: Localhost-safe Ubuntu 24.04 baseline scenario
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  vars:
+    baseline_localhost_safe_mode: true
+    baseline_skip_platform_guard: true
+    localhost_safe_root: "{{ playbook_dir }}/../../.ansible/localhost-safe"
+    base_os_root_dir: "{{ localhost_safe_root }}/root"
+    time_sync_root_dir: "{{ localhost_safe_root }}/root"
+    security_root_dir: "{{ localhost_safe_root }}/root"
+    ssh_root_dir: "{{ localhost_safe_root }}/root"
+    networking_root_dir: "{{ localhost_safe_root }}"
+    networking_manage_netplan: false
+    ssh_validate_command: /usr/bin/test -s %s
+    security_sudoers_validate_command: /usr/bin/test -s %s
+    users_operator_accounts:
+      - name: integration-operator
+        sudo_policy: passwordless
+        ssh_keys:
+          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILocalhostSafeContractKey integration@test
+  pre_tasks:
+    - name: Ensure localhost-safe baseline root exists
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ localhost_safe_root }}"
+        - "{{ localhost_safe_root }}/root"
+        - "{{ localhost_safe_root }}/root/etc"
+        - "{{ localhost_safe_root }}/root/etc/ssh"
+        - "{{ localhost_safe_root }}/root/etc/ssh/sshd_config.d"
+      check_mode: false
+      tags:
+        - baseline
+        - foundation
+  tasks:
+    - name: Include base OS integration role
+      ansible.builtin.include_role:
+        name: base_os
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include time synchronization integration role
+      ansible.builtin.include_role:
+        name: time_sync
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include storage integration role
+      ansible.builtin.include_role:
+        name: storage
+      tags:
+        - baseline
+        - storage
+        - foundation
+
+    - name: Include networking integration role
+      ansible.builtin.include_role:
+        name: networking
+      tags:
+        - baseline
+        - network
+        - foundation
+
+    - name: Include users integration role
+      ansible.builtin.include_role:
+        name: users
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include SSH integration role
+      ansible.builtin.include_role:
+        name: ssh
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include security integration role
+      ansible.builtin.include_role:
+        name: security
+      tags:
+        - baseline
+        - security
+        - foundation

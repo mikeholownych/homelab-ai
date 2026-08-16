@@ -1,0 +1,9 @@
+/var/log/*.log {
+    size {{ base_os_logrotate_size }}
+    rotate {{ base_os_logrotate_rotate }}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

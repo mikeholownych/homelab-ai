@@ -1,15 +1,125 @@
 ---
-- name: Site foundation scaffold
+- name: Converge site baseline and optional host services
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
   tags:
     - site
+    - baseline
     - foundation
+  pre_tasks:
+    - name: Validate Ubuntu 24.04 site target
+      ansible.builtin.assert:
+        that:
+          - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
+          - not baseline_platform_guard_enabled | bool or ansible_distribution_version is version("24.04", "==")
+        fail_msg: >-
+          Site convergence is supported only for Ubuntu 24.04 hosts unless the
+          localhost-safe override is enabled.
+      vars:
+        baseline_platform_guard_enabled: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
+      tags:
+        - site
+        - baseline
+        - foundation
+        - validation
   tasks:
-    - name: Report site scaffold status
-      ansible.builtin.debug:
-        msg: Site scaffolding only; orchestration behavior is not implemented yet.
-      changed_when: false
+    - name: Include base OS site role
+      ansible.builtin.include_role:
+        name: base_os
+      vars:
+        base_os_phase: site
+      tags:
+        - site
+        - baseline
+        - foundation
+
+    - name: Include time synchronization site role
+      ansible.builtin.include_role:
+        name: time_sync
+      tags:
+        - site
+        - baseline
+        - foundation
+
+    - name: Include storage site role
+      ansible.builtin.include_role:
+        name: storage
+      tags:
+        - site
+        - baseline
+        - storage
+        - foundation
+
+    - name: Include networking site role
+      ansible.builtin.include_role:
+        name: networking
+      tags:
+        - site
+        - baseline
+        - network
+        - foundation
+
+    - name: Include local user site role
+      ansible.builtin.include_role:
+        name: users
+      tags:
+        - site
+        - baseline
+        - foundation
+
+    - name: Include SSH site role
+      ansible.builtin.include_role:
+        name: ssh
+      tags:
+        - site
+        - baseline
+        - foundation
+
+    - name: Include host security site role
+      ansible.builtin.include_role:
+        name: security
+      tags:
+        - site
+        - baseline
+        - security
+        - foundation
+
+    - name: Include monitoring role when the feature is enabled
+      ansible.builtin.include_role:
+        name: monitoring
+      when: features.monitoring | default(false) | bool
+      tags:
+        - site
+        - foundation
+
+    - name: Include scheduled reconciliation role when the feature is enabled
+      ansible.builtin.include_role:
+        name: scheduled_ansible
+      when: features.scheduled_reconciliation | default(false) | bool
+      tags:
+        - site
+        - foundation
+
+    - name: Include benchmark orchestration role when the capability is enabled
+      ansible.builtin.include_role:
+        name: benchmarking
+      when: capabilities.benchmarking | default(false) | bool
+      tags:
+        - site
+        - foundation
+
+    - name: Include CMDB export role when the feature is enabled
+      ansible.builtin.include_role:
+        name: cmdb_export
+      when: features.cmdb_export | default(false) | bool
+      tags:
+        - site
+        - foundation
+
+    - name: Include ITSM hooks role when the feature is enabled
+      ansible.builtin.include_role:
+        name: itsm_hooks
+      when: features.itsm_integration | default(false) | bool
       tags:
         - site
         - foundation

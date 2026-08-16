@@ -1,2 +1,86 @@
 ---
-[]
+- name: Validate networking feature flags
+  ansible.builtin.assert:
+    that:
+      - networking_manage_netplan is boolean
+      - networking_apply is boolean
+      - networking_allow_ssh_disruption is boolean
+      - networking_ethernets is mapping
+    fail_msg: networking must be feature gated and use a mapping of explicit netplan interfaces.
+
+- name: Validate declared netplan interfaces
+  ansible.builtin.assert:
+    that:
+      - item.key is match("^[A-Za-z0-9_.:-]+$")
+      - >-
+        (item.value.addresses | default([]))
+        | select("match", "^[0-9A-Fa-f:.]+/[0-9]{1,3}$")
+        | list | length
+        == (item.value.addresses | default([]) | length)
+      - >-
+        (item.value.nameservers | default([]))
+        | select("match", "^[0-9A-Fa-f:.]+$")
+        | list | length
+        == (item.value.nameservers | default([]) | length)
+      - item.value.gateway4 is not defined or item.value.gateway4 is match("^[0-9.]+$")
+      - item.value.gateway6 is not defined or item.value.gateway6 is match("^[0-9A-Fa-f:]+$")
+    fail_msg: >-
+      networking interface definitions must use explicit interface names,
+      addresses, gateways, and DNS values.
+  loop: "{{ networking_ethernets | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: networking_manage_netplan | bool
+
+- name: Ensure netplan configuration directory exists
+  ansible.builtin.file:
+    path: "{{ networking_root_dir ~ '/etc/netplan' if networking_root_dir != '/' else '/etc/netplan' }}"
+    state: directory
+    mode: "0755"
+  when: networking_manage_netplan | bool
+
+- name: Render managed netplan configuration
+  ansible.builtin.template:
+    src: 60-aihost.yaml.j2
+    dest: "{{ networking_netplan_file }}"
+    mode: "0600"
+  when: networking_manage_netplan | bool
+
+- name: Validate generated netplan configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/netplan
+      - generate
+      - --root-dir
+      - "{{ networking_root_dir }}"
+  changed_when: false
+  when:
+    - networking_manage_netplan | bool
+    - networking_manage_runtime | bool
+
+- name: Check SSH safety before applying netplan changes
+  ansible.builtin.assert:
+    that:
+      - >-
+        networking_allow_ssh_disruption | bool
+        or (ansible_connection | default('ssh')) not in
+        ["ssh", "paramiko", "smart"]
+    fail_msg: Refusing to apply netplan changes over SSH without networking_allow_ssh_disruption=true.
+  when:
+    - networking_manage_netplan | bool
+    - networking_apply | bool
+    - networking_manage_runtime | bool
+
+- name: Validate SSH safety and apply generated netplan configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/netplan
+      - apply
+      - --state
+      - "{{ networking_root_dir }}"
+  changed_when: false
+  when:
+    - networking_manage_netplan | bool
+    - networking_apply | bool
+    - networking_manage_runtime | bool
+    - not ansible_check_mode

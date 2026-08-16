@@ -77,7 +77,8 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual("inventory/production/hosts.yml", parser["defaults"]["inventory"])
 
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
-        self.assertIn("-i tests/fixtures/inventory/healthy.yml --check playbooks/baseline.yml --tags foundation", makefile)
+        self.assertIn("-i tests/fixtures/inventory/healthy.yml --check tests/integration/baseline.yml", makefile)
+        self.assertIn("localhost-safe", makefile)
 
     def test_required_inventory_contract_files_exist(self) -> None:
         missing = sorted(str(path.relative_to(REPO_ROOT)) for path in REQUIRED_PATHS if not path.exists())

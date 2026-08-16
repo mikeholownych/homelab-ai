@@ -1,15 +1,76 @@
 ---
-- name: Baseline foundation scaffold
+- name: Converge Ubuntu host baseline
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
   tags:
     - baseline
     - foundation
-  tasks:
-    - name: Report baseline scaffold status
-      ansible.builtin.debug:
-        msg: Baseline scaffolding only; host baseline behavior is not implemented yet.
-      changed_when: false
+  pre_tasks:
+    - name: Validate Ubuntu 24.04 baseline target
+      ansible.builtin.assert:
+        that:
+          - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
+          - not baseline_platform_guard_enabled | bool or ansible_distribution_version is version("24.04", "==")
+        fail_msg: >-
+          Baseline convergence is supported only for Ubuntu 24.04 hosts unless
+          the localhost-safe override is enabled.
+      vars:
+        baseline_platform_guard_enabled: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
       tags:
         - baseline
+        - foundation
+        - validation
+  tasks:
+    - name: Include base OS baseline role
+      ansible.builtin.include_role:
+        name: base_os
+      vars:
+        base_os_phase: baseline
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include time synchronization baseline role
+      ansible.builtin.include_role:
+        name: time_sync
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include storage baseline role
+      ansible.builtin.include_role:
+        name: storage
+      tags:
+        - baseline
+        - storage
+        - foundation
+
+    - name: Include networking baseline role
+      ansible.builtin.include_role:
+        name: networking
+      tags:
+        - baseline
+        - network
+        - foundation
+
+    - name: Include local user baseline role
+      ansible.builtin.include_role:
+        name: users
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include SSH baseline role
+      ansible.builtin.include_role:
+        name: ssh
+      tags:
+        - baseline
+        - foundation
+
+    - name: Include host security baseline role
+      ansible.builtin.include_role:
+        name: security
+      tags:
+        - baseline
+        - security
         - foundation

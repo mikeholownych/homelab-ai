@@ -1,2 +1,37 @@
 ---
-[]
+- name: Validate declared storage mounts
+  ansible.builtin.assert:
+    that:
+      - item.path is match("^/")
+      - item.src is match("^(UUID=[A-Fa-f0-9-]+|/dev/[A-Za-z0-9._/-]+)$")
+      - item.fstype in storage_allowed_fstypes
+      - (item.opts | default("defaults")) is string
+      - (item.state | default("mounted")) in ["mounted", "present"]
+    fail_msg: >-
+      storage mounts must declare an absolute path, a UUID=/dev source, a
+      supported filesystem, and a safe mount state.
+  loop: "{{ storage_mounts }}"
+  loop_control:
+    label: "{{ item.path | default('undefined') }}"
+
+- name: Ensure declared storage mountpoints exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode | default('0755') }}"
+  loop: "{{ storage_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: storage_manage_runtime | bool
+
+- name: Mount only declared storage definitions
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "{{ item.src }}"
+    fstype: "{{ item.fstype }}"
+    opts: "{{ item.opts | default('defaults') }}"
+    state: "{{ item.state | default('mounted') }}"
+  loop: "{{ storage_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when: storage_manage_runtime | bool

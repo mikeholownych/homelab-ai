@@ -1,0 +1,13 @@
+Types: deb
+URIs: {{ base_os_archive_uri }}
+Suites: {{ base_os_apt_suites | reject('equalto', 'noble-security') | join(' ') }}
+Components: {{ base_os_apt_components | join(' ') }}
+Architectures: {{ base_os_apt_architectures | join(' ') }}
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+Types: deb
+URIs: {{ base_os_security_uri }}
+Suites: noble-security
+Components: {{ base_os_apt_components | join(' ') }}
+Architectures: {{ base_os_apt_architectures | join(' ') }}
+Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg

@@ -1,2 +1,75 @@
 ---
-{}
+base_os_supported_distribution: Ubuntu
+base_os_supported_release: "24.04"
+base_os_enforce_platform_guard: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
+base_os_root_dir: ""
+base_os_manage_installer_sources: false
+base_os_archive_uri: http://archive.ubuntu.com/ubuntu
+base_os_security_uri: http://security.ubuntu.com/ubuntu
+base_os_apt_uris:
+  - http://archive.ubuntu.com/ubuntu
+  - http://security.ubuntu.com/ubuntu
+base_os_apt_suites:
+  - noble
+  - noble-updates
+  - noble-backports
+  - noble-security
+base_os_apt_components:
+  - main
+  - restricted
+  - universe
+  - multiverse
+base_os_allowed_architectures:
+  - amd64
+  - arm64
+base_os_apt_architectures:
+  - amd64
+base_os_sources_path: >-
+  {{
+    (base_os_root_dir | default(''))
+    ~
+    (
+      '/etc/apt/sources.list.d/ubuntu.sources'
+      if base_os_manage_installer_sources | bool
+      else '/etc/apt/sources.list.d/aihost-baseline.sources'
+    )
+  }}
+base_os_proxy_enabled: false
+base_os_proxy_environment: {}
+base_os_proxy_path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d/90-aihost-proxy' }}"
+base_os_disable_periodic_path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d/20auto-upgrades' }}"
+base_os_journald_path: "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d/60-aihost.conf' }}"
+base_os_logrotate_path: "{{ (base_os_root_dir | default('')) ~ '/etc/logrotate.d/aihost-baseline' }}"
+base_os_locale_path: "{{ (base_os_root_dir | default('')) ~ '/etc/default/locale' }}"
+base_os_admin_packages:
+  - auditd
+  - ca-certificates
+  - curl
+  - git
+  - htop
+  - jq
+  - locales
+  - logrotate
+  - openssh-server
+  - python3-apt
+  - rsync
+  - sudo
+  - tmux
+  - ufw
+  - unattended-upgrades
+  - vim
+base_os_apt_cache_valid_time: 3600
+base_os_locale: en_US.UTF-8
+base_os_timezone: UTC
+base_os_journald_system_max_use: 1G
+base_os_journald_runtime_max_use: 256M
+base_os_journald_max_file_sec: 1month
+base_os_journald_max_retention_sec: 1month
+base_os_logrotate_size: 100M
+base_os_logrotate_rotate: 12
+base_os_sysctl:
+  fs.inotify.max_user_watches: "1048576"
+  vm.swappiness: "10"
+base_os_package_holds: []
+base_os_package_pins: []
+base_os_mutating_operations_enabled: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"

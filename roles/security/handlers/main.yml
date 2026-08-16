@@ -1,2 +1,27 @@
 ---
-[]
+- name: Restart auditd
+  ansible.builtin.systemd:
+    name: auditd.service
+    state: restarted
+  when: security_manage_runtime | bool
+
+- name: Validate security sysctl settings
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/sysctl
+      - --system
+  changed_when: false
+  when: security_manage_runtime | bool
+
+- name: Reload ufw
+  community.general.ufw:
+    state: reloaded
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Validate sudo policy cache
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/true
+  changed_when: false

@@ -1,2 +1,156 @@
 ---
-[]
+- name: Validate Ubuntu 24.04 base OS target
+  ansible.builtin.assert:
+    that:
+      - not base_os_enforce_platform_guard | bool or ansible_distribution == base_os_supported_distribution
+      - >-
+        not base_os_enforce_platform_guard | bool
+        or ansible_distribution_version is version(base_os_supported_release, "==")
+    fail_msg: >-
+      base_os supports only Ubuntu 24.04 hosts unless the localhost-safe
+      override is enabled.
+
+- name: Validate base OS package source inputs
+  ansible.builtin.assert:
+    that:
+      - base_os_archive_uri is match("^https?://")
+      - base_os_security_uri is match("^https?://")
+      - base_os_apt_architectures | length > 0
+      - (base_os_apt_architectures | difference(base_os_allowed_architectures)) | length == 0
+      - base_os_apt_suites | length > 0
+      - >-
+        (base_os_apt_suites | select("match", "^[A-Za-z0-9][A-Za-z0-9.+-]*$")
+        | list | length) == (base_os_apt_suites | length)
+      - base_os_apt_components | length > 0
+      - >-
+        (base_os_apt_components | select("match", "^[a-z0-9-]+$")
+        | list | length) == (base_os_apt_components | length)
+      - base_os_package_holds is iterable
+      - base_os_package_pins is iterable
+    fail_msg: >-
+      base_os package source inputs must declare explicit URIs, valid suites,
+      components, and supported architectures.
+
+- name: Ensure base OS configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d' }}"
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d' }}"
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/sources.list.d' }}"
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d' }}"
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/default' }}"
+
+- name: Render deb822 Ubuntu package sources
+  ansible.builtin.template:
+    src: aihost-baseline.sources.j2
+    dest: "{{ base_os_sources_path }}"
+    mode: "0644"
+
+- name: Disable unattended apt mutation
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: "{{ base_os_disable_periodic_path }}"
+    mode: "0644"
+
+- name: Render apt proxy configuration without secrets
+  ansible.builtin.template:
+    src: 90-aihost-proxy.j2
+    dest: "{{ base_os_proxy_path }}"
+    mode: "0640"
+  when: base_os_proxy_enabled | bool
+
+- name: Remove apt proxy configuration when disabled
+  ansible.builtin.file:
+    path: "{{ base_os_proxy_path }}"
+    state: absent
+  when: not base_os_proxy_enabled | bool
+
+- name: Install baseline admin packages
+  ansible.builtin.apt:
+    name: "{{ base_os_admin_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ base_os_apt_cache_valid_time }}"
+  when: base_os_mutating_operations_enabled | bool
+
+- name: Generate baseline locale
+  community.general.locale_gen:
+    name: "{{ base_os_locale }}"
+    state: present
+  when: base_os_mutating_operations_enabled | bool
+
+- name: Set baseline locale defaults
+  ansible.builtin.copy:
+    dest: "{{ base_os_locale_path }}"
+    mode: "0644"
+    content: |
+      LANG={{ base_os_locale }}
+      LC_ALL={{ base_os_locale }}
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ base_os_timezone }}"
+  when: base_os_mutating_operations_enabled | bool
+
+- name: Render journald retention policy
+  ansible.builtin.template:
+    src: 60-aihost-journald.conf.j2
+    dest: "{{ base_os_journald_path }}"
+    mode: "0644"
+  notify: Restart systemd-journald
+
+- name: Render baseline logrotate policy
+  ansible.builtin.template:
+    src: aihost-logrotate.j2
+    dest: "{{ base_os_logrotate_path }}"
+    mode: "0644"
+
+- name: Apply baseline sysctl values
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: false
+  loop: "{{ base_os_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: base_os_mutating_operations_enabled | bool
+  notify: Validate base OS sysctl settings
+
+- name: Hold selected high-risk packages
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: "{{ base_os_package_holds }}"
+  when:
+    - base_os_mutating_operations_enabled | bool
+    - base_os_package_holds | length > 0
+
+- name: Render selected apt pin preferences
+  ansible.builtin.template:
+    src: package-pin.pref.j2
+    dest: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d/' ~ item.package ~ '.pref' }}"
+    mode: "0644"
+  loop: "{{ base_os_package_pins }}"
+  loop_control:
+    label: "{{ item.package }}"
+  when: base_os_package_pins | length > 0
+
+- name: Gather installed package facts for unattended-upgrades checks
+  ansible.builtin.package_facts:
+    manager: auto
+  when: base_os_mutating_operations_enabled | bool
+
+- name: Stop unattended-upgrades service when installed
+  ansible.builtin.systemd:
+    name: unattended-upgrades.service
+    state: stopped
+    enabled: false
+    masked: true
+  when:
+    - base_os_mutating_operations_enabled | bool
+    - "'unattended-upgrades' in ansible_facts.packages"

@@ -1,15 +1,54 @@
 ---
-- name: Bootstrap foundation scaffold
+- name: Bootstrap Ubuntu access baseline
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
   tags:
     - bootstrap
     - foundation
-  tasks:
-    - name: Report bootstrap scaffold status
-      ansible.builtin.debug:
-        msg: Bootstrap scaffolding only; host bootstrap behavior is not implemented yet.
-      changed_when: false
+  pre_tasks:
+    - name: Validate Ubuntu 24.04 bootstrap target
+      ansible.builtin.assert:
+        that:
+          - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
+          - not baseline_platform_guard_enabled | bool or ansible_distribution_version is version("24.04", "==")
+        fail_msg: Bootstrap is supported only for Ubuntu 24.04 hosts unless the localhost-safe override is enabled.
+      vars:
+        baseline_platform_guard_enabled: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
       tags:
         - bootstrap
+        - foundation
+        - validation
+  tasks:
+    - name: Include base OS bootstrap role
+      ansible.builtin.include_role:
+        name: base_os
+      vars:
+        base_os_phase: bootstrap
+      tags:
+        - bootstrap
+        - baseline
+        - foundation
+
+    - name: Include time synchronization bootstrap role
+      ansible.builtin.include_role:
+        name: time_sync
+      tags:
+        - bootstrap
+        - baseline
+        - foundation
+
+    - name: Include local user bootstrap role
+      ansible.builtin.include_role:
+        name: users
+      tags:
+        - bootstrap
+        - baseline
+        - foundation
+
+    - name: Include SSH bootstrap role
+      ansible.builtin.include_role:
+        name: ssh
+      tags:
+        - bootstrap
+        - baseline
         - foundation

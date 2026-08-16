@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Manages netplan only when explicitly enabled, with generate-before-apply validation.
   license: MIT
   min_ansible_version: "2.19"
   platforms:

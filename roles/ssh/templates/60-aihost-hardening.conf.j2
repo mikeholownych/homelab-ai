@@ -1,0 +1,9 @@
+PubkeyAuthentication yes
+PasswordAuthentication {{ 'no' if ssh_disable_password_auth | bool else 'yes' }}
+KbdInteractiveAuthentication {{ 'no' if ssh_kbd_interactive_authentication | bool == false else 'yes' }}
+PermitRootLogin {{ ssh_permit_root_login }}
+AllowTcpForwarding {{ 'yes' if ssh_allow_tcp_forwarding | bool else 'no' }}
+AllowAgentForwarding {{ 'yes' if ssh_allow_agent_forwarding | bool else 'no' }}
+X11Forwarding {{ 'yes' if ssh_x11_forwarding | bool else 'no' }}
+ChallengeResponseAuthentication no
+UsePAM yes

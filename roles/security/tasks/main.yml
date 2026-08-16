@@ -1,2 +1,110 @@
 ---
-[]
+- name: Validate security feature inputs
+  ansible.builtin.assert:
+    that:
+      - security_firewall_enabled is boolean
+      - security_inference_api_firewall_enabled is boolean
+      - security_auditd_enabled is boolean
+      - not security_firewall_enabled | bool or security_management_cidrs | length > 0
+      - not security_inference_api_firewall_enabled | bool or security_inference_api_cidrs | length > 0
+    fail_msg: Firewall features remain disabled until explicit management CIDRs and inference API CIDRs are declared.
+
+- name: Ensure security configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0750"
+  loop:
+    - "{{ (security_root_dir | default('')) ~ '/etc/sudoers.d' }}"
+    - "{{ (security_root_dir | default('')) ~ '/etc/audit/rules.d' }}"
+
+- name: Install security support packages
+  ansible.builtin.apt:
+    name: "{{ security_packages }}"
+    state: present
+    update_cache: false
+  when: security_manage_runtime | bool
+
+- name: Render validated operator sudoers policy
+  ansible.builtin.template:
+    src: 90-aihost-operators.sudoers.j2
+    dest: "{{ security_sudoers_path }}"
+    mode: "0440"
+    validate: "{{ security_sudoers_validate_command }}"
+  notify: Validate sudo policy cache
+
+- name: Render auditd rules for host baseline
+  ansible.builtin.template:
+    src: 60-aihost-baseline.rules.j2
+    dest: "{{ security_auditd_rules_path }}"
+    mode: "0640"
+  when: security_auditd_enabled | bool
+  notify: Restart auditd
+
+- name: Apply practical security sysctl values
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: false
+  loop: "{{ security_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: security_manage_runtime | bool
+  notify: Validate security sysctl settings
+
+- name: Set UFW default deny incoming policy
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Set UFW default allow outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Set UFW logging policy
+  community.general.ufw:
+    logging: "{{ security_ufw_logging }}"
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Allow SSH only from configured management CIDRs
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    src: "{{ item }}"
+    comment: Managed SSH access
+  loop: "{{ security_management_cidrs }}"
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Allow inference API only from configured CIDRs
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.1 }}"
+    proto: tcp
+    src: "{{ item.0 }}"
+    comment: Managed inference API access
+  loop: "{{ security_inference_api_cidrs | product(security_inference_api_ports) | list }}"
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+    - security_inference_api_firewall_enabled | bool
+
+- name: Enable managed UFW policy
+  community.general.ufw:
+    state: enabled
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool

@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Manages only explicitly declared filesystem mounts without formatting or repartitioning.
   license: MIT
   min_ansible_version: "2.19"
   platforms:

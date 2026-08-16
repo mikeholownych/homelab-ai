@@ -1,2 +1,20 @@
 ---
-{}
+users_inference_service_groups: []
+users_managed_groups: "{{ users_inference_service_groups }}"
+users_service_accounts:
+  - name: local-ai
+    comment: Local AI inference service account
+    enabled: true
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    groups: "{{ users_inference_service_groups }}"
+users_operator_accounts: []
+users_valid_sudo_policies:
+  - none
+  - passwordless
+  - require_password
+users_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+users_operator_default_shell: /bin/bash
+users_operator_home_mode: "0750"
+users_authorized_keys_path_mode: "0600"

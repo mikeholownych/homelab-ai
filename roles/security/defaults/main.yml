@@ -1,2 +1,21 @@
 ---
-{}
+security_root_dir: ""
+security_firewall_enabled: false
+security_management_cidrs: []
+security_inference_api_firewall_enabled: false
+security_inference_api_cidrs: []
+security_inference_api_ports: []
+security_auditd_enabled: true
+security_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+security_packages:
+  - ufw
+  - auditd
+security_sudoers_validate_command: /usr/sbin/visudo -cf %s
+security_sudoers_path: "{{ (security_root_dir | default('')) ~ '/etc/sudoers.d/90-aihost-operators' }}"
+security_auditd_rules_path: "{{ (security_root_dir | default('')) ~ '/etc/audit/rules.d/60-aihost-baseline.rules' }}"
+security_sysctl:
+  kernel.kptr_restrict: "2"
+  kernel.dmesg_restrict: "1"
+  net.ipv4.conf.all.rp_filter: "1"
+  net.ipv4.conf.default.rp_filter: "1"
+security_ufw_logging: low

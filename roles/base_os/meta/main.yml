@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Ubuntu 24.04 base operating system baseline with explicit apt, locale, logging, and sysctl controls.
   license: MIT
   min_ansible_version: "2.19"
   platforms:

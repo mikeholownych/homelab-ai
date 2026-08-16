@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Manages least-privilege service accounts and SSH-keyed operator access without passwords.
   license: MIT
   min_ansible_version: "2.19"
   platforms:

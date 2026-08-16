@@ -1,0 +1,32 @@
+network:
+  version: 2
+  renderer: {{ networking_renderer }}
+  ethernets:
+{% for interface_name, interface_config in networking_ethernets | dictsort %}
+    {{ interface_name }}:
+{% if interface_config.dhcp4 is defined %}
+      dhcp4: {{ interface_config.dhcp4 | bool | lower }}
+{% endif %}
+{% if interface_config.dhcp6 is defined %}
+      dhcp6: {{ interface_config.dhcp6 | bool | lower }}
+{% endif %}
+{% if interface_config.addresses is defined and interface_config.addresses | length > 0 %}
+      addresses:
+{% for address in interface_config.addresses %}
+        - {{ address }}
+{% endfor %}
+{% endif %}
+{% if interface_config.gateway4 is defined %}
+      gateway4: {{ interface_config.gateway4 }}
+{% endif %}
+{% if interface_config.gateway6 is defined %}
+      gateway6: {{ interface_config.gateway6 }}
+{% endif %}
+{% if interface_config.nameservers is defined and interface_config.nameservers | length > 0 %}
+      nameservers:
+        addresses:
+{% for nameserver in interface_config.nameservers %}
+          - {{ nameserver }}
+{% endfor %}
+{% endif %}
+{% endfor %}

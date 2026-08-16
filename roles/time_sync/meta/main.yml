@@ -1,7 +1,7 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Configures host time synchronization with systemd-timesyncd or chrony.
   license: MIT
   min_ansible_version: "2.19"
   platforms:

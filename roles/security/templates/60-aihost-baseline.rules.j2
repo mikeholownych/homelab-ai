@@ -1,0 +1,6 @@
+-w /etc/ssh/sshd_config -p wa -k sshd_config
+-w /etc/ssh/sshd_config.d -p wa -k sshd_dropins
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d -p wa -k sudoers_dropins
+-w /var/log/auth.log -p wa -k auth_log
+-a always,exit -F arch=b64 -S execve -C uid!=euid -k privilege_escalation

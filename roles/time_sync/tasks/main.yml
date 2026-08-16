@@ -1,2 +1,99 @@
 ---
-[]
+- name: Validate time synchronization inputs
+  ansible.builtin.assert:
+    that:
+      - time_sync_provider in time_sync_supported_providers
+      - time_sync_servers | length > 0
+      - (time_sync_servers | select("match", "^[A-Za-z0-9._:-]+$") | list | length) == (time_sync_servers | length)
+      - >-
+        (time_sync_fallback_servers | select("match", "^[A-Za-z0-9._:-]+$")
+        | list | length) == (time_sync_fallback_servers | length)
+    fail_msg: >-
+      time_sync must select systemd-timesyncd or chrony and declare only named
+      NTP server values.
+
+- name: Ensure time synchronization configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ (time_sync_root_dir | default('')) ~ '/etc/systemd/timesyncd.conf.d' }}"
+    - "{{ (time_sync_root_dir | default('')) ~ '/etc/chrony/sources.d' }}"
+
+- name: Install selected time synchronization packages
+  ansible.builtin.apt:
+    name: "{{ time_sync_provider_packages[time_sync_provider] }}"
+    state: present
+    update_cache: false
+  when: time_sync_manage_runtime | bool
+
+- name: Render systemd-timesyncd configuration
+  ansible.builtin.template:
+    src: timesyncd.conf.j2
+    dest: "{{ time_sync_timesyncd_path }}"
+    mode: "0644"
+  when: time_sync_provider == "systemd-timesyncd"
+  notify: Restart selected time synchronization service
+
+- name: Remove systemd-timesyncd configuration when chrony is selected
+  ansible.builtin.file:
+    path: "{{ time_sync_timesyncd_path }}"
+    state: absent
+  when: time_sync_provider == "chrony"
+
+- name: Render chrony configuration
+  ansible.builtin.template:
+    src: chrony.sources.j2
+    dest: "{{ time_sync_chrony_path }}"
+    mode: "0644"
+  when: time_sync_provider == "chrony"
+  notify: Restart selected time synchronization service
+
+- name: Remove chrony configuration when systemd-timesyncd is selected
+  ansible.builtin.file:
+    path: "{{ time_sync_chrony_path }}"
+    state: absent
+  when: time_sync_provider == "systemd-timesyncd"
+
+- name: Gather service facts for time synchronization conflict handling
+  ansible.builtin.service_facts:
+  when: time_sync_manage_runtime | bool
+
+- name: Enable and start systemd-timesyncd
+  ansible.builtin.systemd:
+    name: systemd-timesyncd.service
+    enabled: true
+    state: started
+  when:
+    - time_sync_manage_runtime | bool
+    - time_sync_provider == "systemd-timesyncd"
+
+- name: Stop chrony when systemd-timesyncd is selected
+  ansible.builtin.systemd:
+    name: chrony.service
+    enabled: false
+    state: stopped
+  when:
+    - time_sync_manage_runtime | bool
+    - time_sync_provider == "systemd-timesyncd"
+    - "'chrony.service' in ansible_facts.services"
+
+- name: Enable and start chrony
+  ansible.builtin.systemd:
+    name: chrony.service
+    enabled: true
+    state: started
+  when:
+    - time_sync_manage_runtime | bool
+    - time_sync_provider == "chrony"
+
+- name: Stop systemd-timesyncd when chrony is selected
+  ansible.builtin.systemd:
+    name: systemd-timesyncd.service
+    enabled: false
+    state: stopped
+  when:
+    - time_sync_manage_runtime | bool
+    - time_sync_provider == "chrony"
+    - "'systemd-timesyncd.service' in ansible_facts.services"

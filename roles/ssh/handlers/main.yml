@@ -1,2 +1,14 @@
 ---
-[]
+- name: Validate SSH daemon configuration before reload
+  ansible.builtin.command:
+    cmd: /usr/sbin/sshd -t -f /etc/ssh/sshd_config
+  changed_when: false
+  when: ssh_manage_runtime | bool
+  listen: Reload SSH daemon
+
+- name: Reload SSH daemon
+  ansible.builtin.systemd:
+    name: ssh.service
+    state: reloaded
+  when: ssh_manage_runtime | bool
+  listen: Reload SSH daemon

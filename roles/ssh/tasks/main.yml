@@ -1,2 +1,67 @@
 ---
-[]
+- name: Validate SSH hardening inputs
+  ansible.builtin.assert:
+    that:
+      - ssh_disable_password_auth is boolean
+      - ssh_allow_tcp_forwarding is boolean
+      - ssh_allow_agent_forwarding is boolean
+      - ssh_x11_forwarding is boolean
+      - ssh_kbd_interactive_authentication is boolean
+      - ssh_permit_root_login in ["no", "prohibit-password", "forced-commands-only"]
+    fail_msg: SSH hardening inputs must use explicit booleans and a supported PermitRootLogin mode.
+
+- name: Ensure SSH configuration drop-in directory exists
+  ansible.builtin.file:
+    path: "{{ ssh_dropin_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Inspect managed operator authorized_keys files for lockout protection
+  ansible.builtin.stat:
+    path: "{{ item.home | default('/home/' ~ item.name) }}/.ssh/authorized_keys"
+  loop: "{{ ssh_managed_operator_accounts }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: ssh_operator_authorized_keys
+  when:
+    - ssh_disable_password_auth | bool
+    - item.enabled | default(true) | bool
+
+- name: Assert key-access proof exists before disabling password authentication
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          ssh_operator_authorized_keys.results
+          | selectattr('stat.exists', 'defined')
+          | selectattr('stat.exists')
+          | selectattr('stat.size', 'gt', 0)
+          | selectattr('stat.mode', 'in', ['0600', '0640'])
+          | list
+          | length
+        ) > 0
+      - >-
+        (
+          ssh_managed_operator_accounts
+          | selectattr('enabled', 'undefined')
+          | list
+          | length
+        ) + (
+          ssh_managed_operator_accounts
+          | selectattr('enabled', 'defined')
+          | selectattr('enabled')
+          | list
+          | length
+        ) > 0
+    fail_msg: >-
+      ssh_disable_password_auth=true requires at least one managed operator
+      with a secure, non-empty authorized_keys file already installed.
+  when: ssh_disable_password_auth | bool
+
+- name: Render SSH hardening drop-in with validate
+  ansible.builtin.template:
+    src: 60-aihost-hardening.conf.j2
+    dest: "{{ ssh_dropin_path }}"
+    mode: "0644"
+    validate: "{{ ssh_validate_command }}"
+  notify: Reload SSH daemon
