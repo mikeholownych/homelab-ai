@@ -26,6 +26,19 @@ def write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def make_validation_payload(
+    manifest: dict[str, object],
+    *,
+    generated_at: str | None = None,
+) -> dict[str, object]:
+    payload = copy.deepcopy(load_json(VALIDATION_FIXTURE))
+    payload["git_sha"] = manifest["git_sha"]
+    payload["simulated"] = manifest["simulated"]
+    payload["node"]["id"] = manifest["collection_target"]["node_id"]
+    payload["generated_at"] = generated_at if generated_at is not None else manifest["run"]["started_at"]
+    return payload
+
+
 def make_manifest(
     *,
     target: str = "ai-p620-01",
@@ -232,7 +245,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": manifest["run"]["ansible"]["recap"],
                 },
             )
-            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
             (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
             (run_dir / "ignored.tmp").write_text("transient\n", encoding="utf-8")
 
@@ -289,7 +302,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": manifest["run"]["ansible"]["recap"],
                 },
             )
-            invalid_validation = copy.deepcopy(load_json(VALIDATION_FIXTURE))
+            invalid_validation = make_validation_payload(manifest)
             invalid_validation["status"] = "FAIL"
             invalid_validation["summary"]["classification"] = "healthy"
             write_json(run_dir / "validation.json", invalid_validation)
@@ -383,6 +396,59 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
             self.assertIn("validation.json", finalized_manifest["finalization"]["reason"])
             self.assertTrue((run_dir / "SHA256SUMS").exists())
 
+    def test_finalize_recovers_with_schema_valid_manifest_when_manifest_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            manifest = load_json(run_dir / "manifest.json")
+            self.assertEqual("incomplete", manifest["finalization"]["state"])
+            validator = __import__("scripts.validate_contract", fromlist=["collect_schema_errors", "collect_semantic_errors"])
+            self.assertEqual([], validator.collect_schema_errors("manifest", manifest, schema_root=REPO_ROOT / "schemas"))
+            self.assertEqual([], validator.collect_semantic_errors("manifest", manifest))
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_recovers_with_schema_valid_manifest_when_manifest_is_scalar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            (run_dir / "manifest.json").write_text("42\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            manifest = load_json(run_dir / "manifest.json")
+            validator = __import__("scripts.validate_contract", fromlist=["collect_schema_errors", "collect_semantic_errors"])
+            self.assertEqual([], validator.collect_schema_errors("manifest", manifest, schema_root=REPO_ROOT / "schemas"))
+            self.assertEqual([], validator.collect_semantic_errors("manifest", manifest))
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_recovers_with_schema_valid_manifest_when_manifest_is_malformed_object(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            write_json(
+                run_dir / "manifest.json",
+                {
+                    "schema_version": "1.1.0",
+                    "run": {
+                        "directory_name": [],
+                    },
+                    "finalization": "broken",
+                },
+            )
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            manifest = load_json(run_dir / "manifest.json")
+            self.assertEqual("incomplete", manifest["finalization"]["state"])
+            self.assertEqual("recovery-unknown", manifest["run"]["directory_name"])
+            validator = __import__("scripts.validate_contract", fromlist=["collect_schema_errors", "collect_semantic_errors"])
+            self.assertEqual([], validator.collect_schema_errors("manifest", manifest, schema_root=REPO_ROOT / "schemas"))
+            self.assertEqual([], validator.collect_semantic_errors("manifest", manifest))
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
     def test_finalize_rejects_empty_recap_object_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             run_dir = Path(tmpdir)
@@ -402,7 +468,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": {},
                 },
             )
-            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
             (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
 
             result = finalize(run_dir)
@@ -415,6 +481,132 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
             self.assertIsNone(finalized_manifest["run"]["ansible"]["recap"])
             self.assertIn("/run/ansible/recap", finalized_manifest["finalization"]["reason"])
             self.assertTrue((run_dir / "SHA256SUMS").exists())
+
+    def test_finalize_redacts_missing_artifact_path_from_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            manifest = make_manifest(status="captured", validation_status="PASS", validation_classification="healthy")
+            manifest["artifacts"][0]["expected"]["path"] = SECRET_SENTINEL
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": manifest["run"]["ansible"]["recap"],
+                },
+            )
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertNotIn(SECRET_SENTINEL, finalized_manifest["finalization"]["reason"])
+            self.assertNotIn(SECRET_SENTINEL, result.stderr)
+
+    def test_finalize_redacts_host_key_and_checksum_path_from_reason(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_dir = Path(tmpdir)
+            recap = {
+                "totals": {
+                    "ok": 1,
+                    "changed": 0,
+                    "unreachable": 0,
+                    "failed": 0,
+                    "skipped": 0,
+                    "rescued": 0,
+                    "ignored": 0,
+                },
+                "hosts": {
+                    SECRET_SENTINEL: {
+                        "ok": True,
+                        "changed": 0,
+                        "unreachable": 0,
+                        "failed": 0,
+                        "skipped": 0,
+                        "rescued": 0,
+                        "ignored": 0,
+                    }
+                },
+            }
+            manifest = make_manifest(status="captured", recap=recap, validation_status="PASS", validation_classification="healthy")
+            write_json(run_dir / "manifest.json", manifest)
+            write_json(
+                run_dir / "ansible-run.json",
+                {
+                    "git_sha": manifest["git_sha"],
+                    "inventory": manifest["run"]["inventory"],
+                    "playbook": manifest["run"]["playbook"],
+                    "limit": manifest["run"]["limit"],
+                    "simulated": False,
+                    "started_at": manifest["run"]["started_at"],
+                    "finished_at": manifest["run"]["finished_at"],
+                    "exit_code": 0,
+                    "recap": recap,
+                },
+            )
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
+            (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+            outside_dir = Path(tmpdir) / "outside"
+            outside_dir.mkdir()
+            outside_file = outside_dir / "outside.txt"
+            outside_file.write_text("external\n", encoding="utf-8")
+            (run_dir / SECRET_SENTINEL).symlink_to(outside_file)
+
+            result = finalize(run_dir)
+
+            self.assertNotEqual(0, result.returncode)
+            finalized_manifest = load_json(run_dir / "manifest.json")
+            self.assertNotIn(SECRET_SENTINEL, finalized_manifest["finalization"]["reason"])
+            self.assertNotIn(SECRET_SENTINEL, result.stderr)
+
+    def test_finalize_rejects_validation_correlation_mismatches(self) -> None:
+        cases = [
+            ("node_id", lambda payload, manifest: payload["node"].__setitem__("id", "wrong-node"), "/node/id"),
+            ("git_sha", lambda payload, manifest: payload.__setitem__("git_sha", "a" * 40), "/git_sha"),
+            ("simulated", lambda payload, manifest: payload.__setitem__("simulated", not manifest["simulated"]), "/simulated"),
+            ("generated_at", lambda payload, manifest: payload.__setitem__("generated_at", "2026-08-15T00:06:00Z"), "/generated_at"),
+        ]
+
+        for label, mutate, expected_pointer in cases:
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    run_dir = Path(tmpdir)
+                    manifest = make_manifest(status="captured", validation_status="PASS", validation_classification="healthy", simulated=True)
+                    write_json(run_dir / "manifest.json", manifest)
+                    write_json(
+                        run_dir / "ansible-run.json",
+                        {
+                            "git_sha": manifest["git_sha"],
+                            "inventory": manifest["run"]["inventory"],
+                            "playbook": manifest["run"]["playbook"],
+                            "limit": manifest["run"]["limit"],
+                            "simulated": True,
+                            "started_at": manifest["run"]["started_at"],
+                            "finished_at": manifest["run"]["finished_at"],
+                            "exit_code": 0,
+                            "recap": manifest["run"]["ansible"]["recap"],
+                        },
+                    )
+                    validation = make_validation_payload(manifest, generated_at="2026-08-15T00:04:00Z")
+                    mutate(validation, manifest)
+                    write_json(run_dir / "validation.json", validation)
+                    (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
+
+                    result = finalize(run_dir)
+
+                    self.assertNotEqual(0, result.returncode)
+                    finalized_manifest = load_json(run_dir / "manifest.json")
+                    self.assertEqual("incomplete", finalized_manifest["finalization"]["state"])
+                    self.assertIn(expected_pointer, finalized_manifest["finalization"]["reason"])
 
     def test_finalize_rejects_supplied_recap_totals_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -457,7 +649,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": recap,
                 },
             )
-            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
             (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
 
             result = finalize(run_dir)
@@ -488,7 +680,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": manifest["run"]["ansible"]["recap"],
                 },
             )
-            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
             (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
 
             result = finalize(run_dir)
@@ -504,7 +696,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
             run_dir = Path(tmpdir)
             manifest = make_manifest(status="captured")
             write_json(run_dir / "manifest.json", manifest)
-            invalid_validation = copy.deepcopy(load_json(VALIDATION_FIXTURE))
+            invalid_validation = make_validation_payload(manifest)
             invalid_validation["checks"][0]["observed"]["summary"] = SECRET_SENTINEL
             invalid_validation["summary"]["classification"] = SECRET_SENTINEL
             write_json(run_dir / "validation.json", invalid_validation)
@@ -555,7 +747,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": manifest["run"]["ansible"]["recap"],
                 },
             )
-            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
             (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
             (run_dir / "linked.txt").symlink_to(outside_file)
 
@@ -590,7 +782,7 @@ ai-p620-01 : ok=12 changed=3 unreachable=0 failed=0 skipped=1 rescued=0
                     "recap": manifest["run"]["ansible"]["recap"],
                 },
             )
-            write_json(run_dir / "validation.json", load_json(VALIDATION_FIXTURE))
+            write_json(run_dir / "validation.json", make_validation_payload(manifest))
             (run_dir / "ansible.log").write_text("PLAY RECAP\n", encoding="utf-8")
             (run_dir / ".tmp-orphan").write_text("ignore me\n", encoding="utf-8")
             (run_dir / "ansible.log.swp").write_text("ignore me too\n", encoding="utf-8")

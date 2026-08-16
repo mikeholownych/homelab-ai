@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 0027
 
 readonly LOCK_CONTENTION_EXIT=73
 readonly ARGUMENT_EXIT=64
@@ -9,11 +10,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 
 repo_root=""
+repo_root_arg=""
 schema_root=""
+schema_root_arg=""
 inventory_arg=""
 target=""
 playbook_arg=""
 evidence_root="/var/lib/local-ai/evidence"
+evidence_root_arg=""
+lock_root=""
+lock_root_arg=""
 lock_path=""
 simulate="false"
 validate_after_site="false"
@@ -21,6 +27,7 @@ validate_after_site="false"
 run_dir_created="false"
 primary_exit=0
 validation_command_exit=0
+effective_exit=0
 finished_at=""
 git_sha=""
 git_status_output=""
@@ -31,6 +38,9 @@ playbook_name=""
 inventory_resolved=""
 playbook_resolved=""
 ansible_config=""
+lock_helper_pid=""
+lock_helper_in=""
+lock_helper_out=""
 
 utc_timestamp() {
   python3 -I -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))'
@@ -44,8 +54,105 @@ require_containment() {
   python3 -I -c 'import sys; from pathlib import Path; Path(sys.argv[1]).resolve().relative_to(Path(sys.argv[2]).resolve())' "$1" "$2" >/dev/null 2>&1
 }
 
+path_is_regular_nosymlink() {
+  python3 -I -c 'import sys; from pathlib import Path; path = Path(sys.argv[1]); raise SystemExit(0 if path.exists() and path.is_file() and not path.is_symlink() else 1)' "$1"
+}
+
+path_is_directory_nosymlink() {
+  python3 -I -c 'import sys; from pathlib import Path; path = Path(sys.argv[1]); raise SystemExit(0 if path.exists() and path.is_dir() and not path.is_symlink() else 1)' "$1"
+}
+
 safe_child_path() {
   python3 -I -c 'import sys; from pathlib import Path; root = Path(sys.argv[1]).resolve(); child = (root / sys.argv[2]).resolve(strict=False); child.relative_to(root); print(child)' "$1" "$2"
+}
+
+parent_path() {
+  python3 -I -c 'import sys; from pathlib import Path; print(Path(sys.argv[1]).resolve().parent)' "$1"
+}
+
+cleanup_lock_helper() {
+  if [[ -n "$lock_helper_in" ]]; then
+    exec {lock_helper_in}>&- || true
+    lock_helper_in=""
+  fi
+  if [[ -n "$lock_helper_out" ]]; then
+    exec {lock_helper_out}<&- || true
+    lock_helper_out=""
+  fi
+  if [[ -n "$lock_helper_pid" ]]; then
+    wait "$lock_helper_pid" 2>/dev/null || true
+    lock_helper_pid=""
+  fi
+}
+
+acquire_lock_file() {
+  coproc LOCK_HELPER {
+    python3 -I - "$lock_path" <<'PY'
+import errno
+import fcntl
+import os
+import stat
+import sys
+
+
+path = sys.argv[1]
+flags = os.O_RDWR | os.O_CREAT
+if hasattr(os, "O_NOFOLLOW"):
+    flags |= os.O_NOFOLLOW
+
+try:
+    fd = os.open(path, flags, 0o640)
+except OSError as exc:
+    if exc.errno in {errno.ELOOP, errno.ENOTDIR, errno.ENOENT}:
+        print("LOCK_INVALID", flush=True)
+        raise SystemExit(0)
+    print("LOCK_ERROR", flush=True)
+    raise SystemExit(0)
+
+try:
+    mode = os.fstat(fd).st_mode
+    if not stat.S_ISREG(mode):
+        print("LOCK_INVALID", flush=True)
+        raise SystemExit(0)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("LOCK_CONTENDED", flush=True)
+        raise SystemExit(0)
+    print("LOCK_OK", flush=True)
+    sys.stdin.read()
+finally:
+    os.close(fd)
+PY
+  }
+
+  # shellcheck disable=SC2153
+  lock_helper_pid="${LOCK_HELPER_PID:-}"
+  lock_helper_out=${LOCK_HELPER[0]}
+  lock_helper_in=${LOCK_HELPER[1]}
+
+  local lock_status=""
+  IFS= read -r -u "$lock_helper_out" lock_status || true
+  case "$lock_status" in
+    LOCK_OK)
+      chmod 0640 "$lock_path"
+      ;;
+    LOCK_CONTENDED)
+      cleanup_lock_helper
+      echo "lock contention" >&2
+      exit "$LOCK_CONTENTION_EXIT"
+      ;;
+    LOCK_INVALID)
+      cleanup_lock_helper
+      echo "lock file must be a regular non-symlink file" >&2
+      exit "$ARGUMENT_EXIT"
+      ;;
+    *)
+      cleanup_lock_helper
+      echo "failed to acquire lock file" >&2
+      exit "$ARGUMENT_EXIT"
+      ;;
+  esac
 }
 
 run_ansible_playbook() {
@@ -59,6 +166,7 @@ run_ansible_playbook() {
 finalize_on_exit() {
   local shell_exit=$?
   trap - EXIT
+  cleanup_lock_helper
 
   if [[ "$run_dir_created" != "true" ]]; then
     exit "$shell_exit"
@@ -68,7 +176,7 @@ finalize_on_exit() {
     finished_at="$(utc_timestamp)"
   fi
 
-  python3 -I - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$primary_exit" "$finished_at" "$repo_root" "$git_status_output" <<'PY'
+  python3 -I - "$run_dir" "$git_sha" "$simulate" "$inventory_arg" "$playbook_name" "$target" "$effective_exit" "$finished_at" "$repo_root" "$git_status_output" <<'PY'
 import json
 import os
 import sys
@@ -148,10 +256,19 @@ PY
   local finalizer_exit=$?
   set -e
 
+  chmod 0640 "$run_dir"/manifest.json "$run_dir"/ansible-run.json "$run_dir"/ansible.log "$run_dir"/SHA256SUMS 2>/dev/null || true
+  if [[ -f "$run_dir/validation.json" ]]; then
+    chmod 0640 "$run_dir/validation.json"
+  fi
+  chmod 0750 "$host_dir" "$run_dir" 2>/dev/null || true
+
   if [[ "$primary_exit" -ne 0 ]]; then
     exit "$primary_exit"
   fi
-  if [[ "$validation_command_exit" -ne 0 || "$finalizer_exit" -ne 0 ]]; then
+  if [[ "$validation_command_exit" -ne 0 ]]; then
+    exit "$validation_command_exit"
+  fi
+  if [[ "$finalizer_exit" -ne 0 ]]; then
     exit "$FINALIZATION_FAILURE_EXIT"
   fi
   exit "$shell_exit"
@@ -160,11 +277,13 @@ PY
 while (($# > 0)); do
   case "$1" in
     --repo-root)
-      repo_root="${2:?missing value for --repo-root}"
+      repo_root_arg="${2:?missing value for --repo-root}"
+      repo_root="$repo_root_arg"
       shift 2
       ;;
     --schema-root)
-      schema_root="${2:?missing value for --schema-root}"
+      schema_root_arg="${2:?missing value for --schema-root}"
+      schema_root="$schema_root_arg"
       shift 2
       ;;
     --inventory)
@@ -180,11 +299,13 @@ while (($# > 0)); do
       shift 2
       ;;
     --evidence-root)
-      evidence_root="${2:?missing value for --evidence-root}"
+      evidence_root_arg="${2:?missing value for --evidence-root}"
+      evidence_root="$evidence_root_arg"
       shift 2
       ;;
-    --lock-path)
-      lock_path="${2:?missing value for --lock-path}"
+    --lock-root)
+      lock_root_arg="${2:?missing value for --lock-root}"
+      lock_root="$lock_root_arg"
       shift 2
       ;;
     --simulate)
@@ -202,8 +323,8 @@ while (($# > 0)); do
   esac
 done
 
-if [[ -z "$repo_root" || -z "$schema_root" || -z "$inventory_arg" || -z "$target" || -z "$playbook_arg" || -z "$lock_path" ]]; then
-  echo "required arguments: --repo-root --schema-root --inventory --target --playbook --lock-path" >&2
+if [[ -z "$repo_root" || -z "$schema_root" || -z "$inventory_arg" || -z "$target" || -z "$playbook_arg" || -z "$lock_root" ]]; then
+  echo "required arguments: --repo-root --schema-root --inventory --target --playbook --lock-root" >&2
   exit "$ARGUMENT_EXIT"
 fi
 
@@ -215,7 +336,14 @@ fi
 repo_root="$(resolve_path "$repo_root")"
 schema_root="$(resolve_path "$schema_root")"
 evidence_root="$(resolve_path "$evidence_root")"
+lock_root="$(resolve_path "$lock_root")"
 ansible_config="$repo_root/ansible.cfg"
+if [[ "$lock_root_arg" == *.lock ]] || [[ "$lock_root" == *.lock ]]; then
+  lock_path="$lock_root"
+  lock_root="$(parent_path "$lock_path")"
+else
+  lock_path="$lock_root/ansible-snapshot.lock"
+fi
 deployed_root="${LOCAL_AI_DEPLOYED_ROOT:-$repo_root}"
 deployed_root="$(resolve_path "$deployed_root")"
 
@@ -224,10 +352,25 @@ require_containment "$repo_root" "$deployed_root" || {
   exit "$ARGUMENT_EXIT"
 }
 
-if [[ ! -f "$ansible_config" ]]; then
-  echo "ansible.cfg must exist under the repo root" >&2
+if ! path_is_regular_nosymlink "$ansible_config"; then
+  echo "ansible.cfg must be a regular file under the repo root" >&2
   exit "$ARGUMENT_EXIT"
 fi
+if [[ "$(resolve_path "$ansible_config")" != "$repo_root/ansible.cfg" ]]; then
+  echo "ansible.cfg must resolve to the exact repo-root config file" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+if [[ -L "$schema_root_arg" ]] || ! path_is_directory_nosymlink "$schema_root"; then
+  echo "schema root must be a regular directory" >&2
+  exit "$ARGUMENT_EXIT"
+fi
+for schema_file in manifest.schema.json validation.schema.json benchmark.schema.json cmdb.schema.json itsm.schema.json evidence.schema.json; do
+  schema_path="$schema_root/$schema_file"
+  if ! path_is_regular_nosymlink "$schema_path"; then
+    echo "schema files must be regular and non-symlinked" >&2
+    exit "$ARGUMENT_EXIT"
+  fi
+done
 
 cd -- "$repo_root"
 
@@ -264,17 +407,21 @@ require_containment "$inventory_resolved" "$repo_root/inventory" || {
   echo "inventory must resolve inside inventory/" >&2
   exit "$ARGUMENT_EXIT"
 }
+if ! path_is_regular_nosymlink "$repo_root/playbooks/$playbook_name" || ! path_is_regular_nosymlink "$repo_root/$inventory_arg"; then
+  echo "playbook and inventory must be regular non-symlink files" >&2
+  exit "$ARGUMENT_EXIT"
+fi
 if [[ ! -f "$playbook_resolved" || ! -f "$inventory_resolved" ]]; then
   echo "playbook and inventory must exist" >&2
   exit "$ARGUMENT_EXIT"
 fi
 
-mkdir -p "$(dirname "$lock_path")"
-exec 9>"$lock_path"
-if ! flock --nonblock 9; then
-  echo "lock contention on $lock_path" >&2
-  exit "$LOCK_CONTENTION_EXIT"
+if [[ -L "$lock_root_arg" ]] || [[ -L "$lock_root" ]]; then
+  echo "lock root must not be a symlink" >&2
+  exit "$ARGUMENT_EXIT"
 fi
+install -d -m 0750 "$lock_root"
+acquire_lock_file
 
 git_sha="$(git -C "$repo_root" rev-parse HEAD)"
 git_status_output="$(git -C "$repo_root" status --porcelain --untracked-files=all)"
@@ -518,6 +665,7 @@ fi
 ansible_args+=("$playbook_resolved")
 run_ansible_playbook "${ansible_args[@]}" >"$log_path" 2>&1
 primary_exit=$?
+effective_exit=$primary_exit
 
 if [[ "$playbook_name" == "site.yml" && "$validate_after_site" == "true" && "$primary_exit" -eq 0 ]]; then
   validation_args=(-i "$inventory_resolved" --limit "$target")
@@ -527,6 +675,7 @@ if [[ "$playbook_name" == "site.yml" && "$validate_after_site" == "true" && "$pr
   validation_args+=("$repo_root/playbooks/validate.yml")
   run_ansible_playbook "${validation_args[@]}" >>"$log_path" 2>&1
   validation_command_exit=$?
+  effective_exit=$validation_command_exit
 fi
 
 finished_at="$(utc_timestamp)"

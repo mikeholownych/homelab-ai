@@ -41,16 +41,23 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def reason_with_path(path: Path, code: str, detail: str | None = None) -> str:
+    reason = f"{path.name} {code}"
+    if detail:
+        reason = f"{reason} {sanitize_reason(detail)}"
+    return reason
+
+
 def safe_json_error(path: Path, exc: Exception) -> str:
     if isinstance(exc, json.JSONDecodeError):
-        return f"{path.name} json_decode_error"
+        return reason_with_path(path, "json_decode_error")
     if isinstance(exc, OSError):
-        return f"{path.name} io_error"
-    return f"{path.name} json_error"
+        return reason_with_path(path, "io_error")
+    return reason_with_path(path, "json_error")
 
 
 def safe_contract_error(path: Path) -> str:
-    return f"{path.name} validation_error"
+    return reason_with_path(path, "contract_error")
 
 
 def is_transient_relative_path(relative_path: str) -> bool:
@@ -111,14 +118,14 @@ def default_manifest(run_dir: Path, repo_root: Path) -> dict[str, Any]:
             },
         ],
         "run": {
-            "directory_name": run_dir.name,
+            "directory_name": "recovery-unknown",
             "started_at": now,
             "finished_at": now,
             "inventory": "inventory/unknown/hosts.yml",
             "playbook": "validate.yml",
             "limit": target,
             "lock": {
-                "path": "",
+                "path": "unavailable",
                 "status": "acquired",
             },
             "repository": {
@@ -265,7 +272,7 @@ def update_artifact_observations(manifest: dict[str, Any], run_dir: Path) -> Non
             artifact["observed"] = {
                 "summary": f"Expected artifact missing for {artifact['id']}",
                 "status": "unavailable",
-                "reason": f"missing file: {expected_path}",
+                "reason": "expected_artifact_missing",
             }
 
 
@@ -278,14 +285,14 @@ def component_files_for_checksums(run_dir: Path) -> tuple[list[Path], list[str]]
         if is_transient_relative_path(relative_path):
             continue
         if path.is_symlink():
-            issues.append(f"{relative_path} symlink_not_allowed")
+            issues.append("checksum_symlink_not_allowed")
             continue
         if not path.is_file():
             continue
         try:
             path.resolve(strict=True).relative_to(resolved_run_dir)
         except (FileNotFoundError, ValueError):
-            issues.append(f"{relative_path} outside_run_dir")
+            issues.append("checksum_outside_run_dir")
             continue
         files.append(path)
     return files, issues
@@ -309,7 +316,7 @@ def validate_component_json(run_dir: Path, schema_root: Path) -> list[str]:
             errors.append(load_error)
             continue
         if not isinstance(payload, dict):
-            errors.append(f"{path.name} / keyword=type")
+            errors.append(reason_with_path(path, "schema_error", "/ keyword=type"))
             continue
         try:
             schema_errors = validate_contract.collect_schema_errors(contract_type, payload, schema_root=schema_root)
@@ -318,17 +325,42 @@ def validate_component_json(run_dir: Path, schema_root: Path) -> list[str]:
             errors.append(safe_contract_error(path))
             continue
         for error in schema_errors + semantic_errors:
-            errors.append(f"{path.name} {sanitize_reason(error)}")
+            if error.startswith("schema validation failed at "):
+                errors.append(reason_with_path(path, "schema_error", error.removeprefix("schema validation failed at ")))
+            else:
+                errors.append(reason_with_path(path, "semantic_error"))
     return errors
 
 
-def validate_manifest_payload(manifest: dict[str, Any], schema_root: Path) -> list[str]:
+def validate_manifest_payload(manifest: dict[str, Any], schema_root: Path, manifest_path: Path) -> list[str]:
     try:
         schema_errors = validate_contract.collect_schema_errors("manifest", manifest, schema_root=schema_root)
         semantic_errors = validate_contract.collect_semantic_errors("manifest", manifest)
     except Exception:
-        return ["manifest.json validation_error"]
-    return [f"manifest.json {sanitize_reason(error)}" for error in schema_errors + semantic_errors]
+        return [safe_contract_error(manifest_path)]
+    formatted: list[str] = []
+    for error in schema_errors:
+        formatted.append(reason_with_path(manifest_path, "schema_error", error.removeprefix("schema validation failed at ")))
+    for _error in semantic_errors:
+        formatted.append(reason_with_path(manifest_path, "semantic_error"))
+    return formatted
+
+
+def validate_validation_correlation(manifest: dict[str, Any], validation_payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if validation_payload.get("git_sha") != manifest.get("git_sha"):
+        errors.append("/git_sha")
+    if validation_payload.get("simulated") != manifest.get("simulated"):
+        errors.append("/simulated")
+    node = validation_payload.get("node")
+    if not isinstance(node, dict) or node.get("id") != manifest["collection_target"]["node_id"]:
+        errors.append("/node/id")
+    generated_at = validation_payload.get("generated_at")
+    started_at = manifest["run"]["started_at"]
+    finished_at = manifest["run"]["finished_at"]
+    if not isinstance(generated_at, str) or generated_at < started_at or generated_at > finished_at:
+        errors.append("/generated_at")
+    return errors
 
 
 def discover_recap(run_dir: Path, manifest: dict[str, Any], ansible_run: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
@@ -342,21 +374,21 @@ def discover_recap(run_dir: Path, manifest: dict[str, Any], ansible_run: dict[st
             try:
                 return parse_recap(source), None
             except ValueError as exc:
-                return None, sanitize_reason(str(exc))
+                return None, "recap_parse_error"
 
     log_path = run_dir / "ansible.log"
     if log_path.exists():
         try:
             return parse_recap(log_path.read_text(encoding="utf-8")), None
         except (OSError, ValueError) as exc:
-            return None, sanitize_reason(str(exc))
-    return None, "ansible recap is missing"
+            return None, "recap_parse_error"
+    return None, "recap_missing"
 
 
 def classify_manifest_status(manifest: dict[str, Any], recap: dict[str, Any] | None) -> tuple[str, str | None]:
     exit_code = manifest["run"]["ansible"]["exit_code"]
     if recap is None:
-        return "incomplete", "/run/ansible/recap unavailable"
+        return "incomplete", "recap_unavailable"
 
     failed = recap["totals"]["failed"]
     unreachable = recap["totals"]["unreachable"]
@@ -370,13 +402,13 @@ def classify_manifest_status(manifest: dict[str, Any], recap: dict[str, Any] | N
 
     reasons: list[str] = []
     if exit_code != 0:
-        reasons.append(f"/run/ansible/exit_code nonzero")
+        reasons.append("/run/ansible/exit_code")
     if failed:
-        reasons.append(f"/run/ansible/recap/totals/failed nonzero")
+        reasons.append("/run/ansible/recap/totals/failed")
     if unreachable:
-        reasons.append(f"/run/ansible/recap/totals/unreachable nonzero")
+        reasons.append("/run/ansible/recap/totals/unreachable")
     if missing_artifacts:
-        reasons.append(f"/artifacts missing {', '.join(sorted(missing_artifacts))}")
+        reasons.append("/artifacts/missing")
     return "incomplete", "; ".join(reasons)
 
 
@@ -391,7 +423,7 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
     if manifest_error is not None:
         errors.append(manifest_error)
     elif manifest_payload is not None and not isinstance(manifest_payload, dict):
-        errors.append("manifest.json / keyword=type")
+        errors.append(reason_with_path(manifest_path, "schema_error", "/ keyword=type"))
 
     ansible_run: dict[str, Any]
     if isinstance(ansible_run_payload, dict):
@@ -401,7 +433,7 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
         if ansible_run_error is not None:
             errors.append(ansible_run_error)
         elif ansible_run_payload is not None:
-            errors.append("ansible-run.json / keyword=type")
+            errors.append(reason_with_path(ansible_run_path, "schema_error", "/ keyword=type"))
 
     manifest["generated_at"] = utc_timestamp_now()
     manifest["git_sha"] = ansible_run.get("git_sha", manifest.get("git_sha"))
@@ -414,7 +446,7 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
     try:
         manifest["run"]["ansible"]["exit_code"] = int(ansible_run.get("exit_code", manifest["run"]["ansible"]["exit_code"]))
     except (TypeError, ValueError):
-        errors.append("ansible-run.json /exit_code invalid")
+        errors.append("ansible_run_semantic_error /exit_code")
         manifest["run"]["ansible"]["exit_code"] = 1
     manifest["run"]["validation"] = {
         "status": "NOT_TESTED",
@@ -428,7 +460,7 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
     elif recap is not None:
         recap_errors = validate_contract.validate_recap_structure(recap, pointer="/run/ansible/recap")
         if recap_errors:
-            errors.append(sanitize_reason(recap_errors[0]))
+            errors.append("recap_schema_error /run/ansible/recap")
             recap = None
     manifest["run"]["ansible"]["recap"] = recap
 
@@ -438,7 +470,7 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
         if validation_error is not None:
             errors.append(validation_error)
         elif not isinstance(validation_payload, dict):
-            errors.append("validation.json / keyword=type")
+            errors.append(reason_with_path(validation_path, "schema_error", "/ keyword=type"))
         else:
             try:
                 validation_errors = validate_contract.collect_schema_errors(
@@ -450,14 +482,22 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
             except Exception:
                 validation_errors = [safe_contract_error(validation_path)]
             if validation_errors:
-                errors.append(f"validation.json {sanitize_reason(validation_errors[0])}" if not validation_errors[0].startswith("validation.json") else sanitize_reason(validation_errors[0]))
+                first_error = validation_errors[0]
+                if first_error.startswith("schema validation failed at "):
+                    errors.append(reason_with_path(validation_path, "schema_error", first_error.removeprefix("schema validation failed at ")))
+                else:
+                    errors.append(reason_with_path(validation_path, "semantic_error"))
             else:
-                manifest["run"]["validation"] = {
-                    "status": validation_payload["status"],
-                    "classification": validation_payload["summary"]["classification"],
-                }
+                correlation_errors = validate_validation_correlation(manifest, validation_payload)
+                if correlation_errors:
+                    errors.append(reason_with_path(validation_path, "correlation_error", correlation_errors[0]))
+                else:
+                    manifest["run"]["validation"] = {
+                        "status": validation_payload["status"],
+                        "classification": validation_payload["summary"]["classification"],
+                    }
     elif expected_validation_artifact(manifest):
-        errors.append("validation.json / missing")
+        errors.append("validation_missing")
 
     update_artifact_observations(manifest, run_dir)
     manifest_status, status_reason = classify_manifest_status(manifest, recap)
@@ -478,7 +518,7 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
         "completed_at": completed_at,
     }
 
-    manifest_errors = validate_manifest_payload(manifest, schema_root)
+    manifest_errors = validate_manifest_payload(manifest, schema_root, manifest_path)
     if manifest_errors:
         errors.append(manifest_errors[0])
         manifest["status"] = "incomplete"

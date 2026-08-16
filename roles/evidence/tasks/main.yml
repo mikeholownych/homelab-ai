@@ -1,8 +1,43 @@
 ---
-- name: Initialize evidence facts
+- name: Validate evidence target name
+  ansible.builtin.assert:
+    that:
+      - evidence_target_name is string
+      - evidence_target_name | regex_search(evidence_target_pattern)
+    fail_msg: evidence_target_name must match the safe node identifier pattern
+  tags:
+    - evidence
+    - validation
+
+- name: Record evidence directory facts
   ansible.builtin.set_fact:
     evidence_run_started_at: "{{ ansible_date_time.iso8601 | default('') }}"
     evidence_host_directory: "{{ evidence_root }}/{{ evidence_target_name }}"
+  tags:
+    - evidence
+    - validation
+
+- name: Inspect evidence root path without following symlinks
+  ansible.builtin.stat:
+    path: "{{ evidence_root }}"
+    follow: false
+  register: evidence_root_stat
+  tags:
+    - evidence
+    - validation
+
+- name: Reject symlinked evidence root path
+  ansible.builtin.fail:
+    msg: evidence_root must not be a symlink
+  when: evidence_root_stat.stat.exists and evidence_root_stat.stat.islnk
+  tags:
+    - evidence
+    - validation
+
+- name: Reject non-directory evidence root path
+  ansible.builtin.fail:
+    msg: evidence_root must be a directory when it already exists
+  when: evidence_root_stat.stat.exists and not evidence_root_stat.stat.isdir
   tags:
     - evidence
     - validation
@@ -16,6 +51,31 @@
     mode: "{{ evidence_directory_mode }}"
   tags:
     - evidence
+
+- name: Inspect evidence host directory path without following symlinks
+  ansible.builtin.stat:
+    path: "{{ evidence_host_directory }}"
+    follow: false
+  register: evidence_host_directory_stat
+  tags:
+    - evidence
+    - validation
+
+- name: Reject symlinked evidence host directory path
+  ansible.builtin.fail:
+    msg: evidence host directory must not be a symlink
+  when: evidence_host_directory_stat.stat.exists and evidence_host_directory_stat.stat.islnk
+  tags:
+    - evidence
+    - validation
+
+- name: Reject non-directory evidence host directory path
+  ansible.builtin.fail:
+    msg: evidence host directory must be a directory when it already exists
+  when: evidence_host_directory_stat.stat.exists and not evidence_host_directory_stat.stat.isdir
+  tags:
+    - evidence
+    - validation
 
 - name: Ensure evidence host directory exists
   ansible.builtin.file:

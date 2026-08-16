@@ -5,3 +5,4 @@ evidence_group: root
 evidence_directory_mode: "0750"
 evidence_host_directory_mode: "0750"
 evidence_target_name: "{{ inventory_hostname }}"
+evidence_target_pattern: "^[A-Za-z0-9][A-Za-z0-9._-]*$"

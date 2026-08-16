@@ -73,7 +73,12 @@ def build_fake_tools(bin_dir: Path, log_path: Path) -> None:
             playbook = Path(argv[-1]).name
             if playbook == "validate.yml" and os.environ.get("FAKE_WRITE_VALIDATION") == "1":
                 payload = json.loads(validation_fixture.read_text(encoding="utf-8"))
+                manifest_payload = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
                 payload["git_sha"] = os.environ.get("FAKE_GIT_SHA", "0123456789abcdef0123456789abcdef01234567")
+                payload["simulated"] = "--check" in argv
+                payload["generated_at"] = manifest_payload["run"]["started_at"]
+                if "--limit" in argv:
+                    payload["node"]["id"] = argv[argv.index("--limit") + 1]
                 if os.environ.get("FAKE_INVALID_VALIDATION") == "1":
                     payload["summary"]["classification"] = os.environ.get("FAKE_SECRET_SENTINEL", "invalid")
                 (run_dir / "validation.json").write_text(json.dumps(payload, indent=2) + "\\n", encoding="utf-8")
@@ -116,21 +121,23 @@ def create_repo(root: Path) -> Path:
 def run_wrapper(
     repo_root: Path,
     evidence_root: Path,
-    lock_path: Path,
+    lock_root: Path,
     *,
     cwd: Path | None = None,
     env: dict[str, str] | None = None,
+    schema_root: Path | None = None,
     playbook: str = "site.yml",
     inventory: str = "inventory/production/hosts.yml",
     target: str = "ai-p620-01",
     extra_args: list[str] | None = None,
+    umask_value: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
     command = [
         str(WRAPPER_PATH),
         "--repo-root",
         str(repo_root),
         "--schema-root",
-        str(REPO_ROOT / "schemas"),
+        str(schema_root if schema_root is not None else (REPO_ROOT / "schemas")),
         "--inventory",
         inventory,
         "--target",
@@ -139,8 +146,8 @@ def run_wrapper(
         playbook,
         "--evidence-root",
         str(evidence_root),
-        "--lock-path",
-        str(lock_path),
+        "--lock-root",
+        str(lock_root),
     ]
     if extra_args:
         command.extend(extra_args)
@@ -154,6 +161,7 @@ def run_wrapper(
         capture_output=True,
         text=True,
         env=merged_env,
+        preexec_fn=(lambda: os.umask(umask_value)) if umask_value is not None else None,
     )
 
 
@@ -379,6 +387,56 @@ class RunWrapperTests(unittest.TestCase):
             self.assertNotIn(SECRET_SENTINEL, manifest["finalization"]["reason"])
             self.assertNotIn("Traceback", result.stderr)
 
+    def test_wrapper_returns_validation_exit_when_site_succeeds_and_post_validation_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_root = temp_root / "locks"
+            lock_root.mkdir()
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "FAKE_ANSIBLE_STDOUT": textwrap.dedent(
+                    """\
+                    PLAY RECAP *********************************************************************
+                    ai-p620-01 : ok=3 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+                    """
+                ),
+                "FAKE_VALIDATE_STDOUT": textwrap.dedent(
+                    """\
+                    PLAY RECAP *********************************************************************
+                    ai-p620-01 : ok=1 changed=0 unreachable=0 failed=1 skipped=0 rescued=0 ignored=0
+                    """
+                ),
+                "FAKE_WRITE_VALIDATION": "1",
+                "FAKE_VALIDATE_EXIT": "23",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(
+                repo_root,
+                evidence_root,
+                lock_root,
+                env=env,
+                playbook="site.yml",
+                extra_args=["--validate-after-site"],
+            )
+
+            self.assertEqual(23, result.returncode)
+            run_dir = next((evidence_root / "ai-p620-01").iterdir())
+            manifest = load_json(run_dir / "manifest.json")
+            ansible_run = load_json(run_dir / "ansible-run.json")
+            self.assertEqual("incomplete", manifest["finalization"]["state"])
+            self.assertEqual(23, manifest["run"]["ansible"]["exit_code"])
+            self.assertEqual(23, ansible_run["exit_code"])
+            self.assertTrue((run_dir / "SHA256SUMS").exists())
+
     def test_wrapper_rejects_missing_recap_without_zero_filling_counts(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_root = Path(tmpdir)
@@ -583,6 +641,144 @@ class RunWrapperTests(unittest.TestCase):
 
             result = run_wrapper(repo_root, evidence_root, lock_path, env=env, playbook="site.yml")
             self.assertNotEqual(0, result.returncode)
+
+    def test_wrapper_rejects_symlinked_ansible_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            outside_config = temp_root / "outside-ansible.cfg"
+            outside_config.write_text("[defaults]\nstdout_callback = yaml\n", encoding="utf-8")
+            (repo_root / "ansible.cfg").unlink()
+            (repo_root / "ansible.cfg").symlink_to(outside_config)
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_root = temp_root / "locks"
+            lock_root.mkdir()
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(repo_root, evidence_root, lock_root, env=env, playbook="validate.yml")
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertFalse((evidence_root / "ai-p620-01").exists())
+
+    def test_wrapper_rejects_symlinked_schema_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_root = temp_root / "locks"
+            lock_root.mkdir()
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+            real_schemas = temp_root / "outside-schemas"
+            real_schemas.mkdir()
+            for schema_file in (REPO_ROOT / "schemas").glob("*.json"):
+                (real_schemas / schema_file.name).write_text(schema_file.read_text(encoding="utf-8"), encoding="utf-8")
+            schema_link = temp_root / "schemas-link"
+            schema_link.symlink_to(real_schemas)
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(
+                repo_root,
+                evidence_root,
+                lock_root,
+                env=env,
+                schema_root=schema_link,
+                playbook="validate.yml",
+            )
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertFalse((evidence_root / "ai-p620-01").exists())
+
+    def test_wrapper_lock_symlink_cannot_truncate_victim(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_root = temp_root / "locks"
+            lock_root.mkdir()
+            victim = temp_root / "victim.txt"
+            victim.write_text("do not truncate\n", encoding="utf-8")
+            (lock_root / "ansible-snapshot.lock").symlink_to(victim)
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(repo_root, evidence_root, lock_root, env=env, playbook="validate.yml")
+
+            self.assertNotEqual(0, result.returncode)
+            self.assertEqual("do not truncate\n", victim.read_text(encoding="utf-8"))
+            self.assertFalse((evidence_root / "ai-p620-01").exists())
+
+    def test_wrapper_forces_restrictive_permissions_even_under_hostile_umask(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_root = temp_root / "locks"
+            lock_root.mkdir()
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "FAKE_ANSIBLE_STDOUT": textwrap.dedent(
+                    """\
+                    PLAY RECAP *********************************************************************
+                    ai-p620-01 : ok=1 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+                    """
+                ),
+                "FAKE_WRITE_VALIDATION": "1",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+            }
+
+            result = run_wrapper(
+                repo_root,
+                evidence_root,
+                lock_root,
+                env=env,
+                playbook="validate.yml",
+                umask_value=0,
+            )
+
+            self.assertEqual(0, result.returncode, result.stderr)
+            run_dir = next((evidence_root / "ai-p620-01").iterdir())
+            paths = [
+                evidence_root / "ai-p620-01",
+                run_dir,
+                run_dir / "manifest.json",
+                run_dir / "ansible-run.json",
+                run_dir / "ansible.log",
+                run_dir / "validation.json",
+                run_dir / "SHA256SUMS",
+                lock_root / "ansible-snapshot.lock",
+            ]
+            for path in paths:
+                mode = path.stat().st_mode
+                self.assertEqual(0, mode & stat.S_IWGRP, f"group-write bit set on {path}")
+                self.assertEqual(0, mode & stat.S_IRWXO, f"world bits set on {path}")
 
     def test_wrapper_does_not_import_malicious_caller_cwd_scripts_module(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

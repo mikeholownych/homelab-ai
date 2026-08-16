@@ -214,15 +214,15 @@ def validate_recap_structure(recap: object, *, pointer: str) -> list[str]:
             errors.append(f"{pointer}/hosts must use non-empty string host names")
             continue
         if not isinstance(host_counters, dict):
-            errors.append(f"{pointer}/hosts/{host_name} must be an object")
+            errors.append(f"{pointer}/hosts/* must be an object")
             continue
         if set(host_counters) != set(RECAP_COUNTER_KEYS):
-            errors.append(f"{pointer}/hosts/{host_name} must contain exactly the supported recap counters")
+            errors.append(f"{pointer}/hosts/* must contain exactly the supported recap counters")
             continue
         for key in RECAP_COUNTER_KEYS:
             value = host_counters.get(key)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-                errors.append(f"{pointer}/hosts/{host_name}/{key} must be a non-negative integer")
+                errors.append(f"{pointer}/hosts/*/{key} must be a non-negative integer")
                 continue
             computed_totals[key] += value
 
