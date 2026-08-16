@@ -6,7 +6,10 @@
       - networking_apply is boolean
       - networking_allow_ssh_disruption is boolean
       - networking_ethernets is mapping
-    fail_msg: networking must be feature gated and use a mapping of explicit netplan interfaces.
+      - networking_renderer in networking_valid_renderers
+    fail_msg: >-
+      networking renderer must be one of the reviewed netplan renderers, and
+      networking must stay feature gated with explicit interface mappings.
 
 - name: Validate declared netplan interfaces
   ansible.builtin.assert:
@@ -39,25 +42,48 @@
     mode: "0755"
   when: networking_manage_netplan | bool
 
-- name: Render managed netplan configuration
+- name: Ensure staged netplan configuration directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ networking_staging_root }}"
+    - "{{ networking_staging_root ~ '/etc' }}"
+    - "{{ networking_staging_root ~ '/etc/netplan' }}"
+  when: networking_manage_netplan | bool
+  check_mode: false
+
+- name: Render staged netplan configuration
   ansible.builtin.template:
     src: 60-aihost.yaml.j2
-    dest: "{{ networking_netplan_file }}"
+    dest: "{{ networking_staging_netplan_file }}"
     mode: "0600"
-  notify: Apply validated netplan configuration
   when: networking_manage_netplan | bool
+  check_mode: false
+  changed_when: false
 
-- name: Validate generated netplan configuration
+- name: Validate staged netplan configuration
   ansible.builtin.command:
     argv:
-      - /usr/sbin/netplan
+      - "{{ networking_netplan_binary }}"
       - generate
       - --root-dir
-      - "{{ networking_root_dir }}"
+      - "{{ networking_staging_root }}"
   changed_when: false
+  check_mode: false
   when:
     - networking_manage_netplan | bool
     - networking_manage_runtime | bool
+
+- name: Install validated netplan configuration
+  ansible.builtin.copy:
+    src: "{{ networking_staging_netplan_file }}"
+    dest: "{{ networking_netplan_file }}"
+    mode: "0600"
+    remote_src: true
+  when: networking_manage_netplan | bool
+  notify: Apply validated netplan configuration
 
 - name: Check SSH safety before applying netplan changes
   ansible.builtin.assert:

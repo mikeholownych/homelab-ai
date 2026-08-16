@@ -27,11 +27,35 @@
       - base_os_manage_boot_parameters is boolean
       - base_os_boot_parameters is iterable
       - not base_os_manage_boot_parameters | bool or base_os_boot_parameters | length > 0
+      - base_os_logrotate_paths is iterable
       - base_os_package_holds is iterable
       - base_os_package_pins is iterable
     fail_msg: >-
       base_os package source inputs must declare explicit URIs, valid suites,
       components, supported architectures, and allowlisted kernel settings.
+
+- name: Validate declared logrotate paths stay within local-ai log ownership
+  ansible.builtin.assert:
+    that:
+      - item is match("^/var/log/local-ai/.+")
+      - item != "/var/log/*.log"
+    fail_msg: >-
+      base_os_logrotate_paths must stay within /var/log/local-ai and must not
+      target /var/log/*.log.
+  loop: "{{ base_os_logrotate_paths }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Validate allowed boot parameters
+  ansible.builtin.assert:
+    that:
+      - item | aihost_boot_param_allowed(base_os_allowed_boot_parameter_patterns)
+    fail_msg: >-
+      base_os_boot_parameters must use the reviewed boot-parameter allowlist.
+  loop: "{{ base_os_boot_parameters }}"
+  loop_control:
+    label: "{{ item }}"
+  when: base_os_manage_boot_parameters | bool
 
 - name: Validate high-risk package holds stay within policy inventory
   ansible.builtin.assert:
@@ -71,6 +95,7 @@
     - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/sources.list.d' }}"
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/default/grub.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/logrotate.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/default' }}"
@@ -140,6 +165,22 @@
     src: aihost-logrotate.j2
     dest: "{{ base_os_logrotate_path }}"
     mode: "0644"
+    validate: "{{ base_os_logrotate_validate_command }}"
+
+- name: Render GRUB boot-parameter drop-in when enabled
+  ansible.builtin.template:
+    src: 90-aihost.cfg.j2
+    dest: "{{ base_os_grub_dropin_path }}"
+    mode: "0644"
+    validate: "{{ base_os_grub_shell_validate_command }}"
+  when: base_os_manage_boot_parameters | bool
+  notify: Apply grub configuration update
+
+- name: Remove GRUB boot-parameter drop-in when disabled
+  ansible.builtin.file:
+    path: "{{ base_os_grub_dropin_path }}"
+    state: absent
+  when: not base_os_manage_boot_parameters | bool
 
 - name: Apply baseline sysctl values
   ansible.posix.sysctl:
@@ -147,14 +188,13 @@
     value: "{{ item.value }}"
     state: present
     sysctl_set: true
-    reload: false
+    reload: true
   loop: "{{ base_os_kernel_sysctl | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
   when:
     - base_os_mutating_operations_enabled | bool
     - base_os_kernel_sysctl | length > 0
-  notify: Validate base OS sysctl settings
 
 - name: Hold selected high-risk packages
   ansible.builtin.dpkg_selections:

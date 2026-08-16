@@ -11,16 +11,33 @@
       - not security_firewall_enabled | bool or security_management_cidrs | length > 0
       - not security_inference_api_firewall_enabled | bool or security_inference_api_cidrs | length > 0
       - not security_inference_api_firewall_enabled | bool or security_inference_api_ports | length > 0
-      - >-
-        (
-          security_inference_api_ports
-          | reject("match", "^[0-9]+$")
-          | list
-          | length
-        ) == 0
     fail_msg: >-
       Firewall controls remain disabled until explicit management CIDRs and
       inference API CIDRs and ports are declared.
+
+- name: Record invalid firewall CIDRs and ports
+  ansible.builtin.set_fact:
+    security_management_cidrs_invalid: "{{ security_management_cidrs | aihost_invalid_cidrs }}"
+    security_inference_api_cidrs_invalid: "{{ security_inference_api_cidrs | aihost_invalid_cidrs }}"
+    security_inference_api_ports_invalid: "{{ security_inference_api_ports | aihost_invalid_ports }}"
+
+- name: Validate management firewall CIDRs
+  ansible.builtin.assert:
+    that:
+      - security_management_cidrs_invalid | length == 0
+    fail_msg: security_management_cidrs must contain valid CIDR networks.
+
+- name: Validate inference firewall CIDRs
+  ansible.builtin.assert:
+    that:
+      - security_inference_api_cidrs_invalid | length == 0
+    fail_msg: security_inference_api_cidrs must contain valid CIDR networks.
+
+- name: Validate inference firewall ports
+  ansible.builtin.assert:
+    that:
+      - security_inference_api_ports_invalid | length == 0
+    fail_msg: security_inference_api_ports must be integers between 1 and 65535.
 
 - name: Ensure security configuration directories exist
   ansible.builtin.file:
@@ -76,35 +93,11 @@
     value: "{{ item.value }}"
     state: present
     sysctl_set: true
-    reload: false
+    reload: true
   loop: "{{ security_sysctl | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
   when: security_manage_runtime | bool
-  notify: Validate security sysctl settings
-
-- name: Set UFW default deny incoming policy
-  community.general.ufw:
-    direction: incoming
-    policy: deny
-  when:
-    - security_manage_runtime | bool
-    - security_firewall_enabled | bool
-
-- name: Set UFW default allow outgoing policy
-  community.general.ufw:
-    direction: outgoing
-    policy: allow
-  when:
-    - security_manage_runtime | bool
-    - security_firewall_enabled | bool
-
-- name: Set UFW logging policy
-  community.general.ufw:
-    logging: "{{ security_ufw_logging }}"
-  when:
-    - security_manage_runtime | bool
-    - security_firewall_enabled | bool
 
 - name: Allow SSH only from configured management CIDRs
   community.general.ufw:
@@ -130,6 +123,29 @@
     - security_manage_runtime | bool
     - security_firewall_enabled | bool
     - security_inference_api_firewall_enabled | bool
+
+- name: Set UFW default deny incoming policy
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Set UFW default allow outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
+
+- name: Set UFW logging policy
+  community.general.ufw:
+    logging: "{{ security_ufw_logging }}"
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
 
 - name: Enable managed UFW policy
   community.general.ufw:

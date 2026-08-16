@@ -1,4 +1,5 @@
-/var/log/*.log {
+{% for log_path in base_os_logrotate_paths %}
+{{ log_path }} {
     size {{ base_os_logrotate_size }}
     rotate {{ base_os_logrotate_rotate }}
     compress
@@ -7,3 +8,4 @@
     notifempty
     copytruncate
 }
+{% endfor %}

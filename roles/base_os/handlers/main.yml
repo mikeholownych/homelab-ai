@@ -5,10 +5,11 @@
     state: restarted
   when: base_os_mutating_operations_enabled | bool
 
-- name: Validate base OS sysctl settings
+- name: Apply grub configuration update
   ansible.builtin.command:
     argv:
-      - /usr/sbin/sysctl
-      - --system
+      - /usr/sbin/update-grub
   changed_when: false
-  when: base_os_mutating_operations_enabled | bool
+  when:
+    - base_os_mutating_operations_enabled | bool
+    - not ansible_check_mode

@@ -28,7 +28,12 @@ base_os_proxy_path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d/
 base_os_disable_periodic_path: "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d/20auto-upgrades' }}"
 base_os_journald_path: "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d/60-aihost.conf' }}"
 base_os_logrotate_path: "{{ (base_os_root_dir | default('')) ~ '/etc/logrotate.d/aihost-baseline' }}"
+base_os_logrotate_validate_command: /usr/sbin/logrotate --debug %s
+base_os_logrotate_paths:
+  - /var/log/local-ai/*.log
 base_os_locale_path: "{{ (base_os_root_dir | default('')) ~ '/etc/default/locale' }}"
+base_os_grub_dropin_path: "{{ (base_os_root_dir | default('')) ~ '/etc/default/grub.d/90-aihost.cfg' }}"
+base_os_grub_shell_validate_command: /bin/sh -n %s
 base_os_admin_packages:
   - auditd
   - ca-certificates
@@ -61,6 +66,13 @@ base_os_allowed_sysctl:
 base_os_kernel_sysctl: {}
 base_os_manage_boot_parameters: false
 base_os_boot_parameters: []
+base_os_allowed_boot_parameter_patterns:
+  - ^intel_iommu=(on|off)$
+  - ^amd_iommu=(on|off)$
+  - ^iommu=(pt|soft|off|force)$
+  - ^pcie_aspm=(off|force)$
+  - ^module_blacklist=[A-Za-z0-9_,.-]+$
+  - ^systemd.unified_cgroup_hierarchy=(0|1)$
 base_os_high_risk_packages:
   - linux-image
   - linux-modules

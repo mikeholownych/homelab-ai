@@ -4,11 +4,3 @@
     name: auditd.service
     state: restarted
   when: security_manage_runtime | bool
-
-- name: Validate security sysctl settings
-  ansible.builtin.command:
-    argv:
-      - /usr/sbin/sysctl
-      - --system
-  changed_when: false
-  when: security_manage_runtime | bool

@@ -77,27 +77,42 @@ def ansible_playbook_bin() -> str:
     raise AssertionError("ansible-playbook is required for localhost role probes")
 
 
-def run_local_role_probe(playbook_text: str) -> subprocess.CompletedProcess[str]:
-    with tempfile.TemporaryDirectory() as tmpdir:
-        temp_root = Path(tmpdir)
-        playbook_path = temp_root / "probe.yml"
-        playbook_path.write_text(playbook_text, encoding="utf-8")
-        env = os.environ.copy()
-        env["ANSIBLE_CONFIG"] = str(REPO_ROOT / "ansible.cfg")
-        env["ANSIBLE_ROLES_PATH"] = str(REPO_ROOT / "roles")
-        return subprocess.run(
-            [
-                ansible_playbook_bin(),
-                "-i",
-                str(REPO_ROOT / "tests" / "fixtures" / "inventory" / "healthy.yml"),
-                str(playbook_path),
-            ],
-            cwd=REPO_ROOT,
-            check=False,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
+def make_probe_workspace() -> Path:
+    return Path(tempfile.mkdtemp(prefix="aihost-baseline-probe-"))
+
+
+def run_local_role_probe(
+    playbook_text: str,
+    *,
+    workspace: Path | None = None,
+    check: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    if workspace is None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            return run_local_role_probe(playbook_text, workspace=temp_root, check=check)
+
+    playbook_path = workspace / "probe.yml"
+    playbook_path.write_text(playbook_text, encoding="utf-8")
+    env = os.environ.copy()
+    env["ANSIBLE_CONFIG"] = str(REPO_ROOT / "ansible.cfg")
+    env["ANSIBLE_ROLES_PATH"] = str(REPO_ROOT / "roles")
+    command = [
+        ansible_playbook_bin(),
+        "-i",
+        str(REPO_ROOT / "tests" / "fixtures" / "inventory" / "healthy.yml"),
+    ]
+    if check:
+        command.append("--check")
+    command.append(str(playbook_path))
+    return subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
 
 
 class BaselineContractTests(unittest.TestCase):
@@ -196,6 +211,51 @@ class BaselineContractTests(unittest.TestCase):
         ):
             self.assertIn(token, controls_doc)
 
+    def test_networking_base_os_and_security_validation_contracts_fail_before_mutation(self) -> None:
+        networking_defaults = load_role_yaml("networking", "defaults/main.yml")
+        networking_tasks = read_text(ROLE_ROOT / "networking" / "tasks" / "main.yml")
+        networking_handlers = read_text(ROLE_ROOT / "networking" / "handlers" / "main.yml")
+        base_os_defaults = load_role_yaml("base_os", "defaults/main.yml")
+        base_os_tasks = read_text(ROLE_ROOT / "base_os" / "tasks" / "main.yml")
+        base_os_handlers = read_text(ROLE_ROOT / "base_os" / "handlers" / "main.yml")
+        base_os_logrotate_template = read_text(ROLE_ROOT / "base_os" / "templates" / "aihost-logrotate.j2")
+        security_tasks = read_text(ROLE_ROOT / "security" / "tasks" / "main.yml")
+        security_handlers = read_text(ROLE_ROOT / "security" / "handlers" / "main.yml")
+
+        self.assertEqual("networkd", networking_defaults.get("networking_renderer"))
+        self.assertIn("networking_staging_root", networking_tasks)
+        self.assertIn("--root-dir", networking_tasks)
+        self.assertIn("check_mode: false", networking_tasks)
+        self.assertLess(networking_tasks.index("networking_staging_root"), networking_tasks.index("networking_netplan_file"))
+        self.assertLess(networking_tasks.index("Validate staged netplan configuration"), networking_tasks.index("Install validated netplan configuration"))
+        self.assertNotIn("notify:", networking_tasks.split("Validate staged netplan configuration", 1)[0])
+        self.assertIn("networking_apply | bool", networking_handlers)
+
+        self.assertEqual(False, base_os_defaults.get("base_os_manage_boot_parameters"))
+        self.assertEqual([], base_os_defaults.get("base_os_boot_parameters"))
+        self.assertIn("base_os_grub_dropin_path", base_os_tasks)
+        self.assertIn("update-grub", base_os_handlers)
+        self.assertIn("logrotate --debug", str(base_os_defaults.get("base_os_logrotate_validate_command")))
+        self.assertEqual(["/var/log/local-ai/*.log"], base_os_defaults.get("base_os_logrotate_paths"))
+        self.assertNotIn("/var/log/*.log", base_os_logrotate_template)
+        self.assertNotIn("sysctl --system", base_os_handlers)
+
+        self.assertLess(
+            security_tasks.index("Allow SSH only from configured management CIDRs"),
+            security_tasks.index("Allow inference API only from configured CIDRs"),
+        )
+        self.assertLess(
+            security_tasks.index("Allow inference API only from configured CIDRs"),
+            security_tasks.index("Set UFW default deny incoming policy"),
+        )
+        self.assertLess(
+            security_tasks.index("Set UFW default allow outgoing policy"),
+            security_tasks.index("Enable managed UFW policy"),
+        )
+        self.assertIn("security_management_cidrs_invalid", security_tasks)
+        self.assertIn("security_inference_api_ports_invalid", security_tasks)
+        self.assertNotIn("sysctl --system", security_handlers)
+
     def test_baseline_roles_avoid_shell_and_keep_command_usage_narrow(self) -> None:
         for role in ROLE_NAMES:
             tasks = load_role_yaml(role, "tasks/main.yml")
@@ -239,6 +299,204 @@ class BaselineContractTests(unittest.TestCase):
             self.assertIn(required, scenario_text)
         self.assertIn("does not assert host convergence", makefile)
 
+    def test_invalid_networking_renderer_fails_before_destination_mutation_even_in_check_mode(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            destination_path = workspace / "root" / "etc" / "netplan" / "60-aihost.yaml"
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            destination_path.write_text("sentinel: keep\n", encoding="utf-8")
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Networking staged validation negative probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    networking_root_dir: "{{ playbook_dir }}/root"
+                    networking_staging_root: "{{ playbook_dir }}/staging"
+                    networking_manage_runtime: true
+                    networking_manage_netplan: true
+                    networking_apply: false
+                    networking_renderer: invalid
+                    networking_netplan_binary: "{{ playbook_dir }}/bin/netplan"
+                    networking_ethernets:
+                      eno1:
+                        dhcp4: true
+                  pre_tasks:
+                    - name: Create staged netplan probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/bin"
+                        - "{{ playbook_dir }}/root/etc/netplan"
+                        - "{{ playbook_dir }}/staging"
+                    - name: Install fake netplan validator
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/bin/netplan"
+                        mode: "0755"
+                        content: |
+                          #!/bin/sh
+                          case "$*" in
+                            *"renderer: invalid"*)
+                              echo "renderer invalid" >&2
+                              exit 12
+                              ;;
+                          esac
+                          exit 0
+                  tasks:
+                    - name: Include networking role
+                      ansible.builtin.include_role:
+                        name: networking
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace, check=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn("networking renderer must be one of", result.stdout + result.stderr)
+            self.assertEqual("sentinel: keep\n", destination_path.read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_invalid_firewall_cidr_fails_with_specific_message_before_ufw(self) -> None:
+        playbook_text = textwrap.dedent(
+            """
+            ---
+            - name: Security invalid CIDR probe
+              hosts: localhost
+              connection: local
+              gather_facts: false
+              become: false
+              vars:
+                security_root_dir: "{{ playbook_dir }}/root"
+                security_manage_runtime: false
+                security_firewall_enabled: true
+                security_management_cidrs:
+                  - 10.0.0.999/24
+                security_auditd_enabled: false
+                security_sudoers_validate_command: "/usr/bin/env true %s"
+              pre_tasks:
+                - name: Create security probe directories
+                  ansible.builtin.file:
+                    path: "{{ item }}"
+                    state: directory
+                    mode: "0755"
+                  loop:
+                    - "{{ playbook_dir }}/root/etc"
+                    - "{{ playbook_dir }}/root/etc/sudoers.d"
+                    - "{{ playbook_dir }}/root/etc/audit/rules.d"
+              tasks:
+                - name: Include security role
+                  ansible.builtin.include_role:
+                    name: security
+            """
+        )
+
+        result = run_local_role_probe(playbook_text)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("security_management_cidrs must contain valid CIDR networks", result.stdout + result.stderr)
+
+    def test_invalid_firewall_port_fails_with_specific_message_before_ufw(self) -> None:
+        playbook_text = textwrap.dedent(
+            """
+            ---
+            - name: Security invalid port probe
+              hosts: localhost
+              connection: local
+              gather_facts: false
+              become: false
+              vars:
+                security_root_dir: "{{ playbook_dir }}/root"
+                security_manage_runtime: false
+                security_firewall_enabled: true
+                security_management_cidrs:
+                  - 10.0.0.0/24
+                security_inference_api_firewall_enabled: true
+                security_inference_api_cidrs:
+                  - 10.1.0.0/24
+                security_inference_api_ports:
+                  - 70000
+                security_auditd_enabled: false
+                security_sudoers_validate_command: "/usr/bin/env true %s"
+              pre_tasks:
+                - name: Create security probe directories
+                  ansible.builtin.file:
+                    path: "{{ item }}"
+                    state: directory
+                    mode: "0755"
+                  loop:
+                    - "{{ playbook_dir }}/root/etc"
+                    - "{{ playbook_dir }}/root/etc/sudoers.d"
+                    - "{{ playbook_dir }}/root/etc/audit/rules.d"
+              tasks:
+                - name: Include security role
+                  ansible.builtin.include_role:
+                    name: security
+            """
+        )
+
+        result = run_local_role_probe(playbook_text)
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("security_inference_api_ports must be integers between 1 and 65535", result.stdout + result.stderr)
+
+    def test_boot_parameter_probe_writes_validated_dropin_only_when_enabled(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Base OS boot parameter probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: true
+                  become: false
+                  vars:
+                    baseline_skip_platform_guard: true
+                    base_os_root_dir: "{{ playbook_dir }}/root"
+                    base_os_mutating_operations_enabled: false
+                    base_os_manage_boot_parameters: true
+                    base_os_boot_parameters:
+                      - intel_iommu=on
+                      - iommu=pt
+                    base_os_logrotate_validate_command: "/usr/bin/env true %s"
+                    base_os_grub_shell_validate_command: "/usr/bin/env true %s"
+                  pre_tasks:
+                    - name: Create base OS probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc"
+                        - "{{ playbook_dir }}/root/etc/apt"
+                        - "{{ playbook_dir }}/root/etc/apt/apt.conf.d"
+                        - "{{ playbook_dir }}/root/etc/apt/preferences.d"
+                        - "{{ playbook_dir }}/root/etc/apt/sources.list.d"
+                        - "{{ playbook_dir }}/root/etc/default"
+                        - "{{ playbook_dir }}/root/etc/default/grub.d"
+                        - "{{ playbook_dir }}/root/etc/logrotate.d"
+                        - "{{ playbook_dir }}/root/etc/systemd"
+                        - "{{ playbook_dir }}/root/etc/systemd/journald.conf.d"
+                  tasks:
+                    - name: Include base OS role
+                      ansible.builtin.include_role:
+                        name: base_os
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            dropin_path = workspace / "root" / "etc" / "default" / "grub.d" / "90-aihost.cfg"
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertTrue(dropin_path.exists(), "Expected boot-parameter drop-in to be rendered when enabled")
+            dropin_text = dropin_path.read_text(encoding="utf-8")
+            self.assertIn("intel_iommu=on", dropin_text)
+            self.assertIn("iommu=pt", dropin_text)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
     def test_bootstrap_probe_succeeds_locally_with_password_auth_enabled(self) -> None:
         playbook_text = textwrap.dedent(
             """
@@ -253,6 +511,7 @@ class BaselineContractTests(unittest.TestCase):
                 baseline_skip_platform_guard: true
                 base_os_root_dir: "{{ playbook_dir }}/root"
                 base_os_mutating_operations_enabled: false
+                base_os_logrotate_validate_command: "/usr/bin/env true %s"
                 time_sync_root_dir: "{{ playbook_dir }}/root"
                 time_sync_manage_runtime: false
                 users_root_dir: "{{ playbook_dir }}/root"

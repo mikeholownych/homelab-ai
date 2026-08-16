@@ -3,12 +3,23 @@ networking_manage_netplan: false
 networking_apply: false
 networking_allow_ssh_disruption: false
 networking_root_dir: /
+networking_staging_root: >-
+  {{
+    networking_root_dir ~ '/run/aihost-netplan-staging'
+    if networking_root_dir != '/'
+    else '/run/aihost-netplan-staging'
+  }}
+networking_staging_netplan_file: "{{ networking_staging_root ~ '/etc/netplan/60-aihost.yaml' }}"
 networking_netplan_file: >-
   {{
     networking_root_dir ~ '/etc/netplan/60-aihost.yaml'
     if networking_root_dir != '/'
     else '/etc/netplan/60-aihost.yaml'
   }}
+networking_netplan_binary: /usr/sbin/netplan
 networking_renderer: networkd
+networking_valid_renderers:
+  - networkd
+  - NetworkManager
 networking_ethernets: {}
 networking_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"

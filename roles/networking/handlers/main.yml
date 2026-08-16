@@ -2,7 +2,7 @@
 - name: Apply validated netplan configuration
   ansible.builtin.command:
     argv:
-      - /usr/sbin/netplan
+      - "{{ networking_netplan_binary }}"
       - apply
   changed_when: false
   when:
