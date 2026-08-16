@@ -5,6 +5,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import textwrap
 import unittest
@@ -207,6 +208,14 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("ssh_authorized_keys", users_tasks)
         self.assertIn("exclusive: true", users_tasks)
         self.assertIn("append: false", users_tasks)
+        self.assertIn(
+            'groups: "{{ (users_local_ai_effective_groups | default([])) | join(\',\') }}"',
+            users_tasks,
+        )
+        self.assertIn(
+            'groups: "{{ ((item.groups | default([])) + (item.preserved_groups | default([]))) | unique | join(\',\') }}"',
+            users_tasks,
+        )
         self.assertIn("preserved_groups", users_tasks)
         self.assertIn("sudo_passwordless_all", users_tasks)
         self.assertIn("sudo_commands", users_tasks)
@@ -223,7 +232,10 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("ssh-keygen", ssh_tasks)
         self.assertIn("sshd -t", str(ssh_defaults.get("ssh_validate_command")))
         self.assertIn("sshd -T", str(ssh_defaults.get("ssh_effective_config_command")))
-        self.assertIn("Include=", str(ssh_defaults.get("ssh_validate_command")))
+        self.assertNotIn("Include=", str(ssh_defaults.get("ssh_validate_command")))
+        self.assertNotIn('validate: "{{ ssh_validate_command }}"', ssh_tasks)
+        self.assertIn("Validate installed SSH daemon syntax after rendering hardening", ssh_tasks)
+        self.assertIn("Validate installed SSH daemon effective configuration after rendering hardening", ssh_tasks)
         self.assertIn("PasswordAuthentication", ssh_template)
         self.assertIn("PermitEmptyPasswords no", ssh_template)
         self.assertIn("ChallengeResponseAuthentication no", ssh_template)
@@ -234,7 +246,6 @@ class BaselineContractTests(unittest.TestCase):
         self.assertEqual([], security_defaults.get("security_management_cidrs"))
         self.assertEqual(False, security_defaults.get("security_inference_api_firewall_enabled"))
         self.assertEqual([], security_defaults.get("security_inference_api_ports"))
-        self.assertIn("security_ufw_module", security_defaults)
         self.assertIn("security_ufw_state_path", security_defaults)
         self.assertIn("community.general.ufw", security_tasks)
         self.assertIn("Delete obsolete managed UFW rules", security_tasks)
@@ -290,7 +301,6 @@ class BaselineContractTests(unittest.TestCase):
         self.assertNotIn("sysctl --system", base_os_handlers)
         self.assertIn("base_os_update_grub_command", base_os_handlers)
         self.assertIn("base_os_package_holds_state_path", base_os_defaults)
-        self.assertIn("base_os_package_selection_module", base_os_defaults)
         self.assertIn("base_os_package_preferences_path", base_os_defaults)
         self.assertIn("selection: install", base_os_tasks)
         self.assertIn("Remove managed apt pin preferences when no pins remain", base_os_tasks)
@@ -353,7 +363,8 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("tests/integration/baseline_os.yml", makefile)
         self.assertIn("localhost-safe", makefile)
         self.assertIn("idempotency:", makefile)
-        self.assertIn("baseline_idempotency.yml", makefile)
+        self.assertIn("baseline_container_harness.py", makefile)
+        self.assertIn("--mode idempotency", makefile)
         self.assertIn("Ubuntu 24.04", scenario_text)
         self.assertIn("check_mode: true", scenario_text)
         for required in ("base_os", "time_sync", "storage", "networking"):
@@ -925,34 +936,135 @@ class BaselineContractTests(unittest.TestCase):
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
 
+    def test_runtime_ssh_render_succeeds_with_real_sshd_and_main_config_include(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            public_key = generate_ed25519_public_key(workspace)
+            host_key = workspace / "root" / "etc" / "ssh" / "ssh_host_ed25519_key"
+            host_key.parent.mkdir(parents=True, exist_ok=True)
+            keygen_result = subprocess.run(
+                [ssh_keygen_bin(), "-q", "-t", "ed25519", "-N", "", "-f", str(host_key)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, keygen_result.returncode, msg=keygen_result.stdout + keygen_result.stderr)
+            playbook_text = textwrap.dedent(
+                f"""
+                ---
+                - name: SSH runtime render probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{{{ playbook_dir }}}}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_operator_users:
+                      - name: ops
+                        enabled: true
+                        home: "{{{{ playbook_dir }}}}/root/home/ops"
+                        ssh_authorized_keys:
+                          - "{public_key}"
+                        sudo: false
+                  pre_tasks:
+                    - name: Create localhost-safe SSH tree
+                      ansible.builtin.file:
+                        path: "{{{{ item }}}}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh"
+                        - "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d"
+                        - "{{{{ playbook_dir }}}}/root/home/ops/.ssh"
+                    - name: Write SSH main config
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config"
+                        mode: "0644"
+                        content: |
+                          HostKey {{{{ playbook_dir }}}}/root/etc/ssh/ssh_host_ed25519_key
+                          Include {{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d/*.conf
+                          UsePAM yes
+                    - name: Write managed authorized_keys proof
+                      ansible.builtin.copy:
+                        dest: "{{{{ playbook_dir }}}}/root/home/ops/.ssh/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          {public_key}
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            self.assertTrue(
+                (workspace / "root" / "etc" / "ssh" / "sshd_config.d" / "00-aihost-hardening.conf").exists(),
+                "Expected runtime probe to render the managed SSH drop-in",
+            )
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
     def test_conflicting_effective_ssh_config_fails_before_reload(self) -> None:
         workspace = make_probe_workspace()
         try:
             public_key = generate_ed25519_public_key(workspace)
-            fake_sshd = workspace / "fake-sshd.sh"
-            fake_sshd.write_text(
+            host_key = workspace / "root" / "etc" / "ssh" / "ssh_host_ed25519_key"
+            host_key.parent.mkdir(parents=True, exist_ok=True)
+            keygen_result = subprocess.run(
+                [ssh_keygen_bin(), "-q", "-t", "ed25519", "-N", "", "-f", str(host_key)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, keygen_result.returncode, msg=keygen_result.stdout + keygen_result.stderr)
+            ssh_main_config = workspace / "root" / "etc" / "ssh" / "sshd_config"
+            ssh_dropin_dir = workspace / "root" / "etc" / "ssh" / "sshd_config.d"
+            ssh_dropin_dir.mkdir(parents=True, exist_ok=True)
+            ssh_main_config.write_text(
                 textwrap.dedent(
-                    """\
-                    #!/bin/sh
-                    case "$1" in
-                      -T)
-                        printf '%s\n' \
-                          'passwordauthentication yes' \
-                          'permitrootlogin yes' \
-                          'kbdinteractiveauthentication yes' \
-                          'allowtcpforwarding yes' \
-                          'allowagentforwarding yes' \
-                          'x11forwarding yes'
-                        ;;
-                      *)
-                        exit 0
-                        ;;
-                    esac
+                    f"""\
+                    HostKey {host_key}
+                    PasswordAuthentication yes
+                    PermitRootLogin yes
+                    KbdInteractiveAuthentication yes
+                    Include {ssh_dropin_dir}/*.conf
+                    UsePAM yes
                     """
                 ),
                 encoding="utf-8",
             )
-            fake_sshd.chmod(0o755)
+            (ssh_dropin_dir / "00-aihost-hardening.conf").write_text(
+                textwrap.dedent(
+                    """\
+                    PubkeyAuthentication yes
+                    PasswordAuthentication no
+                    PermitRootLogin no
+                    KbdInteractiveAuthentication no
+                    AllowTcpForwarding yes
+                    AllowAgentForwarding no
+                    X11Forwarding no
+                    """
+                ),
+                encoding="utf-8",
+            )
+            effective_config_result = subprocess.run(
+                ["/usr/sbin/sshd", "-T", "-f", str(ssh_main_config)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                0,
+                effective_config_result.returncode,
+                msg=effective_config_result.stdout + effective_config_result.stderr,
+            )
+            self.assertIn("passwordauthentication yes", effective_config_result.stdout.lower())
+            self.assertIn("permitrootlogin yes", effective_config_result.stdout.lower())
+            self.assertIn("kbdinteractiveauthentication yes", effective_config_result.stdout.lower())
             playbook_text = textwrap.dedent(
                 f"""
                 ---
@@ -965,8 +1077,6 @@ class BaselineContractTests(unittest.TestCase):
                     ssh_root_dir: "{{{{ playbook_dir }}}}/root"
                     ssh_manage_runtime: false
                     ssh_disable_password_auth: true
-                    ssh_validate_command: "/usr/bin/env true %s"
-                    ssh_effective_config_command: "/bin/sh {fake_sshd} -T"
                     operator_users:
                       - name: ops
                         enabled: true
@@ -989,10 +1099,12 @@ class BaselineContractTests(unittest.TestCase):
                         dest: "{{{{ playbook_dir }}}}/root/etc/ssh/sshd_config"
                         mode: "0644"
                         content: |
+                          HostKey {{{{ playbook_dir }}}}/root/etc/ssh/ssh_host_ed25519_key
                           PasswordAuthentication yes
                           PermitRootLogin yes
                           KbdInteractiveAuthentication yes
                           Include {{{{ playbook_dir }}}}/root/etc/ssh/sshd_config.d/*.conf
+                          UsePAM yes
                     - name: Write managed authorized_keys proof
                       ansible.builtin.copy:
                         dest: "{{{{ playbook_dir }}}}/root/home/ops/.ssh/authorized_keys"
@@ -1009,6 +1121,179 @@ class BaselineContractTests(unittest.TestCase):
             result = run_local_role_probe(playbook_text, workspace=workspace)
             self.assertNotEqual(0, result.returncode)
             self.assertIn("Effective SSH daemon configuration does not match managed hardening intent", result.stdout + result.stderr)
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_check_mode_ssh_candidate_validation_uses_workspace_not_installed_dropin(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            subprocess.run(
+                [
+                    ssh_keygen_bin(),
+                    "-q",
+                    "-t",
+                    "ed25519",
+                    "-N",
+                    "",
+                    "-f",
+                    str(workspace / "root" / "etc" / "ssh" / "ssh_host_ed25519_key"),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: SSH check-mode candidate validation positive probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{ playbook_dir }}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_operator_users:
+                      - name: ops
+                        enabled: true
+                        home: "{{ playbook_dir }}/root/home/ops"
+                        ssh_authorized_keys:
+                          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFiDLmPBUEMperCkBsXkwpK6gBLzg4RJLBzrkAQpQ58D probe@example
+                        sudo: false
+                  pre_tasks:
+                    - name: Create SSH probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc/ssh"
+                        - "{{ playbook_dir }}/root/etc/ssh/sshd_config.d"
+                        - "{{ playbook_dir }}/root/home/ops/.ssh"
+                      check_mode: false
+                    - name: Write conflicting installed SSH main config
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/root/etc/ssh/sshd_config"
+                        mode: "0644"
+                        content: |
+                          HostKey {{ playbook_dir }}/root/etc/ssh/ssh_host_ed25519_key
+                          PasswordAuthentication yes
+                          PermitRootLogin yes
+                          KbdInteractiveAuthentication yes
+                          AllowAgentForwarding yes
+                          X11Forwarding yes
+                          Include {{ playbook_dir }}/root/etc/ssh/sshd_config.d/*.conf
+                      check_mode: false
+                    - name: Seed managed key proof
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/root/home/ops/.ssh/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFiDLmPBUEMperCkBsXkwpK6gBLzg4RJLBzrkAQpQ58D probe@example
+                      check_mode: false
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace, check=True)
+            self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+            dropin_path = workspace / "root" / "etc" / "ssh" / "sshd_config.d" / "00-aihost-hardening.conf"
+            self.assertFalse(
+                dropin_path.exists(),
+                "Expected check mode to validate a candidate workspace without mutating installed drop-ins",
+            )
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_check_mode_ssh_candidate_validation_fails_when_earlier_include_preempts_managed_dropin(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            initial_candidate_dirs = {
+                path.name for path in Path(tempfile.gettempdir()).glob("aihost-ssh-candidate-*")
+            }
+            host_key = workspace / "root" / "etc" / "ssh" / "ssh_host_ed25519_key"
+            host_key.parent.mkdir(parents=True, exist_ok=True)
+            keygen_result = subprocess.run(
+                [ssh_keygen_bin(), "-q", "-t", "ed25519", "-N", "", "-f", str(host_key)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, keygen_result.returncode, msg=keygen_result.stdout + keygen_result.stderr)
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: SSH check-mode candidate validation negative probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    ssh_root_dir: "{{ playbook_dir }}/root"
+                    ssh_manage_runtime: false
+                    ssh_disable_password_auth: true
+                    ssh_operator_users:
+                      - name: ops
+                        enabled: true
+                        home: "{{ playbook_dir }}/root/home/ops"
+                        ssh_authorized_keys:
+                          - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFiDLmPBUEMperCkBsXkwpK6gBLzg4RJLBzrkAQpQ58D probe@example
+                        sudo: false
+                  pre_tasks:
+                    - name: Create SSH probe directories
+                      ansible.builtin.file:
+                        path: "{{ item }}"
+                        state: directory
+                        mode: "0755"
+                      loop:
+                        - "{{ playbook_dir }}/root/etc/ssh"
+                        - "{{ playbook_dir }}/root/etc/ssh/sshd_config.d"
+                        - "{{ playbook_dir }}/root/home/ops/.ssh"
+                      check_mode: false
+                    - name: Write SSH main config with wildcard include
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/root/etc/ssh/sshd_config"
+                        mode: "0644"
+                        content: |
+                          HostKey {{ playbook_dir }}/root/etc/ssh/ssh_host_ed25519_key
+                          Include {{ playbook_dir }}/root/etc/ssh/sshd_config.d/*.conf
+                      check_mode: false
+                    - name: Seed earlier conflicting drop-in
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/root/etc/ssh/sshd_config.d/00-aaa-legacy.conf"
+                        mode: "0644"
+                        content: |
+                          PasswordAuthentication yes
+                      check_mode: false
+                    - name: Seed managed key proof
+                      ansible.builtin.copy:
+                        dest: "{{ playbook_dir }}/root/home/ops/.ssh/authorized_keys"
+                        mode: "0600"
+                        content: |
+                          ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFiDLmPBUEMperCkBsXkwpK6gBLzg4RJLBzrkAQpQ58D probe@example
+                      check_mode: false
+                  tasks:
+                    - name: Include SSH role
+                      ansible.builtin.include_role:
+                        name: ssh
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace, check=True)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(
+                "Effective SSH daemon configuration does not match managed hardening intent",
+                result.stdout + result.stderr,
+            )
+            self.assertEqual(
+                initial_candidate_dirs,
+                {path.name for path in Path(tempfile.gettempdir()).glob("aihost-ssh-candidate-*")},
+                "Expected failed candidate validation to clean its temporary workspace",
+            )
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
 
@@ -1057,6 +1342,62 @@ class BaselineContractTests(unittest.TestCase):
             result = run_local_role_probe(playbook_text, workspace=workspace)
             self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
             self.assertFalse(staging_root.exists(), "Expected staged netplan workspace to be removed after validation")
+        finally:
+            shutil.rmtree(workspace, ignore_errors=True)
+
+    def test_networking_disruption_guard_fails_before_mutation_or_reconnect(self) -> None:
+        workspace = make_probe_workspace()
+        try:
+            destination_path = workspace / "root" / "etc" / "netplan" / "60-aihost.yaml"
+            staging_root = workspace / "staging"
+            destination_path.parent.mkdir(parents=True, exist_ok=True)
+            destination_path.write_text("sentinel: keep\n", encoding="utf-8")
+            playbook_text = textwrap.dedent(
+                """
+                ---
+                - name: Networking disruption guard probe
+                  hosts: localhost
+                  connection: local
+                  gather_facts: false
+                  become: false
+                  vars:
+                    networking_root_dir: "{{ playbook_dir }}/root"
+                    networking_staging_root: "{{ playbook_dir }}/staging"
+                    networking_manage_runtime: true
+                    networking_manage_netplan: true
+                    networking_apply: true
+                    networking_allow_ssh_disruption: false
+                    networking_renderer: networkd
+                    networking_netplan_binary: /usr/bin/env
+                    networking_ethernets:
+                      eno1:
+                        dhcp4: true
+                  pre_tasks:
+                    - name: Ensure netplan destination tree exists
+                      ansible.builtin.file:
+                        path: "{{ playbook_dir }}/root/etc/netplan"
+                        state: directory
+                        mode: "0755"
+                      check_mode: false
+                    - name: Force SSH connection guard value without changing local execution transport
+                      ansible.builtin.set_fact:
+                        ansible_connection: ssh
+                  tasks:
+                    - name: Include networking role
+                      ansible.builtin.include_role:
+                        name: networking
+                """
+            )
+
+            result = run_local_role_probe(playbook_text, workspace=workspace)
+            self.assertNotEqual(0, result.returncode)
+            self.assertIn(
+                "Refusing to apply netplan changes over SSH without networking_allow_ssh_disruption=true",
+                result.stdout + result.stderr,
+            )
+            self.assertNotIn("Failed to connect to the host via ssh", result.stdout + result.stderr)
+            self.assertEqual("sentinel: keep\n", destination_path.read_text(encoding="utf-8"))
+            self.assertFalse(staging_root.exists(), "Expected disruption guard to fail before staging any candidate netplan workspace")
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
 
@@ -1404,9 +1745,43 @@ class BaselineContractTests(unittest.TestCase):
         finally:
             shutil.rmtree(workspace, ignore_errors=True)
 
-    def test_make_idempotency_target_bounds_each_ansible_run(self) -> None:
+    def test_docker_users_group_transition_probe_passes(self) -> None:
+        script_path = REPO_ROOT / "tests" / "integration" / "baseline_container_harness.py"
+        self.assertTrue(script_path.exists(), "Expected Docker baseline harness script to exist")
+        self.assertIsNotNone(shutil.which("docker"), "Docker is required for container-backed baseline transition probes")
+        result = subprocess.run(
+            [sys.executable, str(script_path), "--mode", "users-groups-transition"],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
+
+    def test_make_idempotency_target_uses_pinned_ubuntu_container_harness(self) -> None:
         makefile = read_text(REPO_ROOT / "Makefile")
-        self.assertIn("timeout -k 5s 60s", makefile)
+        harness_path = REPO_ROOT / "tests" / "integration" / "baseline_container_harness.py"
+        dockerfile_path = REPO_ROOT / "tests" / "integration" / "Dockerfile.baseline"
+        harness_text = read_text(harness_path)
+        self.assertIn(str(harness_path.relative_to(REPO_ROOT)), makefile)
+        self.assertNotIn("baseline_idempotency.yml", makefile)
+        self.assertIn("timeout -k 10s 600s", makefile)
+        self.assertTrue(dockerfile_path.exists(), "Expected pinned Ubuntu Dockerfile for baseline harness to exist")
+        dockerfile_text = read_text(dockerfile_path)
+        self.assertIn("FROM ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea", dockerfile_text)
+        self.assertNotIn("FROM ubuntu:24.04", dockerfile_text)
+        self.assertNotIn("curl", dockerfile_text)
+        self.assertRegex(dockerfile_text, r"ansible-core=\S+")
+        self.assertRegex(dockerfile_text, r"openssh-server=\S+")
+        self.assertIn("uuid.uuid4()", harness_text)
+        self.assertIn("atexit.register(self.cleanup)", harness_text)
+        self.assertIn('"docker", "rm", "-f", self.container_name', harness_text)
+        self.assertIn('"docker", "inspect", self.container_name', harness_text)
+        self.assertIn('"--network"', harness_text)
+        self.assertIn('"none"', harness_text)
+        self.assertIn("BUILD_TIMEOUT_SECONDS = 300", harness_text)
+        self.assertIn("RUN_TIMEOUT_SECONDS = 300", harness_text)
 
 
 if __name__ == "__main__":

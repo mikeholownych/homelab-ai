@@ -101,5 +101,10 @@ base_os_package_holds_state_path: >-
   {{ (base_os_root_dir | default('')) ~ '/var/lib/aihost/base-os-package-policy-state.json' }}
 base_os_package_preferences_path: >-
   {{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d/90-aihost-managed.pref' }}
-base_os_package_selection_module: ansible.builtin.dpkg_selections
 base_os_mutating_operations_enabled: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+base_os_manage_admin_packages: "{{ base_os_mutating_operations_enabled | bool }}"
+base_os_manage_journald_service: "{{ base_os_mutating_operations_enabled | bool }}"
+base_os_manage_locale_generation: "{{ base_os_mutating_operations_enabled | bool }}"
+base_os_manage_timezone: "{{ base_os_mutating_operations_enabled | bool }}"
+base_os_manage_package_policy: "{{ base_os_mutating_operations_enabled | bool }}"
+base_os_manage_unattended_upgrades_service: "{{ base_os_mutating_operations_enabled | bool }}"

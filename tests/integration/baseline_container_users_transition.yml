@@ -1,0 +1,32 @@
+---
+- name: Ubuntu container users transition probe
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    users_transition_phase: "{{ users_transition_phase | default(false) | bool }}"
+    users_transition_key: >-
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC0vB3w8r1GxYf+gQ9p2xH2x6jv2YVjU8yUxM2xv1L0n users-transition@example
+    users_manage_runtime: true
+    users_local_ai_manage_device_groups: "{{ (not users_transition_phase) | bool }}"
+    users_local_ai_device_groups: "{{ ['render', 'video'] if not users_transition_phase else [] }}"
+    users_local_ai_service_account:
+      name: local-ai
+      system: true
+      shell: /usr/sbin/nologin
+      home: /var/lib/local-ai
+      enabled: true
+      create_home: true
+      preserved_groups: []
+    operator_users:
+      - name: ops
+        enabled: true
+        sudo: false
+        groups: "{{ ['sudo'] if not users_transition_phase else [] }}"
+        ssh_authorized_keys:
+          - "{{ users_transition_key }}"
+  tasks:
+    - name: Include users role
+      ansible.builtin.include_role:
+        name: users

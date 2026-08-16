@@ -35,6 +35,19 @@
     label: "{{ item.key }}"
   when: networking_manage_netplan | bool
 
+- name: Check SSH safety before applying netplan changes
+  ansible.builtin.assert:
+    that:
+      - >-
+        networking_allow_ssh_disruption | bool
+        or (ansible_connection | default('ssh')) not in
+        ["ssh", "paramiko", "smart"]
+    fail_msg: Refusing to apply netplan changes over SSH without networking_allow_ssh_disruption=true.
+  when:
+    - networking_manage_netplan | bool
+    - networking_apply | bool
+    - networking_manage_runtime | bool
+
 - name: Ensure netplan configuration directory exists
   ansible.builtin.file:
     path: "{{ networking_root_dir ~ '/etc/netplan' if networking_root_dir != '/' else '/etc/netplan' }}"
@@ -51,6 +64,7 @@
         state: directory
         mode: "0700"
       check_mode: false
+      changed_when: false
 
     - name: Create temporary staged netplan workspace
       ansible.builtin.tempfile:
@@ -59,6 +73,7 @@
         prefix: netplan-
       register: networking_staging_workspace
       check_mode: false
+      changed_when: false
 
     - name: Ensure staged netplan configuration directories exist
       ansible.builtin.file:
@@ -69,6 +84,7 @@
         - "{{ networking_staging_workspace.path ~ '/etc' }}"
         - "{{ networking_staging_workspace.path ~ '/etc/netplan' }}"
       check_mode: false
+      changed_when: false
 
     - name: Render staged netplan configuration
       ansible.builtin.template:
@@ -105,16 +121,4 @@
         - "{{ networking_staging_workspace.path | default(omit) }}"
         - "{{ networking_staging_root }}"
       check_mode: false
-
-- name: Check SSH safety before applying netplan changes
-  ansible.builtin.assert:
-    that:
-      - >-
-        networking_allow_ssh_disruption | bool
-        or (ansible_connection | default('ssh')) not in
-        ["ssh", "paramiko", "smart"]
-    fail_msg: Refusing to apply netplan changes over SSH without networking_allow_ssh_disruption=true.
-  when:
-    - networking_manage_netplan | bool
-    - networking_apply | bool
-    - networking_manage_runtime | bool
+      changed_when: false

@@ -7,7 +7,8 @@ ANSIBLE_LINT := $(VENV_DIR)/bin/ansible-lint
 ANSIBLE_GALAXY := $(VENV_DIR)/bin/ansible-galaxy
 PYTEST := $(VENV_DIR)/bin/pytest
 YAMLLINT := $(VENV_DIR)/bin/yamllint
-ANSIBLE_TIMEOUT := timeout -k 5s 60s
+DOCKER_HARNESS_TIMEOUT := timeout -k 10s 600s
+BASELINE_CONTAINER_HARNESS := tests/integration/baseline_container_harness.py
 
 PLAYBOOKS := \
 	playbooks/bootstrap.yml \
@@ -42,12 +43,6 @@ check: bootstrap-tools
 	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check tests/integration/baseline_os.yml
 
 idempotency: bootstrap-tools
-	@tmp_root=$$(mktemp -d .ansible/idempotency.XXXXXX); \
-	trap 'rm -rf "$$tmp_root"' EXIT; \
-	printf '%s\n' "Seeding localhost-safe baseline state for idempotency probe..."; \
-	ANSIBLE_CONFIG=ansible.cfg LOCALHOST_SAFE_ROOT="$$tmp_root" $(ANSIBLE_TIMEOUT) $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml tests/integration/baseline_idempotency.yml >/dev/null; \
-	second_run_output=$$(ANSIBLE_CONFIG=ansible.cfg LOCALHOST_SAFE_ROOT="$$tmp_root" $(ANSIBLE_TIMEOUT) $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml tests/integration/baseline_idempotency.yml); \
-	printf '%s\n' "$$second_run_output"; \
-	printf '%s\n' "$$second_run_output" | awk '/localhost[[:space:]]*: ok=/{for(i=1;i<=NF;i++) if($$i ~ /^changed=/){split($$i,a,"="); found=1; if(a[2] != 0) exit 1}} END{if(found != 1) exit 1}'
+	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --mode idempotency --timeout 590
 
 quality: lint test syntax check check idempotency

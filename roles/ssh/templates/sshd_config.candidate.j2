@@ -1,0 +1,11 @@
+HostKey {{ ssh_candidate_workspace.path }}/ssh_host_ed25519_key
+{{
+  (ssh_main_config_content.content | b64decode)
+  | regex_replace('(?m)^\\s*HostKey\\s+.*\\n?', '')
+  | regex_replace(
+    '(?mi)^\\s*(PasswordAuthentication|PermitRootLogin|KbdInteractiveAuthentication|AllowTcpForwarding|AllowAgentForwarding|X11Forwarding|ChallengeResponseAuthentication|PermitEmptyPasswords|UsePAM)\\s+.*\\n?',
+    ''
+  )
+  | replace(ssh_dropin_path, ssh_candidate_workspace.path ~ '/sshd_config.d/00-aihost-hardening.conf')
+  | replace(ssh_dropin_dir, ssh_candidate_workspace.path ~ '/sshd_config.d')
+}}

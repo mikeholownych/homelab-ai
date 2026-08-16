@@ -94,7 +94,7 @@
     shell: /usr/sbin/nologin
     home: "{{ users_local_ai_service_account.home }}"
     create_home: "{{ users_local_ai_service_account.create_home | default(true) }}"
-    groups: "{{ (users_local_ai_effective_groups | default([])) | join(',') or omit }}"
+    groups: "{{ (users_local_ai_effective_groups | default([])) | join(',') }}"
     append: false
     state: present
   when:
@@ -125,7 +125,7 @@
     name: "{{ item.name }}"
     comment: "{{ item.comment | default(omit) }}"
     shell: "{{ item.shell | default(users_operator_default_shell) }}"
-    groups: "{{ ((item.groups | default([])) + (item.preserved_groups | default([]))) | unique | join(',') or omit }}"
+    groups: "{{ ((item.groups | default([])) + (item.preserved_groups | default([]))) | unique | join(',') }}"
     append: false
     create_home: true
     home: "{{ item.home | default(omit) }}"

@@ -22,6 +22,11 @@
     path: "{{ ssh_main_config_path }}"
   register: ssh_main_config_stat
 
+- name: Inspect SSH drop-in directory for candidate validation
+  ansible.builtin.stat:
+    path: "{{ ssh_dropin_dir }}"
+  register: ssh_dropin_dir_stat
+
 - name: Select enabled managed SSH operators
   ansible.builtin.set_fact:
     ssh_enabled_operator_users: >-
@@ -68,6 +73,8 @@
     state: directory
     prefix: aihost-ssh-proof-
   register: ssh_proof_workspace
+  check_mode: false
+  changed_when: false
   when: ssh_disable_password_auth | bool
 
 - name: Write declared managed SSH proof keys to temporary files
@@ -79,6 +86,8 @@
   loop_control:
     label: "{{ item.name }}"
   register: ssh_declared_key_files
+  check_mode: false
+  changed_when: false
   when: ssh_disable_password_auth | bool
 
 - name: Validate declared managed SSH proof keys with ssh-keygen
@@ -90,6 +99,7 @@
       - "{{ item.dest }}"
   changed_when: false
   failed_when: false
+  check_mode: false
   loop: "{{ ssh_declared_key_files.results | default([]) }}"
   loop_control:
     label: "{{ item.item.name }}"
@@ -105,6 +115,7 @@
       - "{{ item.stat.path }}"
   changed_when: false
   failed_when: false
+  check_mode: false
   loop: "{{ ssh_operator_authorized_keys.results | default([]) }}"
   loop_control:
     label: "{{ item.item.name }}"
@@ -196,54 +207,185 @@
       with a secure, non-empty authorized_keys file already installed.
   when: ssh_disable_password_auth | bool
 
-- name: Render SSH hardening drop-in with validate
+- name: Validate candidate SSH daemon configuration before applying hardening
+  when: ssh_main_config_stat.stat.exists | default(false)
+  block:
+    - name: Slurp SSH main configuration for candidate validation
+      ansible.builtin.slurp:
+        src: "{{ ssh_main_config_path }}"
+      register: ssh_main_config_content
+
+    - name: Create temporary SSH candidate validation workspace
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: aihost-ssh-candidate-
+      register: ssh_candidate_workspace
+      check_mode: false
+      changed_when: false
+
+    - name: Ensure candidate SSH drop-in directory exists
+      ansible.builtin.file:
+        path: "{{ ssh_candidate_workspace.path }}/sshd_config.d"
+        state: directory
+        mode: "0700"
+      check_mode: false
+      changed_when: false
+
+    - name: Generate candidate SSH host key for validation
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -q
+          - -t
+          - ed25519
+          - -N
+          - ""
+          - -f
+          - "{{ ssh_candidate_workspace.path }}/ssh_host_ed25519_key"
+      changed_when: false
+      check_mode: false
+
+    - name: Copy existing SSH drop-ins into candidate workspace
+      ansible.builtin.command:
+        argv:
+          - cp
+          - -a
+          - "{{ ssh_dropin_dir }}/."
+          - "{{ ssh_candidate_workspace.path }}/sshd_config.d/"
+      changed_when: false
+      check_mode: false
+      when: ssh_dropin_dir_stat.stat.isdir | default(false)
+
+    - name: Render candidate SSH main configuration
+      ansible.builtin.template:
+        src: sshd_config.candidate.j2
+        dest: "{{ ssh_candidate_workspace.path }}/sshd_config"
+        mode: "0600"
+      check_mode: false
+      changed_when: false
+
+    - name: Render candidate SSH hardening drop-in
+      ansible.builtin.template:
+        src: 60-aihost-hardening.conf.j2
+        dest: "{{ ssh_candidate_workspace.path }}/sshd_config.d/00-aihost-hardening.conf"
+        mode: "0644"
+      check_mode: false
+      changed_when: false
+
+    - name: Validate candidate SSH daemon syntax
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -t
+          - -f
+          - "{{ ssh_candidate_workspace.path }}/sshd_config"
+      changed_when: false
+      check_mode: false
+
+    - name: Validate effective candidate SSH daemon configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -f
+          - "{{ ssh_candidate_workspace.path }}/sshd_config"
+      changed_when: false
+      check_mode: false
+      register: ssh_candidate_effective_config_probe
+
+    - name: Assert effective candidate SSH daemon configuration matches managed hardening intent
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('passwordauthentication ' ~ ('no' if ssh_disable_password_auth | bool else 'yes'))
+            in (ssh_candidate_effective_config_probe.stdout | lower)
+          - ('permitrootlogin ' ~ ssh_permit_root_login) in (ssh_candidate_effective_config_probe.stdout | lower)
+          - >-
+            (
+              'kbdinteractiveauthentication '
+              ~ ('yes' if ssh_kbd_interactive_authentication | bool else 'no')
+            ) in (ssh_candidate_effective_config_probe.stdout | lower)
+          - >-
+            (
+              'allowtcpforwarding '
+              ~ ('yes' if ssh_allow_tcp_forwarding | bool else 'no')
+            ) in (ssh_candidate_effective_config_probe.stdout | lower)
+          - >-
+            (
+              'allowagentforwarding '
+              ~ ('yes' if ssh_allow_agent_forwarding | bool else 'no')
+            ) in (ssh_candidate_effective_config_probe.stdout | lower)
+          - >-
+            (
+              'x11forwarding '
+              ~ ('yes' if ssh_x11_forwarding | bool else 'no')
+            ) in (ssh_candidate_effective_config_probe.stdout | lower)
+        fail_msg: Effective SSH daemon configuration does not match managed hardening intent.
+  always:
+    - name: Remove temporary SSH candidate validation workspace
+      ansible.builtin.file:
+        path: "{{ ssh_candidate_workspace.path }}"
+        state: absent
+      when: ssh_candidate_workspace.path is defined
+      check_mode: false
+      changed_when: false
+
+- name: Render SSH hardening drop-in
   ansible.builtin.template:
     src: 60-aihost-hardening.conf.j2
     dest: "{{ ssh_dropin_path }}"
     mode: "0644"
-    validate: "{{ ssh_validate_command }}"
   notify: Reload SSH daemon
+  when: not ansible_check_mode
 
-- name: Validate effective SSH daemon configuration after rendering hardening
+- name: Validate installed SSH daemon syntax after rendering hardening
+  ansible.builtin.command:
+    cmd: "{{ ssh_validate_command }}"
+  changed_when: false
+  when:
+    - not ansible_check_mode
+    - ssh_main_config_stat.stat.exists | default(false)
+
+- name: Validate installed SSH daemon effective configuration after rendering hardening
   ansible.builtin.command:
     cmd: "{{ ssh_effective_config_command }}"
   changed_when: false
-  register: ssh_effective_config_probe
+  register: ssh_installed_effective_config_probe
   when:
+    - not ansible_check_mode
     - ssh_main_config_stat.stat.exists | default(false)
-    - ssh_effective_config_command | length > 0
 
-- name: Assert effective SSH daemon configuration matches managed hardening intent
+- name: Assert installed SSH daemon effective configuration matches managed hardening intent
   ansible.builtin.assert:
     that:
       - >-
         ('passwordauthentication ' ~ ('no' if ssh_disable_password_auth | bool else 'yes'))
-        in (ssh_effective_config_probe.stdout | lower)
-      - ('permitrootlogin ' ~ ssh_permit_root_login) in (ssh_effective_config_probe.stdout | lower)
+        in (ssh_installed_effective_config_probe.stdout | lower)
+      - ('permitrootlogin ' ~ ssh_permit_root_login) in (ssh_installed_effective_config_probe.stdout | lower)
       - >-
         (
           'kbdinteractiveauthentication '
           ~ ('yes' if ssh_kbd_interactive_authentication | bool else 'no')
-        ) in (ssh_effective_config_probe.stdout | lower)
+        ) in (ssh_installed_effective_config_probe.stdout | lower)
       - >-
         (
           'allowtcpforwarding '
           ~ ('yes' if ssh_allow_tcp_forwarding | bool else 'no')
-        ) in (ssh_effective_config_probe.stdout | lower)
+        ) in (ssh_installed_effective_config_probe.stdout | lower)
       - >-
         (
           'allowagentforwarding '
           ~ ('yes' if ssh_allow_agent_forwarding | bool else 'no')
-        ) in (ssh_effective_config_probe.stdout | lower)
+        ) in (ssh_installed_effective_config_probe.stdout | lower)
       - >-
         (
           'x11forwarding '
           ~ ('yes' if ssh_x11_forwarding | bool else 'no')
-        ) in (ssh_effective_config_probe.stdout | lower)
+        ) in (ssh_installed_effective_config_probe.stdout | lower)
     fail_msg: Effective SSH daemon configuration does not match managed hardening intent.
   when:
+    - not ansible_check_mode
     - ssh_main_config_stat.stat.exists | default(false)
-    - ssh_effective_config_probe is defined
 
 - name: Remove temporary SSH proof workspace
   ansible.builtin.file:
@@ -252,3 +394,5 @@
   when:
     - ssh_disable_password_auth | bool
     - ssh_proof_workspace.path is defined
+  check_mode: false
+  changed_when: false

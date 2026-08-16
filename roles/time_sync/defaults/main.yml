@@ -18,3 +18,5 @@ time_sync_provider_packages:
   chrony:
     - chrony
 time_sync_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+time_sync_manage_packages: "{{ time_sync_manage_runtime | bool }}"
+time_sync_manage_services: "{{ time_sync_manage_runtime | bool }}"

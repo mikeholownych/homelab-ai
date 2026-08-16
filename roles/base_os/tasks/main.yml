@@ -129,13 +129,13 @@
     state: present
     update_cache: true
     cache_valid_time: "{{ base_os_apt_cache_valid_time }}"
-  when: base_os_mutating_operations_enabled | bool
+  when: base_os_manage_admin_packages | bool
 
 - name: Generate baseline locale
   community.general.locale_gen:
     name: "{{ base_os_locale }}"
     state: present
-  when: base_os_mutating_operations_enabled | bool
+  when: base_os_manage_locale_generation | bool
 
 - name: Set baseline locale defaults
   ansible.builtin.copy:
@@ -148,7 +148,7 @@
 - name: Set system timezone
   community.general.timezone:
     name: "{{ base_os_timezone }}"
-  when: base_os_mutating_operations_enabled | bool
+  when: base_os_manage_timezone | bool
 
 - name: Render journald retention policy
   ansible.builtin.template:
@@ -228,7 +228,7 @@
     selection: install
   loop: "{{ base_os_package_holds_previous | difference(base_os_package_holds) }}"
   when:
-    - base_os_mutating_operations_enabled | bool
+    - base_os_manage_package_policy | bool
     - (base_os_package_holds_previous | difference(base_os_package_holds) | length) > 0
 
 - name: Hold selected high-risk packages
@@ -237,7 +237,7 @@
     selection: hold
   loop: "{{ base_os_package_holds }}"
   when:
-    - base_os_mutating_operations_enabled | bool
+    - base_os_manage_package_policy | bool
     - base_os_package_holds | length > 0
 
 - name: Remove legacy role-owned apt pin preferences
@@ -274,11 +274,11 @@
 - name: Gather installed package facts for unattended-upgrades checks
   ansible.builtin.package_facts:
     manager: auto
-  when: base_os_mutating_operations_enabled | bool
+  when: base_os_manage_unattended_upgrades_service | bool
 
 - name: Gather service facts for unattended-upgrades checks
   ansible.builtin.service_facts:
-  when: base_os_mutating_operations_enabled | bool
+  when: base_os_manage_unattended_upgrades_service | bool
 
 - name: Stop unattended-upgrades service when installed
   ansible.builtin.systemd:
@@ -287,6 +287,6 @@
     enabled: false
     masked: true
   when:
-    - base_os_mutating_operations_enabled | bool
+    - base_os_manage_unattended_upgrades_service | bool
     - "'unattended-upgrades' in ansible_facts.packages"
     - "'unattended-upgrades.service' in ansible_facts.services"

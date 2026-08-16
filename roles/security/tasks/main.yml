@@ -142,7 +142,7 @@
         + [item]
       }}
   loop: "{{ security_ufw_previous_rules | default([]) }}"
-  when: (item | to_json) not in security_ufw_desired_rule_tokens
+  when: item not in security_ufw_desired_rules
 
 - name: Install auditd package when enabled
   ansible.builtin.apt:
@@ -193,7 +193,9 @@
   loop: "{{ security_sysctl | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-  when: security_manage_runtime | bool
+  when:
+    - security_manage_runtime | bool
+    - security_manage_sysctl | bool
 
 - name: Allow SSH only from configured management CIDRs
   community.general.ufw:

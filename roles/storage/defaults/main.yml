@@ -1,6 +1,7 @@
 ---
 storage_mounts: []
 storage_allowed_fstypes:
+  - tmpfs
   - ext4
   - xfs
   - btrfs

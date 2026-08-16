@@ -26,7 +26,9 @@
     name: "{{ time_sync_provider_packages[time_sync_provider] }}"
     state: present
     update_cache: false
-  when: time_sync_manage_runtime | bool
+  when:
+    - time_sync_manage_runtime | bool
+    - time_sync_manage_packages | bool
 
 - name: Render systemd-timesyncd configuration
   ansible.builtin.template:
@@ -58,7 +60,9 @@
 
 - name: Gather service facts for time synchronization conflict handling
   ansible.builtin.service_facts:
-  when: time_sync_manage_runtime | bool
+  when:
+    - time_sync_manage_runtime | bool
+    - time_sync_manage_services | bool
 
 - name: Enable and start systemd-timesyncd
   ansible.builtin.systemd:
@@ -67,6 +71,7 @@
     state: started
   when:
     - time_sync_manage_runtime | bool
+    - time_sync_manage_services | bool
     - time_sync_provider == "systemd-timesyncd"
 
 - name: Stop chrony when systemd-timesyncd is selected
@@ -76,6 +81,7 @@
     state: stopped
   when:
     - time_sync_manage_runtime | bool
+    - time_sync_manage_services | bool
     - time_sync_provider == "systemd-timesyncd"
     - "'chrony.service' in ansible_facts.services"
 
@@ -86,6 +92,7 @@
     state: started
   when:
     - time_sync_manage_runtime | bool
+    - time_sync_manage_services | bool
     - time_sync_provider == "chrony"
 
 - name: Stop systemd-timesyncd when chrony is selected
@@ -95,5 +102,6 @@
     state: stopped
   when:
     - time_sync_manage_runtime | bool
+    - time_sync_manage_services | bool
     - time_sync_provider == "chrony"
     - "'systemd-timesyncd.service' in ansible_facts.services"

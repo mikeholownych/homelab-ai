@@ -1,0 +1,117 @@
+---
+- name: Ubuntu container baseline convergence probe
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  vars:
+    baseline_transition_phase: "{{ baseline_transition_phase | default(false) | bool }}"
+    baseline_operator_key_initial: >-
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJXH3onYv0WQGFFS0XUQ0K3Mx3P4W+H6Ww2x8a6l0g2m baseline-initial@example
+    baseline_operator_key_transition: >-
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILW2Wl9JY+v7k2Qw4VgU4t4M1Lh8mK5A2n5s7a1Qd1Yw baseline-transition@example
+    base_os_manage_ubuntu_sources: false
+    base_os_manage_admin_packages: false
+    base_os_manage_journald_service: false
+    base_os_manage_locale_generation: false
+    base_os_manage_timezone: false
+    base_os_manage_unattended_upgrades_service: false
+    base_os_high_risk_packages:
+      - sudo
+    base_os_package_holds: "{{ [] if baseline_transition_phase else ['sudo'] }}"
+    base_os_package_pins: >-
+      {{
+        []
+        if baseline_transition_phase
+        else [
+          {
+            'package': 'sudo',
+            'pin': 'release a=noble',
+            'priority': 1001
+          }
+        ]
+      }}
+    time_sync_manage_services: false
+    time_sync_manage_packages: false
+    time_sync_provider: "{{ 'systemd-timesyncd' if baseline_transition_phase else 'chrony' }}"
+    storage_mounts:
+      - path: /mnt/aihost-cache
+        src: tmpfs
+        fstype: tmpfs
+        opts: size=16m,mode=0755
+        state: mounted
+    networking_manage_runtime: true
+    networking_manage_netplan: true
+    networking_apply: false
+    networking_renderer: networkd
+    networking_netplan_binary: /usr/sbin/netplan
+    networking_ethernets:
+      eth0:
+        dhcp4: true
+    users_manage_runtime: true
+    users_local_ai_manage_device_groups: "{{ (not baseline_transition_phase) | bool }}"
+    users_local_ai_device_groups: "{{ ['render', 'video'] if not baseline_transition_phase else [] }}"
+    users_local_ai_service_account:
+      name: local-ai
+      system: true
+      shell: /usr/sbin/nologin
+      home: /var/lib/local-ai
+      enabled: true
+      create_home: true
+      preserved_groups: []
+    operator_users:
+      - name: ops
+        enabled: true
+        sudo: false
+        groups: "{{ ['sudo'] if not baseline_transition_phase else [] }}"
+        ssh_authorized_keys:
+          - "{{ baseline_operator_key_transition if baseline_transition_phase else baseline_operator_key_initial }}"
+    ssh_manage_runtime: false
+    ssh_disable_password_auth: true
+    ssh_operator_users: "{{ operator_users }}"
+    security_manage_runtime: true
+    security_manage_sysctl: false
+    security_auditd_enabled: false
+    security_firewall_enabled: "{{ (not baseline_transition_phase) | bool }}"
+    security_management_cidrs: "{{ ['10.10.0.0/24'] if not baseline_transition_phase else [] }}"
+    security_inference_api_firewall_enabled: "{{ (not baseline_transition_phase) | bool }}"
+    security_inference_api_cidrs: "{{ ['192.0.2.0/24'] if not baseline_transition_phase else [] }}"
+    security_inference_api_ports: "{{ [8080] if not baseline_transition_phase else [] }}"
+  pre_tasks:
+    - name: Install harness SSH main config with managed include path
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config
+        mode: "0644"
+        content: |
+          HostKey /etc/ssh/ssh_host_ed25519_key
+          Include /etc/ssh/sshd_config.d/*.conf
+          UsePAM yes
+      check_mode: false
+  tasks:
+    - name: Include base OS role
+      ansible.builtin.include_role:
+        name: base_os
+
+    - name: Include time synchronization role
+      ansible.builtin.include_role:
+        name: time_sync
+
+    - name: Include storage role
+      ansible.builtin.include_role:
+        name: storage
+
+    - name: Include networking role
+      ansible.builtin.include_role:
+        name: networking
+
+    - name: Include users role
+      ansible.builtin.include_role:
+        name: users
+
+    - name: Include SSH role
+      ansible.builtin.include_role:
+        name: ssh
+
+    - name: Include security role
+      ansible.builtin.include_role:
+        name: security

@@ -3,7 +3,9 @@
   ansible.builtin.systemd:
     name: systemd-journald.service
     state: restarted
-  when: base_os_mutating_operations_enabled | bool
+  when:
+    - base_os_mutating_operations_enabled | bool
+    - base_os_manage_journald_service | bool
 
 - name: Apply update-grub configuration update
   listen: Apply grub configuration update
