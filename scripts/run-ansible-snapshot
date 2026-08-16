@@ -39,8 +39,8 @@ inventory_resolved=""
 playbook_resolved=""
 ansible_config=""
 lock_helper_pid=""
-lock_helper_in=""
-lock_helper_out=""
+lock_helper_status_file=""
+lock_helper_release_file=""
 
 utc_timestamp() {
   python3 -I -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))'
@@ -71,68 +71,104 @@ parent_path() {
 }
 
 cleanup_lock_helper() {
-  if [[ -n "$lock_helper_in" ]]; then
-    exec {lock_helper_in}>&- || true
-    lock_helper_in=""
-  fi
-  if [[ -n "$lock_helper_out" ]]; then
-    exec {lock_helper_out}<&- || true
-    lock_helper_out=""
+  if [[ -n "$lock_helper_release_file" ]]; then
+    : >"$lock_helper_release_file"
   fi
   if [[ -n "$lock_helper_pid" ]]; then
     wait "$lock_helper_pid" 2>/dev/null || true
     lock_helper_pid=""
   fi
+  if [[ -n "$lock_helper_status_file" ]]; then
+    rm -f "$lock_helper_status_file"
+    lock_helper_status_file=""
+  fi
+  if [[ -n "$lock_helper_release_file" ]]; then
+    rm -f "$lock_helper_release_file"
+    lock_helper_release_file=""
+  fi
+}
+
+# shellcheck disable=SC2317
+hold_lock_for_test_if_requested() {
+  local ready_file="${LOCAL_AI_TEST_HOLD_READY_FILE:-}"
+  local release_file="${LOCAL_AI_TEST_HOLD_RELEASE_FILE:-}"
+  if [[ -z "$ready_file" ]]; then
+    return
+  fi
+
+  printf '%s\n' "$run_dir" >"$ready_file"
+  if [[ -z "$release_file" ]]; then
+    return
+  fi
+
+  local attempts=0
+  while [[ ! -f "$release_file" && "$attempts" -lt 200 ]]; do
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
 }
 
 acquire_lock_file() {
-  coproc LOCK_HELPER {
-    python3 -I - "$lock_path" <<'PY'
+  lock_helper_status_file="$(mktemp "$lock_root/.lock-status.XXXXXX")"
+  lock_helper_release_file="$lock_root/.lock-release.$$.$RANDOM"
+  rm -f "$lock_helper_release_file"
+
+  python3 -I - "$lock_path" "$lock_helper_status_file" "$lock_helper_release_file" <<'PY' &
 import errno
 import fcntl
 import os
 import stat
 import sys
+import time
 
 
 path = sys.argv[1]
+status_file = sys.argv[2]
+release_file = sys.argv[3]
 flags = os.O_RDWR | os.O_CREAT
 if hasattr(os, "O_NOFOLLOW"):
     flags |= os.O_NOFOLLOW
+
+def write_status(value: str) -> None:
+    with open(status_file, "w", encoding="utf-8") as handle:
+        handle.write(value)
 
 try:
     fd = os.open(path, flags, 0o640)
 except OSError as exc:
     if exc.errno in {errno.ELOOP, errno.ENOTDIR, errno.ENOENT}:
-        print("LOCK_INVALID", flush=True)
+        write_status("LOCK_INVALID")
         raise SystemExit(0)
-    print("LOCK_ERROR", flush=True)
+    write_status("LOCK_ERROR")
     raise SystemExit(0)
 
 try:
     mode = os.fstat(fd).st_mode
     if not stat.S_ISREG(mode):
-        print("LOCK_INVALID", flush=True)
+        write_status("LOCK_INVALID")
         raise SystemExit(0)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
-        print("LOCK_CONTENDED", flush=True)
+        write_status("LOCK_CONTENDED")
         raise SystemExit(0)
-    print("LOCK_OK", flush=True)
-    sys.stdin.read()
+    write_status("LOCK_OK")
+    while not os.path.exists(release_file):
+        time.sleep(0.05)
 finally:
     os.close(fd)
 PY
-  }
-
-  # shellcheck disable=SC2153
-  lock_helper_pid="${LOCK_HELPER_PID:-}"
-  lock_helper_out=${LOCK_HELPER[0]}
-  lock_helper_in=${LOCK_HELPER[1]}
+  lock_helper_pid=$!
 
   local lock_status=""
-  IFS= read -r -u "$lock_helper_out" lock_status || true
+  local attempts=0
+  while [[ ! -s "$lock_helper_status_file" && "$attempts" -lt 200 ]]; do
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+  if [[ -s "$lock_helper_status_file" ]]; then
+    lock_status="$(cat "$lock_helper_status_file")"
+  fi
   case "$lock_status" in
     LOCK_OK)
       chmod 0640 "$lock_path"
@@ -166,9 +202,9 @@ run_ansible_playbook() {
 finalize_on_exit() {
   local shell_exit=$?
   trap - EXIT
-  cleanup_lock_helper
 
   if [[ "$run_dir_created" != "true" ]]; then
+    cleanup_lock_helper
     exit "$shell_exit"
   fi
 
@@ -262,16 +298,18 @@ PY
   fi
   chmod 0750 "$host_dir" "$run_dir" 2>/dev/null || true
 
+  local final_exit="$shell_exit"
   if [[ "$primary_exit" -ne 0 ]]; then
-    exit "$primary_exit"
+    final_exit="$primary_exit"
+  elif [[ "$validation_command_exit" -ne 0 ]]; then
+    final_exit="$validation_command_exit"
+  elif [[ "$finalizer_exit" -ne 0 ]]; then
+    final_exit="$FINALIZATION_FAILURE_EXIT"
   fi
-  if [[ "$validation_command_exit" -ne 0 ]]; then
-    exit "$validation_command_exit"
-  fi
-  if [[ "$finalizer_exit" -ne 0 ]]; then
-    exit "$FINALIZATION_FAILURE_EXIT"
-  fi
-  exit "$shell_exit"
+
+  hold_lock_for_test_if_requested
+  cleanup_lock_helper
+  exit "$final_exit"
 }
 
 while (($# > 0)); do
@@ -422,6 +460,7 @@ if [[ -L "$lock_root_arg" ]] || [[ -L "$lock_root" ]]; then
 fi
 install -d -m 0750 "$lock_root"
 acquire_lock_file
+trap finalize_on_exit EXIT
 
 git_sha="$(git -C "$repo_root" rev-parse HEAD)"
 git_status_output="$(git -C "$repo_root" status --porcelain --untracked-files=all)"
@@ -462,7 +501,6 @@ if [[ -e "$run_dir" ]]; then
 fi
 install -d -m 0750 "$run_dir"
 run_dir_created="true"
-trap finalize_on_exit EXIT
 
 export LOCAL_AI_EVIDENCE_RUN_DIR="$run_dir"
 

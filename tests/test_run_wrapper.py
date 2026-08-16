@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 import unittest
 from pathlib import Path
 
@@ -159,6 +160,53 @@ def run_wrapper(
         cwd=cwd if cwd is not None else REPO_ROOT,
         check=False,
         capture_output=True,
+        text=True,
+        env=merged_env,
+        preexec_fn=(lambda: os.umask(umask_value)) if umask_value is not None else None,
+    )
+
+
+def start_wrapper(
+    repo_root: Path,
+    evidence_root: Path,
+    lock_root: Path,
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    schema_root: Path | None = None,
+    playbook: str = "site.yml",
+    inventory: str = "inventory/production/hosts.yml",
+    target: str = "ai-p620-01",
+    extra_args: list[str] | None = None,
+    umask_value: int | None = None,
+) -> subprocess.Popen[str]:
+    command = [
+        str(WRAPPER_PATH),
+        "--repo-root",
+        str(repo_root),
+        "--schema-root",
+        str(schema_root if schema_root is not None else (REPO_ROOT / "schemas")),
+        "--inventory",
+        inventory,
+        "--target",
+        target,
+        "--playbook",
+        playbook,
+        "--evidence-root",
+        str(evidence_root),
+        "--lock-root",
+        str(lock_root),
+    ]
+    if extra_args:
+        command.extend(extra_args)
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    return subprocess.Popen(
+        command,
+        cwd=cwd if cwd is not None else REPO_ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
         env=merged_env,
         preexec_fn=(lambda: os.umask(umask_value)) if umask_value is not None else None,
@@ -909,6 +957,70 @@ class RunWrapperTests(unittest.TestCase):
 
             self.assertEqual(73, result.returncode)
             self.assertFalse((evidence_root / "ai-p620-01").exists())
+
+    def test_wrapper_holds_lock_through_finalization_checksums_and_mode_normalization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_root = Path(tmpdir)
+            repo_root = create_repo(temp_root / "repo")
+            evidence_root = temp_root / "evidence-root"
+            evidence_root.mkdir()
+            lock_root = temp_root / "locks"
+            lock_root.mkdir()
+            bin_dir = temp_root / "bin"
+            bin_dir.mkdir()
+            tool_log = temp_root / "tool.log"
+            build_fake_tools(bin_dir, tool_log)
+            hold_ready = temp_root / "hold-ready.txt"
+            hold_release = temp_root / "hold-release.txt"
+
+            env = {
+                "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                "FAKE_ANSIBLE_STDOUT": textwrap.dedent(
+                    """\
+                    PLAY RECAP *********************************************************************
+                    ai-p620-01 : ok=1 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+                    """
+                ),
+                "FAKE_WRITE_VALIDATION": "1",
+                "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
+                "LOCAL_AI_TEST_HOLD_READY_FILE": str(hold_ready),
+                "LOCAL_AI_TEST_HOLD_RELEASE_FILE": str(hold_release),
+            }
+
+            first = start_wrapper(
+                repo_root,
+                evidence_root,
+                lock_root,
+                env=env,
+                playbook="validate.yml",
+            )
+            try:
+                deadline = time.time() + 10
+                while not hold_ready.exists():
+                    if first.poll() is not None:
+                        stdout, stderr = first.communicate(timeout=1)
+                        self.fail(f"first wrapper exited before hold point\nstdout={stdout}\nstderr={stderr}")
+                    if time.time() >= deadline:
+                        first.kill()
+                        stdout, stderr = first.communicate(timeout=1)
+                        self.fail(f"timed out waiting for hold point\nstdout={stdout}\nstderr={stderr}")
+                    time.sleep(0.05)
+
+                run_dir = Path(hold_ready.read_text(encoding="utf-8").strip())
+                self.assertTrue((run_dir / "SHA256SUMS").exists())
+                self.assertTrue((run_dir / "manifest.json").exists())
+                self.assertEqual(0, (run_dir / "SHA256SUMS").stat().st_mode & stat.S_IWGRP)
+                self.assertEqual(0, (run_dir / "SHA256SUMS").stat().st_mode & stat.S_IRWXO)
+                self.assertEqual(0, (run_dir / "manifest.json").stat().st_mode & stat.S_IWGRP)
+                self.assertEqual(0, (run_dir / "manifest.json").stat().st_mode & stat.S_IRWXO)
+
+                second = run_wrapper(repo_root, evidence_root, lock_root, env=env, playbook="validate.yml")
+                self.assertEqual(73, second.returncode, second.stderr)
+                self.assertEqual([run_dir], list((evidence_root / "ai-p620-01").iterdir()))
+            finally:
+                hold_release.write_text("release\n", encoding="utf-8")
+                stdout, stderr = first.communicate(timeout=10)
+                self.assertEqual(0, first.returncode, f"stdout={stdout}\nstderr={stderr}")
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
   ansible.builtin.assert:
     that:
       - evidence_target_name is string
-      - evidence_target_name | regex_search(evidence_target_pattern)
+      - (evidence_target_name | regex_search(evidence_target_pattern)) is not none
     fail_msg: evidence_target_name must match the safe node identifier pattern
   tags:
     - evidence
