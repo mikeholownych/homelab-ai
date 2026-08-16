@@ -1,9 +1,13 @@
 # Managed operator sudo policy
 Defaults secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-{% for account in users_operator_accounts | default([]) %}
-{% if account.sudo_policy == 'passwordless' %}
+{% for account in operator_users | default([]) %}
+{% if account.enabled | default(true) and account.sudo | default(false) %}
+{% if account.sudo_passwordless_all | default(false) %}
 {{ account.name }} ALL=(ALL) NOPASSWD:ALL
-{% elif account.sudo_policy == 'require_password' %}
-{{ account.name }} ALL=(ALL) ALL
+{% elif account.sudo_nopasswd | default(false) %}
+{{ account.name }} ALL=(ALL) NOPASSWD: {{ account.sudo_commands | join(', ') }}
+{% else %}
+{{ account.name }} ALL=(ALL) {{ account.sudo_commands | join(', ') }}
+{% endif %}
 {% endif %}
 {% endfor %}

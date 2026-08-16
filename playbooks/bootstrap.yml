@@ -28,6 +28,8 @@
         - bootstrap
         - baseline
         - foundation
+        - users
+        - ssh
 
     - name: Include time synchronization bootstrap role
       ansible.builtin.include_role:
@@ -42,7 +44,7 @@
         name: users
       tags:
         - bootstrap
-        - baseline
+        - users
         - foundation
 
     - name: Include SSH bootstrap role
@@ -50,5 +52,5 @@
         name: ssh
       tags:
         - bootstrap
-        - baseline
+        - ssh
         - foundation

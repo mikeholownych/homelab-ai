@@ -1,58 +1,118 @@
 ---
-- name: Validate declared service accounts
+- name: Validate users role inputs
   ansible.builtin.assert:
     that:
-      - item.name is match("^[a-z_][a-z0-9_-]*$")
-      - item.shell == "/usr/sbin/nologin"
-      - item.system | default(true) | bool
-    fail_msg: Service accounts must be system-scoped, named safely, and use /usr/sbin/nologin.
-  loop: "{{ users_service_accounts }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when: item.enabled | default(true) | bool
-
-- name: Validate declared operator accounts
-  ansible.builtin.assert:
-    that:
-      - item.name is match("^[a-z_][a-z0-9_-]*$")
-      - item.ssh_keys is defined
-      - item.ssh_keys | length > 0
-      - item.sudo_policy in users_valid_sudo_policies
-      - item.password is not defined
+      - users_disabled_operator_state in ["lock", "absent"]
+      - operator_users is iterable
+      - users_local_ai_device_groups is iterable
+      - (users_local_ai_device_groups | difference(["render", "video"])) | length == 0
+      - users_local_ai_service_account.name is match("^[a-z_][a-z0-9_-]*$")
+      - users_local_ai_service_account.system | bool
+      - users_local_ai_service_account.shell == "/usr/sbin/nologin"
     fail_msg: >-
-      Operator accounts must be named safely, provide at least one SSH key,
-      declare sudo_policy, and omit passwords.
-  loop: "{{ users_operator_accounts }}"
+      users must declare a safe disabled-user policy, inventory-driven operator
+      users, and a least-privilege local-ai service account.
+
+- name: Validate declared operator users
+  ansible.builtin.assert:
+    that:
+      - item.name is match("^[a-z_][a-z0-9_-]*$")
+      - item.enabled | default(true) is boolean
+      - item.sudo | default(false) is boolean
+      - item.sudo_passwordless_all | default(false) is boolean
+      - item.sudo_nopasswd | default(false) is boolean
+      - item.password is not defined
+      - >-
+        not (item.enabled | default(true) | bool)
+        or (item.ssh_authorized_keys | default([]) | length > 0)
+      - >-
+        not (item.sudo | default(false) | bool)
+        or (
+          item.sudo_passwordless_all | default(false) | bool
+          or item.sudo_commands | default([]) | length > 0
+        )
+      - >-
+        (
+          item.sudo_commands | default([])
+          | reject("match", "^/.+")
+          | list
+          | length
+        ) == 0
+    fail_msg: >-
+      Enabled operators must define non-empty ssh_authorized_keys, omit
+      passwords, and use explicit sudo_commands unless passwordless-all is
+      opted in.
+  loop: "{{ operator_users }}"
   loop_control:
     label: "{{ item.name }}"
 
-- name: Ensure explicitly managed groups exist
+- name: Gather runtime group database for local-ai service account
+  ansible.builtin.getent:
+    database: group
+    split: ":"
+  when:
+    - users_manage_runtime | bool
+    - users_local_ai_device_groups | length > 0
+    - not users_local_ai_manage_device_groups | bool
+
+- name: Ensure explicitly managed local-ai device groups exist
   ansible.builtin.group:
     name: "{{ item }}"
     state: present
-  loop: "{{ users_managed_groups }}"
+  loop: "{{ users_local_ai_device_groups }}"
   when:
     - users_manage_runtime | bool
-    - users_managed_groups | length > 0
+    - users_local_ai_manage_device_groups | bool
 
-- name: Ensure declared service accounts exist
+- name: Select effective local-ai supplemental groups
+  ansible.builtin.set_fact:
+    users_local_ai_effective_groups: >-
+      {{
+        users_local_ai_device_groups
+        if users_local_ai_manage_device_groups | bool
+        else
+        (
+          users_local_ai_device_groups
+          | select("in", (ansible_facts.getent_group | default({})).keys() | list)
+          | list
+        )
+      }}
+
+- name: Ensure local-ai service account exists
   ansible.builtin.user:
-    name: "{{ item.name }}"
-    comment: "{{ item.comment | default(omit) }}"
+    name: "{{ users_local_ai_service_account.name }}"
+    comment: "{{ users_local_ai_service_account.comment | default(omit) }}"
     system: true
     shell: /usr/sbin/nologin
-    create_home: "{{ item.create_home | default(false) }}"
-    groups: "{{ (item.groups | default([])) | join(',') or omit }}"
+    home: "{{ users_local_ai_service_account.home }}"
+    create_home: "{{ users_local_ai_service_account.create_home | default(true) }}"
+    groups: "{{ (users_local_ai_effective_groups | default([])) | join(',') or omit }}"
     append: true
     state: present
-  loop: "{{ users_service_accounts }}"
-  loop_control:
-    label: "{{ item.name }}"
   when:
     - users_manage_runtime | bool
-    - item.enabled | default(true) | bool
+    - users_local_ai_service_account.enabled | default(true) | bool
 
-- name: Ensure declared operator users exist
+- name: Ensure local-ai service account home exists with secure mode
+  ansible.builtin.file:
+    path: "{{ users_local_ai_service_account.home }}"
+    state: directory
+    mode: "0750"
+  when:
+    - users_manage_runtime | bool
+    - users_local_ai_service_account.enabled | default(true) | bool
+    - users_local_ai_service_account.create_home | default(true) | bool
+
+- name: Remove disabled local-ai service account when explicitly disabled
+  ansible.builtin.user:
+    name: "{{ users_local_ai_service_account.name }}"
+    state: absent
+    remove: false
+  when:
+    - users_manage_runtime | bool
+    - not users_local_ai_service_account.enabled | default(true) | bool
+
+- name: Ensure enabled operator users exist
   ansible.builtin.user:
     name: "{{ item.name }}"
     comment: "{{ item.comment | default(omit) }}"
@@ -60,55 +120,114 @@
     groups: "{{ (item.groups | default([])) | join(',') or omit }}"
     append: true
     create_home: true
+    home: "{{ item.home | default(omit) }}"
     state: present
-  loop: "{{ users_operator_accounts }}"
+  loop: "{{ operator_users }}"
   loop_control:
     label: "{{ item.name }}"
-  when: users_manage_runtime | bool
+  when:
+    - users_manage_runtime | bool
+    - item.enabled | default(true) | bool
 
-- name: Secure operator home directories
+- name: Lock disabled operator users
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    password_lock: true
+    shell: /usr/sbin/nologin
+    state: present
+  loop: "{{ operator_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - users_manage_runtime | bool
+    - not item.enabled | default(true) | bool
+    - users_disabled_operator_state == "lock"
+
+- name: Remove disabled operator users when absent is configured
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    state: absent
+    remove: false
+  loop: "{{ operator_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - users_manage_runtime | bool
+    - not item.enabled | default(true) | bool
+    - users_disabled_operator_state == "absent"
+
+- name: Secure enabled operator home directories
   ansible.builtin.file:
     path: "{{ item.home | default('/home/' ~ item.name) }}"
     state: directory
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
     mode: "{{ users_operator_home_mode }}"
-  loop: "{{ users_operator_accounts }}"
+  loop: "{{ operator_users }}"
   loop_control:
     label: "{{ item.name }}"
-  when: users_manage_runtime | bool
+  when:
+    - users_manage_runtime | bool
+    - item.enabled | default(true) | bool
 
-- name: Ensure operator SSH directories exist
+- name: Ensure enabled operator SSH directories exist
   ansible.builtin.file:
     path: "{{ item.home | default('/home/' ~ item.name) }}/.ssh"
     state: directory
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
-    mode: "0700"
-  loop: "{{ users_operator_accounts }}"
+    mode: "{{ users_operator_ssh_dir_mode }}"
+  loop: "{{ operator_users }}"
   loop_control:
     label: "{{ item.name }}"
-  when: users_manage_runtime | bool
+  when:
+    - users_manage_runtime | bool
+    - item.enabled | default(true) | bool
 
-- name: Install operator authorized keys
+- name: Select enabled operator key records
+  ansible.builtin.set_fact:
+    users_enabled_operator_key_records: >-
+      {{
+        (
+          operator_users
+          | selectattr('enabled', 'undefined')
+          | list
+        )
+        + (
+          operator_users
+          | selectattr('enabled', 'defined')
+          | selectattr('enabled')
+          | list
+        )
+      }}
+
+- name: Install enabled operator authorized keys
   ansible.posix.authorized_key:
     user: "{{ item.0.name }}"
     key: "{{ item.1 }}"
     state: present
     exclusive: false
-  loop: "{{ users_operator_accounts | subelements('ssh_keys') }}"
+    manage_dir: false
+  loop: >-
+    {{
+      users_enabled_operator_key_records
+      | default([])
+      | subelements('ssh_authorized_keys', skip_missing=True)
+    }}
   loop_control:
     label: "{{ item.0.name }}"
   when: users_manage_runtime | bool
 
-- name: Secure operator authorized_keys files
+- name: Secure enabled operator authorized_keys files
   ansible.builtin.file:
     path: "{{ item.home | default('/home/' ~ item.name) }}/.ssh/authorized_keys"
     owner: "{{ item.name }}"
     group: "{{ item.name }}"
     mode: "{{ users_authorized_keys_path_mode }}"
     state: file
-  loop: "{{ users_operator_accounts }}"
+  loop: "{{ operator_users }}"
   loop_control:
     label: "{{ item.name }}"
-  when: users_manage_runtime | bool
+  when:
+    - users_manage_runtime | bool
+    - item.enabled | default(true) | bool

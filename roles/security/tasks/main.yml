@@ -5,25 +5,49 @@
       - security_firewall_enabled is boolean
       - security_inference_api_firewall_enabled is boolean
       - security_auditd_enabled is boolean
+      - security_management_cidrs is iterable
+      - security_inference_api_cidrs is iterable
+      - security_inference_api_ports is iterable
       - not security_firewall_enabled | bool or security_management_cidrs | length > 0
       - not security_inference_api_firewall_enabled | bool or security_inference_api_cidrs | length > 0
-    fail_msg: Firewall features remain disabled until explicit management CIDRs and inference API CIDRs are declared.
+      - not security_inference_api_firewall_enabled | bool or security_inference_api_ports | length > 0
+      - >-
+        (
+          security_inference_api_ports
+          | reject("match", "^[0-9]+$")
+          | list
+          | length
+        ) == 0
+    fail_msg: >-
+      Firewall controls remain disabled until explicit management CIDRs and
+      inference API CIDRs and ports are declared.
 
 - name: Ensure security configuration directories exist
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
-    mode: "0750"
+    mode: "{{ '0750' if item.endswith('/etc/audit/rules.d') else '0755' }}"
   loop:
     - "{{ (security_root_dir | default('')) ~ '/etc/sudoers.d' }}"
     - "{{ (security_root_dir | default('')) ~ '/etc/audit/rules.d' }}"
 
-- name: Install security support packages
+- name: Install auditd package when enabled
   ansible.builtin.apt:
-    name: "{{ security_packages }}"
+    name: "{{ security_auditd_package }}"
     state: present
     update_cache: false
-  when: security_manage_runtime | bool
+  when:
+    - security_manage_runtime | bool
+    - security_auditd_enabled | bool
+
+- name: Install UFW package when firewalling is enabled
+  ansible.builtin.apt:
+    name: "{{ security_firewall_package }}"
+    state: present
+    update_cache: false
+  when:
+    - security_manage_runtime | bool
+    - security_firewall_enabled | bool
 
 - name: Render validated operator sudoers policy
   ansible.builtin.template:
@@ -31,7 +55,6 @@
     dest: "{{ security_sudoers_path }}"
     mode: "0440"
     validate: "{{ security_sudoers_validate_command }}"
-  notify: Validate sudo policy cache
 
 - name: Render auditd rules for host baseline
   ansible.builtin.template:
@@ -40,6 +63,12 @@
     mode: "0640"
   when: security_auditd_enabled | bool
   notify: Restart auditd
+
+- name: Remove auditd rules when disabled
+  ansible.builtin.file:
+    path: "{{ security_auditd_rules_path }}"
+    state: absent
+  when: not security_auditd_enabled | bool
 
 - name: Apply practical security sysctl values
   ansible.posix.sysctl:

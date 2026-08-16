@@ -1,10 +1,10 @@
 # Security controls for baseline hosts
 
-This repository applies practical host controls for Ubuntu 24.04 AI nodes. It does not claim generic CIS compliance.
+This repository applies practical host controls for Ubuntu 24.04 AI nodes. It documents bounded host-hardening choices instead of claiming a generic benchmark profile.
 
-- The `users` role can place service accounts into `render` and `video` groups when GPU device access is explicitly configured. Those groups are not granted by default.
-- The `ssh` role protects operator access by proving at least one managed public key exists before `PasswordAuthentication` can be disabled.
-- The `security` role keeps firewall policy opt-in. SSH rules require explicit management CIDRs, and inference API firewall access requires both explicit CIDRs and explicit ports.
-- Audit rules add useful visibility, but audit overhead should be measured before enabling extra high-volume syscall coverage on busy inference hosts.
-- Future systemd hardening may need explicit exceptions for GPU device nodes, container workloads, and `mlock` use by latency-sensitive inference runtimes.
-- Base OS package controls disable unattended package mutation, but they do not uninstall security tooling such as `unattended-upgrades`.
+- The `users` role provisions a dedicated `local-ai` service account with `/usr/sbin/nologin`, a controlled home directory, and least-privilege group membership. `render` and `video` access remain opt-in and are attached only when those groups are explicitly configured for GPU access and either already exist or are explicitly managed.
+- The `ssh` role protects operator access by proving at least one enabled managed operator already has a non-empty authorized key installed before `PasswordAuthentication` can be disabled. SSH forwarding stays explicit: TCP forwarding can remain available for operator workflows, while agent forwarding, empty passwords, root login, challenge-response, and X11 are constrained by default.
+- The `security` role keeps firewall policy opt-in. UFW is never enabled without explicit management CIDRs, SSH rules stay limited to those CIDRs, and inference API exposure requires explicit CIDRs plus explicit listener ports. Outbound access for the OpenAI API or package mirrors may therefore need matching firewall review before stricter egress policy is introduced.
+- Audit rules stay bounded to practical config and privilege-escalation visibility. Measured audit overhead should be reviewed before expanding coverage on busy inference hosts, especially around GPU-heavy or container-heavy workloads.
+- Future systemd hardening may require explicit `DeviceAllow` exceptions for GPU device nodes, container device access rules, and `mlock` or service limits for latency-sensitive inference runtimes.
+- Base OS package controls disable unattended upgrades so a pinned GPU or runtime stack is not mutated unexpectedly. Any future unattended upgrades posture must stay compatible with pinned Intel runtime packages and other reviewed runtime versions.

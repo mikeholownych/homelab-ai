@@ -1,7 +1,7 @@
 ---
 - name: Validate SSH daemon configuration before reload
   ansible.builtin.command:
-    cmd: /usr/sbin/sshd -t -f /etc/ssh/sshd_config
+    cmd: "{{ ssh_reload_validate_command }}"
   changed_when: false
   when: ssh_manage_runtime | bool
   listen: Reload SSH daemon

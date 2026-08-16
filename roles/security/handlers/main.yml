@@ -12,16 +12,3 @@
       - --system
   changed_when: false
   when: security_manage_runtime | bool
-
-- name: Reload ufw
-  community.general.ufw:
-    state: reloaded
-  when:
-    - security_manage_runtime | bool
-    - security_firewall_enabled | bool
-
-- name: Validate sudo policy cache
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/true
-  changed_when: false

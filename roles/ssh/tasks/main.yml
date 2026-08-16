@@ -8,6 +8,7 @@
       - ssh_x11_forwarding is boolean
       - ssh_kbd_interactive_authentication is boolean
       - ssh_permit_root_login in ["no", "prohibit-password", "forced-commands-only"]
+      - ssh_operator_users is iterable
     fail_msg: SSH hardening inputs must use explicit booleans and a supported PermitRootLogin mode.
 
 - name: Ensure SSH configuration drop-in directory exists
@@ -19,7 +20,8 @@
 - name: Inspect managed operator authorized_keys files for lockout protection
   ansible.builtin.stat:
     path: "{{ item.home | default('/home/' ~ item.name) }}/.ssh/authorized_keys"
-  loop: "{{ ssh_managed_operator_accounts }}"
+    follow: false
+  loop: "{{ ssh_operator_users }}"
   loop_control:
     label: "{{ item.name }}"
   register: ssh_operator_authorized_keys
@@ -27,29 +29,83 @@
     - ssh_disable_password_auth | bool
     - item.enabled | default(true) | bool
 
+- name: Slurp managed operator authorized_keys files for lockout proof
+  ansible.builtin.slurp:
+    src: "{{ item.stat.path }}"
+  loop: "{{ ssh_operator_authorized_keys.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  register: ssh_operator_authorized_keys_content
+  when:
+    - ssh_disable_password_auth | bool
+    - item.stat.exists | default(false)
+    - item.stat.isreg | default(false)
+    - not item.stat.islnk | default(false)
+
+- name: Build SSH key-access proof candidates
+  ansible.builtin.set_fact:
+    ssh_key_access_proof_candidates: >-
+      {{
+        (ssh_key_access_proof_candidates | default([]))
+        + [
+          {
+            'name': ssh_operator_authorized_keys.results[item].item.name,
+            'enabled': ssh_operator_authorized_keys.results[item].item.enabled | default(true),
+            'exists': ssh_operator_authorized_keys.results[item].stat.exists | default(false),
+            'isreg': ssh_operator_authorized_keys.results[item].stat.isreg | default(false),
+            'islnk': ssh_operator_authorized_keys.results[item].stat.islnk | default(false),
+            'mode': ssh_operator_authorized_keys.results[item].stat.mode | default(''),
+            'size': ssh_operator_authorized_keys.results[item].stat.size | default(0),
+            'owner_ok': (
+              (not ssh_require_managed_owner_match | bool)
+              or (
+                ssh_operator_authorized_keys.results[item].stat.pw_name | default('')
+                == ssh_operator_authorized_keys.results[item].item.name
+              )
+            ),
+            'content_ok': (
+              (
+                (
+                  ssh_operator_authorized_keys_content.results[item].content
+                  | default('')
+                  | b64decode
+                ).splitlines()
+                | intersect(ssh_operator_authorized_keys.results[item].item.ssh_authorized_keys | default([]))
+                | length
+              ) > 0
+            )
+          }
+        ]
+      }}
+  loop: "{{ range(0, ssh_operator_authorized_keys.results | default([]) | length) | list }}"
+  when: ssh_disable_password_auth | bool
+
 - name: Assert key-access proof exists before disabling password authentication
   ansible.builtin.assert:
     that:
       - >-
         (
-          ssh_operator_authorized_keys.results
-          | selectattr('stat.exists', 'defined')
-          | selectattr('stat.exists')
-          | selectattr('stat.size', 'gt', 0)
-          | selectattr('stat.mode', 'in', ['0600', '0640'])
+          ssh_operator_users
+          | selectattr('enabled', 'undefined')
+          | list
+          | length
+        ) + (
+          ssh_operator_users
+          | selectattr('enabled', 'defined')
+          | selectattr('enabled')
           | list
           | length
         ) > 0
       - >-
         (
-          ssh_managed_operator_accounts
-          | selectattr('enabled', 'undefined')
-          | list
-          | length
-        ) + (
-          ssh_managed_operator_accounts
-          | selectattr('enabled', 'defined')
-          | selectattr('enabled')
+          ssh_key_access_proof_candidates | default([])
+          | selectattr('exists')
+          | selectattr('isreg')
+          | rejectattr('islnk')
+          | selectattr('mode', 'in', ssh_proof_allowed_modes)
+          | selectattr('size', 'gt', 0)
+          | selectattr('owner_ok')
+          | selectattr('content_ok')
           | list
           | length
         ) > 0

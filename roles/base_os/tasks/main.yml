@@ -71,6 +71,7 @@
     - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/apt.conf.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/preferences.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/apt/sources.list.d' }}"
+    - "{{ (base_os_root_dir | default('')) ~ '/etc/logrotate.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/systemd/journald.conf.d' }}"
     - "{{ (base_os_root_dir | default('')) ~ '/etc/default' }}"
 

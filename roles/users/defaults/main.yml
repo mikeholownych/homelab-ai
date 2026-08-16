@@ -1,20 +1,19 @@
 ---
-users_inference_service_groups: []
-users_managed_groups: "{{ users_inference_service_groups }}"
-users_service_accounts:
-  - name: local-ai
-    comment: Local AI inference service account
-    enabled: true
-    system: true
-    shell: /usr/sbin/nologin
-    create_home: false
-    groups: "{{ users_inference_service_groups }}"
-users_operator_accounts: []
-users_valid_sudo_policies:
-  - none
-  - passwordless
-  - require_password
+users_root_dir: ""
 users_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
 users_operator_default_shell: /bin/bash
 users_operator_home_mode: "0750"
+users_operator_ssh_dir_mode: "0700"
 users_authorized_keys_path_mode: "0600"
+users_disabled_operator_state: lock
+users_local_ai_manage_device_groups: false
+users_local_ai_device_groups: []
+users_local_ai_service_account:
+  name: local-ai
+  comment: Local AI inference service account
+  enabled: true
+  system: true
+  shell: /usr/sbin/nologin
+  home: /var/lib/local-ai
+  create_home: true
+operator_users: [] # noqa var-naming[no-role-prefix]

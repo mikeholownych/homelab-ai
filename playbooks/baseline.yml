@@ -56,3 +56,27 @@
         - baseline
         - network
         - foundation
+
+    - name: Include users baseline role
+      ansible.builtin.include_role:
+        name: users
+      tags:
+        - baseline
+        - users
+        - foundation
+
+    - name: Include SSH baseline role
+      ansible.builtin.include_role:
+        name: ssh
+      tags:
+        - baseline
+        - ssh
+        - foundation
+
+    - name: Include security baseline role
+      ansible.builtin.include_role:
+        name: security
+      tags:
+        - baseline
+        - security
+        - foundation
