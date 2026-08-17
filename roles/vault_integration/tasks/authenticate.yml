@@ -1,0 +1,30 @@
+---
+- name: Authenticate to Vault with short-lived AppRole credentials
+  community.hashi_vault.vault_login:
+    url: "{{ vault_integration_addr }}"
+    auth_method: "{{ vault_integration_auth_method }}"
+    mount_point: "{{ vault_integration_auth_mount }}"
+    role_id: "{{ vault_integration_role_id }}"
+    secret_id: "{{ vault_integration_secret_id }}"
+    namespace: "{{ vault_integration_namespace if vault_integration_namespace | length > 0 else omit }}"
+    ca_cert: "{{ vault_integration_ca_cert_path if vault_integration_ca_cert_path | length > 0 else omit }}"
+    validate_certs: "{{ vault_integration_validate_certs }}"
+  register: vault_integration_login_result
+  delegate_to: localhost
+  become: false
+  no_log: true
+
+- name: Validate Vault token lifetime, renewability, and policies
+  ansible.builtin.assert:
+    that:
+      - vault_integration_login_result.login.auth.client_token is string
+      - vault_integration_login_result.login.auth.client_token | length > 0
+      - vault_integration_login_result.login.auth.lease_duration | default(0) | int > 0
+      - vault_integration_login_result.login.auth.lease_duration | int <= vault_integration_token_max_ttl_seconds | int
+      - vault_integration_login_result.login.auth.renewable | default(false) | bool
+      - "'root' not in (vault_integration_login_result.login.auth.policies | default([]))"
+      - "'root' not in (vault_integration_login_result.login.auth.token_policies | default([]))"
+    fail_msg: >-
+      Vault authentication must yield a short-lived renewable token without the
+      root policy.
+  no_log: true

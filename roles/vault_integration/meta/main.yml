@@ -1,11 +1,13 @@
 ---
 galaxy_info:
   author: aihost-foundation
-  description: Foundation scaffold only; implementation is deferred to later tasks.
+  description: Fail-closed HashiCorp Vault runtime authentication and KVv2 retrieval helpers.
   license: MIT
   min_ansible_version: "2.19"
   platforms:
     - name: Ubuntu
       versions:
         - noble
+collections:
+  - community.hashi_vault
 dependencies: []

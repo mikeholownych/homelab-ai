@@ -1,0 +1,11 @@
+---
+- name: Install non-secret Vault runtime configuration reference
+  ansible.builtin.template:
+    src: vault-agent.env.j2
+    dest: "{{ vault_integration_bootstrap_reference_env_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  tags:
+    - bootstrap
+    - vault

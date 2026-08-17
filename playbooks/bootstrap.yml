@@ -54,3 +54,16 @@
         - bootstrap
         - ssh
         - foundation
+
+    - name: Include vault bootstrap contract when vault_bootstrap_validate_credentials is enabled
+      ansible.builtin.include_role:
+        name: vault_integration
+      vars:
+        vault_integration_operation: bootstrap
+      when:
+        - vault_integration_bootstrap_validate_credentials | default(false) | bool
+          or vault_integration_bootstrap_configure_references | default(false) | bool
+      tags:
+        - bootstrap
+        - vault
+        - foundation

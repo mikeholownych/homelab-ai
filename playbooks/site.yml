@@ -9,6 +9,17 @@
     - site
     - foundation
   tasks:
+    - name: Include vault_preflight role before secret-dependent services
+      ansible.builtin.include_role:
+        name: vault_integration
+      vars:
+        vault_integration_operation: preflight
+      when: vault_integration_enabled | default(false) | bool
+      tags:
+        - site
+        - foundation
+        - vault
+
     - name: Include monitoring role when the feature is enabled
       ansible.builtin.include_role:
         name: monitoring
