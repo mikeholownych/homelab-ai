@@ -6,43 +6,76 @@
       - vault_integration_enabled | bool or vault_integration_operation == 'bootstrap'
       - vault_integration_auth_method in vault_integration_auth_method_allowlist
       - vault_integration_auth_method == 'approle'
+      - vault_integration_validate_certs | bool
       - vault_integration_addr is string
-      - vault_integration_addr | length > 0
-      - vault_integration_addr is match('^https://')
-      - vault_integration_auth_mount is string
-      - vault_integration_auth_mount | length > 0
-      - vault_integration_kv2_mount is string
-      - vault_integration_kv2_mount | length > 0
-      - vault_integration_namespace is string
+      - vault_integration_addr is match('^https://[A-Za-z0-9._:-]+(?:/.*)?$')
+      - >-
+        vault_integration_namespace is none
+        or vault_integration_namespace is match('^[A-Za-z0-9][A-Za-z0-9_/-]*[A-Za-z0-9]$')
+      - vault_integration_namespace is none or '..' not in vault_integration_namespace
+      - vault_integration_auth_mount is match('^[A-Za-z0-9][A-Za-z0-9_-]*$')
+      - vault_integration_kv2_mount is match('^[A-Za-z0-9][A-Za-z0-9_-]*$')
       - vault_integration_ca_cert_path is string
       - vault_integration_ca_cert_path | length > 0
-      - vault_integration_ca_cert_path.startswith('/')
+      - vault_integration_ca_cert_path is match('^/')
       - vault_integration_token_max_ttl_seconds | int > 0
       - vault_integration_credential_max_size_bytes | int > 0
       - vault_integration_credential_allowed_owners | length > 0
       - vault_integration_credential_allowed_groups | length > 0
       - vault_integration_allowed_credential_modes | length > 0
-      - vault_integration_allowed_secret_prefixes | length == 4
+      - vault_integration_allowed_secret_prefixes is not defined
     fail_msg: >-
       Vault runtime integration only supports the documented AppRole over HTTPS
       interface and fails closed when required inputs are invalid.
 
-- name: Resolve protected AppRole credential paths
-  ansible.builtin.include_tasks: resolve_credentials.yml
+- name: Inspect controller CA bundle path without following symlinks
+  ansible.builtin.stat:
+    path: "{{ vault_integration_ca_cert_path }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  register: vault_integration_controller_ca_cert_stat
+  delegate_to: localhost
+  become: false
+  no_log: true
 
-- name: Render Vault runtime configuration reference for scheduled runs
-  ansible.builtin.include_tasks: bootstrap.yml
-  when:
-    - vault_integration_operation == 'bootstrap'
-    - vault_integration_bootstrap_configure_references | bool
+- name: Validate controller CA bundle path
+  ansible.builtin.assert:
+    that:
+      - vault_integration_controller_ca_cert_stat.stat.exists
+      - vault_integration_controller_ca_cert_stat.stat.isreg
+      - not vault_integration_controller_ca_cert_stat.stat.islnk | default(false)
+      - vault_integration_controller_ca_cert_stat.stat.readable | default(false)
+    fail_msg: >-
+      Vault TLS verification requires a readable regular CA bundle path on the
+      controller and does not permit symlink indirection.
+  no_log: true
 
-- name: Authenticate to Vault for runtime validation
-  ansible.builtin.include_tasks: authenticate.yml
-  when: vault_integration_operation in ['preflight', 'read']
+- name: Run Vault runtime flow with guaranteed cleanup
+  block:
+    - name: Resolve protected AppRole credential paths
+      ansible.builtin.include_tasks: resolve_credentials.yml
 
-- name: Retrieve a Vault secret at task runtime
-  ansible.builtin.include_tasks: read.yml
-  when: vault_integration_operation == 'read'
+    - name: Support cleanup verification after credential resolution
+      ansible.builtin.assert:
+        that:
+          - not (vault_integration_test_fail_after_credential_resolve | default(false) | bool)
+        fail_msg: Simulated failure after protected Vault credential resolution.
+      no_log: true
 
-- name: Clear transient Vault credentials and login state
-  ansible.builtin.include_tasks: cleanup.yml
+    - name: Render Vault runtime configuration reference for scheduled runs
+      ansible.builtin.include_tasks: bootstrap.yml
+      when:
+        - vault_integration_operation == 'bootstrap'
+        - vault_integration_bootstrap_configure_references | bool
+
+    - name: Authenticate to Vault for runtime validation
+      ansible.builtin.include_tasks: authenticate.yml
+      when: vault_integration_operation in ['preflight', 'read']
+
+    - name: Retrieve a Vault secret at task runtime
+      ansible.builtin.include_tasks: read.yml
+      when: vault_integration_operation == 'read'
+  always:
+    - name: Clear transient Vault credentials and login state
+      ansible.builtin.include_tasks: cleanup.yml

@@ -1,9 +1,14 @@
 ---
 - name: Clear transient Vault credential and token material
   ansible.builtin.set_fact:
-    vault_integration_role_id: ""
-    vault_integration_secret_id: ""
-    vault_integration_login_result: {}
-    vault_integration_role_id_file: {}
-    vault_integration_secret_id_file: {}
+    vault_integration_cleanup_marker: true
+    vault_integration_role_id:
+    vault_integration_secret_id:
+    vault_integration_login_result:
+    vault_integration_secret_result:
+    vault_integration_role_id_file:
+    vault_integration_secret_id_file:
+    vault_integration_secret_ref_normalized:
+    vault_integration_secret_engine_relative_path:
+    vault_integration_secret_path_segments:
   no_log: true

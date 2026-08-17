@@ -7,7 +7,7 @@ vault_integration_auth_method_allowlist:
   - approle
 
 vault_integration_addr: https://vault.example.invalid
-vault_integration_namespace: ""
+vault_integration_namespace:
 vault_integration_auth_mount: approle
 vault_integration_kv2_mount: secret
 vault_integration_validate_certs: true
@@ -17,7 +17,8 @@ vault_integration_bootstrap_validate_credentials: false
 vault_integration_bootstrap_configure_references: false
 vault_integration_bootstrap_reference_env_path: /etc/aihost/vault-runtime.env
 
-vault_integration_credentials_directory: "{{ ansible_env.CREDENTIALS_DIRECTORY | default('') }}"
+vault_integration_credentials_directory: >-
+  {{ lookup('ansible.builtin.env', 'CREDENTIALS_DIRECTORY') | default('', true) }}
 vault_integration_role_id_credential_filename: vault-role-id
 vault_integration_secret_id_credential_filename: vault-secret-id
 vault_integration_role_id_credential_fallback_paths: []
@@ -32,12 +33,6 @@ vault_integration_allowed_credential_modes:
 vault_integration_credential_max_size_bytes: 4096
 
 vault_integration_token_max_ttl_seconds: 3600
-
-vault_integration_allowed_secret_prefixes:
-  - secret/local-ai/shared/
-  - secret/local-ai/hosts/
-  - secret/local-ai/clusters/
-  - secret/local-ai/services/
 
 vault_integration_secret_ref: ""
 vault_integration_secret_version:

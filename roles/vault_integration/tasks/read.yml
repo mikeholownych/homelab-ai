@@ -3,9 +3,20 @@
   ansible.builtin.set_fact:
     vault_integration_secret_ref_normalized: >-
       {{ vault_integration_secret_ref | regex_replace('^/+|/+$', '') }}
+    vault_integration_secret_path_segments: >-
+      {{ vault_integration_secret_ref | regex_replace('^/+|/+$', '') | split('/') }}
   no_log: true
 
-- name: Assert the logical Vault secret path stays within the allowlist
+- name: Derive fixed Vault secret path prefixes from the validated KV mount
+  ansible.builtin.set_fact:
+    vault_integration_secret_category_prefixes:
+      shared: "{{ vault_integration_kv2_mount }}/local-ai/shared/"
+      hosts: "{{ vault_integration_kv2_mount }}/local-ai/hosts/{{ inventory_hostname }}/"
+      clusters: "{{ vault_integration_kv2_mount }}/local-ai/clusters/"
+      services: "{{ vault_integration_kv2_mount }}/local-ai/services/"
+  no_log: true
+
+- name: Assert the logical Vault secret path stays within fixed runtime boundaries
   ansible.builtin.assert:
     that:
       - vault_integration_secret_ref is string
@@ -14,34 +25,50 @@
       - vault_integration_secret_ref == vault_integration_secret_ref_normalized
       - "'..' not in vault_integration_secret_ref_normalized"
       - not (vault_integration_secret_ref_normalized | regex_search('(^|/)\\.\\.(?:/|$)'))
-      - vault_integration_secret_ref_normalized is match('^secret/local-ai/[A-Za-z0-9/_-]+$')
-      - vault_integration_secret_ref_normalized.split('/')[0:2] == ['secret', 'local-ai']
       - >-
-        vault_integration_secret_ref_normalized.split('/')[2]
-        in
-        (
-          vault_integration_allowed_secret_prefixes
-          | map('regex_replace', '^secret/local-ai/([^/]+)/?$', '\\1')
-          | list
+        vault_integration_secret_ref_normalized.startswith(
+          vault_integration_kv2_mount ~ '/local-ai/'
         )
+      - vault_integration_secret_path_segments | length > 3
+      - vault_integration_secret_path_segments[0] == vault_integration_kv2_mount
+      - vault_integration_secret_path_segments[1] == 'local-ai'
+      - vault_integration_secret_path_segments[2] in ['shared', 'hosts', 'clusters', 'services']
       - >-
-        vault_integration_secret_ref_normalized.split('/')[2] != 'hosts'
+        vault_integration_secret_path_segments[2] != 'hosts'
         or
         (
-          vault_integration_secret_ref_normalized.split('/') | length > 3
-          and vault_integration_secret_ref_normalized.split('/')[3] == inventory_hostname
+          vault_integration_secret_path_segments | length > 4
+          and vault_integration_secret_path_segments[3] == inventory_hostname
         )
+      - >-
+        vault_integration_secret_path_segments[2] != 'clusters'
+        or (cluster.enabled | default(false) | bool)
+      - >-
+        vault_integration_secret_path_segments[2] != 'shared'
+        or vault_integration_secret_ref_normalized.startswith(vault_integration_secret_category_prefixes.shared)
+      - >-
+        vault_integration_secret_path_segments[2] != 'hosts'
+        or vault_integration_secret_ref_normalized.startswith(vault_integration_secret_category_prefixes.hosts)
+      - >-
+        vault_integration_secret_path_segments[2] != 'clusters'
+        or vault_integration_secret_ref_normalized.startswith(vault_integration_secret_category_prefixes.clusters)
+      - >-
+        vault_integration_secret_path_segments[2] != 'services'
+        or vault_integration_secret_ref_normalized.startswith(vault_integration_secret_category_prefixes.services)
     fail_msg: >-
       Vault secret references must be normalized Git-stored logical paths under
-      the shared, hosts, clusters, or services allowlist.
+      the fixed shared, hosts, clusters, or services runtime boundaries.
 
 - name: Build the KVv2 path relative to the configured mount
   ansible.builtin.set_fact:
     vault_integration_secret_engine_relative_path: >-
-      {{
-        vault_integration_secret_ref_normalized
-        | regex_replace('^' ~ vault_integration_kv2_mount ~ '/', '')
-      }}
+      {{ vault_integration_secret_ref_normalized.split('/', 1)[1] }}
+  no_log: true
+
+- name: Inject a simulated Vault secret result for cleanup probes
+  ansible.builtin.set_fact:
+    vault_integration_secret_result: "{{ vault_integration_test_simulated_secret_result }}"
+  when: vault_integration_test_simulated_secret_result is defined
   no_log: true
 
 - name: Retrieve the Vault secret at task runtime
@@ -53,13 +80,14 @@
     engine_mount_point: "{{ vault_integration_kv2_mount }}"
     path: "{{ vault_integration_secret_engine_relative_path }}"
     version: "{{ vault_integration_secret_version if vault_integration_secret_version is not none else omit }}"
-    namespace: "{{ vault_integration_namespace if vault_integration_namespace | length > 0 else omit }}"
-    ca_cert: "{{ vault_integration_ca_cert_path if vault_integration_ca_cert_path | length > 0 else omit }}"
+    namespace: "{{ vault_integration_namespace if vault_integration_namespace is not none else omit }}"
+    ca_cert: "{{ vault_integration_ca_cert_path }}"
     validate_certs: "{{ vault_integration_validate_certs }}"
   register: vault_integration_secret_result
   delegate_to: localhost
   become: false
   no_log: true
+  when: vault_integration_test_simulated_secret_result is not defined
 
 - name: Assert required keys were returned by Vault without fallback
   ansible.builtin.assert:
