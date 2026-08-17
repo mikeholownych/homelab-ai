@@ -27,6 +27,18 @@ uses controller credentials instead of remote `ansible_env` values. You may
 still override `vault_integration_credentials_directory` explicitly when the
 controller needs a different protected path.
 
+When `vault_integration_operation: read` succeeds, the role publishes a minimal
+caller interface:
+
+- `vault_integration_secret` contains only the explicitly requested secret keys
+- `vault_integration_secret_access_metadata` contains non-secret access
+  metadata such as the logical path reference and KV version
+
+The role still guarantees cleanup of transient credential, token, login, and
+raw read result variables. Callers should consume `vault_integration_secret`
+immediately in the next dependent task and then clear it with a `no_log: true`
+`ansible.builtin.set_fact` once it is no longer needed.
+
 ## Protected AppRole credential contract
 
 The scheduled runner should provide:
@@ -69,6 +81,12 @@ printed to stdout during installation.
 
 Use `community.hashi_vault.vault_login` for the short-lived runtime token
 exchange and `community.hashi_vault.vault_kv2_get` for task-time reads.
+
+Both read-only tasks set `check_mode: false`. Ansible check mode would
+otherwise simulate Vault access and skip the real short-lived token exchange or
+KV read, which breaks meaningful preflight validation. The explicit check mode
+override keeps check mode functional by performing the same read-only Vault
+authentication and secret retrieval that normal runtime validation requires.
 
 Prefer read only KV policies. Omit `list` unless you truly need metadata
 enumeration; metadata list only if needed.

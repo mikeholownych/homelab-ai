@@ -22,6 +22,7 @@ SITE_PLAYBOOK = REPO_ROOT / "playbooks" / "site.yml"
 REQUIREMENTS_YML = REPO_ROOT / "requirements.yml"
 DOCS_PATH = REPO_ROOT / "docs" / "vault.md"
 CLEANUP_TASKS_PATH = TASKS_ROOT / "cleanup.yml"
+PUBLISH_SECRET_OUTPUT_TASKS_PATH = TASKS_ROOT / "publish_secret_output.yml"
 VALIDATE_SECRET_REF_TASKS_PATH = TASKS_ROOT / "validate_secret_ref.yml"
 CURRENT_USER = pwd.getpwuid(os.getuid()).pw_name
 CURRENT_GROUP = grp.getgrgid(os.getgid()).gr_name
@@ -218,8 +219,16 @@ class VaultContractTests(unittest.TestCase):
         self.assertEqual(1, len(kv_tasks), "Expected one KVv2 runtime retrieval task")
         self.assertTrue(login_tasks[0].get("no_log"), "Vault login must set no_log: true")
         self.assertTrue(kv_tasks[0].get("no_log"), "Vault KVv2 reads must set no_log: true")
+        self.assertEqual(False, login_tasks[0].get("check_mode"), "Vault login must force real read-only execution in check mode")
+        self.assertEqual(False, kv_tasks[0].get("check_mode"), "Vault KVv2 reads must force real read-only execution in check mode")
         self.assertNotIn("vault_integration_test_", role_text)
         self.assertNotIn("simulated Vault", role_text)
+
+    def test_role_documents_minimal_caller_secret_interface(self) -> None:
+        role_text = load_role_text()
+        self.assertIn("vault_integration_secret:", role_text)
+        self.assertIn("vault_integration_secret_access_metadata:", role_text)
+        self.assertIn("vault_integration_required_secret_keys", role_text)
 
     def test_bootstrap_and_site_wire_vault_role_with_explicit_tags(self) -> None:
         bootstrap_tasks = load_task_documents(BOOTSTRAP_PLAYBOOK)
@@ -285,6 +294,10 @@ class VaultContractTests(unittest.TestCase):
             "recovery",
             "community.hashi_vault.vault_login",
             "community.hashi_vault.vault_kv2_get",
+            "check mode",
+            "check_mode: false",
+            "vault_integration_secret",
+            "vault_integration_secret_access_metadata",
             "read only",
             "metadata list only if needed",
             "plaintext fallback",
@@ -315,6 +328,7 @@ class VaultContractTests(unittest.TestCase):
                                 "ansible.builtin.include_role": {"name": "vault_integration"},
                                 "vars": {
                                     "vault_integration_operation": "bootstrap",
+                                    "vault_integration_bootstrap_validate_credentials": True,
                                     "vault_integration_credential_allowed_owners": [CURRENT_USER],
                                     "vault_integration_credential_allowed_groups": [CURRENT_GROUP],
                                 },
@@ -326,7 +340,7 @@ class VaultContractTests(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
 
-    def test_cleanup_task_clears_sensitive_facts_after_failure(self) -> None:
+    def test_cleanup_task_clears_raw_sensitive_facts_but_preserves_caller_secret_output(self) -> None:
         playbook = [
             {
                 "hosts": "localhost",
@@ -341,6 +355,8 @@ class VaultContractTests(unittest.TestCase):
                                     "vault_integration_secret_id": "seed-secret-id",
                                     "vault_integration_login_result": {"login": {"auth": {"client_token": "seed-token"}}},
                                     "vault_integration_secret_result": {"secret": {"required": "seed-value"}},
+                                    "vault_integration_secret": {"required": "seed-value"},
+                                    "vault_integration_secret_access_metadata": {"status": "ok", "path_ref": "secret/local-ai/shared/seed"},
                                     "vault_integration_role_id_file": "/run/seed-role-id",
                                     "vault_integration_secret_id_file": "/run/seed-secret-id",
                                     "vault_integration_secret_ref_normalized": "secret/local-ai/shared/seed",
@@ -372,6 +388,8 @@ class VaultContractTests(unittest.TestCase):
                                         "vault_integration_secret_id_file is none",
                                         "vault_integration_login_result is none",
                                         "vault_integration_secret_result is none",
+                                        "vault_integration_secret.required == 'seed-value'",
+                                        "vault_integration_secret_access_metadata.path_ref == 'secret/local-ai/shared/seed'",
                                         "vault_integration_secret_ref_normalized is none",
                                         "vault_integration_secret_engine_relative_path is none",
                                         "vault_integration_secret_path_segments is none",
@@ -385,6 +403,78 @@ class VaultContractTests(unittest.TestCase):
         ]
         result = run_probe_playbook(playbook)
         self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
+
+    def test_publish_secret_output_task_exposes_required_keys_only(self) -> None:
+        playbook = [
+            {
+                "hosts": "localhost",
+                "gather_facts": False,
+                "vars": {
+                    "vault_integration_required_secret_keys": ["required", "another_required"],
+                    "vault_integration_secret_result": {
+                        "secret": {
+                            "required": "seed-value",
+                            "another_required": "second-value",
+                            "extra": "should-not-leak",
+                        },
+                        "metadata": {"version": 7, "created_time": "2026-08-17T00:00:00Z"},
+                    },
+                    "vault_integration_secret_ref_normalized": "secret/local-ai/shared/app.env",
+                    "vault_integration_kv2_mount": "secret",
+                },
+                "tasks": [
+                    {
+                        "name": "Publish minimal caller secret output",
+                        "ansible.builtin.include_tasks": str(PUBLISH_SECRET_OUTPUT_TASKS_PATH),
+                    },
+                    {
+                        "name": "Assert caller secret output shape",
+                        "ansible.builtin.assert": {
+                            "that": [
+                                "vault_integration_secret.required == 'seed-value'",
+                                "vault_integration_secret.another_required == 'second-value'",
+                                "'extra' not in vault_integration_secret",
+                                "vault_integration_secret_access_metadata.version == 7",
+                                "vault_integration_secret_access_metadata.path_ref == 'secret/local-ai/shared/app.env'",
+                            ]
+                        },
+                    },
+                ],
+            }
+        ]
+        result = run_probe_playbook(playbook)
+        self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
+
+    def test_bootstrap_reference_render_does_not_require_credentials_when_validation_is_disabled(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aihost-vault-bootstrap-reference-") as tmpdir:
+            temp_root = Path(tmpdir)
+            reference_env_path = temp_root / "vault-runtime.env"
+            result = run_probe_playbook(
+                [
+                    {
+                        "hosts": "localhost",
+                        "gather_facts": False,
+                        "tasks": [
+                            {
+                                "name": "Render vault bootstrap references without validating credentials",
+                                "ansible.builtin.include_role": {"name": "vault_integration"},
+                                "vars": {
+                                    "vault_integration_operation": "bootstrap",
+                                    "vault_integration_bootstrap_configure_references": True,
+                                    "vault_integration_bootstrap_validate_credentials": False,
+                                    "vault_integration_bootstrap_reference_env_path": str(reference_env_path),
+                                    "vault_integration_bootstrap_reference_owner": CURRENT_USER,
+                                    "vault_integration_bootstrap_reference_group": CURRENT_GROUP,
+                                },
+                            }
+                        ],
+                    }
+                ]
+            )
+            self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
+            rendered = reference_env_path.read_text(encoding="utf-8")
+            self.assertIn("VAULT_ROLE_ID_FILE=${CREDENTIALS_DIRECTORY}/vault-role-id", rendered)
+            self.assertIn("VAULT_SECRET_ID_FILE=${CREDENTIALS_DIRECTORY}/vault-secret-id", rendered)
 
     def test_secret_ref_validation_rejects_fail_closed_input_defects(self) -> None:
         invalid_cases = (

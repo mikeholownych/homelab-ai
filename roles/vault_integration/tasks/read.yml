@@ -23,6 +23,7 @@
   register: vault_integration_secret_result
   delegate_to: localhost
   become: false
+  check_mode: false
   no_log: true
 
 - name: Assert required keys were returned by Vault without fallback
@@ -37,11 +38,5 @@
       instead of falling back to plaintext or cached values.
   no_log: true
 
-- name: Record non-secret Vault access metadata for downstream evidence
-  ansible.builtin.set_fact:
-    vault_integration_secret_access_metadata:
-      status: ok
-      path_ref: "{{ vault_integration_secret_ref_normalized }}"
-      engine_mount_point: "{{ vault_integration_kv2_mount }}"
-      version: "{{ vault_integration_secret_result.metadata.version }}"
-      created_time: "{{ vault_integration_secret_result.metadata.created_time | default(None) }}"
+- name: Publish the minimal caller secret interface
+  ansible.builtin.include_tasks: publish_secret_output.yml

@@ -16,6 +16,8 @@ vault_integration_ca_cert_path: /etc/ssl/certs/ca-certificates.crt
 vault_integration_bootstrap_validate_credentials: false
 vault_integration_bootstrap_configure_references: false
 vault_integration_bootstrap_reference_env_path: /etc/aihost/vault-runtime.env
+vault_integration_bootstrap_reference_owner: root
+vault_integration_bootstrap_reference_group: root
 
 vault_integration_credentials_directory: >-
   {{ lookup('ansible.builtin.env', 'CREDENTIALS_DIRECTORY') | default('', true) }}

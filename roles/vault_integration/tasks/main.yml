@@ -55,6 +55,9 @@
   block:
     - name: Resolve protected AppRole credential paths
       ansible.builtin.include_tasks: resolve_credentials.yml
+      when:
+        - vault_integration_operation in ['preflight', 'read']
+          or vault_integration_bootstrap_validate_credentials | bool
 
     - name: Render Vault runtime configuration reference for scheduled runs
       ansible.builtin.include_tasks: bootstrap.yml
