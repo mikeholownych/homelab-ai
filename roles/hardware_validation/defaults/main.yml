@@ -1,2 +1,7 @@
 ---
-{}
+hardware_validation_profile_path: "{{ playbook_dir }}/../profiles/hardware/{{ hardware_profile }}.yml"
+hardware_validation_classifier_path: /usr/local/libexec/local-ai-classify-hardware
+hardware_validation_evidence_dir: >-
+  {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR') |
+     default('/var/lib/local-ai/evidence/manual', true) }}
+hardware_validation_fail_on_blocking: true

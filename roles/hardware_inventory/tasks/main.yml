@@ -1,2 +1,36 @@
 ---
-[]
+- name: Ensure hardware inventory working directory exists
+  ansible.builtin.file:
+    path: "{{ hardware_inventory_work_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [inventory, hardware]
+
+- name: Install read-only hardware collector
+  ansible.builtin.copy:
+    src: collect_hardware.py
+    dest: "{{ hardware_inventory_collector_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [inventory, hardware]
+
+- name: Collect required hardware sources without mutation
+  ansible.builtin.command:
+    argv: ["{{ hardware_inventory_collector_path }}"]
+  register: hardware_inventory_collection
+  changed_when: false
+  failed_when: hardware_inventory_collection.rc != 0
+  check_mode: false
+  tags: [inventory, hardware]
+
+- name: Persist observed hardware snapshot
+  ansible.builtin.copy:
+    content: "{{ hardware_inventory_collection.stdout | from_json | to_nice_json }}\n"
+    dest: "{{ hardware_inventory_observed_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  tags: [inventory, hardware]

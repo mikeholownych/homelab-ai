@@ -1,15 +1,13 @@
 ---
-- name: Validate foundation scaffold
+- name: Independently validate hardware state
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
+  become: true
   tags:
-    - validate
-    - foundation
-  tasks:
-    - name: Report validate scaffold status
-      ansible.builtin.debug:
-        msg: Validate scaffolding only; validation behavior is not implemented yet.
-      changed_when: false
-      tags:
-        - validate
-        - foundation
+    - validation
+    - hardware
+  roles:
+    - role: hardware_inventory
+      tags: [validation, inventory, hardware]
+    - role: hardware_validation
+      tags: [validation, hardware]

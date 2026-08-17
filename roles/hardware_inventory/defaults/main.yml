@@ -1,2 +1,4 @@
 ---
-{}
+hardware_inventory_work_dir: /var/lib/local-ai/hardware
+hardware_inventory_observed_path: "{{ hardware_inventory_work_dir }}/observed.json"
+hardware_inventory_collector_path: /usr/local/libexec/local-ai-collect-hardware

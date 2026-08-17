@@ -1,2 +1,51 @@
 ---
-[]
+- name: Load version-controlled expected hardware profile
+  ansible.builtin.include_vars:
+    file: "{{ hardware_validation_profile_path }}"
+    name: hardware_validation_expected
+  tags: [validation, hardware]
+
+- name: Install pure hardware classifier
+  ansible.builtin.copy:
+    src: classify_hardware.py
+    dest: "{{ hardware_validation_classifier_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [validation, hardware]
+
+- name: Ensure hardware evidence directory exists
+  ansible.builtin.file:
+    path: "{{ hardware_validation_evidence_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [validation, hardware]
+
+- name: Materialize expected profile for pure comparison
+  ansible.builtin.copy:
+    content: "{{ hardware_validation_expected | to_nice_json }}\n"
+    dest: "{{ hardware_inventory_work_dir }}/expected.json"
+    owner: root
+    group: root
+    mode: "0640"
+  tags: [validation, hardware]
+
+- name: Classify observed hardware and write structured evidence
+  ansible.builtin.command:
+    argv:
+      - "{{ hardware_validation_classifier_path }}"
+      - --profile
+      - "{{ hardware_inventory_work_dir }}/expected.json"
+      - --observed
+      - "{{ hardware_inventory_observed_path }}"
+      - --output-dir
+      - "{{ hardware_validation_evidence_dir }}"
+  register: hardware_validation_result
+  changed_when: false
+  failed_when: >-
+    hardware_validation_result.rc not in [0, 2] or
+    (hardware_validation_fail_on_blocking | bool and hardware_validation_result.rc == 2)
+  check_mode: false
+  tags: [validation, hardware]

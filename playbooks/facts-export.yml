@@ -1,15 +1,14 @@
 ---
-- name: Facts export foundation scaffold
+- name: Export authoritative hardware facts
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
+  become: true
   tags:
     - facts_export
-    - foundation
-  tasks:
-    - name: Report facts-export scaffold status
-      ansible.builtin.debug:
-        msg: Facts-export scaffolding only; export behavior is not implemented yet.
-      changed_when: false
-      tags:
-        - facts_export
-        - foundation
+    - inventory
+    - hardware
+  roles:
+    - role: hardware_inventory
+      tags: [facts_export, inventory, hardware]
+    - role: hardware_validation
+      tags: [facts_export, validation, hardware]
