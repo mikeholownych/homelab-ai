@@ -50,6 +50,21 @@ Each credential file must be:
 The role ID may be less sensitive than the SecretID, but this repository still
 treats both as protected.
 
+Install the AppRole RoleID as a protected root-owned file even though it is not
+secret:
+
+```bash
+umask 077
+install -d -m 0700 -o root -g root /run/aihost-vault
+vault read -field=role_id auth/approle/role/local-ai-runtime/role-id \
+  > /run/aihost-vault/vault-role-id.tmp
+install -m 0400 -o root -g root /run/aihost-vault/vault-role-id.tmp /etc/aihost/credentials/vault-role-id
+rm -f /run/aihost-vault/vault-role-id.tmp
+```
+
+Redirect the RoleID straight into the protected temporary file so nothing is
+printed to stdout during installation.
+
 ## AppRole setup and policy scope
 
 Use `community.hashi_vault.vault_login` for the short-lived runtime token
@@ -66,11 +81,15 @@ vault auth enable -path=approle approle
 vault write auth/approle/role/local-ai-runtime \
   token_policies=local-ai-runtime \
   token_ttl=15m \
-  token_max_ttl=1h \
-  secret_id_ttl=24h \
-  secret_id_num_uses=1 \
+  token_max_ttl=30m \
+  secret_id_ttl=168h \
+  secret_id_num_uses=0 \
   bind_secret_id=true
 ```
+
+This combination supports scheduled machine auth without a one-shot second-run
+failure. The SecretID can be reused during its bounded 168h lifetime, while the
+Vault tokens issued from it remain short-lived and never stored.
 
 Example policy with read only access:
 
@@ -152,12 +171,27 @@ The role then reads `$CREDENTIALS_DIRECTORY/vault-role-id` and
 
 ## rotation, revocation, and outage recovery
 
-- Rotation: rotate the SecretID regularly and after any suspected exposure.
+- Rotation: rotate the SecretID before the bounded 168h TTL expires and after
+  any suspected exposure.
 - Revocation: revoke the SecretID immediately when the runner is retired or
   compromised.
 - Revoke orphaned wrapped SecretIDs or stale AppRole SecretIDs before issuing a
   replacement.
 - Rebind the AppRole policy when access scope changes.
+
+Concrete scheduled rotation procedure:
+
+1. Generate a new wrapped SecretID before the current SecretID TTL expires.
+2. Unwrap it into a protected temporary file exactly as shown above.
+3. atomically replace the credential file at
+   `/etc/aihost/credentials/vault-secret-id`.
+4. run the Vault preflight so the next scheduled run proves the new credential
+   works.
+5. revoke the old SecretID accessor only after a successful run with the new
+   credential.
+
+This avoids a one-shot second-run failure while still keeping runtime tokens
+short-lived and never stored.
 
 When runtime access fails, diagnose in this order:
 
@@ -167,8 +201,10 @@ When runtime access fails, diagnose in this order:
 3. Auth: confirm the AppRole mount, role ID, SecretID, TTL, and renewable token
    behavior.
 4. Policy restore: confirm the read policy still covers the exact logical path.
-5. Rerun the Ansible play once TLS, Vault health, auth, and policy restore are
-   corrected.
+5. If a rotated credential is suspect, reinstall the protected RoleID file,
+   generate a new wrapped SecretID, atomically replace the SecretID file, run
+   the Vault preflight, and then rerun the Ansible play once TLS, Vault health,
+   auth, and policy restore are corrected.
 
 The repository fails closed during outages. There is never a plaintext fallback
 and never an Ansible Vault fallback.

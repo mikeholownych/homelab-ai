@@ -258,19 +258,28 @@ class VaultContractTests(unittest.TestCase):
             "$CREDENTIALS_DIRECTORY/vault-secret-id",
             "LoadCredential=vault-role-id:/etc/aihost/credentials/vault-role-id",
             "LoadCredential=vault-secret-id:/etc/aihost/credentials/vault-secret-id",
+            "umask 077",
+            "vault read -field=role_id auth/approle/role/local-ai-runtime/role-id",
+            "install -m 0400 -o root -g root /run/aihost-vault/vault-role-id.tmp /etc/aihost/credentials/vault-role-id",
+            "rm -f /run/aihost-vault/vault-role-id.tmp",
             "vault policy write local-ai-runtime",
             "vault auth enable -path=approle approle",
             "vault write auth/approle/role/local-ai-runtime",
             "token_policies=local-ai-runtime",
             "token_ttl=15m",
-            "token_max_ttl=1h",
-            "secret_id_ttl=24h",
-            "secret_id_num_uses=1",
+            "token_max_ttl=30m",
+            "secret_id_ttl=168h",
+            "secret_id_num_uses=0",
             "bind_secret_id=true",
             "vault write -format=json -wrap-ttl=15m -f auth/approle/role/local-ai-runtime/secret-id",
             ".data.secret_id",
             "install -m 0400 -o root -g root",
             "rm -f /run/aihost-vault/wrapped-secret-id.json",
+            "rotate the SecretID before the bounded 168h TTL expires",
+            "atomically replace the credential file",
+            "run the Vault preflight",
+            "revoke the old SecretID accessor",
+            "short-lived and never stored",
             "rotation",
             "revoke",
             "recovery",
@@ -286,6 +295,7 @@ class VaultContractTests(unittest.TestCase):
                 self.assertIn(token, docs_text)
         self.assertNotIn("LoadCredentialEncrypted=", docs_text)
         self.assertNotIn("systemd-creds encrypt", docs_text)
+        self.assertNotIn("secret_id_num_uses=1", docs_text)
 
     def test_role_uses_controller_credentials_directory_lookup_instead_of_remote_ansible_env(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aihost-vault-cred-source-") as tmpdir:
