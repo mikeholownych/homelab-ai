@@ -18,6 +18,12 @@ cpu:
 
 gpu:
   count_expected: 2
+  approved_pci_devices:
+    - vendor_id: "8086"
+      device_id: e222
+      model: Intel Arc Pro B65
+      source: Intel Xe KMD supported hardware table
+      source_url: https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html
   expected_models:
     - vendor: Intel
       model: Intel Arc Pro B65

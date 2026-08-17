@@ -1,0 +1,13 @@
+0000:41:00.0 Display controller [0380]: Intel Corporation Device [8086:e222]
+	LnkCap: Port #0, Speed 32GT/s, Width x16
+	LnkSta: Speed 16GT/s (downgraded), Width x16
+	Region 2: Memory at 4000000000 (64-bit, prefetchable) [size=32G]
+	Capabilities: [420 v1] Physical Resizable BAR
+		BAR 2: current size: 32GB, supported: 256MB 32GB
+
+0000:61:00.0 Display controller [0380]: Intel Corporation Device [8086:e222]
+	LnkCap: Port #0, Speed 32GT/s, Width x16
+	LnkSta: Speed 16GT/s (downgraded), Width x8 (downgraded)
+	Region 2: Memory at 4800000000 (64-bit, prefetchable) [size=32G]
+	Capabilities: [420 v1] Physical Resizable BAR
+		BAR 2: current size: 32GB, supported: 256MB 32GB

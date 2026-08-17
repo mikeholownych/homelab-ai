@@ -2,11 +2,10 @@
   "simulated": true,
   "dmi": {"manufacturer": "Lenovo", "product_name": "30E1S7NJ00 ThinkStation P620", "serial_number": "SIMULATED", "asset_tag": "SIMULATED", "bios_version": "SIM-1"},
   "cpu": {"model": "AMD Ryzen Threadripper PRO 3945WX 12-Cores", "sockets": 1},
-  "memory": {"total_gib": 48, "dimms": [{"locator": "DIMM1", "size_gib": 16}, {"locator": "DIMM2", "size_gib": 16}, {"locator": "DIMM3", "size_gib": 16}]},
-  "gpus": [{"model": "Intel Arc Pro B65", "pci_id": "8086:sim1", "memory_gib": 32, "level_zero": true}, {"model": "Intel Arc Pro B65", "pci_id": "8086:sim2", "memory_gib": 32, "level_zero": true}],
-  "pci": [{"address": "0000:41:00.0", "slot_width": 16, "current_width": 16, "max_generation": 4, "current_generation": 4, "bar_gib": 32, "rebar_enabled": true}, {"address": "0000:61:00.0", "slot_width": 16, "current_width": 16, "max_generation": 4, "current_generation": 4, "bar_gib": 32, "rebar_enabled": true}],
-  "firmware": {"above_4g_decoding": true, "devices": []},
-  "storage": [{"name": "nvme0n1", "size_bytes": 1000204886016, "firmware": "SIM"}],
-  "nics": [{"name": "enp1s0", "speed_mbps": 10000, "mac": "00:00:00:00:00:00"}],
-  "power_supplies": []
+  "memory": {"total_gib": 48, "dimms": [{"locator": "DIMM1", "size_gib": 16}]},
+  "gpus": [{"bdf": "0000:41:00.0", "vendor_id": "8086", "device_id": "e222"}, {"bdf": "0000:61:00.0", "vendor_id": "8086", "device_id": "e222"}],
+  "level_zero_devices": [{"bdf": "0000:41:00.0", "name": "Intel Arc Pro B65", "memory_gib": 32, "memory_source": "level_zero_global_memory"}, {"bdf": "0000:61:00.0", "name": "Intel Arc Pro B65", "memory_gib": 32, "memory_source": "level_zero_global_memory"}],
+  "pci": [{"bdf": "0000:41:00.0", "vendor_id": "8086", "device_id": "e222", "slot_width": 16, "current_width": 16, "device_max_generation": 5, "current_generation": 4, "bar_sizes_gib": [32], "rebar_enabled": true}, {"bdf": "0000:61:00.0", "vendor_id": "8086", "device_id": "e222", "slot_width": 16, "current_width": 16, "device_max_generation": 5, "current_generation": 4, "bar_sizes_gib": [32], "rebar_enabled": true}],
+  "firmware": {"above_4g_decoding": {"value": true, "source": "bios_setup_export", "confidence": "authoritative"}, "devices": []},
+  "storage": [], "nics": [], "power_supplies": []
 }

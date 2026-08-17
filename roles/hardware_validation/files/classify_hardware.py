@@ -24,39 +24,65 @@ def classify(profile, observed):
                          "blocking", "CPU identity must match the version-controlled platform profile."))
     expected_gpus = profile["gpu"]["count_expected"]
     gpus = observed.get("gpus", [])
+    pci = observed.get("pci", [])
     checks.append(_check("gpu_count", expected_gpus, len(gpus), len(gpus) == expected_gpus,
                          "blocking", "All intended accelerators must enumerate."))
-    models = [gpu.get("model", "") for gpu in gpus]
-    model_ok = len(gpus) == expected_gpus and all("Intel Arc Pro B65" in model for model in models)
-    checks.append(_check("gpu_model_match", "Intel Arc Pro B65", models, model_ok,
-                         "blocking", "Unexpected accelerators invalidate the runtime baseline."))
+    approved = {(item["vendor_id"].lower(), item["device_id"].lower()): item["model"]
+                for item in profile["gpu"]["approved_pci_devices"]}
+    identities = [{"bdf": gpu.get("bdf"), "vendor_id": gpu.get("vendor_id"),
+                   "device_id": gpu.get("device_id")} for gpu in gpus]
+    pci_by_bdf = {str(item.get("bdf", "")).lower(): item for item in pci if item.get("bdf")}
+    model_ok = len(gpus) == expected_gpus and len(pci_by_bdf) == expected_gpus and all(
+        (str(gpu.get("vendor_id", "")).lower(), str(gpu.get("device_id", "")).lower()) in approved
+        and str(gpu.get("bdf", "")).lower() in pci_by_bdf
+        and str(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("vendor_id", "")).lower() ==
+        str(gpu.get("vendor_id", "")).lower()
+        and str(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("device_id", "")).lower() ==
+        str(gpu.get("device_id", "")).lower()
+        for gpu in gpus
+    )
+    checks.append(_check("gpu_model_match", profile["gpu"]["approved_pci_devices"], identities, model_ok,
+                         "blocking", "GPU identity is resolved only from approved vendor/device PCI IDs."))
     memory_target = profile["gpu"]["expected_models"][0]["memory_gib"]["approximate"]
     memory_tolerance = profile["gpu"]["expected_models"][0]["memory_gib"]["tolerance_gib"]
-    gpu_memory = [gpu.get("memory_gib") for gpu in gpus]
+    level_zero = observed.get("level_zero_devices", [])
+    pci_bdfs = {str(gpu.get("bdf", "")).lower() for gpu in gpus}
+    level_zero_by_bdf = {str(device.get("bdf", "")).lower(): device for device in level_zero
+                         if device.get("bdf")}
+    trustworthy_l0 = (len(level_zero) == expected_gpus and set(level_zero_by_bdf) == pci_bdfs and
+                      all(device.get("memory_source") == "level_zero_global_memory"
+                          for device in level_zero))
+    gpu_memory = [level_zero_by_bdf.get(bdf, {}).get("memory_gib") for bdf in sorted(pci_bdfs)]
     gpu_memory_ok = len(gpu_memory) == expected_gpus and all(
         isinstance(value, (int, float)) and abs(value - memory_target) <= memory_tolerance
         for value in gpu_memory
     )
     checks.append(_check("gpu_memory", f"{memory_target} GiB +/- {memory_tolerance} GiB", gpu_memory,
-                         gpu_memory_ok, "blocking", "Each GPU must expose its expected large memory BAR."))
-    l0_count = sum(bool(gpu.get("level_zero")) for gpu in gpus)
-    checks.append(_check("level_zero_detected", expected_gpus, l0_count, l0_count == expected_gpus,
-                         "blocking", "Each accelerator requires a Level Zero device."))
-    pci = observed.get("pci", [])
+                         trustworthy_l0 and gpu_memory_ok, "blocking",
+                         "VRAM must come from BDF-correlated Level Zero global-memory diagnostics, never BAR size."))
+    checks.append(_check("level_zero_detected", {"count": expected_gpus, "bdfs": sorted(pci_bdfs)},
+                         level_zero, trustworthy_l0, "blocking",
+                         "Exactly two trustworthy Level Zero devices must bind one-to-one to GPU PCI BDFs."))
     rebar_ok = len(pci) == expected_gpus and all(item.get("rebar_enabled") is True for item in pci)
     checks.append(_check("resizable_bar_enabled", True, [item.get("rebar_enabled") for item in pci],
                          rebar_ok, "blocking", "Large BAR is required for the intended GPU memory mapping."))
-    above4g = observed.get("firmware", {}).get("above_4g_decoding")
-    checks.append(_check("above_4g_decoding_enabled", True, above4g, above4g is True,
-                         "blocking", "Above 4G decoding is required for dual large-memory GPUs."))
+    above4g = observed.get("firmware", {}).get("above_4g_decoding", {})
+    above4g_value = above4g.get("value") if isinstance(above4g, dict) else None
+    if above4g_value is None:
+        checks.append({"rule": "above_4g_decoding_enabled", "expected": True, "observed": above4g,
+                       "status": profile["firmware"]["above_4g_decoding"]["undiscoverable_status"],
+                       "severity": "informational",
+                       "rationale": "Linux does not expose an authoritative setting; commissioning must verify BIOS."})
+    else:
+        checks.append(_check("above_4g_decoding_enabled", True, above4g, above4g_value is True,
+                             "blocking", "Only an explicit sourced BIOS observation may satisfy this check."))
     ratio_min = profile["pcie"]["material_degradation"]["minimum_negotiated_to_slot_ratio"]
     unhealthy = []
     for index, link in enumerate(pci):
         slot_width = int(link.get("slot_width") or 0)
         current_width = int(link.get("current_width") or 0)
         generation = int(link.get("current_generation") or 0)
-        expected_generation = min(int(link.get("max_generation") or 0),
-                                  profile["pcie"]["host_link"]["max_generation"])
+        expected_generation = profile["pcie"]["host_link"]["expected_negotiated_generation"]
         if not slot_width or current_width / slot_width < ratio_min or generation < expected_generation:
             unhealthy.append({"gpu": index, "slot_width": slot_width, "current_width": current_width,
                               "expected_generation": expected_generation, "current_generation": generation})
@@ -76,7 +102,7 @@ def classify(profile, observed):
     simulated = observed.get("simulated") is True
     blocking = any(item["status"] == "fail" and item["severity"] == "blocking" for item in checks)
     warning = any(item["status"] == "fail" and item["severity"] == "warning" for item in checks)
-    return {"schema_version": "1.0.0", "simulated": simulated, "physical_acceptance": False if simulated else not blocking,
+    return {"schema_version": "1.0.0", "simulated": simulated, "physical_acceptance": False,
             "status": "blocking" if blocking else "warning" if warning else "pass", "checks": checks}
 
 

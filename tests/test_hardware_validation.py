@@ -9,10 +9,18 @@ import yaml
 
 ROOT = Path(__file__).parents[1]
 MODULE_PATH = ROOT / "roles/hardware_validation/files/classify_hardware.py"
+COLLECTOR_PATH = ROOT / "roles/hardware_inventory/files/collect_hardware.py"
 
 
 def load_classifier():
     spec = importlib.util.spec_from_file_location("classify_hardware", MODULE_PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_collector():
+    spec = importlib.util.spec_from_file_location("collect_hardware", COLLECTOR_PATH)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -26,6 +34,8 @@ def load_classifier():
         ("rebar_missing", "blocking", "resizable_bar_enabled"),
         ("level_zero_missing", "blocking", "level_zero_detected"),
         ("pcie_degraded", "blocking", "pcie_link_health"),
+        ("gpu_model", "blocking", "gpu_model_match"),
+        ("vram_mismatch", "blocking", "gpu_memory"),
     ],
 )
 def test_fixture_classification(fixture, status, rule):
@@ -89,3 +99,80 @@ def test_collector_has_no_simulation_mode_and_requires_core_sources():
     for command in ("lspci", "lsblk", "ip"):
         assert f'["{command}"' in source
     assert '"simulated": False' in source
+
+
+def test_realistic_lspci_parser_uses_explicit_link_fields_and_slot_width():
+    collector = load_collector()
+    pci = collector.parse_lspci(
+        (ROOT / "tests/fixtures/hardware/lspci_b65.txt").read_text(),
+        (ROOT / "tests/fixtures/hardware/dmidecode_slots.txt").read_text(),
+    )
+    assert pci[0] == {
+        "bdf": "0000:41:00.0", "vendor_id": "8086", "device_id": "e222",
+        "device_max_generation": 5, "device_max_width": 16,
+        "current_generation": 4, "current_width": 16, "slot_width": 16,
+        "bar_sizes_gib": [32.0], "rebar_enabled": True,
+    }
+    assert pci[1]["slot_width"] == 8
+    assert pci[1]["current_width"] == 8
+
+
+def test_realistic_level_zero_parser_reports_bdf_and_vram_not_bar():
+    collector = load_collector()
+    devices = collector.parse_level_zero((ROOT / "tests/fixtures/hardware/zeinfo_b65.json").read_text())
+    assert [item["bdf"] for item in devices] == ["0000:41:00.0", "0000:61:00.0"]
+    assert all(item["memory_gib"] == 32 for item in devices)
+    assert all(item["memory_source"] == "level_zero_global_memory" for item in devices)
+
+
+def test_unknown_vram_and_unbound_level_zero_cannot_pass():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["level_zero_devices"][0]["memory_gib"] = None
+    observed["level_zero_devices"][1]["bdf"] = "0000:ff:00.0"
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "blocking"
+    assert result["physical_acceptance"] is False
+
+
+def test_above4g_unknown_is_not_tested_not_inferred_from_bar():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["firmware"]["above_4g_decoding"] = {"value": None, "source": "not exposed", "confidence": "unknown"}
+    result = classifier.classify(profile, observed)
+    check = next(item for item in result["checks"] if item["rule"] == "above_4g_decoding_enabled")
+    assert check["status"] == "not_tested"
+    assert result["physical_acceptance"] is False
+
+
+def test_gen3_blocks_even_if_device_claims_gen3_maximum():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["pci"][0].update({"device_max_generation": 3, "current_generation": 3})
+    result = classifier.classify(profile, observed)
+    check = next(item for item in result["checks"] if item["rule"] == "pcie_link_health")
+    assert check["status"] == "fail"
+    assert check["severity"] == "blocking"
+
+
+def test_gpu_identity_must_bind_to_same_pci_bdf():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["pci"][1]["device_id"] = "ffff"
+    result = classifier.classify(profile, observed)
+    check = next(item for item in result["checks"] if item["rule"] == "gpu_model_match")
+    assert check["status"] == "fail"
+
+
+def test_successful_live_observation_still_does_not_grant_commissioning_acceptance():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["simulated"] = False
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "pass"
+    assert result["physical_acceptance"] is False

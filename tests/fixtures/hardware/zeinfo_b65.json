@@ -1,0 +1,6 @@
+{
+  "devices": [
+    {"name": "Intel Arc Pro B65", "pci_bdf": "0000:41:00.0", "global_memory_size": 34359738368},
+    {"name": "Intel Arc Pro B65", "pci_bdf": "0000:61:00.0", "global_memory_size": 34359738368}
+  ]
+}
