@@ -1,4 +1,10 @@
 ---
+- name: Clear previously published Vault caller output before refresh
+  ansible.builtin.set_fact:
+    vault_integration_secret:
+    vault_integration_secret_access_metadata:
+  no_log: true
+
 - name: Validate the logical Vault secret path reference
   ansible.builtin.include_tasks: validate_secret_ref.yml
 

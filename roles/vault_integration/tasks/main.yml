@@ -53,6 +53,13 @@
 
 - name: Run Vault runtime flow with guaranteed cleanup
   block:
+    - name: Clear previously published Vault caller output before refresh
+      ansible.builtin.set_fact:
+        vault_integration_secret:
+        vault_integration_secret_access_metadata:
+      no_log: true
+      when: vault_integration_operation == 'read'
+
     - name: Resolve protected AppRole credential paths
       ansible.builtin.include_tasks: resolve_credentials.yml
       when:

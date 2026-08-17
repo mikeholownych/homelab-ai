@@ -404,6 +404,57 @@ class VaultContractTests(unittest.TestCase):
         result = run_probe_playbook(playbook)
         self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
 
+    def test_read_operation_clears_stale_published_output_before_attempt(self) -> None:
+        playbook = [
+            {
+                "hosts": "localhost",
+                "gather_facts": False,
+                "tasks": [
+                    {
+                        "block": [
+                            {
+                                "name": "Seed stale published Vault output",
+                                "ansible.builtin.set_fact": {
+                                    "vault_integration_secret": {"required": "stale-value"},
+                                    "vault_integration_secret_access_metadata": {
+                                        "status": "ok",
+                                        "path_ref": "secret/local-ai/shared/stale",
+                                        "version": 1,
+                                    },
+                                },
+                            },
+                            {
+                                "name": "Attempt Vault read that fails before credentials or Vault access",
+                                "ansible.builtin.include_role": {"name": "vault_integration"},
+                                "vars": {
+                                    "vault_integration_enabled": True,
+                                    "vault_integration_operation": "read",
+                                    "vault_integration_secret_ref": "secret/local-ai/shared/runtime",
+                                    "vault_integration_required_secret_keys": ["required"],
+                                    "vault_integration_credential_allowed_owners": [CURRENT_USER],
+                                    "vault_integration_credential_allowed_groups": [CURRENT_GROUP],
+                                },
+                            },
+                        ],
+                        "rescue": [
+                            {
+                                "name": "Assert stale published output was cleared after failed refresh",
+                                "ansible.builtin.assert": {
+                                    "that": [
+                                        "vault_integration_secret is not defined or vault_integration_secret is none",
+                                        "vault_integration_secret_access_metadata is not defined or vault_integration_secret_access_metadata is none",
+                                        "vault_integration_cleanup_marker | default(false) | bool",
+                                    ]
+                                },
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+        result = run_probe_playbook(playbook)
+        self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
+
     def test_publish_secret_output_task_exposes_required_keys_only(self) -> None:
         playbook = [
             {
@@ -475,6 +526,12 @@ class VaultContractTests(unittest.TestCase):
             rendered = reference_env_path.read_text(encoding="utf-8")
             self.assertIn("VAULT_ROLE_ID_FILE=${CREDENTIALS_DIRECTORY}/vault-role-id", rendered)
             self.assertIn("VAULT_SECRET_ID_FILE=${CREDENTIALS_DIRECTORY}/vault-secret-id", rendered)
+
+    def test_read_flow_clears_published_output_before_refresh_attempt(self) -> None:
+        role_text = load_role_text()
+        self.assertIn("vault_integration_secret:", role_text)
+        self.assertIn("vault_integration_secret_access_metadata:", role_text)
+        self.assertIn("Clear previously published Vault caller output before refresh", role_text)
 
     def test_secret_ref_validation_rejects_fail_closed_input_defects(self) -> None:
         invalid_cases = (
