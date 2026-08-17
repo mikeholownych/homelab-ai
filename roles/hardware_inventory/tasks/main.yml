@@ -8,6 +8,15 @@
     mode: "0750"
   tags: [inventory, hardware]
 
+- name: Ensure hardware collector install directory exists
+  ansible.builtin.file:
+    path: "{{ hardware_inventory_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [inventory, hardware, hardware_install]
+
 - name: Install read-only hardware collector
   ansible.builtin.copy:
     src: collect_hardware.py
@@ -15,7 +24,7 @@
     owner: root
     group: root
     mode: "0755"
-  tags: [inventory, hardware]
+  tags: [inventory, hardware, hardware_install]
 
 - name: Collect required hardware sources without mutation
   ansible.builtin.command:

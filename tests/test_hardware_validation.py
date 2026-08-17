@@ -76,6 +76,21 @@ def test_role_commands_are_read_only_and_never_report_changed():
     assert all("ignore_errors" not in task for task in command_tasks)
 
 
+@pytest.mark.parametrize("role_name", ["hardware_inventory", "hardware_validation"])
+def test_install_parent_exists_before_executable_copy(role_name):
+    tasks = yaml.safe_load((ROOT / f"roles/{role_name}/tasks/main.yml").read_text())
+    executable_copy_index = next(
+        index for index, task in enumerate(tasks)
+        if task.get("ansible.builtin.copy", {}).get("mode") == "0755"
+    )
+    parent_index = next(
+        index for index, task in enumerate(tasks)
+        if task.get("ansible.builtin.file", {}).get("state") == "directory"
+        and "install_dir" in str(task.get("ansible.builtin.file", {}).get("path"))
+    )
+    assert parent_index < executable_copy_index
+
+
 def test_classifier_writes_required_machine_readable_evidence(tmp_path):
     profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
     profile_path = tmp_path / "profile.json"
@@ -144,7 +159,26 @@ def test_above4g_unknown_is_not_tested_not_inferred_from_bar():
     result = classifier.classify(profile, observed)
     check = next(item for item in result["checks"] if item["rule"] == "above_4g_decoding_enabled")
     assert check["status"] == "not_tested"
+    assert result["status"] == "not_tested"
     assert result["physical_acceptance"] is False
+
+
+def test_required_unproven_prerequisite_exits_nonzero(tmp_path):
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["firmware"]["above_4g_decoding"] = {
+        "value": None, "source": "not exposed", "confidence": "unknown"
+    }
+    profile_path, observed_path = tmp_path / "profile.json", tmp_path / "observed.json"
+    profile_path.write_text(json.dumps(profile))
+    observed_path.write_text(json.dumps(observed))
+    process = subprocess.run(
+        [str(MODULE_PATH), "--profile", str(profile_path), "--observed", str(observed_path),
+         "--output-dir", str(tmp_path / "evidence")],
+        check=False, capture_output=True, text=True,
+    )
+    assert process.returncode == 3
+    assert json.loads(process.stdout)["status"] == "not_tested"
 
 
 def test_gen3_blocks_even_if_device_claims_gen3_maximum():

@@ -1,0 +1,26 @@
+---
+- name: Verify hardware helper installation on a fresh host
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Include hardware inventory install tasks
+      ansible.builtin.include_role:
+        name: hardware_inventory
+      tags: [always]
+
+    - name: Include hardware validation install tasks
+      ansible.builtin.include_role:
+        name: hardware_validation
+      tags: [always]
+
+    - name: Repeat hardware inventory install tasks for idempotency
+      ansible.builtin.include_role:
+        name: hardware_inventory
+      tags: [always]
+
+    - name: Repeat hardware validation install tasks for idempotency
+      ansible.builtin.include_role:
+        name: hardware_validation
+      tags: [always]

@@ -5,6 +5,15 @@
     name: hardware_validation_expected
   tags: [validation, hardware]
 
+- name: Ensure hardware classifier install directory exists
+  ansible.builtin.file:
+    path: "{{ hardware_validation_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [validation, hardware, hardware_install]
+
 - name: Install pure hardware classifier
   ansible.builtin.copy:
     src: classify_hardware.py
@@ -12,7 +21,7 @@
     owner: root
     group: root
     mode: "0755"
-  tags: [validation, hardware]
+  tags: [validation, hardware, hardware_install]
 
 - name: Ensure hardware evidence directory exists
   ansible.builtin.file:

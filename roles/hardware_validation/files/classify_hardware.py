@@ -102,8 +102,14 @@ def classify(profile, observed):
     simulated = observed.get("simulated") is True
     blocking = any(item["status"] == "fail" and item["severity"] == "blocking" for item in checks)
     warning = any(item["status"] == "fail" and item["severity"] == "warning" for item in checks)
+    required_incomplete = (
+        profile["firmware"]["above_4g_decoding"]["required"] is True
+        and any(item["rule"] == "above_4g_decoding_enabled" and item["status"] == "not_tested"
+                for item in checks)
+    )
     return {"schema_version": "1.0.0", "simulated": simulated, "physical_acceptance": False,
-            "status": "blocking" if blocking else "warning" if warning else "pass", "checks": checks}
+            "status": "blocking" if blocking else "not_tested" if required_incomplete else
+            "warning" if warning else "pass", "checks": checks}
 
 
 def main():
@@ -120,10 +126,12 @@ def main():
     def evidence(expected, actual, rules, rationale):
         relevant = [item for item in result["checks"] if item["rule"] in rules]
         failed = [item for item in relevant if item["status"] == "fail"]
+        unproven = [item for item in relevant if item["status"] == "not_tested"]
         severity = "blocking" if any(item["severity"] == "blocking" for item in failed) else \
             "warning" if failed else "informational"
         return {"simulated": observed.get("simulated", False), "expected": expected, "observed": actual,
-                "severity": severity, "status": "fail" if failed else "pass", "rationale": rationale,
+                "severity": severity, "status": "fail" if failed else "not_tested" if unproven else "pass",
+                "rationale": rationale,
                 "checks": relevant}
 
     documents = {
@@ -145,7 +153,7 @@ def main():
     for name, document in documents.items():
         (output / name).write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")
     print(json.dumps(result, separators=(",", ":")))
-    raise SystemExit(2 if result["status"] == "blocking" else 0)
+    raise SystemExit(2 if result["status"] == "blocking" else 3 if result["status"] == "not_tested" else 0)
 
 
 if __name__ == "__main__":
