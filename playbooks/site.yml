@@ -20,6 +20,28 @@
         - foundation
         - vault
 
+    - name: Include Intel GPU role for GPU-capable nodes
+      ansible.builtin.include_role:
+        name: intel_gpu
+      when: capabilities.gpu | default(false) | bool
+      tags: [site, gpu, hardware, runtime]
+
+    - name: Include optional container runtime for GPU-capable nodes
+      ansible.builtin.include_role:
+        name: container_runtime
+      when:
+        - capabilities.gpu | default(false) | bool
+        - container_runtime_enabled | default(false) | bool
+      tags: [site, gpu, runtime]
+
+    - name: Include PyTorch XPU role for inference-capable GPU nodes
+      ansible.builtin.include_role:
+        name: pytorch_xpu
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+      tags: [site, gpu, runtime, inference]
+
     - name: Include monitoring role when the feature is enabled
       ansible.builtin.include_role:
         name: monitoring

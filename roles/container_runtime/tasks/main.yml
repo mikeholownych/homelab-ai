@@ -1,2 +1,16 @@
 ---
-[]
+- name: Install pinned rootless container runtime when enabled
+  ansible.builtin.apt:
+    name: "{{ container_runtime_package }}={{ container_runtime_package_version }}"
+    state: present
+    allow_downgrade: true
+  when: container_runtime_enabled | bool
+  tags: [runtime, gpu]
+
+- name: Verify DRI device mapping source exists
+  ansible.builtin.stat:
+    path: /dev/dri
+  register: container_runtime_dri
+  failed_when: not container_runtime_dri.stat.exists
+  when: container_runtime_enabled | bool
+  tags: [runtime, gpu, validation]

@@ -1,2 +1,13 @@
 ---
-{}
+pytorch_xpu_install_enabled: false
+pytorch_xpu_dependency_lock_approved: false
+pytorch_xpu_python_version: "3.12"
+pytorch_xpu_version: 2.12.1+xpu
+pytorch_xpu_wheel_url: https://download-r2.pytorch.org/whl/xpu/torch-2.12.1%2Bxpu-cp312-cp312-linux_x86_64.whl
+pytorch_xpu_wheel_sha256: a7c11b8f3754e26afdbd74948dfa4491f5c6f1b31e465b55ef8e47c2b53e0852
+pytorch_xpu_root: /opt/local-ai/pytorch-xpu
+pytorch_xpu_venv: "{{ pytorch_xpu_root }}/{{ pytorch_xpu_version }}-py{{ pytorch_xpu_python_version }}"
+pytorch_xpu_current: "{{ pytorch_xpu_root }}/current"
+pytorch_xpu_validator: /usr/local/libexec/local-ai-validate-xpu
+pytorch_xpu_evidence_dir: /var/lib/local-ai/evidence
+pytorch_xpu_expected_count: 2

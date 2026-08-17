@@ -1,2 +1,88 @@
 ---
-[]
+- name: Refuse PyTorch XPU until the Intel B65 OS support gate is approved
+  ansible.builtin.assert:
+    that:
+      - intel_gpu_compatibility_set_approved | default(false) | bool
+      - intel_gpu_install_enabled | default(false) | bool
+      - pytorch_xpu_dependency_lock_approved | bool
+    fail_msg: PyTorch XPU cannot be installed before the pinned Intel GPU stack is supported and enabled.
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime, inference]
+
+- name: Install pinned Python venv tooling
+  ansible.builtin.apt:
+    name: "python{{ pytorch_xpu_python_version }}-venv"
+    state: present
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Ensure PyTorch XPU and validator parent directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ pytorch_xpu_root }}"
+    - "{{ pytorch_xpu_validator | dirname }}"
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Create versioned PyTorch XPU virtual environment
+  ansible.builtin.command:
+    argv: ["python{{ pytorch_xpu_python_version }}", -m, venv, "{{ pytorch_xpu_venv }}"]
+    creates: "{{ pytorch_xpu_venv }}/bin/python"
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Install hash-pinned PyTorch XPU wheel without dependency mutation
+  ansible.builtin.pip:
+    name: "{{ pytorch_xpu_wheel_url }}#sha256={{ pytorch_xpu_wheel_sha256 }}"
+    virtualenv: "{{ pytorch_xpu_venv }}"
+    extra_args: --no-deps
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Install XPU validator
+  ansible.builtin.copy:
+    src: validate_xpu.py
+    dest: "{{ pytorch_xpu_validator }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Ensure runtime evidence directory exists
+  ansible.builtin.file:
+    path: "{{ pytorch_xpu_evidence_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, validation]
+
+- name: Validate every XPU before promotion and write runtime.json
+  ansible.builtin.command:
+    argv:
+      - "{{ pytorch_xpu_venv }}/bin/python"
+      - "{{ pytorch_xpu_validator }}"
+      - --expected-count
+      - "{{ pytorch_xpu_expected_count | string }}"
+      - --output
+      - "{{ pytorch_xpu_evidence_dir }}/runtime.json"
+  changed_when: false
+  when: pytorch_xpu_install_enabled | bool
+  check_mode: false
+  tags: [gpu, runtime, validation]
+
+- name: Promote validated versioned environment atomically through current link
+  ansible.builtin.file:
+    src: "{{ pytorch_xpu_venv }}"
+    dest: "{{ pytorch_xpu_current }}"
+    state: link
+    force: true
+  when: pytorch_xpu_install_enabled | bool
+  tags: [gpu, runtime]

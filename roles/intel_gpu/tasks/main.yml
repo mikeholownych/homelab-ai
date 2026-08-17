@@ -1,2 +1,144 @@
 ---
-[]
+- name: Fail closed when the requested B65 operating-system combination is unverified
+  ansible.builtin.assert:
+    that:
+      - intel_gpu_compatibility_set_approved | bool
+      - ansible_distribution == 'Ubuntu'
+      - ansible_distribution_version is version(intel_gpu_minimum_ubuntu_point_release, '>=')
+      - ansible_kernel is version(intel_gpu_minimum_kernel, '>=')
+    fail_msg: "{{ intel_gpu_support_blocker }} Installation is disabled until all immutable pins are approved."
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Install immutable Intel repository signing key
+  ansible.builtin.get_url:
+    url: "{{ intel_gpu_repository_key_url }}"
+    dest: "{{ intel_gpu_repository_key_path }}"
+    checksum: "sha256:{{ intel_gpu_repository_key_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Read Intel repository signing-key fingerprints
+  ansible.builtin.command:
+    argv: [gpg, --show-keys, --with-colons, "{{ intel_gpu_repository_key_path }}"]
+  register: intel_gpu_key_details
+  changed_when: false
+  when: intel_gpu_install_enabled | bool
+  check_mode: false
+  tags: [gpu, runtime]
+
+- name: Require the approved Intel repository signing-key fingerprint
+  ansible.builtin.assert:
+    that:
+      - intel_gpu_repository_key_fingerprint in intel_gpu_key_details.stdout
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Configure exact Intel OMIX repository release
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch=amd64 signed-by={{ intel_gpu_repository_key_path }}]
+      {{ intel_gpu_repository_url }} unified
+    filename: intel-omix
+    state: present
+    update_cache: true
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Install exact Intel OMIX runtime compatibility set
+  ansible.builtin.apt:
+    name: "intel-omix={{ intel_gpu_omix_version }}"
+    state: present
+    allow_downgrade: true
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Capture installed package versions for runtime evidence
+  ansible.builtin.package_facts:
+    manager: apt
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime, validation]
+
+- name: Grant named services render and video group access
+  ansible.builtin.user:
+    name: "{{ item.0 }}"
+    groups: "{{ item.1 }}"
+    append: true
+  loop: "{{ intel_gpu_service_accounts | product(['render', 'video']) | list }}"
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, runtime]
+
+- name: Require DRI render devices before GPU validation
+  ansible.builtin.stat:
+    path: /dev/dri
+  register: intel_gpu_dri
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, validation]
+
+- name: Validate two B65 devices and capture PCI IDs, 32 GiB VRAM, Level Zero and ReBAR
+  ansible.builtin.command:
+    argv: ["zeinfo", -j]
+  register: intel_gpu_zeinfo
+  changed_when: false
+  failed_when: not intel_gpu_dri.stat.exists or intel_gpu_zeinfo.rc != 0
+  when: intel_gpu_install_enabled | bool
+  check_mode: false
+  tags: [gpu, validation]
+
+- name: Capture target Intel PCI devices and ReBAR details
+  ansible.builtin.command:
+    argv: ["lspci", -Dnnvv]
+  register: intel_gpu_pci
+  changed_when: false
+  when: intel_gpu_install_enabled | bool
+  check_mode: false
+  tags: [gpu, validation]
+
+- name: Require expected B65 PCI IDs and large-memory Level Zero evidence
+  ansible.builtin.assert:
+    that:
+      - >-
+        (intel_gpu_pci.stdout | lower | regex_findall(intel_gpu_target_pci_ids[0])) | length ==
+        intel_gpu_expected_count
+      - (intel_gpu_pci.stdout | regex_findall('(?i)Resizable BAR')) | length >= intel_gpu_expected_count
+      - (intel_gpu_zeinfo.stdout | regex_findall('34359738368')) | length >= intel_gpu_expected_count
+    fail_msg: Expected two B65 PCI IDs, ReBAR evidence, and approximately 32 GiB VRAM per Level Zero device.
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, validation]
+
+- name: Ensure Intel GPU runtime evidence directory exists
+  ansible.builtin.file:
+    path: "{{ intel_gpu_runtime_evidence_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, validation]
+
+- name: Write machine-readable Intel GPU runtime PASS evidence
+  ansible.builtin.copy:
+    content: >-
+      {{ {
+        'schema_version': '1.0.0',
+        'status': 'PASS',
+        'physical_acceptance': false,
+        'expected_count': intel_gpu_expected_count,
+        'expected_pci_ids': intel_gpu_target_pci_ids,
+        'expected_vram_gib': intel_gpu_expected_vram_gib,
+        'intel_omix_version': ansible_facts.packages['intel-omix'][0].version,
+        'level_zero': intel_gpu_zeinfo.stdout | from_json,
+        'pci': intel_gpu_pci.stdout
+      } | to_nice_json }}
+    dest: "{{ intel_gpu_runtime_evidence_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when: intel_gpu_install_enabled | bool
+  tags: [gpu, validation]
+
+# Detailed PCI IDs, driver/runtime versions, ReBAR and per-device VRAM are independently
+# classified by hardware_inventory/hardware_validation into machine-readable evidence.
