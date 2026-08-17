@@ -21,6 +21,8 @@ BOOTSTRAP_PLAYBOOK = REPO_ROOT / "playbooks" / "bootstrap.yml"
 SITE_PLAYBOOK = REPO_ROOT / "playbooks" / "site.yml"
 REQUIREMENTS_YML = REPO_ROOT / "requirements.yml"
 DOCS_PATH = REPO_ROOT / "docs" / "vault.md"
+CLEANUP_TASKS_PATH = TASKS_ROOT / "cleanup.yml"
+VALIDATE_SECRET_REF_TASKS_PATH = TASKS_ROOT / "validate_secret_ref.yml"
 CURRENT_USER = pwd.getpwuid(os.getuid()).pw_name
 CURRENT_GROUP = grp.getgrgid(os.getgid()).gr_name
 
@@ -68,7 +70,11 @@ def write_yaml(path: Path, data: object) -> None:
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
 
-def run_probe_playbook(playbook: list[dict[str, object]], *, extra_env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def run_probe_playbook(
+    playbook: list[dict[str, object]],
+    *,
+    extra_env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     binary = ansible_playbook_bin()
     if binary is None:
         raise unittest.SkipTest("ansible-playbook is not available")
@@ -116,25 +122,26 @@ def make_credentials(temp_root: Path) -> Path:
     return credentials_dir
 
 
-def simulated_login_result() -> dict[str, object]:
-    return {
-        "login": {
-            "auth": {
-                "client_token": "simulated-token",
-                "lease_duration": 900,
-                "renewable": True,
-                "policies": ["local-ai-runtime"],
-                "token_policies": ["local-ai-runtime"],
-            }
+def run_secret_ref_validation(secret_ref: str, *, cluster_enabled: bool = False) -> subprocess.CompletedProcess[str]:
+    playbook = [
+        {
+            "hosts": "localhost",
+            "gather_facts": False,
+            "vars": {
+                "vault_integration_kv2_mount": "secret",
+                "vault_integration_secret_ref": secret_ref,
+                "vault_integration_required_secret_keys": ["required"],
+                "cluster": {"enabled": cluster_enabled},
+            },
+            "tasks": [
+                {
+                    "name": "Validate Vault logical secret reference only",
+                    "ansible.builtin.include_tasks": str(VALIDATE_SECRET_REF_TASKS_PATH),
+                }
+            ],
         }
-    }
-
-
-def simulated_secret_result() -> dict[str, object]:
-    return {
-        "secret": {"required": "value"},
-        "metadata": {"version": 3, "created_time": "2026-08-17T00:00:00Z"},
-    }
+    ]
+    return run_probe_playbook(playbook)
 
 
 class VaultContractTests(unittest.TestCase):
@@ -172,7 +179,7 @@ class VaultContractTests(unittest.TestCase):
         self.assertEqual(1, len(always_tasks))
         self.assertEqual("cleanup.yml", always_tasks[0]["ansible.builtin.include_tasks"])
 
-    def test_role_tasks_validate_fail_closed_tls_mounts_namespace_and_boundaries(self) -> None:
+    def test_role_tasks_validate_fail_closed_tls_mounts_namespace_and_secret_path_grammar(self) -> None:
         role_text = load_role_text()
         required_tokens = (
             "vault_integration_validate_certs | bool",
@@ -181,7 +188,10 @@ class VaultContractTests(unittest.TestCase):
             "vault_integration_auth_mount is match",
             "vault_integration_kv2_mount is match",
             "vault_integration_controller_ca_cert_stat",
+            "vault_integration_secret_ref_normalized is match('^[A-Za-z0-9._/-]+$')",
             "vault_integration_secret_ref_normalized.startswith(",
+            "vault_integration_secret_ref_normalized.count('//') == 0",
+            "vault_integration_secret_path_segments | reject('in', ['', '.', '..'])",
             "vault_integration_kv2_mount ~ '/local-ai/'",
             "vault_integration_secret_path_segments[2] in ['shared', 'hosts', 'clusters', 'services']",
             "vault_integration_secret_path_segments[3] == inventory_hostname",
@@ -195,9 +205,10 @@ class VaultContractTests(unittest.TestCase):
         self.assertNotIn("ignore_errors:", role_text)
         self.assertNotIn("cacheable: true", role_text)
 
-    def test_role_uses_vault_modules_with_no_log(self) -> None:
+    def test_role_uses_vault_modules_with_no_log_and_no_test_hooks(self) -> None:
         login_tasks = []
         kv_tasks = []
+        role_text = load_role_text()
         for task in load_role_tasks():
             if "community.hashi_vault.vault_login" in task:
                 login_tasks.append(task)
@@ -207,6 +218,8 @@ class VaultContractTests(unittest.TestCase):
         self.assertEqual(1, len(kv_tasks), "Expected one KVv2 runtime retrieval task")
         self.assertTrue(login_tasks[0].get("no_log"), "Vault login must set no_log: true")
         self.assertTrue(kv_tasks[0].get("no_log"), "Vault KVv2 reads must set no_log: true")
+        self.assertNotIn("vault_integration_test_", role_text)
+        self.assertNotIn("simulated Vault", role_text)
 
     def test_bootstrap_and_site_wire_vault_role_with_explicit_tags(self) -> None:
         bootstrap_tasks = load_task_documents(BOOTSTRAP_PLAYBOOK)
@@ -228,7 +241,7 @@ class VaultContractTests(unittest.TestCase):
         self.assertIn("vault", site_vault[0].get("tags", []))
         self.assertIn("vault_preflight", site_vault[0].get("name", ""))
 
-    def test_vault_docs_use_exact_variable_names_and_operator_recovery_contract(self) -> None:
+    def test_vault_docs_use_exact_variable_names_and_credential_delivery_contract(self) -> None:
         docs_text = load_text(DOCS_PATH)
         required_tokens = (
             "vault_integration_enabled",
@@ -240,17 +253,27 @@ class VaultContractTests(unittest.TestCase):
             "vault_integration_auth_mount",
             "vault_integration_kv2_mount",
             "vault_integration_ca_cert_path",
-            "systemd-creds",
-            "LoadCredential=",
-            "wrapping token",
-            "vault unwrap",
-            "install -m 0400",
-            "response wrapping",
+            "vault_integration_credentials_directory",
+            "$CREDENTIALS_DIRECTORY/vault-role-id",
+            "$CREDENTIALS_DIRECTORY/vault-secret-id",
+            "LoadCredential=vault-role-id:/etc/aihost/credentials/vault-role-id",
+            "LoadCredential=vault-secret-id:/etc/aihost/credentials/vault-secret-id",
+            "vault policy write local-ai-runtime",
+            "vault auth enable -path=approle approle",
+            "vault write auth/approle/role/local-ai-runtime",
+            "token_policies=local-ai-runtime",
+            "token_ttl=15m",
+            "token_max_ttl=1h",
+            "secret_id_ttl=24h",
+            "secret_id_num_uses=1",
+            "bind_secret_id=true",
+            "vault write -format=json -wrap-ttl=15m -f auth/approle/role/local-ai-runtime/secret-id",
+            ".data.secret_id",
+            "install -m 0400 -o root -g root",
+            "rm -f /run/aihost-vault/wrapped-secret-id.json",
             "rotation",
-            "revocation",
-            "TLS",
-            "Vault health",
-            "policy restore",
+            "revoke",
+            "recovery",
             "community.hashi_vault.vault_login",
             "community.hashi_vault.vault_kv2_get",
             "read only",
@@ -261,6 +284,8 @@ class VaultContractTests(unittest.TestCase):
         for token in required_tokens:
             with self.subTest(token=token):
                 self.assertIn(token, docs_text)
+        self.assertNotIn("LoadCredentialEncrypted=", docs_text)
+        self.assertNotIn("systemd-creds encrypt", docs_text)
 
     def test_role_uses_controller_credentials_directory_lookup_instead_of_remote_ansible_env(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aihost-vault-cred-source-") as tmpdir:
@@ -291,95 +316,117 @@ class VaultContractTests(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
 
-    def test_role_cleanup_runs_after_injected_failures(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="aihost-vault-cleanup-") as tmpdir:
-            temp_root = Path(tmpdir)
-            credentials_dir = make_credentials(temp_root)
-            for failure_var, failure_value in (
-                ("vault_integration_test_fail_after_credential_resolve", True),
-                ("vault_integration_test_fail_after_login", True),
-            ):
-                with self.subTest(failure_var=failure_var):
-                    role_vars: dict[str, object] = {
-                        "vault_integration_enabled": True,
-                        "vault_integration_operation": "preflight",
-                        "vault_integration_credential_allowed_owners": [CURRENT_USER],
-                        "vault_integration_credential_allowed_groups": [CURRENT_GROUP],
-                        "vault_integration_test_simulated_login_result": simulated_login_result(),
-                        failure_var: failure_value,
+    def test_cleanup_task_clears_sensitive_facts_after_failure(self) -> None:
+        playbook = [
+            {
+                "hosts": "localhost",
+                "gather_facts": False,
+                "tasks": [
+                    {
+                        "block": [
+                            {
+                                "name": "Seed representative Vault-sensitive facts",
+                                "ansible.builtin.set_fact": {
+                                    "vault_integration_role_id": "seed-role-id",
+                                    "vault_integration_secret_id": "seed-secret-id",
+                                    "vault_integration_login_result": {"login": {"auth": {"client_token": "seed-token"}}},
+                                    "vault_integration_secret_result": {"secret": {"required": "seed-value"}},
+                                    "vault_integration_role_id_file": "/run/seed-role-id",
+                                    "vault_integration_secret_id_file": "/run/seed-secret-id",
+                                    "vault_integration_secret_ref_normalized": "secret/local-ai/shared/seed",
+                                    "vault_integration_secret_engine_relative_path": "local-ai/shared/seed",
+                                    "vault_integration_secret_path_segments": ["secret", "local-ai", "shared", "seed"],
+                                },
+                            },
+                            {
+                                "name": "Fail deliberately after seeding cleanup inputs",
+                                "ansible.builtin.fail": {"msg": "exercise cleanup always path"},
+                            },
+                        ],
+                        "rescue": [
+                            {"name": "Continue after deliberate failure", "ansible.builtin.debug": {"msg": "rescued"}},
+                        ],
+                        "always": [
+                            {
+                                "name": "Run real Vault cleanup task file",
+                                "ansible.builtin.include_tasks": str(CLEANUP_TASKS_PATH),
+                            },
+                            {
+                                "name": "Assert cleanup marker and cleared sensitive facts",
+                                "ansible.builtin.assert": {
+                                    "that": [
+                                        "vault_integration_cleanup_marker | default(false) | bool",
+                                        "vault_integration_role_id is none",
+                                        "vault_integration_secret_id is none",
+                                        "vault_integration_role_id_file is none",
+                                        "vault_integration_secret_id_file is none",
+                                        "vault_integration_login_result is none",
+                                        "vault_integration_secret_result is none",
+                                        "vault_integration_secret_ref_normalized is none",
+                                        "vault_integration_secret_engine_relative_path is none",
+                                        "vault_integration_secret_path_segments is none",
+                                    ]
+                                },
+                            },
+                        ],
                     }
-                    playbook = [
-                        {
-                            "hosts": "localhost",
-                            "gather_facts": False,
-                            "tasks": [
-                                {
-                                    "block": [
-                                        {
-                                            "name": "Run vault role and expect a controlled failure",
-                                            "ansible.builtin.include_role": {"name": "vault_integration"},
-                                            "vars": role_vars,
-                                        }
-                                    ],
-                                    "rescue": [
-                                        {
-                                            "name": "Assert vault cleanup marker and cleared sensitive facts",
-                                            "ansible.builtin.assert": {
-                                                "that": [
-                                                    "vault_integration_cleanup_marker | default(false) | bool",
-                                                    "vault_integration_role_id is none",
-                                                    "vault_integration_secret_id is none",
-                                                    "vault_integration_role_id_file is none",
-                                                    "vault_integration_secret_id_file is none",
-                                                    "vault_integration_login_result is none",
-                                                    "vault_integration_secret_result is none",
-                                                ]
-                                            },
-                                        }
-                                    ],
-                                }
-                            ],
-                        }
-                    ]
-                    result = run_probe_playbook(
-                        playbook,
-                        extra_env={"CREDENTIALS_DIRECTORY": str(credentials_dir)},
-                    )
-                    self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
+                ],
+            }
+        ]
+        result = run_probe_playbook(playbook)
+        self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
 
-    def test_role_rejects_fail_closed_input_defects(self) -> None:
+    def test_secret_ref_validation_rejects_fail_closed_input_defects(self) -> None:
+        invalid_cases = (
+            "secret/local-ai/shared/space here",
+            "secret/local-ai/shared/tab\there",
+            "secret/local-ai/shared/line\nbreak",
+            r"secret/local-ai/shared/back\slash",
+            "secret/local-ai/shared/percent%name",
+            "secret/local-ai/shared/question?name",
+            "secret/local-ai/shared/hash#name",
+            "secret/local-ai/shared//double-slash",
+            "secret/local-ai/shared/./dot-segment",
+            "secret/local-ai/shared/../dotdot-segment",
+            "secret/local-ai/shared/",
+            "other/local-ai/shared/name",
+            "secret/other/shared/name",
+            "secret/local-ai/users/name",
+            "secret/local-ai/hosts/not-localhost/runtime",
+        )
+        for secret_ref in invalid_cases:
+            with self.subTest(secret_ref=secret_ref):
+                result = run_secret_ref_validation(secret_ref)
+                self.assertNotEqual(0, result.returncode, f"{secret_ref!r} unexpectedly passed")
+
+        cluster_result = run_secret_ref_validation("secret/local-ai/clusters/runtime")
+        self.assertNotEqual(0, cluster_result.returncode, "cluster path unexpectedly passed without cluster membership")
+
+    def test_secret_ref_validation_accepts_valid_dotted_and_dashed_name(self) -> None:
+        result = run_secret_ref_validation("secret/local-ai/services/api.v2/db-user_01")
+        self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
+
+        cluster_result = run_secret_ref_validation(
+            "secret/local-ai/clusters/cluster-a/service.v1",
+            cluster_enabled=True,
+        )
+        self.assertEqual(0, cluster_result.returncode, f"{cluster_result.stdout}\n{cluster_result.stderr}")
+
+    def test_role_rejects_fail_closed_input_defects_before_runtime(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aihost-vault-invalid-") as tmpdir:
             temp_root = Path(tmpdir)
             credentials_dir = make_credentials(temp_root)
             invalid_cases = (
                 ("tls_false", {"vault_integration_operation": "bootstrap", "vault_integration_validate_certs": False}),
-                ("prefix_override", {"vault_integration_operation": "bootstrap", "vault_integration_allowed_secret_prefixes": ["secret/local-ai/shared/"]}),
+                (
+                    "prefix_override",
+                    {
+                        "vault_integration_operation": "bootstrap",
+                        "vault_integration_allowed_secret_prefixes": ["secret/local-ai/shared/"],
+                    },
+                ),
                 ("auth_mount_traversal", {"vault_integration_operation": "bootstrap", "vault_integration_auth_mount": "../approle"}),
                 ("kv_mount_nested", {"vault_integration_operation": "bootstrap", "vault_integration_kv2_mount": "secret/nested"}),
-                (
-                    "wrong_host_secret",
-                    {
-                        "vault_integration_operation": "read",
-                        "vault_integration_enabled": True,
-                        "vault_integration_credential_allowed_owners": [CURRENT_USER],
-                        "vault_integration_credential_allowed_groups": [CURRENT_GROUP],
-                        "vault_integration_test_simulated_login_result": simulated_login_result(),
-                        "vault_integration_secret_ref": "secret/local-ai/hosts/not-localhost/runtime",
-                        "vault_integration_required_secret_keys": ["required"],
-                    },
-                ),
-                (
-                    "cluster_secret_without_membership",
-                    {
-                        "vault_integration_operation": "read",
-                        "vault_integration_enabled": True,
-                        "vault_integration_credential_allowed_owners": [CURRENT_USER],
-                        "vault_integration_credential_allowed_groups": [CURRENT_GROUP],
-                        "vault_integration_test_simulated_login_result": simulated_login_result(),
-                        "vault_integration_secret_ref": "secret/local-ai/clusters/runtime",
-                        "vault_integration_required_secret_keys": ["required"],
-                    },
-                ),
             )
             for label, role_vars in invalid_cases:
                 with self.subTest(label=label):

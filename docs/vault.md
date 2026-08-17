@@ -31,8 +31,8 @@ controller needs a different protected path.
 
 The scheduled runner should provide:
 
-- `${CREDENTIALS_DIRECTORY}/vault-role-id`
-- `${CREDENTIALS_DIRECTORY}/vault-secret-id`
+- `$CREDENTIALS_DIRECTORY/vault-role-id`
+- `$CREDENTIALS_DIRECTORY/vault-secret-id`
 
 If `LoadCredential=` is unavailable, point the role at protected fallback files
 that were provisioned out of band. Do not create those files from inventory and
@@ -57,6 +57,20 @@ exchange and `community.hashi_vault.vault_kv2_get` for task-time reads.
 
 Prefer read only KV policies. Omit `list` unless you truly need metadata
 enumeration; metadata list only if needed.
+
+Example AppRole provisioning flow:
+
+```bash
+vault policy write local-ai-runtime /path/to/local-ai-runtime-policy.hcl
+vault auth enable -path=approle approle
+vault write auth/approle/role/local-ai-runtime \
+  token_policies=local-ai-runtime \
+  token_ttl=15m \
+  token_max_ttl=1h \
+  secret_id_ttl=24h \
+  secret_id_num_uses=1 \
+  bind_secret_id=true
+```
 
 Example policy with read only access:
 
@@ -89,16 +103,23 @@ out of band.
 Example placeholder flow:
 
 ```bash
-vault write -wrap-ttl=15m -f auth/approle/role/local-ai-runtime/secret-id
-vault unwrap WRAPPING_TOKEN_FROM_OUT_OF_BAND_CHANNEL
-systemd-creds encrypt --name=vault-secret-id /secure/input /secure/output
-install -m 0400 -o root -g root /secure/output /etc/aihost/credentials/vault-secret-id
-rm -f /secure/input /secure/output
+install -d -m 0700 -o root -g root /run/aihost-vault
+vault write -format=json -wrap-ttl=15m -f auth/approle/role/local-ai-runtime/secret-id \
+  > /run/aihost-vault/wrapped-secret-id.json
+VAULT_TOKEN=WRAPPING_TOKEN_FROM_OUT_OF_BAND_CHANNEL \
+  vault unwrap -format=json > /run/aihost-vault/unwrapped-secret-id.json
+python3 -c "import json, pathlib; data=json.loads(pathlib.Path('/run/aihost-vault/unwrapped-secret-id.json').read_text(encoding='utf-8')); pathlib.Path('/run/aihost-vault/vault-secret-id.tmp').write_text(data['data']['secret_id'] + '\n', encoding='utf-8')"
+install -m 0400 -o root -g root /run/aihost-vault/vault-secret-id.tmp /etc/aihost/credentials/vault-secret-id
+rm -f /run/aihost-vault/wrapped-secret-id.json /run/aihost-vault/unwrapped-secret-id.json /run/aihost-vault/vault-secret-id.tmp
 ```
 
-Use the wrapping token only long enough to run `vault unwrap`, install the
-SecretID with `systemd-creds` or `install -m 0400`, and delete transient files
-immediately without printing the SecretID.
+The JSON capture keeps the wrapped response and the unwrapped `.data.secret_id`
+out of stdout while a root-only tmpfs file is converted into the protected
+runtime credential file. Delete the wrapper JSON and every transient file
+immediately after install.
+
+This contract uses plain root-owned `0400` files with `LoadCredential=` only.
+Never point `LoadCredential=` at ciphertext or encrypted credential blobs.
 
 Do not use a root token for automation.
 
@@ -114,6 +135,8 @@ Git stores only logical references. Runtime reads must stay under the validated
 
 Host secrets must match the current `inventory_hostname`. Cluster secrets are
 allowed only when cluster membership is configured for the current host.
+Logical refs must be exact ASCII paths with no whitespace, control characters,
+backslashes, `%`, `?`, `#`, empty segments, `.`, `..`, or double slashes.
 
 ## systemd scheduled runner example
 
@@ -124,11 +147,16 @@ LoadCredential=vault-secret-id:/etc/aihost/credentials/vault-secret-id
 EnvironmentFile=/etc/aihost/vault-runtime.env
 ```
 
+The role then reads `$CREDENTIALS_DIRECTORY/vault-role-id` and
+`$CREDENTIALS_DIRECTORY/vault-secret-id` on the controller at runtime.
+
 ## rotation, revocation, and outage recovery
 
 - Rotation: rotate the SecretID regularly and after any suspected exposure.
 - Revocation: revoke the SecretID immediately when the runner is retired or
   compromised.
+- Revoke orphaned wrapped SecretIDs or stale AppRole SecretIDs before issuing a
+  replacement.
 - Rebind the AppRole policy when access scope changes.
 
 When runtime access fails, diagnose in this order:

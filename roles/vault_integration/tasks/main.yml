@@ -56,13 +56,6 @@
     - name: Resolve protected AppRole credential paths
       ansible.builtin.include_tasks: resolve_credentials.yml
 
-    - name: Support cleanup verification after credential resolution
-      ansible.builtin.assert:
-        that:
-          - not (vault_integration_test_fail_after_credential_resolve | default(false) | bool)
-        fail_msg: Simulated failure after protected Vault credential resolution.
-      no_log: true
-
     - name: Render Vault runtime configuration reference for scheduled runs
       ansible.builtin.include_tasks: bootstrap.yml
       when:

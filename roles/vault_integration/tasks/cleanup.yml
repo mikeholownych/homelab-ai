@@ -11,4 +11,5 @@
     vault_integration_secret_ref_normalized:
     vault_integration_secret_engine_relative_path:
     vault_integration_secret_path_segments:
+    vault_integration_secret_category_prefixes:
   no_log: true

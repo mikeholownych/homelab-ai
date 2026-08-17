@@ -1,10 +1,4 @@
 ---
-- name: Inject a simulated Vault login result for cleanup probes
-  ansible.builtin.set_fact:
-    vault_integration_login_result: "{{ vault_integration_test_simulated_login_result }}"
-  when: vault_integration_test_simulated_login_result is defined
-  no_log: true
-
 - name: Authenticate to Vault with short-lived AppRole credentials
   community.hashi_vault.vault_login:
     url: "{{ vault_integration_addr }}"
@@ -19,7 +13,6 @@
   delegate_to: localhost
   become: false
   no_log: true
-  when: vault_integration_test_simulated_login_result is not defined
 
 - name: Validate Vault token lifetime, renewability, and policies
   ansible.builtin.assert:
@@ -34,11 +27,4 @@
     fail_msg: >-
       Vault authentication must yield a short-lived renewable token without the
       root policy.
-  no_log: true
-
-- name: Support cleanup verification after Vault login
-  ansible.builtin.assert:
-    that:
-      - not (vault_integration_test_fail_after_login | default(false) | bool)
-    fail_msg: Simulated failure after Vault login for cleanup verification.
   no_log: true
