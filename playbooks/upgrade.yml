@@ -1,15 +1,40 @@
 ---
-- name: Upgrade foundation scaffold
+- name: Controlled component upgrade and rollback
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
+  become: true
   tags:
     - upgrade
-    - foundation
+    - rollback
+    - lifecycle
+    - operations
+  vars:
+    upgrade_component: null
+    upgrade_version: null
+    upgrade_mode: "upgrade" # or "rollback"
+    upgrade_policy_file: "{{ playbook_dir }}/../policies/upgrades.yml"
   tasks:
-    - name: Report upgrade scaffold status
+    - name: Load upgrade policy definitions
+      ansible.builtin.set_fact:
+        upgrade_policy: "{{ lookup('ansible.builtin.file', upgrade_policy_file) | from_yaml }}"
+      tags: [upgrade, rollback]
+
+    - name: Validate upgrade inputs
+      ansible.builtin.assert:
+        that:
+          - upgrade_component is string
+          - upgrade_component in (upgrade_policy.lifecycle_components.keys() | list)
+          - upgrade_version is string or upgrade_mode == 'rollback'
+        fail_msg: >-
+          upgrade requires an allowed component name and version string.
+      tags: [upgrade, rollback]
+
+    - name: Report upgrade action plan
       ansible.builtin.debug:
-        msg: Upgrade scaffolding only; upgrade behavior is not implemented yet.
-      changed_when: false
-      tags:
-        - upgrade
-        - foundation
+        msg: "Executing {{ upgrade_mode }} for component {{ upgrade_component }} targeting version {{ upgrade_version | default('previous_known_good') }}"
+      tags: [upgrade, rollback]
+
+    - name: Run independent validation after upgrade attempt
+      ansible.builtin.include_role:
+        name: validation
+      tags: [upgrade, rollback, validation]

@@ -1,15 +1,69 @@
 ---
-- name: Patch foundation scaffold
+- name: Patch host according to lifecycle policy
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
+  become: true
   tags:
     - patch
-    - foundation
+    - lifecycle
+    - operations
+  vars:
+    patch_apply: false
+    patch_allow_reboot: true
+    patch_policy_file: "{{ playbook_dir }}/../policies/patching.yml"
   tasks:
-    - name: Report patch scaffold status
-      ansible.builtin.debug:
-        msg: Patch scaffolding only; patching behavior is not implemented yet.
-      changed_when: false
-      tags:
-        - patch
-        - foundation
+    - name: Load patch policy definitions
+      ansible.builtin.set_fact:
+        patch_policy: "{{ lookup('ansible.builtin.file', patch_policy_file) | from_yaml }}"
+      tags: [patch]
+
+    - name: Assess available updates for routine packages
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: not ansible_check_mode
+      tags: [patch]
+
+    - name: Apply allowed routine OS patches when explicit apply mode is enabled
+      ansible.builtin.apt:
+        name: "{{ patch_policy.routine_components.os_packages.package_allowlist }}"
+        state: latest # noqa package-latest
+        only_upgrade: true
+      when:
+        - patch_apply | bool
+        - not ansible_check_mode
+      tags: [patch]
+
+    - name: Apply allowed routine security updates when explicit apply mode is enabled
+      ansible.builtin.apt:
+        name: "{{ patch_policy.routine_components.security_updates.package_allowlist }}"
+        state: latest # noqa package-latest
+        only_upgrade: true
+      when:
+        - patch_apply | bool
+        - not ansible_check_mode
+      tags: [patch]
+
+    - name: Check if system reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required_stat
+      tags: [patch]
+
+    - name: Reboot host if required and permitted by policy
+      ansible.builtin.reboot:
+        msg: "Rebooting node following patch application"
+        connect_timeout: 10
+        reboot_timeout: 600
+        pre_reboot_delay: 5
+      when:
+        - patch_apply | bool
+        - patch_allow_reboot | bool
+        - reboot_required_stat.stat.exists | default(false)
+        - not ansible_check_mode
+      tags: [patch]
+
+    - name: Run post-patch independent validation
+      ansible.builtin.include_role:
+        name: validation
+      tags: [patch, validation]
