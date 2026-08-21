@@ -46,6 +46,7 @@ def parse_lspci(text, slots_text):
         bars = [int(value) * {"K": 1 / 1024 / 1024, "M": 1 / 1024, "G": 1, "T": 1024}[unit.upper()]
                 for value, unit in re.findall(r"Region \d+:.*\[size=(\d+)([KMGT])\]", section, re.I)]
         rebar = re.search(r"BAR \d+: current size: (\d+)([MG])B", section)
+        kernel_driver = re.search(r"Kernel driver in use:\s*(\S+)", section)
         rebar_gib = int(rebar.group(1)) / 1024 if rebar and rebar.group(2) == "M" else \
             int(rebar.group(1)) if rebar else 0
         devices.append({"bdf": bdf, "vendor_id": identity.group(2).lower(),
@@ -54,7 +55,8 @@ def parse_lspci(text, slots_text):
                         "device_max_width": int(cap.group(2)),
                         "current_generation": _generation(float(sta.group(1))),
                         "current_width": int(sta.group(2)), "slot_width": slots.get(bdf),
-                        "bar_sizes_gib": bars, "rebar_enabled": rebar_gib >= 16})
+                        "bar_sizes_gib": bars, "rebar_enabled": rebar_gib >= 16,
+                        "kernel_driver": kernel_driver.group(1) if kernel_driver else None})
     return devices
 
 
@@ -102,6 +104,9 @@ def main():
     dimms_text = run(["dmidecode", "--type", "memory"])
     firmware_text = run(["fwupdmgr", "get-devices", "--json"], required=False)
     psu_text = run(["dmidecode", "--type", "39"], required=False)
+    level_zero_packages = run(["dpkg-query", "-W", "-f=${Package}=${Version}\\n",
+                               "libze1", "libze-intel-gpu1", "intel-opencl-icd"], required=False)
+    kernel_driver_version = run(["modinfo", "-F", "version", "xe"], required=False).strip()
     dimms = []
     for block in dimms_text.split("Memory Device"):
         locator, size = re.search(r"Locator:\s*(.+)", block), re.search(r"Size:\s*(.+)", block)
@@ -126,7 +131,12 @@ def main():
                                             "confidence": "unknown"},
                      "devices": json.loads(firmware_text) if firmware_text else []},
         "power_supplies": [{"raw": block.strip()} for block in psu_text.split("System Power Supply")
-                           if "Power Unit Group" in block],
+                            if "Power Unit Group" in block],
+        "runtime_versions": {
+            "kernel": run(["uname", "-r"]).strip(),
+            "kernel_driver": {"name": "xe", "version": kernel_driver_version or None},
+            "level_zero_packages": sorted(line for line in level_zero_packages.splitlines() if line),
+        },
     }
     print(json.dumps(observed, sort_keys=True))
 

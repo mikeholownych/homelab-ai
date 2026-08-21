@@ -126,7 +126,7 @@ def test_realistic_lspci_parser_uses_explicit_link_fields_and_slot_width():
         "bdf": "0000:41:00.0", "vendor_id": "8086", "device_id": "e222",
         "device_max_generation": 5, "device_max_width": 16,
         "current_generation": 4, "current_width": 16, "slot_width": 16,
-        "bar_sizes_gib": [32.0], "rebar_enabled": True,
+        "bar_sizes_gib": [32.0], "rebar_enabled": True, "kernel_driver": None,
     }
     assert pci[1]["slot_width"] == 8
     assert pci[1]["current_width"] == 8

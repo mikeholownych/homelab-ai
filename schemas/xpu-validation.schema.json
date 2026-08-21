@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local-ai.invalid/schemas/xpu-validation.schema.json",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "status", "physical_acceptance", "expected_count", "observed_count", "devices"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "status": {"enum": ["PASS", "FAIL", "NOT_TESTED"]},
+    "physical_acceptance": {"const": false},
+    "expected_count": {"type": "integer", "minimum": 1},
+    "observed_count": {"type": "integer", "minimum": 0},
+    "devices": {"type": "array"},
+    "reason": {"type": "string"}
+  }
+}

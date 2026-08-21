@@ -9,12 +9,14 @@ def validate(torch, expected_count):
     result = {
         "schema_version": "1.0.0", "status": "FAIL", "physical_acceptance": False,
         "torch_version": getattr(torch, "__version__", "unknown"), "devices": [],
+        "expected_count": expected_count, "observed_count": 0,
     }
     if not torch.xpu.is_available():
         result["error"] = "torch.xpu is unavailable"
         return result
     count = torch.xpu.device_count()
     result["device_count"] = count
+    result["observed_count"] = count
     if count != expected_count:
         result["error"] = f"expected {expected_count} XPU devices, observed {count}"
         return result
@@ -48,17 +50,20 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-count", type=int, required=True)
     parser.add_argument("--output", required=True)
+    parser.add_argument("--validation-output", required=True)
     args = parser.parse_args()
     try:
         import torch
     except ImportError as exc:
         result = {
             "schema_version": "1.0.0", "status": "FAIL", "physical_acceptance": False,
+            "expected_count": args.expected_count, "observed_count": 0,
             "devices": [], "error": "torch import failed", "detail": str(exc),
         }
     else:
         result = validate(torch, args.expected_count)
     write_result(args.output, result)
+    write_result(args.validation_output, result)
     print(json.dumps(result, sort_keys=True))
     raise SystemExit(0 if result["status"] == "PASS" else 2)
 

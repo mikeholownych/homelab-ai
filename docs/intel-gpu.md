@@ -5,20 +5,20 @@ Status: **NOT_TESTED on physical hardware** and disabled until commissioning app
 As accessed on 2026-08-17, Intel's generic supported-hardware table identifies Arc Pro B65 as PCI ID `8086:e222` and lists
 full support on Ubuntu 25.10/kernel 6.17. More specifically, Intel's OMIX installation guide names B65 and supports Ubuntu
 Desktop 24.04.4 or Ubuntu 24.04 with the 6.17 HWE kernel. The role therefore requires Ubuntu 24.04.4+, kernel 6.17+, and an
-explicit Git-controlled compatibility approval. Installation is disabled by default and fails before mutation if any gate
-is absent. This repository does not infer B65 support from B50/B60/B580 results.
+conflicting support statements. The host stack therefore has the explicit state `unresolved_vendor_support_conflict` and
+installation fails unconditionally before mutation. There is no manual approval boolean that bypasses this boundary. This
+repository does not infer B65 support from B50/B60/B580 results.
 
-The supported installation route is the exact Intel OMIX 0.3.0 repository and `intel-omix=0.3.0-9~24.04`. Intel describes
-that runtime package as the validated driver/library set required for PyTorch. It is not the full oneAPI toolkit and the
-role does not install `intel-omix-dev`, media, debugging, or development metapackages. The repository key is pinned by file
-SHA-256 and primary fingerprint before APT use. Upstream compute-runtime 26.27.39122.11 artifact hashes remain recorded as
-component provenance, but Ansible installs the vendor-validated OMIX dependency set rather than mixing releases.
+The OMIX 0.3.0 repository metadata and `intel-omix=0.3.0-9~24.04` were inspected, but are not presented as a supported
+production closure because of that conflict. No partial APT dependency closure or mismatched direct compute-runtime
+artifact set is committed or installed. Resolving this requires Intel to provide a coherent B65 host support statement
+and an immutable full dependency snapshot suitable for the selected Ubuntu installation.
 
-PyTorch is staged as CPython 3.12 and `torch==2.12.1+xpu`, using the official XPU wheel URL and index-published SHA-256.
-Installation uses `--no-deps` specifically to prevent unpinned transitive dependency mutation; therefore commissioning
-must replace this scaffold with a complete hash lock before enabling it. The validator requires exactly two devices,
+PyTorch is staged as CPython 3.12 and `torch==2.12.1+xpu`. Its complete 33-package dependency closure was resolved from
+the official PyTorch XPU and PyPI indexes on 2026-08-17, with every distribution pinned and SHA-256 protected. Ansible
+installs that lock with `--require-hashes`. The validator requires exactly two devices,
 records device names and memory, and runs allocation, addition, synchronization, and result verification on each device.
-Only after PASS does Ansible promote the versioned virtual environment through the `current` symlink. PASS still does not
+Only after PASS does Ansible atomically promote the versioned virtual environment and preserve `previous`. PASS does not
 grant commissioning acceptance; the separate commissioning workflow owns that decision.
 
 Primary sources (accessed 2026-08-17):

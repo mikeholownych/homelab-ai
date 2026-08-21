@@ -1,144 +1,85 @@
 ---
-- name: Fail closed when the requested B65 operating-system combination is unverified
-  ansible.builtin.assert:
-    that:
-      - intel_gpu_compatibility_set_approved | bool
-      - ansible_distribution == 'Ubuntu'
-      - ansible_distribution_version is version(intel_gpu_minimum_ubuntu_point_release, '>=')
-      - ansible_kernel is version(intel_gpu_minimum_kernel, '>=')
-    fail_msg: "{{ intel_gpu_support_blocker }} Installation is disabled until all immutable pins are approved."
+- name: Refuse unresolved Intel B65 host-stack installation
+  ansible.builtin.fail:
+    msg: "{{ intel_gpu_support_blocker }}"
   when: intel_gpu_install_enabled | bool
   tags: [gpu, runtime]
 
-- name: Install immutable Intel repository signing key
-  ansible.builtin.get_url:
-    url: "{{ intel_gpu_repository_key_url }}"
-    dest: "{{ intel_gpu_repository_key_path }}"
-    checksum: "sha256:{{ intel_gpu_repository_key_sha256 }}"
-    owner: root
-    group: root
-    mode: "0644"
-  when: intel_gpu_install_enabled | bool
-  tags: [gpu, runtime]
+- name: Record Intel GPU validation as NOT_TESTED in check mode
+  ansible.builtin.set_fact:
+    intel_gpu_validation_status: NOT_TESTED
+    intel_gpu_validation_reason: check mode does not execute physical probes or trust simulated absent changes
+  when: ansible_check_mode
+  tags: [gpu, validation]
 
-- name: Read Intel repository signing-key fingerprints
-  ansible.builtin.command:
-    argv: [gpg, --show-keys, --with-colons, "{{ intel_gpu_repository_key_path }}"]
-  register: intel_gpu_key_details
-  changed_when: false
-  when: intel_gpu_install_enabled | bool
-  check_mode: false
-  tags: [gpu, runtime]
-
-- name: Require the approved Intel repository signing-key fingerprint
-  ansible.builtin.assert:
-    that:
-      - intel_gpu_repository_key_fingerprint in intel_gpu_key_details.stdout
-  when: intel_gpu_install_enabled | bool
-  tags: [gpu, runtime]
-
-- name: Configure exact Intel OMIX repository release
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch=amd64 signed-by={{ intel_gpu_repository_key_path }}]
-      {{ intel_gpu_repository_url }} unified
-    filename: intel-omix
-    state: present
-    update_cache: true
-  when: intel_gpu_install_enabled | bool
-  tags: [gpu, runtime]
-
-- name: Install exact Intel OMIX runtime compatibility set
-  ansible.builtin.apt:
-    name: "intel-omix={{ intel_gpu_omix_version }}"
-    state: present
-    allow_downgrade: true
-  when: intel_gpu_install_enabled | bool
-  tags: [gpu, runtime]
-
-- name: Capture installed package versions for runtime evidence
+- name: Gather installed package facts for physical GPU preflight
   ansible.builtin.package_facts:
     manager: apt
-  when: intel_gpu_install_enabled | bool
-  tags: [gpu, runtime, validation]
-
-- name: Grant named services render and video group access
-  ansible.builtin.user:
-    name: "{{ item.0 }}"
-    groups: "{{ item.1 }}"
-    append: true
-  loop: "{{ intel_gpu_service_accounts | product(['render', 'video']) | list }}"
-  when: intel_gpu_install_enabled | bool
-  tags: [gpu, runtime]
-
-- name: Require DRI render devices before GPU validation
-  ansible.builtin.stat:
-    path: /dev/dri
-  register: intel_gpu_dri
-  when: intel_gpu_install_enabled | bool
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
   tags: [gpu, validation]
 
-- name: Validate two B65 devices and capture PCI IDs, 32 GiB VRAM, Level Zero and ReBAR
-  ansible.builtin.command:
-    argv: ["zeinfo", -j]
-  register: intel_gpu_zeinfo
-  changed_when: false
-  failed_when: not intel_gpu_dri.stat.exists or intel_gpu_zeinfo.rc != 0
-  when: intel_gpu_install_enabled | bool
-  check_mode: false
-  tags: [gpu, validation]
-
-- name: Capture target Intel PCI devices and ReBAR details
-  ansible.builtin.command:
-    argv: ["lspci", -Dnnvv]
-  register: intel_gpu_pci
-  changed_when: false
-  when: intel_gpu_install_enabled | bool
-  check_mode: false
-  tags: [gpu, validation]
-
-- name: Require expected B65 PCI IDs and large-memory Level Zero evidence
+- name: Require Ubuntu 24.04 package identity and Intel-required 6.17 HWE kernel
   ansible.builtin.assert:
     that:
-      - >-
-        (intel_gpu_pci.stdout | lower | regex_findall(intel_gpu_target_pci_ids[0])) | length ==
-        intel_gpu_expected_count
-      - (intel_gpu_pci.stdout | regex_findall('(?i)Resizable BAR')) | length >= intel_gpu_expected_count
-      - (intel_gpu_zeinfo.stdout | regex_findall('34359738368')) | length >= intel_gpu_expected_count
-    fail_msg: Expected two B65 PCI IDs, ReBAR evidence, and approximately 32 GiB VRAM per Level Zero device.
-  when: intel_gpu_install_enabled | bool
+      - ansible_distribution == 'Ubuntu'
+      - ansible_distribution_version == '24.04'
+      - ansible_kernel is version(intel_gpu_minimum_kernel, '>=')
+      - "'base-files' in ansible_facts.packages"
+    fail_msg: Physical B65 validation requires an installed Ubuntu 24.04 base-files package and running kernel 6.17+.
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
   tags: [gpu, validation]
 
-- name: Ensure Intel GPU runtime evidence directory exists
-  ansible.builtin.file:
-    path: "{{ intel_gpu_runtime_evidence_path | dirname }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0750"
-  when: intel_gpu_install_enabled | bool
+- name: Run trusted BDF-correlated hardware inventory when explicitly commissioned
+  ansible.builtin.include_role:
+    name: hardware_inventory
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
+  tags: [gpu, inventory, hardware, validation]
+
+- name: Record expected Intel GPU contract for normalized evidence
+  ansible.builtin.set_fact:
+    intel_gpu_expected_contract:
+      count: "{{ intel_gpu_expected_count }}"
+      pci_ids: "{{ intel_gpu_target_pci_ids }}"
+      vram_gib: "{{ intel_gpu_expected_vram_gib }}"
+      vram_tolerance_gib: "{{ intel_gpu_vram_tolerance_gib }}"
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
   tags: [gpu, validation]
 
-- name: Write machine-readable Intel GPU runtime PASS evidence
-  ansible.builtin.copy:
-    content: >-
-      {{ {
-        'schema_version': '1.0.0',
-        'status': 'PASS',
-        'physical_acceptance': false,
-        'expected_count': intel_gpu_expected_count,
-        'expected_pci_ids': intel_gpu_target_pci_ids,
-        'expected_vram_gib': intel_gpu_expected_vram_gib,
-        'intel_omix_version': ansible_facts.packages['intel-omix'][0].version,
-        'level_zero': intel_gpu_zeinfo.stdout | from_json,
-        'pci': intel_gpu_pci.stdout
-      } | to_nice_json }}
-    dest: "{{ intel_gpu_runtime_evidence_path }}"
-    owner: root
-    group: root
-    mode: "0640"
-  when: intel_gpu_install_enabled | bool
+- name: Run trusted topology and Level Zero classifier when explicitly commissioned
+  ansible.builtin.include_role:
+    name: hardware_validation
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
+  tags: [gpu, hardware, validation]
+
+- name: Load normalized BDF-correlated hardware result
+  ansible.builtin.slurp:
+    src: "{{ hardware_validation_evidence_dir }}/hardware.json"
+  register: intel_gpu_hardware_document
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
   tags: [gpu, validation]
 
-# Detailed PCI IDs, driver/runtime versions, ReBAR and per-device VRAM are independently
-# classified by hardware_inventory/hardware_validation into machine-readable evidence.
+- name: Require independently classified GPU, PCIe, ReBAR, VRAM and Level Zero state
+  ansible.builtin.assert:
+    that:
+      - (intel_gpu_hardware_document.content | b64decode | from_json).status == 'pass'
+      - not (intel_gpu_hardware_document.content | b64decode | from_json).simulated
+    fail_msg: BDF-correlated hardware classification did not pass; no Intel GPU runtime PASS evidence is emitted.
+  when:
+    - intel_gpu_physical_validation_enabled | bool
+    - not ansible_check_mode
+  tags: [gpu, validation]
+
+# hardware_inventory records PCI IDs, firmware, kernel driver, PCIe and Level Zero data.
+# hardware_validation binds Level Zero memory to the same PCI BDF and applies VRAM tolerance and ReBAR policy.

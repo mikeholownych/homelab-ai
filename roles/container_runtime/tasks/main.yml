@@ -14,3 +14,47 @@
   failed_when: not container_runtime_dri.stat.exists
   when: container_runtime_enabled | bool
   tags: [runtime, gpu, validation]
+
+- name: Verify every configured DRI render node exists
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ container_runtime_render_nodes }}"
+  register: container_runtime_render_node_facts
+  failed_when: not container_runtime_render_node_facts.stat.exists
+  when:
+    - container_runtime_enabled | bool
+    - not ansible_check_mode
+  tags: [runtime, gpu, validation]
+
+- name: Ensure CDI configuration directory exists
+  ansible.builtin.file:
+    path: "{{ container_runtime_cdi_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: container_runtime_enabled | bool
+  tags: [runtime, gpu]
+
+- name: Expose configured DRI render nodes through CDI
+  ansible.builtin.copy:
+    content: |
+      cdiVersion: "0.5.0"
+      kind: "local-ai.intel/gpu"
+      annotations:
+        local-ai/device-mappings: "{{ container_runtime_device_mappings | join(',') }}"
+      devices:
+      {% for node in container_runtime_render_nodes %}
+        - name: "gpu{{ loop.index0 }}"
+          containerEdits:
+            deviceNodes:
+              - path: "{{ node }}"
+                hostPath: "{{ node }}"
+                permissions: "rwm"
+      {% endfor %}
+    dest: /etc/cdi/local-ai-dri.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  when: container_runtime_enabled | bool
+  tags: [runtime, gpu]

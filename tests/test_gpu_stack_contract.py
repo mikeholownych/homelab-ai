@@ -23,31 +23,25 @@ def test_b65_on_ubuntu_2404_is_gated_on_official_omix_prerequisites():
     assert "Ubuntu Desktop 24.04.4" in defaults["intel_gpu_support_blocker"]
 
 
-def test_omix_repository_and_key_are_immutable():
-    defaults = load_yaml("roles/intel_gpu/defaults/main.yml")
-    assert defaults["intel_gpu_repository_url"].endswith("/intel-omix/0.3.0")
-    assert defaults["intel_gpu_repository_key_fingerprint"] == "E0258B57D9C442D5DB1855C271740E4DE392BFE3"
-    assert len(defaults["intel_gpu_repository_key_sha256"]) == 64
-    assert defaults["intel_gpu_omix_version"] == "0.3.0-9~24.04"
+def test_unresolved_host_stack_has_no_partial_apt_installation():
+    tasks = (ROOT / "roles/intel_gpu/tasks/main.yml").read_text()
+    assert "apt_repository" not in tasks
+    assert "intel-omix=" not in tasks
 
 
-def test_compute_artifacts_are_immutable_and_minimal():
+def test_vendor_support_conflict_is_unconditionally_fail_closed():
     defaults = load_yaml("roles/intel_gpu/defaults/main.yml")
-    artifacts = defaults["intel_gpu_compute_artifacts"]
-    assert artifacts
-    assert all(item["url"].startswith("https://github.com/intel/") for item in artifacts)
-    assert all(len(item["sha256"]) == 64 for item in artifacts)
-    packages = {item["package"] for item in artifacts}
-    assert {"intel-opencl-icd", "libze-intel-gpu1", "libigdgmm12"} <= packages
-    assert not any("oneapi" in package.lower() for package in packages)
+    assert defaults["intel_gpu_stack_status"] == "unresolved_vendor_support_conflict"
+    tasks = load_yaml("roles/intel_gpu/tasks/main.yml")
+    first = tasks[0]
+    assert "ansible.builtin.fail" in first
+    assert "compatibility_set_approved" not in json.dumps(defaults)
 
 
 def test_gpu_role_enforces_devices_access_and_physical_checks():
     tasks = (ROOT / "roles/intel_gpu/tasks/main.yml").read_text()
-    for contract in (
-        "intel_gpu_compatibility_set_approved", "intel_gpu_expected_count", "intel_gpu_target_pci_ids",
-        "render", "video", "/dev/dri", "zeinfo", "ReBAR", "32",
-    ):
+    for contract in ("intel_gpu_expected_count", "intel_gpu_target_pci_ids", "hardware_inventory",
+                     "hardware_validation"):
         assert contract in tasks
     assert "ignore_errors" not in tasks
 
@@ -59,6 +53,11 @@ def test_pytorch_wheel_and_python_are_pinned_by_hash():
     assert defaults["pytorch_xpu_wheel_url"].startswith("https://download-r2.pytorch.org/whl/xpu/")
     assert len(defaults["pytorch_xpu_wheel_sha256"]) == 64
     assert "latest" not in json.dumps(defaults).lower()
+    lock = (ROOT / "roles/pytorch_xpu/files/requirements-xpu-py312.lock").read_text()
+    assert "torch==2.12.1+xpu --hash=sha256:" in lock
+    assert len([line for line in lock.splitlines() if "==" in line]) >= 30
+    assert "--require-hashes" in (ROOT / "roles/pytorch_xpu/tasks/main.yml").read_text()
+    assert "dependency_lock_approved" not in json.dumps(defaults)
 
 
 def test_pytorch_role_promotes_current_only_after_validation():
@@ -67,7 +66,8 @@ def test_pytorch_role_promotes_current_only_after_validation():
     validate_at = next(i for i, name in enumerate(names) if "Validate every XPU" in name)
     promote_at = next(i for i, name in enumerate(names) if "Promote validated" in name)
     assert validate_at < promote_at
-    assert tasks[promote_at]["ansible.builtin.file"]["state"] == "link"
+    assert "pytorch_xpu_promoter" in json.dumps(tasks[promote_at])
+    assert "promote_venv.py" in json.dumps(tasks)
     assert "runtime.json" in json.dumps(tasks)
 
 
@@ -130,6 +130,50 @@ def test_container_runtime_is_opt_in_and_maps_dri_only():
     defaults = load_yaml("roles/container_runtime/defaults/main.yml")
     assert defaults["container_runtime_enabled"] is False
     assert defaults["container_runtime_device_mappings"] == ["/dev/dri:/dev/dri"]
+    tasks = (ROOT / "roles/container_runtime/tasks/main.yml").read_text()
+    assert "/etc/cdi/local-ai-dri.yaml" in tasks
+    assert defaults["container_runtime_render_nodes"] == ["/dev/dri/renderD128", "/dev/dri/renderD129"]
+
+
+def test_gpu_validation_reuses_bdf_correlated_hardware_roles():
+    tasks = (ROOT / "roles/intel_gpu/tasks/main.yml").read_text()
+    assert "name: hardware_inventory" in tasks
+    assert "name: hardware_validation" in tasks
+    assert "regex_findall" not in tasks
+    collector = (ROOT / "roles/hardware_inventory/files/collect_hardware.py").read_text()
+    assert '"runtime_versions"' in collector
+    assert '"kernel_driver"' in collector
+    assert '"level_zero_packages"' in collector
+
+
+def test_atomic_promoter_preserves_previous_and_uses_replace(tmp_path):
+    path = ROOT / "roles/pytorch_xpu/files/promote_venv.py"
+    spec = importlib.util.spec_from_file_location("promote_venv", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    old, new = tmp_path / "old", tmp_path / "new"
+    old.mkdir(); new.mkdir()
+    current, previous = tmp_path / "current", tmp_path / "previous"
+    current.symlink_to(old)
+    assert module.promote(new, current, previous) is True
+    assert current.resolve() == new
+    assert previous.resolve() == old
+    assert module.promote(new, current, previous) is False
+    assert previous.resolve() == old
+
+
+def test_xpu_validation_schema_accepts_validator_output():
+    import jsonschema
+    schema = json.loads((ROOT / "schemas/xpu-validation.schema.json").read_text())
+    document = {"schema_version": "1.0.0", "status": "NOT_TESTED", "physical_acceptance": False,
+                "expected_count": 2, "observed_count": 0, "devices": [], "reason": "no physical hardware"}
+    jsonschema.validate(document, schema)
+
+
+def test_check_mode_has_explicit_skip_semantics():
+    tasks = (ROOT / "roles/pytorch_xpu/tasks/main.yml").read_text()
+    assert "ansible_check_mode" in tasks
+    assert "NOT_TESTED" in tasks
 
 
 def test_gpu_playbook_tags_select_work_without_defining_identity():
