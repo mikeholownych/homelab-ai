@@ -1,15 +1,17 @@
 ---
-- name: Benchmark foundation scaffold
+- name: Execute inference performance benchmarks
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
+  become: true
   tags:
     - benchmark
-    - foundation
+    - operations
+  vars:
+    benchmark_profile: "small"
   tasks:
-    - name: Report benchmark scaffold status
-      ansible.builtin.debug:
-        msg: Benchmark scaffolding only; benchmarking behavior is not implemented yet.
-      changed_when: false
-      tags:
-        - benchmark
-        - foundation
+    - name: Run benchmark role
+      ansible.builtin.include_role:
+        name: benchmarking
+      vars:
+        benchmarking_active_profile: "{{ benchmark_profile }}"
+      tags: [benchmark]

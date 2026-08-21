@@ -1,2 +1,37 @@
 ---
-{}
+benchmarking_enabled: true
+benchmarking_active_profile: "small"
+benchmarking_evidence_dir: "/var/lib/aihost/evidence"
+benchmarking_output_path: "{{ benchmarking_evidence_dir }}/benchmark.json"
+
+benchmarking_profiles:
+  small:
+    description: "Small single-GPU model inference benchmark"
+    gpu_count: 1
+    tensor_parallelism: 1
+    context_window_tokens: 4096
+    duration_seconds: 30.0
+  medium_32b:
+    description: "30-32B single-GPU model inference benchmark"
+    gpu_count: 1
+    tensor_parallelism: 1
+    context_window_tokens: 8192
+    duration_seconds: 60.0
+  large_70b:
+    description: "70B dual-GPU model inference benchmark"
+    gpu_count: 2
+    tensor_parallelism: 2
+    context_window_tokens: 8192
+    duration_seconds: 60.0
+  low_precision_moe:
+    description: "Supported low-precision MoE model benchmark"
+    gpu_count: 2
+    tensor_parallelism: 2
+    context_window_tokens: 4096
+    duration_seconds: 60.0
+  sustained_load:
+    description: "Sustained thermal and load test"
+    gpu_count: 2
+    tensor_parallelism: 2
+    context_window_tokens: 16384
+    duration_seconds: 300.0

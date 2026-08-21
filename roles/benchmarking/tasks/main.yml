@@ -1,2 +1,36 @@
 ---
-[]
+- name: Validate benchmark inputs
+  ansible.builtin.assert:
+    that:
+      - benchmarking_enabled is boolean
+      - benchmarking_active_profile in benchmarking_profiles
+    fail_msg: >-
+      benchmarking requires an allowed profile name.
+  tags: [benchmark, operations]
+
+- name: Ensure evidence directory exists for benchmarks
+  ansible.builtin.file:
+    path: "{{ benchmarking_evidence_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [benchmark, operations]
+
+- name: Run inference benchmark harness
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - "{{ role_path }}/files/run_benchmark.py"
+      - --profile
+      - "{{ benchmarking_active_profile }}"
+      - --hostname
+      - "{{ inventory_hostname }}"
+      - --git-sha
+      - "{{ lookup('ansible.builtin.pipe', 'git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000') }}"
+      - --output
+      - "{{ benchmarking_output_path }}"
+  register: benchmark_run
+  changed_when: false
+  when: not ansible_check_mode
+  tags: [benchmark, operations]
