@@ -1,2 +1,16 @@
 ---
-[]
+- name: Validate ITSM hook parameters
+  ansible.builtin.assert:
+    that:
+      - itsm_integration_enabled is boolean
+      - itsm_permitted_actions is iterable
+      - itsm_requested_action in itsm_permitted_actions
+    fail_msg: >-
+      Requested ITSM action is not in the permitted action allowlist.
+  when: itsm_integration_enabled | bool
+  tags: [itsm, operations]
+
+- name: Report ITSM authorization state
+  ansible.builtin.debug:
+    msg: "ITSM execution authorized for change ticket {{ itsm_change_id | default('N/A') }} with action {{ itsm_requested_action }}"
+  tags: [itsm, operations]

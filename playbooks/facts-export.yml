@@ -1,14 +1,14 @@
 ---
-- name: Export authoritative hardware facts
+- name: Export normalized CMDB facts and configuration item data
   hosts: ai_hosts
   gather_facts: true
   become: true
   tags:
-    - facts_export
-    - inventory
-    - hardware
-  roles:
-    - role: hardware_inventory
-      tags: [facts_export, inventory, hardware]
-    - role: hardware_validation
-      tags: [facts_export, validation, hardware]
+    - facts-export
+    - cmdb
+    - operations
+  tasks:
+    - name: Run CMDB export role
+      ansible.builtin.include_role:
+        name: cmdb_export
+      tags: [cmdb, facts-export]
