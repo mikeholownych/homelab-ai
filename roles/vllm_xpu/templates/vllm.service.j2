@@ -1,0 +1,30 @@
+[Unit]
+Description=vLLM Intel XPU OpenAI-Compatible Inference Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ vllm_xpu_user }}
+Group={{ vllm_xpu_group }}
+WorkingDirectory={{ vllm_xpu_config_dir }}
+EnvironmentFile={{ vllm_xpu_env_file }}
+ExecStart=/usr/local/bin/vllm-xpu-runner serve --config {{ vllm_xpu_config_file }}
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=60s
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+StandardOutput=append:{{ vllm_xpu_log_dir }}/vllm.log
+StandardError=append:{{ vllm_xpu_log_dir }}/vllm-error.log
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }}
+PrivateTmp=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+
+[Install]
+WantedBy=multi-user.target

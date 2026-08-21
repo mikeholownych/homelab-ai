@@ -1,2 +1,79 @@
 ---
-[]
+- name: Validate vLLM XPU role inputs
+  ansible.builtin.assert:
+    that:
+      - vllm_xpu_version is string
+      - vllm_xpu_version | length > 0
+      - vllm_xpu_container_digest is match("^sha256:[0-9a-fA-F]{64}$")
+      - vllm_xpu_profiles is mapping
+      - "vllm_xpu_active_profile in vllm_xpu_profiles"
+      - (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size in [1, 2]
+    fail_msg: >-
+      vllm_xpu requires a valid pinned version, image digest, and profile configuration.
+  tags: [inference, runtime, vllm]
+
+- name: Create vLLM service directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_group }}"
+    mode: "0750"
+  loop:
+    - "{{ vllm_xpu_config_dir }}"
+    - "{{ vllm_xpu_log_dir }}"
+    - "{{ vllm_xpu_model_cache_dir }}"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
+- name: Render non-secret vLLM configuration file
+  ansible.builtin.template:
+    src: vllm-config.yaml.j2
+    dest: "{{ vllm_xpu_config_file }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_group }}"
+    mode: "0644"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
+- name: Render vLLM runtime environment file
+  ansible.builtin.template:
+    src: vllm.env.j2
+    dest: "{{ vllm_xpu_env_file }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_group }}"
+    mode: "0600"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
+- name: Install vLLM systemd service unit
+  ansible.builtin.template:
+    src: vllm.service.j2
+    dest: /etc/systemd/system/vllm.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: vllm_xpu_install_enabled | bool
+  notify: Reload systemd daemon
+  tags: [inference, runtime, vllm]
+
+- name: Record vLLM validation state during check mode or when uncommissioned
+  ansible.builtin.copy:
+    content: >-
+      {{ {
+        'schema_version': '1.0.0',
+        'service': 'vllm_xpu',
+        'status': 'NOT_TESTED',
+        'physical_acceptance': false,
+        'simulated': false,
+        'endpoint': 'http://' ~ vllm_xpu_host ~ ':' ~ (vllm_xpu_port | string),
+        'tensor_parallel_size': (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size,
+        'reason': 'check mode or uncommissioned hardware skips live service validation'
+      } | to_nice_json }}
+    dest: "{{ vllm_xpu_validation_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - ansible_check_mode or not (vllm_xpu_service_enabled | bool)
+  tags: [inference, validation, vllm]

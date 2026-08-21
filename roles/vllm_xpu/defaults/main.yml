@@ -1,2 +1,39 @@
 ---
-{}
+vllm_xpu_install_enabled: false
+vllm_xpu_service_enabled: false
+vllm_xpu_version: "0.7.3"
+vllm_xpu_runtime_mode: "container"
+vllm_xpu_container_image: "ghcr.io/vllm-project/vllm-xpu"
+vllm_xpu_container_tag: "v0.7.3"
+vllm_xpu_container_digest: "sha256:d8b76e1a4731ec22d4f8ef0e5a882a1772658823f6e1f0e4adfa5468752d5e23"
+
+vllm_xpu_host: "0.0.0.0"
+vllm_xpu_port: 8000
+vllm_xpu_user: "aihost-runtime"
+vllm_xpu_group: "render"
+
+vllm_xpu_config_dir: "/etc/local-ai/vllm"
+vllm_xpu_config_file: "{{ vllm_xpu_config_dir }}/vllm-config.yaml"
+vllm_xpu_env_file: "{{ vllm_xpu_config_dir }}/vllm.env"
+vllm_xpu_log_dir: "/var/log/local-ai/vllm"
+vllm_xpu_model_cache_dir: "/var/lib/local-ai/models"
+
+vllm_xpu_active_profile: "small"
+vllm_xpu_profiles:
+  small:
+    tensor_parallel_size: 1
+    gpu_memory_utilization: 0.90
+    max_model_len: 4096
+    enforce_eager: false
+  large:
+    tensor_parallel_size: 2
+    gpu_memory_utilization: 0.90
+    max_model_len: 8192
+    enforce_eager: false
+
+vllm_xpu_model_id: null
+vllm_xpu_model_revision: null
+vllm_xpu_model_path: null
+
+vllm_xpu_validation_path: "/var/lib/aihost/evidence/vllm_validation.json"
+vllm_xpu_api_key_secret_path: "secret/local-ai/services/vllm/api-key"

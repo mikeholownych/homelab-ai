@@ -42,6 +42,22 @@
         - capabilities.inference | default(false) | bool
       tags: [site, gpu, runtime, inference]
 
+    - name: Include vLLM XPU role for primary inference nodes
+      ansible.builtin.include_role:
+        name: vllm_xpu
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+      tags: [site, gpu, runtime, inference, vllm]
+
+    - name: Include llama.cpp SYCL role for fallback inference nodes
+      ansible.builtin.include_role:
+        name: llama_cpp_sycl
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+      tags: [site, gpu, runtime, inference, llama_cpp]
+
     - name: Include monitoring role when the feature is enabled
       ansible.builtin.include_role:
         name: monitoring

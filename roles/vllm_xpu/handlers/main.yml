@@ -1,2 +1,12 @@
 ---
-[]
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart vLLM service
+  ansible.builtin.systemd:
+    name: vllm.service
+    state: restarted
+  when:
+    - vllm_xpu_service_enabled | default(false) | bool
+    - not ansible_check_mode
