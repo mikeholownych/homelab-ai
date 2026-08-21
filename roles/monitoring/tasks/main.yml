@@ -1,2 +1,26 @@
 ---
-[]
+- name: Validate monitoring inputs
+  ansible.builtin.assert:
+    that:
+      - monitoring_enabled is boolean
+      - monitoring_log_dir is string
+    fail_msg: >-
+      monitoring role requires valid configuration flags.
+  tags: [monitoring, telemetry]
+
+- name: Create monitoring log directory
+  ansible.builtin.file:
+    path: "{{ monitoring_log_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  when:
+    - monitoring_enabled | bool
+  tags: [monitoring, telemetry]
+
+- name: Record monitoring check mode status
+  ansible.builtin.debug:
+    msg: "Monitoring role check mode active"
+  when: ansible_check_mode
+  tags: [monitoring, telemetry]

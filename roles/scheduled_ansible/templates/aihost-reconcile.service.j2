@@ -1,0 +1,16 @@
+[Unit]
+Description=Local AI Host Scheduled Reconciliation (run-ansible-snapshot)
+Documentation=file://{{ scheduled_ansible_snapshot_dir }}/docs/operations.md
+After=network.target
+
+[Service]
+Type=oneshot
+User={{ scheduled_ansible_user }}
+WorkingDirectory={{ scheduled_ansible_snapshot_dir }}
+ExecStart={{ scheduled_ansible_runner_path | default('/opt/local-ai/scripts/run-ansible-snapshot') }} site.yml
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+LimitNOFILE=65536
+StandardOutput=append:{{ scheduled_ansible_log_dir }}/reconcile.log
+StandardError=append:{{ scheduled_ansible_log_dir }}/reconcile.log

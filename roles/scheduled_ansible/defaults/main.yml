@@ -1,2 +1,22 @@
 ---
-{}
+scheduled_ansible_reconcile_enabled: true
+scheduled_ansible_patch_enabled: false
+scheduled_ansible_validate_enabled: true
+scheduled_ansible_benchmark_enabled: false
+
+scheduled_ansible_reconcile_timer_schedule: "hourly"
+scheduled_ansible_reconcile_random_delay_sec: "300s"
+
+scheduled_ansible_patch_timer_schedule: "Sun *-*-* 03:00:00"
+scheduled_ansible_patch_random_delay_sec: "1800s"
+
+scheduled_ansible_validate_timer_schedule: "daily"
+scheduled_ansible_validate_random_delay_sec: "600s"
+
+scheduled_ansible_benchmark_timer_schedule: "Sat *-*-* 02:00:00"
+scheduled_ansible_benchmark_random_delay_sec: "600s"
+
+scheduled_ansible_runner_path: "/opt/local-ai/scripts/run-ansible-snapshot"
+scheduled_ansible_snapshot_dir: "/opt/local-ai"
+scheduled_ansible_log_dir: "/var/log/local-ai/reconciliation"
+scheduled_ansible_user: "root"

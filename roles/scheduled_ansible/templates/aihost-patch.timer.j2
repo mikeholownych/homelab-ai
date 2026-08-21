@@ -1,0 +1,11 @@
+[Unit]
+Description=Local AI Host Scheduled Patch Timer
+After=network.target
+
+[Timer]
+OnCalendar={{ scheduled_ansible_patch_timer_schedule }}
+RandomizedDelaySec={{ scheduled_ansible_patch_random_delay_sec }}
+Persistent=false
+
+[Install]
+WantedBy=timers.target

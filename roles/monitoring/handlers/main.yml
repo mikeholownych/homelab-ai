@@ -1,2 +1,4 @@
 ---
-[]
+- name: Reload monitoring daemon
+  ansible.builtin.debug:
+    msg: "Monitoring configuration updated"

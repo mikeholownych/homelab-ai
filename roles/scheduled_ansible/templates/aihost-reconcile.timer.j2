@@ -1,0 +1,11 @@
+[Unit]
+Description=Local AI Host Scheduled Reconciliation Timer
+After=network.target
+
+[Timer]
+OnCalendar={{ scheduled_ansible_reconcile_timer_schedule }}
+RandomizedDelaySec={{ scheduled_ansible_reconcile_random_delay_sec }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

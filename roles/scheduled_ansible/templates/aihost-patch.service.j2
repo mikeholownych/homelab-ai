@@ -1,0 +1,13 @@
+[Unit]
+Description=Local AI Host Scheduled Patch Assessment
+After=network.target
+
+[Service]
+Type=oneshot
+User={{ scheduled_ansible_user }}
+WorkingDirectory={{ scheduled_ansible_snapshot_dir }}
+ExecStart={{ scheduled_ansible_runner_path }} patch.yml
+Nice=15
+LimitNOFILE=65536
+StandardOutput=append:{{ scheduled_ansible_log_dir }}/patch.log
+StandardError=append:{{ scheduled_ansible_log_dir }}/patch.log

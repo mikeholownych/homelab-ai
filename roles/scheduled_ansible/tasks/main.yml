@@ -1,2 +1,56 @@
 ---
-[]
+- name: Validate scheduled reconciliation inputs
+  ansible.builtin.assert:
+    that:
+      - scheduled_ansible_reconcile_enabled is boolean
+      - scheduled_ansible_patch_enabled is boolean
+      - scheduled_ansible_validate_enabled is boolean
+      - scheduled_ansible_benchmark_enabled is boolean
+      - scheduled_ansible_runner_path is string
+      - scheduled_ansible_log_dir is string
+    fail_msg: >-
+      scheduled_ansible requires boolean enablement flags and valid paths.
+  tags: [scheduled_ansible, operations]
+
+- name: Create scheduled reconciliation log directory
+  ansible.builtin.file:
+    path: "{{ scheduled_ansible_log_dir }}"
+    state: directory
+    owner: "{{ scheduled_ansible_user }}"
+    group: root
+    mode: "0750"
+  tags: [scheduled_ansible, operations]
+
+- name: Install reconciliation systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: "aihost-reconcile.service.j2", dest: "aihost-reconcile.service" }
+    - { src: "aihost-reconcile.timer.j2", dest: "aihost-reconcile.timer" }
+  notify: Reload systemd daemon
+  tags: [scheduled_ansible, operations]
+
+- name: Install patch systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: "aihost-patch.service.j2", dest: "aihost-patch.service" }
+    - { src: "aihost-patch.timer.j2", dest: "aihost-patch.timer" }
+  notify: Reload systemd daemon
+  tags: [scheduled_ansible, operations]
+
+- name: Manage scheduled reconciliation timer state
+  ansible.builtin.systemd:
+    name: aihost-reconcile.timer
+    state: "{{ 'started' if (scheduled_ansible_reconcile_enabled | bool) else 'stopped' }}"
+    enabled: "{{ scheduled_ansible_reconcile_enabled | bool }}"
+  when: not ansible_check_mode
+  tags: [scheduled_ansible, operations]

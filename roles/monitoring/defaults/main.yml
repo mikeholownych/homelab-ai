@@ -1,2 +1,5 @@
 ---
-{}
+monitoring_enabled: true
+monitoring_log_dir: "/var/log/local-ai/monitoring"
+monitoring_collector_enabled: true
+monitoring_collection_interval_sec: 60
