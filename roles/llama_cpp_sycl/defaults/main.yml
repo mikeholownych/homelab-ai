@@ -1,2 +1,29 @@
 ---
-{}
+llama_cpp_sycl_install_enabled: false
+llama_cpp_sycl_service_enabled: false
+
+llama_cpp_sycl_git_repo: "https://github.com/ggerganov/llama.cpp.git"
+llama_cpp_sycl_git_commit: "b374829a435fa848d7c1775efd2dfbfb87fcf1e2"
+
+llama_cpp_sycl_cmake_args:
+  - "-DGGML_SYCL=ON"
+  - "-DGGML_SYCL_F16=ON"
+  - "-DCMAKE_BUILD_TYPE=Release"
+
+llama_cpp_sycl_host: "0.0.0.0"
+llama_cpp_sycl_port: 8080
+llama_cpp_sycl_user: "aihost-runtime"
+llama_cpp_sycl_group: "render"
+
+llama_cpp_sycl_install_dir: "/opt/llama.cpp-sycl"
+llama_cpp_sycl_config_dir: "/etc/local-ai/llama.cpp"
+llama_cpp_sycl_log_dir: "/var/log/local-ai/llama.cpp"
+llama_cpp_sycl_model_path: null
+
+llama_cpp_sycl_n_gpu_layers: 99
+llama_cpp_sycl_split_mode: "layer"
+llama_cpp_sycl_tensor_split: "1,1"
+llama_cpp_sycl_device_selector: "level_zero:0"
+
+llama_cpp_sycl_dual_gpu_support_certified: false
+llama_cpp_sycl_validation_path: "/var/lib/aihost/evidence/llama_validation.json"

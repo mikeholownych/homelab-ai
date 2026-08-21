@@ -1,0 +1,28 @@
+[Unit]
+Description=llama.cpp SYCL Fallback Inference Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ llama_cpp_sycl_user }}
+Group={{ llama_cpp_sycl_group }}
+WorkingDirectory={{ llama_cpp_sycl_config_dir }}
+EnvironmentFile={{ llama_cpp_sycl_config_dir }}/llama.env
+ExecStart={{ llama_cpp_sycl_install_dir }}/bin/llama-server --host {{ llama_cpp_sycl_host }} --port {{ llama_cpp_sycl_port }} -m {{ llama_cpp_sycl_model_path | default('/var/lib/local-ai/models/fallback.gguf') }} -ngl {{ llama_cpp_sycl_n_gpu_layers }} -sm {{ llama_cpp_sycl_split_mode }} -ts {{ llama_cpp_sycl_tensor_split }}
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+StandardOutput=append:{{ llama_cpp_sycl_log_dir }}/llama-server.log
+StandardError=append:{{ llama_cpp_sycl_log_dir }}/llama-server-error.log
+
+# Security hardening
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ llama_cpp_sycl_log_dir }}
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,2 +1,12 @@
 ---
-[]
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart llama-server service
+  ansible.builtin.systemd:
+    name: llama-server.service
+    state: restarted
+  when:
+    - llama_cpp_sycl_service_enabled | default(false) | bool
+    - not ansible_check_mode

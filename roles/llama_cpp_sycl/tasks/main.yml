@@ -1,2 +1,79 @@
 ---
-[]
+- name: Validate llama.cpp SYCL role inputs
+  ansible.builtin.assert:
+    that:
+      - llama_cpp_sycl_git_commit is match("^[0-9a-fA-F]{40}$")
+      - llama_cpp_sycl_cmake_args is iterable
+      - (llama_cpp_sycl_cmake_args | select("match", "^-DGGML_SYCL=ON$") | list | length) > 0
+      - llama_cpp_sycl_split_mode in ["none", "layer", "row"]
+      - llama_cpp_sycl_tensor_split is string
+    fail_msg: >-
+      llama_cpp_sycl requires an exact 40-character commit, explicit SYCL build flags, and valid split_mode/tensor_split.
+  tags: [inference, runtime, llama_cpp]
+
+- name: Assert dual-GPU SYCL requires explicit certification before enabling service
+  ansible.builtin.assert:
+    that:
+      - not (llama_cpp_sycl_service_enabled | bool) or (llama_cpp_sycl_split_mode == 'none') or (llama_cpp_sycl_dual_gpu_support_certified | bool)
+    fail_msg: >-
+      Multi-GPU SYCL execution in llama.cpp requires explicit dual-GPU acceptance certification.
+  when: llama_cpp_sycl_service_enabled | bool
+  tags: [inference, runtime, llama_cpp]
+
+- name: Create llama.cpp configuration and log directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ llama_cpp_sycl_user }}"
+    group: "{{ llama_cpp_sycl_group }}"
+    mode: "0750"
+  loop:
+    - "{{ llama_cpp_sycl_config_dir }}"
+    - "{{ llama_cpp_sycl_log_dir }}"
+  when: llama_cpp_sycl_install_enabled | bool
+  tags: [inference, runtime, llama_cpp]
+
+- name: Render llama.cpp environment file
+  ansible.builtin.template:
+    src: llama.env.j2
+    dest: "{{ llama_cpp_sycl_config_dir }}/llama.env"
+    owner: "{{ llama_cpp_sycl_user }}"
+    group: "{{ llama_cpp_sycl_group }}"
+    mode: "0640"
+  when: llama_cpp_sycl_install_enabled | bool
+  tags: [inference, runtime, llama_cpp]
+
+- name: Install llama.cpp systemd service unit
+  ansible.builtin.template:
+    src: llama-server.service.j2
+    dest: /etc/systemd/system/llama-server.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: llama_cpp_sycl_install_enabled | bool
+  notify: Reload systemd daemon
+  tags: [inference, runtime, llama_cpp]
+
+- name: Record llama.cpp fallback validation state during check mode or when uncommissioned
+  ansible.builtin.copy:
+    content: >-
+      {{ {
+        'schema_version': '1.0.0',
+        'service': 'llama_cpp_sycl',
+        'git_commit': llama_cpp_sycl_git_commit,
+        'status': 'NOT_TESTED',
+        'physical_acceptance': false,
+        'simulated': false,
+        'dual_gpu_tested': false,
+        'dual_gpu_supported': false,
+        'split_mode': llama_cpp_sycl_split_mode,
+        'tensor_split': llama_cpp_sycl_tensor_split,
+        'reason': 'check mode or uncommissioned hardware skips live fallback service validation'
+      } | to_nice_json }}
+    dest: "{{ llama_cpp_sycl_validation_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - ansible_check_mode or not (llama_cpp_sycl_service_enabled | bool)
+  tags: [inference, validation, llama_cpp]
