@@ -1,15 +1,29 @@
 ---
-- name: Drift check foundation scaffold
+- name: Assess host configuration drift
   hosts: ai_hosts
-  gather_facts: false
+  gather_facts: true
+  become: true
   tags:
-    - drift_check
-    - foundation
+    - drift
+    - validation
+    - operations
   tasks:
-    - name: Report drift-check scaffold status
+    - name: Run hardware discovery for drift check
+      ansible.builtin.include_role:
+        name: hardware_inventory
+      tags: [drift, inventory]
+
+    - name: Run hardware validation for drift check
+      ansible.builtin.include_role:
+        name: hardware_validation
+      tags: [drift, hardware]
+
+    - name: Run independent validation aggregation
+      ansible.builtin.include_role:
+        name: validation
+      tags: [drift, validation]
+
+    - name: Report drift assessment status
       ansible.builtin.debug:
-        msg: Drift-check scaffolding only; drift detection behavior is not implemented yet.
-      changed_when: false
-      tags:
-        - drift_check
-        - foundation
+        msg: "Drift assessment complete. Validation result recorded in evidence."
+      tags: [drift]

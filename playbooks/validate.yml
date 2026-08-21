@@ -1,13 +1,17 @@
 ---
-- name: Independently validate hardware state
+- name: Independently validate host state
   hosts: ai_hosts
   gather_facts: true
   become: true
   tags:
     - validation
     - hardware
+    - runtime
+    - operations
   roles:
     - role: hardware_inventory
       tags: [validation, inventory, hardware]
     - role: hardware_validation
       tags: [validation, hardware]
+    - role: validation
+      tags: [validation, runtime, operations]

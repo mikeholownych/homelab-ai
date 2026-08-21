@@ -1,2 +1,6 @@
 ---
-{}
+validation_evidence_dir: "/var/lib/aihost/evidence"
+validation_output_path: "{{ validation_evidence_dir }}/validation.json"
+validation_summary_path: "{{ validation_evidence_dir }}/validation_summary.txt"
+validation_fail_on_blocking: true
+validation_simulated: false
