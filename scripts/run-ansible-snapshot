@@ -675,7 +675,7 @@ atomic_write_json(run_dir / "ansible-run.json", ansible_run)
 PY
 
 set +e
-ansible_args=(-i "$inventory_resolved" --limit "$target")
+  ansible_args=(-i "$inventory_resolved" --limit "$target" --extra-var "git_commit_sha=$git_sha")
 if [[ "$simulate" == "true" ]]; then
   ansible_args+=(--check)
 fi
@@ -685,7 +685,7 @@ primary_exit=$?
 effective_exit=$primary_exit
 
 if [[ "$playbook_name" == "site.yml" && "$validate_after_site" == "true" && "$primary_exit" -eq 0 ]]; then
-  validation_args=(-i "$inventory_resolved" --limit "$target")
+  validation_args=(-i "$inventory_resolved" --limit "$target" --extra-var "git_commit_sha=$git_sha")
   if [[ "$simulate" == "true" ]]; then
     validation_args+=(--check)
   fi

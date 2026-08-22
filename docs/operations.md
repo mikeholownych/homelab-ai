@@ -58,3 +58,12 @@ ansible-playbook playbooks/upgrade.yml --limit ai-p620-01 -e "upgrade_component=
 # Rollback
 ansible-playbook playbooks/upgrade.yml --limit ai-p620-01 -e "upgrade_component=vllm upgrade_mode=rollback"
 ```
+
+### 9. Git SHA in evidence
+Validation and benchmark evidence records the deployed Git SHA. Runs launched through
+`scripts/run-ansible-snapshot` receive `git_commit_sha` automatically from the captured
+repository state. For direct `ansible-playbook` invocations, pass it explicitly so
+evidence stays attributable:
+```bash
+-e "git_commit_sha=$(git rev-parse HEAD)"
+```
