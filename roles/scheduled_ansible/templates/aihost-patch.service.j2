@@ -1,6 +1,7 @@
 [Unit]
 Description=Local AI Host Scheduled Patch Assessment
 After=network.target
+OnFailure=aihost-alert@%n
 
 [Service]
 Type=oneshot

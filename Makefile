@@ -19,7 +19,8 @@ PLAYBOOKS := \
 	playbooks/upgrade.yml \
 	playbooks/validate.yml \
 	playbooks/benchmark.yml \
-	playbooks/facts-export.yml
+	playbooks/facts-export.yml \
+	playbooks/reboot-verify.yml
 
 .PHONY: bootstrap-tools lint syntax test check tuning-smoke idempotency quality
 
@@ -43,8 +44,12 @@ check: bootstrap-tools
 	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check tests/integration/baseline_os.yml
 
 tuning-smoke: bootstrap-tools
-	@echo "Running read-only OS tuning smoke against this machine (installs helpers under /usr/local/libexec, writes evidence under /var/lib/aihost)."
-	ansible-playbook -i tests/fixtures/inventory/healthy.yml tests/integration/os_tuning_smoke.yml
+	@echo "Running read-write OS tuning convergence against this machine (installs helpers under /usr/local/libexec, writes state under /var/lib/aihost)."
+	$(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml tests/integration/os_tuning_smoke.yml
+
+tuning-idempotency: tuning-smoke
+	@echo "Re-running tuning convergence and requiring a byte-stable second pass."
+	scripts/check-tuning-idempotency
 
 idempotency: bootstrap-tools
 	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --mode idempotency --timeout 590

@@ -2,6 +2,7 @@
 Description=Local AI Host Scheduled Reconciliation (run-ansible-snapshot)
 Documentation=file://{{ scheduled_ansible_snapshot_dir }}/docs/operations.md
 After=network.target
+OnFailure=aihost-alert@%n
 
 [Service]
 Type=oneshot

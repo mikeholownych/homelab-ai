@@ -1,0 +1,42 @@
+---
+# Evidence durability: append-only mirror of the evidence tree to off-host
+# storage. Disabled until an operator configures a destination; the mirror is
+# pull-safe (rsync archive, no deletions) so the source of record stays intact.
+- name: Install evidence sync script
+  ansible.builtin.copy:
+    src: sync-evidence.sh
+    dest: "{{ monitoring_evidence_sync_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [monitoring, evidence_sync]
+
+- name: Install evidence sync service unit
+  ansible.builtin.template:
+    src: aihost-evidence-sync.service.j2
+    dest: "{{ monitoring_evidence_sync_service_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload monitoring daemon
+  tags: [monitoring, evidence_sync]
+
+- name: Install evidence sync timer unit
+  ansible.builtin.template:
+    src: aihost-evidence-sync.timer.j2
+    dest: "{{ monitoring_evidence_sync_timer_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload monitoring daemon
+  tags: [monitoring, evidence_sync]
+
+- name: Manage evidence sync timer state
+  ansible.builtin.systemd_service:
+    name: aihost-evidence-sync.timer
+    state: "{{ 'started' if (monitoring_evidence_sync_enabled | bool) else 'stopped' }}"
+    enabled: "{{ monitoring_evidence_sync_enabled | bool }}"
+    daemon_reload: true
+  when:
+    - not ansible_check_mode
+  tags: [monitoring, evidence_sync]

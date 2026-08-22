@@ -67,3 +67,25 @@ evidence stays attributable:
 ```bash
 -e "git_commit_sha=$(git rev-parse HEAD)"
 ```
+
+### 10. Failure Visibility
+Timer failures alert through `aihost-alert@%n`: alerts always append to
+`/var/log/local-ai/alerts/alerts.log`; configure `/etc/local-ai/alert.env`
+(out-of-band, not committed) with `AIHOST_ALERT_COMMAND=/path/to/hook` to
+forward alerts elsewhere. The command receives `<unit> <timestamp>` as argv;
+content is never shell-interpolated.
+
+### 11. Evidence Durability
+Mirror the evidence tree off-host behind `monitoring_evidence_sync_enabled`
+plus an rsync destination; runs daily via `aihost-evidence-sync.timer`. The
+mirror is append-only (`rsync -a`, no `--delete`) so the source of record is
+never trimmed by a sync job.
+
+### 12. Controlled Reboot
+For kernel experiments or post-patch reboots:
+```bash
+scripts/run-ansible-snapshot ... --playbook reboot-verify.yml ...
+```
+The playbook verifies a pinned kernel image exists before rebooting, asserts
+the running kernel after return, confirms GPU enumeration, then imports
+`validate.yml`.

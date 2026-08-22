@@ -31,10 +31,41 @@
         name: validation
       tags: [drift, validation]
 
+    - name: Read validation outcome for drift classification
+      ansible.builtin.set_fact:
+        validation_document: >-
+          {{ lookup('ansible.builtin.file',
+                    '/var/lib/aihost/evidence/validation.json', errors='ignore') | from_json }}
+      tags: [drift]
+
+    - name: Classify coarse drift state from validation outcome
+      ansible.builtin.set_fact:
+        drift_classification: >-
+          {{ 'blocking_drift' if (validation_document.status | default('NOT_TESTED')) == 'BLOCKED'
+          else 'unresolved_drift' if ((validation_document.status | default('NOT_TESTED')) == 'FAIL'
+          or (os_tuning_numa_stability | default('PASS')) == 'FAIL')
+          else 'no_drift' }}
+      tags: [drift]
+
+    - name: Persist machine-readable drift status artifact
+      ansible.builtin.copy:
+        content: "{{ {'schema_version': '1.0.0',
+                       'classification': drift_classification,
+                       'validation_status': validation_document.status | default('NOT_TESTED'),
+                       'active_tuning_profile': os_tuning_config.profile_name | default('unknown'),
+                       'numa_stability': os_tuning_numa_stability | default('unknown'),
+                       'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')} | to_nice_json }}\n"
+        dest: "/var/lib/aihost/evidence/manual/drift-status.json"
+        owner: root
+        group: root
+        mode: "0640"
+      tags: [drift]
+
     - name: Report drift assessment status
       ansible.builtin.debug:
         msg:
           assessment: "Drift assessment complete. Validation result recorded in evidence."
+          classification: "{{ drift_classification }}"
           active_tuning_profile: "{{ os_tuning_config.profile_name | default('unknown') }}"
           tuning_numa_stability: "{{ os_tuning_numa_stability | default('unknown') }}"
       tags: [drift]

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Tuning idempotency gate: converge the read-write tuning path twice on this
+# host and require the second run to report changed=0. Exercises the same
+# enforcement/evidence code paths scheduled reconciliation uses.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+ANSIBLE_CONFIG=ansible.cfg \
+  .venv/bin/ansible-playbook -i tests/fixtures/inventory/healthy.yml \
+  tests/integration/os_tuning_smoke.yml > /tmp/opencode/tuning-idem-1.log 2>&1 || {
+    cat /tmp/opencode/tuning-idem-1.log; exit 1; }
+
+ANSIBLE_CONFIG=ansible.cfg \
+  .venv/bin/ansible-playbook -i tests/fixtures/inventory/healthy.yml \
+  tests/integration/os_tuning_smoke.yml > /tmp/opencode/tuning-idem-2.log 2>&1 || {
+    cat /tmp/opencode/tuning-idem-2.log; exit 1; }
+
+recap="$(grep -E '^localhost' /tmp/opencode/tuning-idem-2.log | tail -1)"
+echo "second-run recap: $recap"
+if grep -E '^localhost' /tmp/opencode/tuning-idem-2.log | tail -1 | grep -qE 'changed=0\b'; then
+  echo "tuning idempotency: PASS (second run changed=0)"
+else
+  echo "tuning idempotency: FAIL (second run reported changes)" >&2
+  exit 1
+fi

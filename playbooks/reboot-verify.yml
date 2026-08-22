@@ -1,0 +1,78 @@
+---
+# Controlled reboot with boot verification. Used by patching, upgrades, and
+# kernel experiments: verifies the target kernel exists BEFORE rebooting,
+# reboots, waits for return, fails closed if the running kernel does not match
+# the declared expectation, then runs independent validation.
+- name: Controlled reboot and post-boot verification
+  hosts: ai_hosts
+  gather_facts: true
+  become: true
+  tags:
+    - reboot
+    - upgrade
+    - validation
+    - operations
+  vars:
+    reboot_verify_expected_kernel: >-
+      {{ reboot_verify_expected_kernel_override
+         | default(tuning_expected_kernel | default(none)) }}
+    tuning_expected_kernel: >-
+      {{ (lookup('ansible.builtin.file',
+         playbook_dir ~ '/../profiles/tuning/'
+         ~ (os_tuning_profile | default('baseline')) ~ '.yml',
+         errors='ignore') | from_yaml).os_tuning.kernel.expected_release | default(none) }}
+
+  tasks:
+    - name: Record kernel expectation before rebooting
+      ansible.builtin.debug:
+        msg: >-
+          Expected kernel after reboot:
+          {{ reboot_verify_expected_kernel | default('any installed supported kernel') }}
+
+    - name: Verify pinned kernel artifact exists before committing to reboot
+      ansible.builtin.stat:
+        path: "/boot/vmlinuz-{{ reboot_verify_expected_kernel }}"
+        follow: false
+      register: reboot_verify_kernel_image
+      when: reboot_verify_expected_kernel is not none
+
+    - name: Fail closed when the pinned kernel is not installed
+      ansible.builtin.fail:
+        msg: >-
+          Refusing to reboot: pinned kernel {{ reboot_verify_expected_kernel }} is not
+          present at /boot. Install it first; the previous kernel remains bootable.
+      when:
+        - reboot_verify_expected_kernel is not none
+        - not (reboot_verify_kernel_image.stat.exists | default(false))
+
+    - name: Reboot and wait for node return
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        max_wait: 1200
+        test_command: systemctl is-active ssh || true
+      when: not ansible_check_mode
+
+    - name: Verify the running kernel matches the declared expectation
+      ansible.builtin.assert:
+        that:
+          - ansible_kernel == reboot_verify_expected_kernel
+        fail_msg: >-
+          Node came back on kernel {{ ansible_kernel }} but {{ reboot_verify_expected_kernel }}
+          was declared. Do not proceed with dependent changes; resolve boot selection manually.
+      when:
+        - reboot_verify_expected_kernel is not none
+        - not ansible_check_mode
+
+    - name: Confirm GPU devices still enumerate after reboot
+      ansible.builtin.command:
+        argv: ["lspci", "-Dnn"]
+      register: reboot_verify_lspci
+      changed_when: false
+      check_mode: false
+      failed_when: >-
+        '8086:e222' not in reboot_verify_lspci.stdout
+        and (hardware_gpu_expected | default(true)) | bool
+      when: not ansible_check_mode
+
+- name: Run independent validation after reboot
+  import_playbook: validate.yml

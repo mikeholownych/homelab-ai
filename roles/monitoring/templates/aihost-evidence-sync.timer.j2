@@ -1,0 +1,10 @@
+[Unit]
+Description=aihost evidence durability schedule
+
+[Timer]
+OnCalendar={{ monitoring_evidence_sync_interval }}
+RandomizedDelaySec=300s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -391,7 +391,7 @@ done
 
 cd -- "$repo_root"
 
-readonly ALLOWLISTED_PLAYBOOKS=("site.yml" "drift-check.yml" "patch.yml" "validate.yml" "benchmark.yml" "facts-export.yml")
+readonly ALLOWLISTED_PLAYBOOKS=("site.yml" "drift-check.yml" "patch.yml" "validate.yml" "benchmark.yml" "facts-export.yml" "reboot-verify.yml")
 playbook_name="$(basename "$playbook_arg")"
 if [[ "$playbook_arg" != "$playbook_name" ]]; then
   echo "playbook must be provided as an allowlisted file name" >&2

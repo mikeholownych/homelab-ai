@@ -4,20 +4,56 @@
     that:
       - monitoring_enabled is boolean
       - monitoring_log_dir is string
+      - not (monitoring_evidence_sync_enabled | bool) or (monitoring_evidence_sync_destination is string)
     fail_msg: >-
-      monitoring role requires valid configuration flags.
+      monitoring role requires valid configuration flags; evidence sync needs a
+      destination before it can be enabled.
   tags: [monitoring, telemetry]
 
 - name: Create monitoring log directory
   ansible.builtin.file:
-    path: "{{ monitoring_log_dir }}"
+    path: "{{ item }}"
     state: directory
     owner: root
     group: root
     mode: "0750"
+  loop:
+    - "{{ monitoring_log_dir }}"
+    - "{{ monitoring_alert_log_dir }}"
   when:
     - monitoring_enabled | bool
   tags: [monitoring, telemetry]
+
+- name: Install failure alert hook script
+  ansible.builtin.copy:
+    src: alert.sh
+    dest: "{{ monitoring_alert_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - monitoring_enabled | bool
+    - monitoring_alert_enabled | bool
+  tags: [monitoring, alerts]
+
+- name: Install failure alert template unit
+  ansible.builtin.template:
+    src: aihost-alert@.service.j2
+    dest: "{{ monitoring_alert_service_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - monitoring_enabled | bool
+    - monitoring_alert_enabled | bool
+  notify: Reload monitoring daemon
+  tags: [monitoring, alerts]
+
+- name: Install evidence durability sync script and units
+  ansible.builtin.include_tasks: evidence_sync.yml
+  when:
+    - monitoring_enabled | bool
+  tags: [monitoring, evidence_sync]
 
 - name: Record monitoring check mode status
   ansible.builtin.debug:

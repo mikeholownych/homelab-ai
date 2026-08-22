@@ -1,0 +1,13 @@
+[Unit]
+Description=aihost evidence durability sync
+After=network-online.target
+Wants=network-online.target
+OnFailure=aihost-alert@%n
+
+[Service]
+Type=oneshot
+ExecStart={{ monitoring_evidence_sync_script_path }}
+Nice=10
+IOSchedulingClass=idle
+StandardOutput=journal
+StandardError=journal

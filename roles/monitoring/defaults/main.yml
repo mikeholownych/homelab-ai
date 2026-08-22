@@ -3,3 +3,21 @@ monitoring_enabled: true
 monitoring_log_dir: "/var/log/local-ai/monitoring"
 monitoring_collector_enabled: true
 monitoring_collection_interval_sec: 60
+
+# Failure visibility: every aihost timer unit carries OnFailure=aihost-alert@%n.
+# The alert script always logs locally; an optional operator-provided command
+# (configured out-of-band in /etc/local-ai/alert.env) can forward alerts.
+monitoring_alert_enabled: true
+monitoring_alert_log_dir: "/var/log/local-ai/alerts"
+monitoring_alert_script_path: /usr/local/libexec/local-ai-alert
+monitoring_alert_service_path: /etc/systemd/system/aihost-alert@.service
+
+# Off-host evidence durability: mirror the evidence tree to a destination
+# (rsync URL) on a schedule. Disabled until an operator provides storage.
+monitoring_evidence_sync_enabled: false
+monitoring_evidence_source_dir: /var/lib/local-ai/evidence
+monitoring_evidence_sync_destination: null
+monitoring_evidence_sync_interval: "daily"
+monitoring_evidence_sync_service_path: /etc/systemd/system/aihost-evidence-sync.service
+monitoring_evidence_sync_timer_path: /etc/systemd/system/aihost-evidence-sync.timer
+monitoring_evidence_sync_script_path: /usr/local/libexec/local-ai-sync-evidence

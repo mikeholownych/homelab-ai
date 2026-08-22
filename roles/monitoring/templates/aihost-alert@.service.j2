@@ -1,0 +1,13 @@
+[Unit]
+Description=aihost failure alert for %i
+DefaultDependencies=no
+After=systemd-journald.socket
+
+[Service]
+Type=oneshot
+ExecStart={{ monitoring_alert_script_path }} %i
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

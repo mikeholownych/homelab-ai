@@ -13,6 +13,9 @@
     owner: root
     group: root
     mode: "0640"
+    # Manual-fallback captures are first-run-wins so repeated convergences stay
+    # byte-idempotent; real runs write unique LOCAL_AI_EVIDENCE_RUN_DIR trees.
+    force: "{{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR') | length > 0 }}"
   loop:
     - section_key: numa
       evidence_file: numa.json
@@ -50,7 +53,6 @@
                    'state': os_tuning_config.state,
                    'revision': os_tuning_config.revision,
                    'authoritative': os_tuning_authoritative | bool,
-                   'converged_at': os_tuning_generated_at,
                    'git_sha': git_commit_sha | default('none')} | to_nice_json }}\n"
     dest: "{{ os_tuning_work_dir }}/profile-active.json"
     owner: root

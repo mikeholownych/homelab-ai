@@ -605,7 +605,7 @@ class RunWrapperTests(unittest.TestCase):
             self.assertNotIn("ansible-playbook", tool_log.read_text(encoding="utf-8"))
 
     def test_wrapper_accepts_exact_playbook_allowlist_and_rejects_others(self) -> None:
-        allowed = ["site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml"]
+        allowed = ["site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "reboot-verify.yml"]
         for playbook in allowed:
             with self.subTest(playbook=playbook):
                 with tempfile.TemporaryDirectory() as tmpdir:
