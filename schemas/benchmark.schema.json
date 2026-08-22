@@ -17,7 +17,8 @@
     "telemetry",
     "correctness",
     "failure_criteria",
-    "os_tuning"
+    "os_tuning",
+    "safety"
   ],
   "properties": {
     "schema_version": {
@@ -443,6 +444,115 @@
         "kernel_cmdline": {
           "type": [
             "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "safety": {
+      "description": "Guardrail configuration and enforcement state for this benchmark run.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "runtime",
+        "guardrails",
+        "power_budget",
+        "thermal_abort_triggered",
+        "telemetry_source",
+        "peak_gpu_temperature_c"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "simulated",
+            "real"
+          ]
+        },
+        "runtime": {
+          "enum": [
+            "simulated",
+            "vllm",
+            "llama"
+          ]
+        },
+        "guardrails": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "psu_capacity_watts",
+            "gpu_tdp_watts_per_gpu",
+            "system_base_power_watts",
+            "power_headroom_pct",
+            "abort_temperature_c"
+          ],
+          "properties": {
+            "psu_capacity_watts": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "gpu_tdp_watts_per_gpu": {
+              "type": "number",
+              "minimum": 0
+            },
+            "system_base_power_watts": {
+              "type": "number",
+              "minimum": 0
+            },
+            "power_headroom_pct": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "abort_temperature_c": {
+              "type": "number",
+              "minimum": 50,
+              "maximum": 120
+            }
+          }
+        },
+        "power_budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "estimated_watts",
+            "limit_watts"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "not_evaluated",
+                "ok",
+                "refused"
+              ]
+            },
+            "estimated_watts": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "limit_watts": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "thermal_abort_triggered": {
+          "type": "boolean"
+        },
+        "telemetry_source": {
+          "enum": [
+            "hwmon",
+            "unavailable"
+          ]
+        },
+        "peak_gpu_temperature_c": {
+          "type": [
+            "number",
             "null"
           ]
         }

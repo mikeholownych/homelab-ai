@@ -129,5 +129,24 @@
     "io_scheduler": "none",
     "irq_policy": "irqbalance:active",
     "kernel_cmdline": "BOOT_IMAGE=/vmlinuz root=/dev/nvme0n1p2"
+  },
+  "safety": {
+    "mode": "simulated",
+    "runtime": "simulated",
+    "guardrails": {
+      "psu_capacity_watts": 1000,
+      "gpu_tdp_watts_per_gpu": 225,
+      "system_base_power_watts": 250,
+      "power_headroom_pct": 20.0,
+      "abort_temperature_c": 90
+    },
+    "power_budget": {
+      "status": "not_evaluated",
+      "estimated_watts": null,
+      "limit_watts": null
+    },
+    "thermal_abort_triggered": false,
+    "telemetry_source": "unavailable",
+    "peak_gpu_temperature_c": null
   }
 }

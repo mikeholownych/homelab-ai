@@ -4,6 +4,28 @@ benchmarking_active_profile: "small"
 benchmarking_evidence_dir: "/var/lib/aihost/evidence"
 benchmarking_output_path: "{{ benchmarking_evidence_dir }}/benchmark.json"
 
+# Execution mode: simulated until physical acceptance; real drives a live
+# endpoint and never fabricates results.
+benchmarking_mode: simulated
+benchmarking_runtime: vllm
+benchmarking_base_url: "http://127.0.0.1:8000"
+benchmarking_auth_env_file: >-
+  {{ ('/etc/local-ai/vllm/vllm.env' if benchmarking_runtime == 'vllm'
+      else '/etc/local-ai/llama.cpp/llama.env') }}
+benchmarking_api_key_env: "{{ 'VLLM_API_KEY' if benchmarking_runtime == 'vllm' else 'LLAMA_API_KEY' }}"
+benchmarking_prompt: "Write a short sentence about efficient inference."
+benchmarking_max_new_tokens: 128
+benchmarking_iterations: 5
+benchmarking_request_timeout_sec: 120
+benchmarking_min_generation_tokens_per_sec: 30
+
+# Thermal and power guardrails; the harness refuses to run outside these.
+benchmarking_psu_capacity_watts: 1000
+benchmarking_gpu_tdp_watts: 225
+benchmarking_system_base_power_watts: 250
+benchmarking_power_headroom_pct: 20.0
+benchmarking_abort_temperature_c: 90
+
 benchmarking_profiles:
   small:
     description: "Small single-GPU model inference benchmark"

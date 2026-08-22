@@ -37,6 +37,30 @@
       - "{{ inventory_hostname }}"
       - --git-sha
       - "{{ git_commit_sha | default('0000000000000000000000000000000000000000') }}"
+      - --mode
+      - "{{ benchmarking_mode }}"
+      - --runtime
+      - "{{ benchmarking_runtime }}"
+      - --base-url
+      - "{{ benchmarking_base_url }}"
+      - --auth-env-file
+      - "{{ benchmarking_auth_env_file }}"
+      - --api-key-env
+      - "{{ benchmarking_api_key_env }}"
+      - --iterations
+      - "{{ benchmarking_iterations | string }}"
+      - --duration
+      - "{{ benchmarking_profiles[benchmarking_active_profile].duration_seconds | default(30) | string }}"
+      - --tensor-parallelism
+      - "{{ benchmarking_profiles[benchmarking_active_profile].tensor_parallelism | string }}"
+      - --gpu-count
+      - "{{ benchmarking_profiles[benchmarking_active_profile].gpu_count | string }}"
+      - --psu-capacity-watts
+      - "{{ benchmarking_psu_capacity_watts | string }}"
+      - --gpu-tdp-watts
+      - "{{ benchmarking_gpu_tdp_watts | string }}"
+      - --abort-temperature-c
+      - "{{ benchmarking_abort_temperature_c | string }}"
       - --output
       - "{{ benchmarking_output_path }}"
   register: benchmarking_run

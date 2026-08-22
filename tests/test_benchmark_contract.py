@@ -69,3 +69,79 @@ def test_playbook_benchmark_structure():
     content = (REPO_ROOT / "playbooks/benchmark.yml").read_text()
     assert "benchmark" in content
     assert "benchmarking" in content
+
+
+def test_power_budget_refusal_math():
+    mod = load_harness()
+    ok = mod.evaluate_power_budget(2, 225, 1000, 250, 20.0)
+    assert ok["status"] == "ok" and ok["limit_watts"] == 800.0
+    refused = mod.evaluate_power_budget(2, 300, 750, 200, 10.0)
+    assert refused["status"] == "refused"
+    assert refused["estimated_watts"] > refused["limit_watts"]
+
+
+def test_real_mode_fails_honestly_without_server(tmp_path):
+    import subprocess
+    import sys as _sys
+
+    out = tmp_path / "bench.json"
+    result = subprocess.run(
+        [
+            _sys.executable, str(HARNESS_PATH),
+            "--mode", "real", "--runtime", "vllm", "--model", "test/model",
+            "--base-url", "http://127.0.0.1:1",
+            "--iterations", "1", "--duration", "2",
+            "--output", str(out),
+        ],
+        capture_output=True, text=True, timeout=60,
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    assert result.returncode != 0
+    doc = json.loads(out.read_text())
+    jsonschema.validate(instance=doc, schema=load_schema())
+    assert doc["simulated"] is False
+    # Nothing was measured, so the honest state is NOT_RUN with unavailable
+    # telemetry - never a fabricated FAIL or PASS.
+    assert doc["status"] == "NOT_RUN"
+    assert doc["failure_criteria"] == []
+    for metric in doc["telemetry"].values():
+        assert metric["observed"]["status"] == "unavailable"
+
+
+def test_thermal_abort_marks_failure_criterion():
+    mod = load_harness()
+    safety = {
+        "mode": "real", "runtime": "vllm",
+        "guardrails": {
+            "psu_capacity_watts": 1000, "gpu_tdp_watts_per_gpu": 225,
+            "system_base_power_watts": 250, "power_headroom_pct": 20.0,
+            "abort_temperature_c": 90,
+        },
+        "power_budget": {"status": "ok", "estimated_watts": 700.0, "limit_watts": 800.0},
+        "thermal_abort_triggered": True,
+        "telemetry_source": "hwmon", "peak_gpu_temperature_c": 91.2,
+    }
+    doc = mod.build_benchmark_document(status="FAIL", mode="real", runtime="vllm", safety=safety)
+    criteria = [c["criterion"] for c in doc["failure_criteria"]]
+    assert "thermal_abort" in criteria
+    assert doc["safety"]["thermal_abort_triggered"] is True
+
+
+def test_sampler_records_unavailable_without_hwmon():
+    mod = load_harness()
+    sampler = mod.TelemetrySampler(interval_sec=0.01)
+    sampler.sample_once()
+    # On CI hosts without GPU hwmon the source is honestly unavailable.
+    if not mod.discover_gpu_hwmons():
+        assert sampler.telemetry_source == "unavailable"
+        assert sampler.max_temperature() is None
+
+
+def test_stream_parser_reports_connection_failure_not_pass():
+    mod = load_harness()
+    result = mod.stream_vllm_completion(
+        base_url="http://127.0.0.1:1", api_key=None, model="m",
+        prompt="p", max_new_tokens=8, timeout_sec=5,
+    )
+    assert result["status"] == "error"
+    assert "tokens_per_second" not in result
