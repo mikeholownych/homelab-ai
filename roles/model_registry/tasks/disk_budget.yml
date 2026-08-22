@@ -1,0 +1,34 @@
+---
+- name: Resolve cache filesystem free space
+  ansible.builtin.set_fact:
+    model_registry_cache_free_gib: >-
+      {{ (matching_mounts | map(attribute='size_available') | first | default(0)) / 1024 / 1024 / 1024 | round(2) }}
+  vars:
+    matching_mounts: >-
+      {{ ansible_mounts | default([])
+         | selectattr('mount', 'defined')
+         | selectattr('size_available', 'defined')
+         | rejectattr('mount', 'equalto', '/proc')
+         | list }}
+  tags: [models]
+
+- name: Sum declared model demand conservatively
+  ansible.builtin.set_fact:
+    model_registry_declared_demand_gib: >-
+      {{ model_registry_models | dict2items
+         | map(attribute='value.size_gib') | map('float') | sum | round(2) }}
+  tags: [models]
+
+- name: Refuse to materialize models without adequate disk headroom
+  ansible.builtin.assert:
+    that:
+      - >-
+        (model_registry_declared_demand_gib | float) + (model_registry_min_free_disk_gib | int)
+        <= (model_registry_cache_free_gib | float)
+    fail_msg: >-
+      Cache filesystem has {{ model_registry_cache_free_gib }} GiB free but declared models
+      need {{ model_registry_declared_demand_gib }} GiB plus the
+      {{ model_registry_min_free_disk_gib }} GiB safety floor. Free space or trim the
+      declaration before converging. Present models are re-counted deliberately so the
+      budget always covers a full re-materialization after loss.
+  tags: [models]

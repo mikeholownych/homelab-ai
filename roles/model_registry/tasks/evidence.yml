@@ -1,0 +1,45 @@
+---
+# Machine-readable registry state: what is declared, what is materialized, and
+# where each revision lives. Written to the work dir and the evidence directory.
+- name: Build model registry manifest
+  ansible.builtin.set_fact:
+    model_registry_manifest: >-
+      {{ {'schema_version': '1.0.0',
+          'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ'),
+          'enabled': model_registry_enabled | bool,
+          'declared_models': model_registry_models.keys() | list,
+          'models': registry_entries} }}
+  vars:
+    registry_entries: >-
+      {% set entries = {} %}
+      {% for entry in model_registry_models | dict2items %}
+        {% set stamp_path = model_registry_work_dir ~ '/' ~ entry.key ~ '.stamp' %}
+        {% set existing = lookup('ansible.builtin.file', stamp_path, errors='ignore') %}
+        {% set _ = entries.update({entry.key: {
+            'repo_id': entry.value.repo_id,
+            'revision': entry.value.revision,
+            'materialized': existing == (entry.value | aihost_model_stamp),
+            'cache_path': model_registry_cache_root ~ '/' ~ entry.key ~ '/' ~ entry.value.revision,
+            'artifact_count': entry.value.artifacts | length}}) %}
+      {% endfor %}
+      {{ entries }}
+  tags: [models]
+
+- name: Persist model registry manifest to work directory
+  ansible.builtin.copy:
+    content: "{{ model_registry_manifest | to_nice_json }}\n"
+    dest: "{{ model_registry_work_dir }}/models.json"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [models]
+
+- name: Persist model registry manifest to evidence
+  ansible.builtin.copy:
+    content: "{{ model_registry_manifest | to_nice_json }}\n"
+    dest: "{{ model_registry_evidence_dir }}/models.json"
+    owner: root
+    group: root
+    mode: "0640"
+  check_mode: false
+  tags: [models]

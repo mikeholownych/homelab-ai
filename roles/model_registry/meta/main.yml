@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: aihost-foundation
+  description: Pinned, hash-verified model artifact supply chain for the local AI host
+  license: MIT
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

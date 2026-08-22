@@ -1,0 +1,32 @@
+---
+# Retention: keep only the newest N revision directories per declared model.
+# Undeclared top-level entries are never touched unless pruning is explicit.
+- name: List cached model directories
+  ansible.builtin.find:
+    paths: "{{ model_registry_cache_root }}"
+    file_type: directory
+    recurse: false
+  register: model_registry_cached_models
+  tags: [models]
+
+- name: Apply retention policy to each declared model's revisions
+  ansible.builtin.include_tasks: prune_model_revisions.yml
+  loop: "{{ model_registry_models | dict2items }}"
+  loop_control:
+    loop_var: model_entry
+    label: "{{ model_entry.key }}"
+  tags: [models]
+
+- name: Remove undeclared top-level entries when explicit cleanup is enabled
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: >-
+    {{ model_registry_cached_models.files
+       | selectattr('basename', 'defined')
+       | rejectattr('basename', 'in', model_registry_models.keys() | list)
+       | list }}
+  when:
+    - model_registry_prune_undeclared | bool
+    - model_registry_cached_models.files | length > 0
+  tags: [models]

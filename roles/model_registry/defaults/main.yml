@@ -1,0 +1,29 @@
+---
+# Model declarations are desired state: every entry pins repo, revision, and
+# per-artifact SHA256 so a model is as reproducible as any package. Empty by
+# default; models are added by Git commit only.
+model_registry_enabled: false
+model_registry_models: {}
+
+model_registry_cache_root: /var/lib/local-ai/models
+model_registry_staging_dir: /var/lib/local-ai/model-staging
+model_registry_work_dir: /var/lib/aihost/model-registry
+model_registry_evidence_dir: >-
+  {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR') |
+     default('/var/lib/aihost/evidence/manual', true) }}
+
+# Downloads use the pinned resolve URLs directly with sha256 enforcement.
+model_registry_http_timeout_sec: 600
+
+# Safety: refuse to fill the cache filesystem beyond this free-space floor.
+model_registry_min_free_disk_gib: 50
+# GC policy: keep at most N revisions per declared model; never touch undeclared
+# repos unless explicit cleanup is enabled.
+model_registry_keep_revisions_per_model: 2
+model_registry_prune_undeclared: false
+
+# Optional token for gated repositories; retrieved from Vault only when set.
+model_registry_hf_token_secret_path: null
+model_registry_hf_token_secret_file_key: "token"
+
+model_registry_hf_endpoint: "https://huggingface.co"

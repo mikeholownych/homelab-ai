@@ -67,6 +67,7 @@ class FilterModule:
             "aihost_invalid_ports": invalid_ports,
             "aihost_invalid_logrotate_paths": invalid_logrotate_paths,
             "aihost_boot_param_allowed": self.boot_param_allowed,
+            "aihost_model_stamp": model_stamp,
         }
 
     @staticmethod
@@ -75,3 +76,9 @@ class FilterModule:
 
         string_value = str(value)
         return any(re.match(str(pattern), string_value) for pattern in patterns)
+
+
+def model_stamp(model: dict) -> str:
+    """Stable stamp identifying a pinned model revision and its artifact hashes."""
+    hashes = ",".join(sorted(str(artifact["sha256"]) for artifact in model.get("artifacts", [])))
+    return f"{model.get('repo_id', '')}|{model.get('revision', '')}|{hashes}"

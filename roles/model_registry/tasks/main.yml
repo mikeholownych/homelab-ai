@@ -1,0 +1,68 @@
+---
+# Model supply chain: pinned repos/revisions/artifact hashes are desired state.
+- name: Validate model_registry inputs
+  ansible.builtin.assert:
+    that:
+      - model_registry_models is mapping
+      - model_registry_min_free_disk_gib | int > 0
+      - model_registry_keep_revisions_per_model | int >= 1
+    fail_msg: model_registry requires a mapping of declared models and sane safety values.
+  tags: [models]
+
+- name: Validate every declared model pin
+  ansible.builtin.assert:
+    that:
+      - item.value.repo_id is match('^[A-Za-z0-9][A-Za-z0-9._/-]*$')
+      - item.value.repo_id is not match('(^|/)\\.\\.')
+      - item.value.revision is string
+      - item.value.revision | length > 0
+      - item.value.revision not in ['main', 'master', 'HEAD']
+      - item.value.artifacts is iterable
+      - item.value.artifacts | length > 0
+      - >-
+        item.value.artifacts | selectattr('path', 'defined') | selectattr('sha256', 'defined')
+        | selectattr('sha256', 'match', '^[a-f0-9]{64}$') | list | length == (item.value.artifacts | length)
+      - item.value.size_gib is defined
+      - item.value.size_gib | float > 0
+    fail_msg: >-
+      Model '{{ item.key }}' must pin an exact revision (tags/commits only, never main),
+      declare every artifact with a 64-hex sha256, and estimate its size for disk budgeting.
+  loop: "{{ model_registry_models | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  tags: [models]
+
+- name: Create model registry directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ model_registry_cache_root }}"
+    - "{{ model_registry_staging_dir }}"
+    - "{{ model_registry_work_dir }}"
+  tags: [models]
+
+- name: Check cache filesystem capacity against declared demand
+  ansible.builtin.include_tasks: disk_budget.yml
+  tags: [models]
+
+- name: Materialize declared models
+  ansible.builtin.include_tasks: materialize.yml
+  when:
+    - model_registry_enabled | bool
+    - not ansible_check_mode
+  tags: [models]
+
+- name: Apply retention policy to cached revisions
+  ansible.builtin.include_tasks: gc.yml
+  when:
+    - model_registry_enabled | bool
+    - not ansible_check_mode
+  tags: [models]
+
+- name: Record model registry evidence
+  ansible.builtin.include_tasks: evidence.yml
+  tags: [models]

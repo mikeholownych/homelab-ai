@@ -21,6 +21,7 @@ features:
   monitoring: true
   scheduled_reconciliation: true
   os_tuning: true
+  model_registry: false
   clustering: false
   cmdb_export: false
   itsm_integration: false

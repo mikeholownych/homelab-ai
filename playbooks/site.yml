@@ -34,6 +34,12 @@
         - container_runtime_enabled | default(false) | bool
       tags: [site, gpu, runtime]
 
+    - name: Include model registry role when models are managed
+      ansible.builtin.include_role:
+        name: model_registry
+      when: features.model_registry | default(false) | bool
+      tags: [site, models]
+
     - name: Include OS tuning role for tuning-managed nodes
       ansible.builtin.include_role:
         name: os_tuning

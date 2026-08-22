@@ -1,0 +1,27 @@
+---
+# Materialization is stamp-gated: a revision is downloaded only when its stamp
+# (repo|revision|sorted artifact hashes) differs from the recorded one.
+- name: Determine which declared models need materialization
+  ansible.builtin.set_fact:
+    model_registry_pending: >-
+      {{ model_registry_models | dict2items
+         | rejectattr('key', 'in', satisfied_models) | map(attribute='key') | list }}
+  vars:
+    satisfied_models: >-
+      {% set done = [] %}
+      {% for entry in model_registry_models | dict2items %}
+        {% set expected = entry.value | aihost_model_stamp %}
+        {% set existing = lookup('ansible.builtin.file',
+                                 model_registry_work_dir ~ '/' ~ entry.key ~ '.stamp', errors='ignore') %}
+        {% if existing == expected %}{% set _ = done.append(entry.key) %}{% endif %}
+      {% endfor %}
+      {{ done }}
+  tags: [models]
+
+- name: Download and verify pending models
+  ansible.builtin.include_tasks: download_model.yml
+  loop: "{{ model_registry_models | dict2items | selectattr('key', 'in', model_registry_pending) | list }}"
+  loop_control:
+    loop_var: model_entry
+    label: "{{ model_entry.key }}"
+  tags: [models]

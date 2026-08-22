@@ -1,0 +1,35 @@
+---
+# Retention inside one declared model: cache_root/<model>/<revision>/ directories,
+# newest by mtime wins; everything older than keep_revisions_per_model is removed.
+- name: Inspect revision directories for {{ model_entry.key }}
+  ansible.builtin.stat:
+    path: "{{ model_registry_cache_root }}/{{ model_entry.key }}"
+    get_checksum: false
+  register: model_registry_model_root
+  tags: [models]
+
+- name: List cached revisions for {{ model_entry.key }}
+  ansible.builtin.find:
+    paths: "{{ model_registry_cache_root }}/{{ model_entry.key }}"
+    file_type: directory
+    recurse: false
+  register: model_registry_revisions
+  when: model_registry_model_root.stat.exists | bool
+  tags: [models]
+
+- name: Remove superseded revisions for {{ model_entry.key }}
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ sorted_revision_paths }}"
+  loop_control:
+    index_var: revision_index
+  when:
+    - model_registry_model_root.stat.exists | bool
+    - revision_index >= (model_registry_keep_revisions_per_model | int)
+  vars:
+    sorted_revision_paths: >-
+      {{ (model_registry_revisions.files | default([])
+          | sort(attribute='mtime', reverse=True)
+          | map(attribute='path') | list) }}
+  tags: [models]

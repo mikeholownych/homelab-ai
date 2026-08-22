@@ -1,0 +1,66 @@
+---
+# Single-model materialization: per-artifact downloads with native checksum
+# enforcement, atomic promotion into the cache, then a stamp recording exactly
+# what landed. get_url is idempotent; the stamp gates whole-revision rework.
+- name: Prepare staging area for {{ model_entry.key }}
+  ansible.builtin.file:
+    path: "{{ model_registry_staging_dir }}/{{ model_entry.key }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [models]
+
+- name: Read optional HuggingFace token from Vault for gated repositories
+  ansible.builtin.include_role:
+    name: vault_integration
+    tasks_from: main.yml
+  vars:
+    vault_integration_operation: read
+    vault_integration_secret_ref: "{{ model_registry_hf_token_secret_path }}"
+    vault_integration_required_secret_keys:
+      - "{{ model_registry_hf_token_secret_file_key }}"
+  when: model_registry_hf_token_secret_path is not none
+  no_log: true
+  tags: [models, vault]
+
+- name: Download pinned artifacts with checksum enforcement
+  ansible.builtin.get_url:
+    url: >-
+      {{ model_registry_hf_endpoint }}/{{ model_entry.value.repo_id }}
+      /resolve/{{ model_entry.value.revision }}/{{ artifact.path }}
+    dest: "{{ model_registry_staging_dir }}/{{ model_entry.key }}/{{ artifact.path | basename }}"
+    checksum: "sha256:{{ artifact.sha256 }}"
+    mode: "0640"
+    owner: root
+    group: root
+    timeout: "{{ model_registry_http_timeout_sec }}"
+    headers: >-
+      {{ {'Authorization': 'Bearer ' ~ vault_integration_secret[model_registry_hf_token_secret_file_key]}
+         if model_registry_hf_token_secret_path is not none else omit }}
+  loop: "{{ model_entry.value.artifacts }}"
+  loop_control:
+    label: "{{ artifact.path }}"
+  when: not ansible_check_mode
+  no_log: "{{ model_registry_hf_token_secret_path is not none }}"
+  tags: [models]
+
+- name: Promote verified revision into the cache atomically
+  ansible.builtin.copy:
+    src: "{{ model_registry_staging_dir }}/{{ model_entry.key }}/"
+    dest: "{{ model_registry_cache_root }}/{{ model_entry.key }}/{{ model_entry.value.revision }}/"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+    directory_mode: "0750"
+  tags: [models]
+
+- name: Record materialization stamp
+  ansible.builtin.copy:
+    content: "{{ model_entry.value | aihost_model_stamp }}\n"
+    dest: "{{ model_registry_work_dir }}/{{ model_entry.key }}.stamp"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [models]
