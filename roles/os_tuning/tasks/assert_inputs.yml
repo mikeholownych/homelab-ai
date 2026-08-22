@@ -1,0 +1,49 @@
+---
+- name: Validate os_tuning inputs
+  ansible.builtin.assert:
+    that:
+      - os_tuning_enabled | bool
+      - os_tuning_profile is string
+      - os_tuning_profile | regex_search('^[a-z0-9][a-z0-9_]*$') is not none
+      - os_tuning_state in ['baseline', 'candidate', 'accepted', 'rejected']
+    fail_msg: os_tuning requires an enabled flag, a safe profile name, and a valid lifecycle state.
+  tags: [tuning]
+
+- name: Load version-controlled OS tuning profile
+  ansible.builtin.include_vars:
+    file: "{{ os_tuning_profiles_dir }}/{{ os_tuning_profile }}.yml"
+    name: os_tuning_config
+  tags: [tuning]
+
+- name: Validate loaded OS tuning profile structure
+  ansible.builtin.assert:
+    that:
+      - os_tuning_config.schema_version == '1.0.0'
+      - os_tuning_config.profile_name == os_tuning_profile
+      - os_tuning_config.os_tuning is mapping
+      - os_tuning_config.state in ['baseline', 'candidate', 'accepted', 'rejected']
+      - >-
+        os_tuning_config.state in ['baseline', 'accepted']
+        or not (os_tuning_authoritative | default(false) | bool)
+    fail_msg: >-
+      Profile must declare schema_version 1.0.0, match the selected name, and only
+      baseline/accepted profiles may be authoritative for scheduled reconciliation.
+  tags: [tuning]
+
+- name: Validate tuning values against host allowlists
+  ansible.builtin.assert:
+    that:
+      - >-
+        tuning.config.os_tuning.cpu.governor is none
+        or tuning.config.os_tuning.cpu.governor in os_tuning_allowed_governors
+      - >-
+        tuning.config.os_tuning.cpu.energy_performance_preference is none
+        or tuning.config.os_tuning.cpu.energy_performance_preference in os_tuning_allowed_epp_values
+      - >-
+        tuning.config.os_tuning.kernel.sysctl | dict2items | map(attribute='key')
+        | difference(os_tuning_allowed_sysctl_keys) | length == 0
+    fail_msg: Tuning profile requests values outside the host allowlist.
+  vars:
+    tuning:
+      config: "{{ os_tuning_config }}"
+  tags: [tuning]

@@ -1,0 +1,8 @@
+# Managed by Ansible (os_tuning role). NVMe I/O policy from the active tuning
+# profile. Applies at device add time; scheduled reconciliation corrects drift.
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*"{% if os_tuning_config.os_tuning.io.scheduler is not none %}, \
+  ATTR{queue/scheduler}="{{ os_tuning_config.os_tuning.io.scheduler }}"{% endif %}
+{% if os_tuning_config.os_tuning.io.read_ahead_kb is not none %}
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", \
+  ATTR{queue/read_ahead_kb}="{{ os_tuning_config.os_tuning.io.read_ahead_kb }}"
+{% endif %}

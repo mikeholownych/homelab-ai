@@ -1,0 +1,67 @@
+---
+os_tuning_enabled: true
+os_tuning_profile: baseline
+os_tuning_profiles_dir: "{{ role_path }}/../../profiles/tuning"
+os_tuning_state: candidate
+os_tuning_apply_mutations: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+
+# Discovery-only packages required for topology evidence; installed idempotently.
+os_tuning_install_discovery_packages: true
+os_tuning_discovery_packages:
+  - numactl
+
+# Install locations for role helpers.
+os_tuning_install_dir: /usr/local/libexec
+os_tuning_collector_path: /usr/local/libexec/local-ai-collect-tuning
+os_tuning_cpu_power_helper_path: /usr/local/libexec/local-ai-set-cpu-power
+
+# Evidence and state output locations.
+os_tuning_evidence_dir: >-
+  {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR') |
+     default('/var/lib/aihost/evidence/manual', true) }}
+os_tuning_work_dir: /var/lib/aihost/tuning
+
+# Subsystem file ownership (distinct from base_os drop-ins on purpose).
+os_tuning_grub_dropin_path: /etc/default/grub.d/95-aihost-tuning.cfg
+os_tuning_udev_rules_path: /etc/udev/rules.d/61-aihost-io.rules
+os_tuning_cpu_power_service_path: /etc/systemd/system/aihost-cpu-power.service
+os_tuning_update_grub_command: /usr/sbin/update-grub
+os_tuning_cpu_power_service_name: aihost-cpu-power
+
+# Allowlists constraining what any tuning profile may manage on this host.
+os_tuning_allowed_sysctl_keys:
+  - vm.swappiness
+  - vm.dirty_ratio
+  - vm.dirty_background_ratio
+  - vm.zone_reclaim_mode
+os_tuning_allowed_boot_parameter_patterns:
+  - '^transparent_hugepage=(always|madvise|never)$'
+  - '^transparent_hugepage_defrag=(always|defer|defer\+madvise|madvise|never)$'
+  - '^default_hugepagesz=([1G]B|[2M]B)$'
+  - '^hugepagesz=([1G]B|[2M]B)$'
+  - '^hugepages=[0-9]+$'
+os_tuning_allowed_governors:
+  - performance
+  - powersave
+  - schedutil
+  - ondemand
+  - conservative
+os_tuning_allowed_epp_values:
+  - performance
+  - balance_performance
+  - normal
+  - balance_power
+  - power
+
+# Safety limits for explicit HugeTLB reservations.
+os_tuning_hugepages_max_host_memory_pct: 25
+
+# Fail-closed certification gates for high-risk candidates. These stay false
+# until measured evidence justifies enabling the corresponding class.
+os_tuning_irq_affinity_certified: false
+os_tuning_numa_binding_certified: false
+os_tuning_custom_kernel_certified: false
+
+# Kernel-drift policy: unexpected running kernels are always reported; automatic
+# rollback of a running kernel is never attempted without this explicit flag.
+os_tuning_kernel_drift_autoremediate: false

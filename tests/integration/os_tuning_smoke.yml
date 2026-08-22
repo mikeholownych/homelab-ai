@@ -1,0 +1,14 @@
+---
+# Read-only OS tuning smoke test: discovery, evidence slicing, safety gates,
+# and validation-check emission without any mutation. Safe against localhost.
+- name: Verify os_tuning discovery path end to end
+  hosts: localhost
+  gather_facts: true
+  become: true
+  vars:
+    os_tuning_apply_mutations: false
+    os_tuning_install_discovery_packages: false
+    os_tuning_profile: baseline
+  roles:
+    - role: os_tuning
+      tags: [tuning]

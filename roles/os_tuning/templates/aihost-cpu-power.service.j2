@@ -1,0 +1,13 @@
+[Unit]
+Description=aihost CPU power policy (tuning profile: {{ os_tuning_config.profile_name }})
+Documentation=file:///usr/share/doc/aihost/os-tuning
+After=multi-user.target
+
+[Service]
+Type=oneshot
+{% set tuning_cpu = os_tuning_config.os_tuning.cpu %}
+ExecStart={{ os_tuning_cpu_power_helper_path }} {{ ['--governor', tuning_cpu.governor] if tuning_cpu.governor is not none else [] }} {{ ['--epp', tuning_cpu.energy_performance_preference] if tuning_cpu.energy_performance_preference is not none else [] }}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

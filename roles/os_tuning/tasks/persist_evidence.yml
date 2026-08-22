@@ -1,0 +1,60 @@
+---
+# Slice the collected snapshot into individual evidence documents. Each document
+# records the section verbatim plus provenance; unavailable optional telemetry
+# stays marked inside the section rather than being dropped or fabricated.
+- name: Persist tuning evidence documents
+  ansible.builtin.copy:
+    content: "{{ {'simulated': false,
+                   'generated_at': os_tuning_generated_at,
+                   'profile': os_tuning_config.profile_name,
+                   'profile_revision': os_tuning_config.revision,
+                   item_pair.section_key: os_tuning_observed[item_pair.section_key]} | to_nice_json }}\n"
+    dest: "{{ os_tuning_evidence_dir }}/{{ item_pair.evidence_file }}"
+    owner: root
+    group: root
+    mode: "0640"
+  loop:
+    - section_key: numa
+      evidence_file: numa.json
+    - section_key: interrupts
+      evidence_file: interrupts.json
+    - section_key: cpu_power
+      evidence_file: cpu-power.json
+    - section_key: memory_policy
+      evidence_file: memory-policy.json
+    - section_key: hugepages
+      evidence_file: hugepages.json
+    - section_key: io
+      evidence_file: io.json
+    - section_key: kernel
+      evidence_file: kernel.json
+  loop_control:
+    label: "{{ item_pair.evidence_file }}"
+    loop_var: item_pair
+  check_mode: false
+  tags: [tuning]
+
+- name: Persist resolved tuning profile as machine-readable evidence
+  ansible.builtin.copy:
+    content: "{{ os_tuning_config | to_nice_json }}\n"
+    dest: "{{ os_tuning_evidence_dir }}/tuning-profile.json"
+    owner: root
+    group: root
+    mode: "0640"
+  check_mode: false
+  tags: [tuning]
+
+- name: Record active profile state for validation and drift classification
+  ansible.builtin.copy:
+    content: "{{ {'profile_name': os_tuning_config.profile_name,
+                   'state': os_tuning_config.state,
+                   'revision': os_tuning_config.revision,
+                   'authoritative': os_tuning_authoritative | bool,
+                   'converged_at': os_tuning_generated_at,
+                   'git_sha': git_commit_sha | default('none')} | to_nice_json }}\n"
+    dest: "{{ os_tuning_work_dir }}/profile-active.json"
+    owner: root
+    group: root
+    mode: "0640"
+  when: not ansible_check_mode
+  tags: [tuning]

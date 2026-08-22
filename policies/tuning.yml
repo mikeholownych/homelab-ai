@@ -1,0 +1,77 @@
+---
+schema_version: "1.0.0"
+description: >-
+  Evidence-driven promotion policy for OS tuning profiles. A tuning candidate
+  becomes the new baseline only through measured, repeatable benchmark evidence.
+  One fast benchmark run is never sufficient. Sample sizes on a single node are
+  small: treat all thresholds as minimum bars, not statistical proof, and record
+  run-to-run variance alongside every comparison.
+
+states:
+  baseline:
+    description: The authoritative profile applied by convergence and reconciled by scheduled runs.
+    authoritative: true
+  candidate:
+    description: >-
+      Under evaluation. May be converged onto the test host deliberately and
+      temporarily; must not be declared in inventory as authoritative.
+    authoritative: false
+  accepted:
+    description: >-
+      Passed promotion criteria against its parent baseline with recorded
+      evidence refs; eligible to replace the baseline by an explicit Git change
+      that also updates inventory os_tuning_profile.
+    authoritative: true
+  rejected:
+    description: Failed criteria or superseded; retained in Git for the record with its evidence refs.
+    authoritative: false
+
+promotion:
+  workflow:
+    - create candidate profile (state candidate, parent_baseline set)
+    - commit
+    - converge test host explicitly with the candidate selected
+    - benchmark candidate and parent baseline under identical model profiles
+    - evaluate against criteria below using evidence/benchmark documents
+    - mark state accepted or rejected with benchmark_refs recorded
+    - promote only by changing inventory os_tuning_profile plus profile state in Git
+  criteria:
+    min_runs_per_profile: 3
+    description: Each side of the comparison needs at least this many completed runs.
+    min_generation_throughput_improvement_pct: 3.0
+    ttft_must_not_regress_pct: 5.0
+    max_power_increase_pct: 5.0
+    max_gpu_temperature_increase_c: 3.0
+    correctness_required: true
+    stability_required: true
+    reboot_persistence_required: true
+    soak_required: true
+    soak_minimum_minutes: 30
+    no_other_workload_regression: true
+    description_note: >-
+      Improvements inside run-to-run variance are noise. Record standard
+      deviation for both sides; require the improvement band to exceed the
+      combined spread before accepting.
+
+rejection:
+  automatic_triggers:
+    - correctness regression on any validated model/runtime combination
+    - service crash, watchdog reset, or failed post-reboot validation
+    - power or thermal increase beyond limits above without throughput gain
+    - failure to persist across reboot when persistence is required
+  procedure:
+    - set candidate state to rejected in Git with benchmark_refs kept
+    - reconverge the host with os_tuning_profile pointing at the previous baseline
+    - verify rollback via validate.yml active-state checks
+    - retain the rejected profile and its evidence for future reference
+
+kernel_experiments:
+  prebuilt_first: true
+  supported_sources_only: true
+  pin_in_git: true
+  retain_previous_kernel: true
+  custom_kernel_requires:
+    - documented concrete blocker unavailable in supported kernels
+    - reproducible build pipeline per docs/custom-kernel.md
+    - checksummed artifact committed under kernel/build metadata
+    - full hardware/XPU/inference validation after reboot before acceptance

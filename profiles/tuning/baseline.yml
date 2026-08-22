@@ -1,0 +1,58 @@
+---
+schema_version: "1.0.0"
+profile_name: baseline
+state: baseline
+revision: "r0"
+description: >-
+  Conservative starting point. Explicitly manages nothing that the supported
+  Ubuntu 24.04 + Intel stack does not already do well. Exists to make the
+  untouched distro behavior observable, versioned, and benchmarkable before any
+  candidate tuning is evaluated.
+parent_baseline: null
+benchmark_refs: []
+os_tuning:
+  cpu:
+    governor: null
+    energy_performance_preference: null
+    cstate_policy: null
+    affinity_enabled: false
+    isolated_cpus: []
+  numa:
+    policy: default
+    preferred_nodes: []
+    interleave_nodes: []
+    runtime_binding_enabled: false
+  memory:
+    swappiness: null
+    dirty_ratio: null
+    dirty_background_ratio: null
+    zone_reclaim_mode: null
+  transparent_hugepages:
+    enabled: default
+    defrag: default
+  hugepages:
+    enabled: false
+    size_kib: null
+    count: 0
+  io:
+    scheduler: null
+    read_ahead_kb: null
+  irq:
+    affinity_enabled: false
+    managed_irq_policy: default
+  kernel:
+    sysctl: {}
+    cmdline: []
+    expected_release: null
+  pcie:
+    validate_rebar: true
+    validate_above_4g: true
+    validate_link_width: true
+    validate_link_speed: true
+    validate_bar_sizes: true
+    validate_p2p: true
+  custom_kernel:
+    enabled: false
+    version: null
+    artifact_path: null
+    sha256: null

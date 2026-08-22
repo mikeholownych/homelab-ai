@@ -1,0 +1,60 @@
+---
+schema_version: "1.0.0"
+profile_name: inference_candidate_01
+state: candidate
+revision: "r1"
+description: >-
+  Single controlled experiment: CPU frequency governor and energy-performance
+  preference. Tests whether a fixed performance governor with
+  balance_performance EPP improves generation throughput or TTFT beyond the
+  distro default (schedutil/platform default) without disproportionate power or
+  thermal cost. This profile is NOT applied unless selected explicitly; it must
+  never be promoted without the evidence required by policies/tuning.yml.
+parent_baseline: baseline
+benchmark_refs: []
+os_tuning:
+  cpu:
+    governor: performance
+    energy_performance_preference: balance_performance
+    cstate_policy: null
+    affinity_enabled: false
+    isolated_cpus: []
+  numa:
+    policy: default
+    preferred_nodes: []
+    interleave_nodes: []
+    runtime_binding_enabled: false
+  memory:
+    swappiness: null
+    dirty_ratio: null
+    dirty_background_ratio: null
+    zone_reclaim_mode: null
+  transparent_hugepages:
+    enabled: default
+    defrag: default
+  hugepages:
+    enabled: false
+    size_kib: null
+    count: 0
+  io:
+    scheduler: null
+    read_ahead_kb: null
+  irq:
+    affinity_enabled: false
+    managed_irq_policy: default
+  kernel:
+    sysctl: {}
+    cmdline: []
+    expected_release: null
+  pcie:
+    validate_rebar: true
+    validate_above_4g: true
+    validate_link_width: true
+    validate_link_speed: true
+    validate_bar_sizes: true
+    validate_p2p: true
+  custom_kernel:
+    enabled: false
+    version: null
+    artifact_path: null
+    sha256: null

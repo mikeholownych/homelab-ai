@@ -1,0 +1,78 @@
+---
+# HugeTLB reservations remove memory from general use. Capacity is checked
+# against the observed host RAM before any reservation is applied.
+- name: Validate hugepages capacity safety
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (tuning.config.os_tuning.hugepages.enabled | bool)
+        or (tuning.host_memory_gib | float <= 0.0)
+        or (((tuning.config.os_tuning.hugepages.count | int)
+             * (tuning.config.os_tuning.hugepages.size_kib | int) / 1024 / 1024)
+            * 100) <= (tuning.host_memory_gib | float * os_tuning_hugepages_max_host_memory_pct | int)
+    fail_msg: >-
+      Requested HugeTLB reservation exceeds {{ os_tuning_hugepages_max_host_memory_pct }}% of
+      observed host memory ({{ tuning.host_memory_gib }} GiB). Reduce count or raise the limit
+      explicitly in inventory with recorded justification.
+  vars:
+    tuning:
+      config: "{{ os_tuning_config }}"
+      host_memory_gib: "{{ os_tuning_observed.memory_policy.host_memory_gib | default(0) }}"
+  tags: [tuning, hugepages]
+
+# High-risk classes stay disabled until a certified runbook and measured evidence exist.
+- name: Reject uncertified IRQ affinity changes
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (tuning.config.os_tuning.irq.affinity_enabled | bool)
+        or (os_tuning_irq_affinity_certified | bool)
+    fail_msg: >-
+      IRQ affinity pinning requires os_tuning_irq_affinity_certified=true backed by measured
+      latency-jitter or contention evidence. Discovery continues; nothing is pinned.
+  vars:
+    tuning:
+      config: "{{ os_tuning_config }}"
+  tags: [tuning, irq]
+
+- name: Reject uncertified NUMA runtime binding
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (tuning.config.os_tuning.numa.runtime_binding_enabled | bool)
+        or (os_tuning_numa_binding_certified | bool)
+    fail_msg: >-
+      NUMA runtime binding requires os_tuning_numa_binding_certified=true backed by
+      topology-aware benchmark comparisons on the discovered topology.
+  vars:
+    tuning:
+      config: "{{ os_tuning_config }}"
+  tags: [tuning, cluster]
+
+- name: Reject uncertified custom kernel deployment
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (tuning.config.os_tuning.custom_kernel.enabled | bool)
+        or (os_tuning_custom_kernel_certified | bool)
+    fail_msg: >-
+      Custom kernel deployment requires os_tuning_custom_kernel_certified=true plus the
+      reproducible build workflow from docs/custom-kernel.md. Supported packaged kernels
+      remain the default path.
+  vars:
+    tuning:
+      config: "{{ os_tuning_config }}"
+  tags: [tuning, upgrade]
+
+- name: Validate declared custom kernel artifact reference
+  ansible.builtin.assert:
+    that:
+      - tuning.config.os_tuning.custom_kernel.artifact_path is not none
+      - tuning.config.os_tuning.custom_kernel.sha256 is not none
+      - tuning.config.os_tuning.custom_kernel.version is not none
+    fail_msg: An enabled custom_kernel block requires version, artifact_path, and sha256 pins.
+  vars:
+    tuning:
+      config: "{{ os_tuning_config }}"
+  when: tuning.config.os_tuning.custom_kernel.enabled | bool
+  tags: [tuning, upgrade]

@@ -1,0 +1,23 @@
+---
+- name: Apply grub configuration update for tuning
+  ansible.builtin.command:
+    argv: ["{{ os_tuning_update_grub_command }}"]
+  changed_when: false
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+
+- name: Reload systemd units for tuning
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+
+- name: Reload udev rules for tuning
+  ansible.builtin.command:
+    argv: ["udevadm", "control", "--reload"]
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode

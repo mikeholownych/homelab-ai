@@ -1,0 +1,11 @@
+---
+galaxy_info:
+  author: aihost-foundation
+  description: Evidence-driven OS tuning convergence for the local AI workstation
+  license: MIT
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

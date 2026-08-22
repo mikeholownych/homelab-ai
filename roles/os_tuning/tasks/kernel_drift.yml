@@ -1,0 +1,35 @@
+---
+# Kernel drift is high-risk: an unexpected running kernel can silently break the
+# XPU stack. This role never boots a different kernel on its own. When a pinned
+# expected_release does not match the running kernel, convergence fails closed
+# so dependent runtime changes are blocked until an operator resolves boot state.
+- name: Compare running kernel against declared expectation
+  ansible.builtin.assert:
+    that:
+      - >-
+        tuning.expected.os_tuning.kernel.expected_release is none
+        or os_tuning_observed.kernel.running_release == tuning.expected.os_tuning.kernel.expected_release
+    fail_msg: >-
+      Running kernel {{ os_tuning_observed.kernel.running_release }} does not match the pinned
+      expectation. Resolve boot selection manually; automatic kernel rollback is not performed.
+  vars:
+    tuning: "{{ os_tuning_config }}"
+  when:
+    - os_tuning_apply_mutations | bool
+    - tuning.expected.os_tuning.kernel.expected_release is not none
+  tags: [tuning, upgrade]
+
+# Custom kernel deployment stays scaffolding: it requires the certified flag,
+# a checksummed artifact produced by docs/custom-kernel.md workflow, and never
+# removes the previous kernel package.
+- name: Install checksummed custom kernel artifact
+  ansible.builtin.debug:
+    msg: >-
+      Custom kernel deployment scaffold reached but intentionally inert. Deploy
+      {{ os_tuning_config.os_tuning.custom_kernel.artifact_path }}
+      (sha256 {{ os_tuning_config.os_tuning.custom_kernel.sha256 }}) via dpkg after recording
+      rollback instructions, then reboot and run full validation before acceptance.
+  when:
+    - os_tuning_config.os_tuning.custom_kernel.enabled | bool
+    - os_tuning_custom_kernel_certified | bool
+  tags: [tuning, upgrade]

@@ -1,0 +1,171 @@
+---
+# OS tuning subsystem: evidence-driven convergence for the local AI host.
+#
+# Flow: assert inputs -> load versioned profile -> discovery (read-only) ->
+# evidence persistence -> safety gates -> conservative enforcement (only what
+# the profile manages) -> kernel drift handling -> validation check emission.
+- name: Run tuning input and profile assertions
+  ansible.builtin.include_tasks: assert_inputs.yml
+  tags: [tuning]
+
+- name: Set resolved tuning facts
+  ansible.builtin.set_fact:
+    os_tuning_generated_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+    os_tuning_authoritative: "{{ (os_tuning_config.state in ['baseline', 'accepted']) | bool }}"
+  tags: [tuning]
+
+- name: Discover live OS tuning state without mutation
+  ansible.builtin.include_tasks: discovery.yml
+  tags: [tuning]
+
+- name: Persist tuning evidence documents
+  ansible.builtin.include_tasks: persist_evidence.yml
+  tags: [tuning]
+
+- name: Enforce tuning safety gates before any mutation
+  ansible.builtin.include_tasks: safety_gates.yml
+  tags: [tuning]
+
+- name: Install NUMA discovery packages when enabled
+  ansible.builtin.apt:
+    name: "{{ os_tuning_discovery_packages }}"
+    state: present
+  when:
+    - os_tuning_install_discovery_packages | bool
+    - os_tuning_apply_mutations | bool
+  tags: [tuning, baseline]
+
+- name: Compute managed sysctl mapping from the profile
+  ansible.builtin.set_fact:
+    os_tuning_managed_sysctl: "{{ profile_memory | combine(profile_extra) }}"
+  vars:
+    memory: "{{ os_tuning_config.os_tuning.memory }}"
+    hugepages: "{{ os_tuning_config.os_tuning.hugepages }}"
+    declared_hugepages_sysctl: >-
+      {{ {'vm.nr_hugepages': hugepages.count}
+         if ((hugepages.enabled | bool) and (hugepages.count | int) > 0 and hugepages.size_kib | int == 2048)
+         else {} }}
+    profile_memory: >-
+      {{ ({'vm.swappiness': memory.swappiness,
+           'vm.dirty_ratio': memory.dirty_ratio,
+           'vm.dirty_background_ratio': memory.dirty_background_ratio,
+           'vm.zone_reclaim_mode': memory.zone_reclaim_mode}
+          | dict2items | rejectattr('value', 'equalto', none) | items2dict)
+         | combine(declared_hugepages_sysctl) }}
+    profile_extra: "{{ os_tuning_config.os_tuning.kernel.sysctl | default({}) }}"
+  tags: [tuning]
+
+- name: Compute managed kernel command-line parameters
+  ansible.builtin.set_fact:
+    os_tuning_managed_cmdline: "{{ declared_thp_params + declared_hp_params + declared_kernel_params }}"
+  vars:
+    thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
+    hugepages: "{{ os_tuning_config.os_tuning.hugepages }}"
+    hugepage_suffix: >-
+      {{ {2048: '2M', 1048576: '1G'}[hugepages.size_kib | int] if hugepages.size_kib is not none else none }}
+    declared_thp_params: >-
+      {{ ([] if thp.enabled == 'default' else ['transparent_hugepage=' + thp.enabled])
+         + ([] if thp.defrag == 'default' else ['transparent_hugepage_defrag=' + thp.defrag]) }}
+    declared_hp_params: >-
+      {{ [] if not (hugepages.enabled | bool) or hugepages.size_kib is none
+         else ['default_hugepagesz=' + hugepage_suffix, 'hugepagesz=' + hugepage_suffix,
+               'hugepages=' + (hugepages.count | string)] }}
+    declared_kernel_params: "{{ os_tuning_config.os_tuning.kernel.cmdline }}"
+  tags: [tuning]
+
+- name: Validate managed kernel command-line parameters against allowlist
+  ansible.builtin.assert:
+    that:
+      - param | aihost_boot_param_allowed(os_tuning_allowed_boot_parameter_patterns)
+    fail_msg: >-
+      Kernel parameter {{ param }} is not on the tuning boot-parameter allowlist.
+      Extend os_tuning_allowed_boot_parameter_patterns deliberately if required.
+  loop: "{{ os_tuning_managed_cmdline | unique }}"
+  loop_control:
+    loop_var: param
+  tags: [tuning]
+
+- name: Apply memory sysctls owned by the tuning profile
+  ansible.builtin.include_tasks: apply_memory.yml
+  tags: [tuning, baseline]
+
+- name: Compute drifted NVMe queue lists for I/O enforcement
+  ansible.builtin.set_fact:
+    os_tuning_io_drifted_schedulers: >-
+      {{ observed_queues | dict2items
+         | selectattr('value.scheduler_current', 'defined')
+         | selectattr('value.scheduler_current', 'string')
+         | rejectattr('value.scheduler_current', 'equalto', io.scheduler)
+         | map(attribute='key') | list if io.scheduler is not none else [] }}
+    os_tuning_io_drifted_readahead: >-
+      {{ observed_queues | dict2items
+         | selectattr('value.read_ahead_kb', 'defined')
+         | selectattr('value.read_ahead_kb', 'number')
+         | rejectattr('value.read_ahead_kb', 'equalto', io.read_ahead_kb)
+         | map(attribute='key') | list if io.read_ahead_kb is not none else [] }}
+  vars:
+    observed_queues: "{{ os_tuning_observed.io.nvme_queues | default({}) }}"
+    io: "{{ os_tuning_config.os_tuning.io }}"
+  when: os_tuning_observed.io.nvme_queues is mapping
+  tags: [tuning, io]
+
+- name: Apply I/O settings owned by the tuning profile
+  ansible.builtin.include_tasks: apply_io.yml
+  tags: [tuning, io]
+
+- name: Apply CPU power settings owned by the tuning profile
+  ansible.builtin.include_tasks: apply_cpu_power.yml
+  tags: [tuning, baseline]
+
+- name: Apply transparent hugepage settings owned by the tuning profile
+  ansible.builtin.include_tasks: apply_thp.yml
+  tags: [tuning, baseline]
+
+- name: Detect kernel drift against the declared expectation
+  ansible.builtin.include_tasks: kernel_drift.yml
+  tags: [tuning, upgrade]
+
+- name: Inspect previous NUMA topology fingerprint
+  ansible.builtin.stat:
+    path: "{{ os_tuning_work_dir }}/numa-fingerprint.txt"
+    get_checksum: false
+  register: os_tuning_previous_numa_fingerprint_stat
+  check_mode: false
+  tags: [tuning]
+
+- name: Read previous NUMA topology fingerprint
+  ansible.builtin.slurp:
+    src: "{{ os_tuning_work_dir }}/numa-fingerprint.txt"
+  register: os_tuning_previous_numa_fingerprint_content
+  when: os_tuning_previous_numa_fingerprint_stat.stat.exists | bool
+  check_mode: false
+  tags: [tuning]
+
+- name: Compute current NUMA topology fingerprint
+  ansible.builtin.set_fact:
+    os_tuning_numa_fingerprint: >-
+      {{ (os_tuning_observed.numa.numactl_hardware.node_count | default('?')) | string
+         + ':' + (os_tuning_observed.numa.gpu_numa_nodes | to_json) }}
+  tags: [tuning]
+
+- name: Compare NUMA topology against previous observation
+  ansible.builtin.set_fact:
+    os_tuning_numa_stability: >-
+      {{ 'first_observation' if not (os_tuning_previous_numa_fingerprint_stat.stat.exists | bool)
+      else ('PASS' if (os_tuning_previous_numa_fingerprint_content.content | default('') | b64decode | trim)
+      == os_tuning_numa_fingerprint else 'FAIL') }}
+  tags: [tuning]
+
+- name: Write current NUMA topology fingerprint
+  ansible.builtin.copy:
+    content: "{{ os_tuning_numa_fingerprint }}\n"
+    dest: "{{ os_tuning_work_dir }}/numa-fingerprint.txt"
+    owner: root
+    group: root
+    mode: "0640"
+  when: not ansible_check_mode
+  tags: [tuning]
+
+- name: Emit independent tuning validation checks
+  ansible.builtin.include_tasks: emit_checks.yml
+  tags: [tuning]

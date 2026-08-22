@@ -1,0 +1,77 @@
+---
+# I/O tuning applies to NVMe queues only. Persistence uses a udev rule; runtime
+# writes are guarded by the discovered per-device current values so they run
+# only on real drift. Scheduler names and readahead bounds are schema-validated.
+- name: Render NVMe I/O udev rule
+  ansible.builtin.template:
+    src: 61-aihost-io.rules.j2
+    dest: "{{ os_tuning_udev_rules_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - os_tuning_apply_mutations | bool
+    - tuning_io.scheduler is not none or tuning_io.read_ahead_kb is not none
+  register: os_tuning_udev_rule
+  notify: Reload udev rules for tuning
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]
+
+- name: Remove NVMe I/O udev rule when nothing is managed
+  ansible.builtin.file:
+    path: "{{ os_tuning_udev_rules_path }}"
+    state: absent
+  when:
+    - os_tuning_apply_mutations | bool
+    - tuning_io.scheduler is none and tuning_io.read_ahead_kb is none
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]
+
+# Runtime sysfs writes require shell redirection (no module covers queue
+# attributes). Guarded by observed per-device values collected in discovery;
+# a failed write fails the task and therefore the convergence.
+- name: Apply runtime NVMe scheduler on drifted devices
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > \"$2\""
+      - nvme-scheduler-apply
+      - "{{ tuning_io.scheduler }}"
+      - "/sys/block/{{ item }}/queue/scheduler"
+  loop: "{{ os_tuning_io_drifted_schedulers }}"
+  loop_control:
+    label: "{{ item }}={{ tuning_io.scheduler }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_io.scheduler is not none
+    - os_tuning_io_drifted_schedulers | length > 0
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]
+
+- name: Apply runtime NVMe read-ahead on drifted devices
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > \"$2\""
+      - nvme-readahead-apply
+      - "{{ tuning_io.read_ahead_kb }}"
+      - "/sys/block/{{ item }}/queue/read_ahead_kb"
+  loop: "{{ os_tuning_io_drifted_readahead }}"
+  loop_control:
+    label: "{{ item }}={{ tuning_io.read_ahead_kb }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_io.read_ahead_kb is not none
+    - os_tuning_io_drifted_readahead | length > 0
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]

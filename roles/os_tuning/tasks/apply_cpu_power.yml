@@ -1,0 +1,78 @@
+---
+# CPU governor/EPP enforcement runs through the idempotent helper so the same
+# binary backs runtime convergence, the boot-time systemd service, and
+# validation probes. The unit is only installed when a profile manages values.
+- name: Install aihost-cpu-power oneshot service
+  ansible.builtin.template:
+    src: aihost-cpu-power.service.j2
+    dest: "{{ os_tuning_cpu_power_service_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - os_tuning_apply_mutations | bool
+    - tuning_cpu.governor is not none or tuning_cpu.energy_performance_preference is not none
+  vars:
+    tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
+  notify: Reload systemd units for tuning
+  tags: [tuning, baseline]
+
+- name: Remove aihost-cpu-power service when nothing is managed
+  ansible.builtin.file:
+    path: "{{ os_tuning_cpu_power_service_path }}"
+    state: absent
+  when:
+    - os_tuning_apply_mutations | bool
+    - tuning_cpu.governor is none and tuning_cpu.energy_performance_preference is none
+  vars:
+    tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
+  notify: Reload systemd units for tuning
+  tags: [tuning]
+
+- name: Enable aihost-cpu-power boot persistence
+  ansible.builtin.systemd_service:
+    name: "{{ os_tuning_cpu_power_service_name }}"
+    enabled: true
+    state: started
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_cpu.governor is not none or tuning_cpu.energy_performance_preference is not none
+  vars:
+    tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
+  tags: [tuning, baseline]
+
+- name: Apply CPU governor and energy-performance preference at runtime
+  ansible.builtin.command:
+    argv: "{{ cpu_power_argv }}"
+  register: os_tuning_cpu_power_runtime
+  changed_when: "'\"changed\": 0' not in (os_tuning_cpu_power_runtime.stdout | default(''))"
+  failed_when: os_tuning_cpu_power_runtime.rc not in [0, 3]
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_cpu.governor is not none or tuning_cpu.energy_performance_preference is not none
+  vars:
+    tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
+    governor_args: "{{ ['--governor', tuning_cpu.governor] if tuning_cpu.governor is not none else [] }}"
+    epp_args: >-
+      {{ ['--epp', tuning_cpu.energy_performance_preference]
+         if tuning_cpu.energy_performance_preference is not none else [] }}
+    cpu_power_argv: "{{ [os_tuning_cpu_power_helper_path] + governor_args + epp_args }}"
+  tags: [tuning, baseline]
+
+- name: Validate active CPU power state matches the profile
+  ansible.builtin.command:
+    argv: "{{ [os_tuning_cpu_power_helper_path, '--validate'] + governor_args + epp_args }}"
+  register: os_tuning_cpu_power_validate
+  changed_when: false
+  check_mode: false
+  failed_when: os_tuning_cpu_power_validate.rc not in [0, 4]
+  vars:
+    tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
+    governor_args: "{{ ['--governor', tuning_cpu.governor] if tuning_cpu.governor is not none else [] }}"
+    epp_args: >-
+      {{ ['--epp', tuning_cpu.energy_performance_preference]
+         if tuning_cpu.energy_performance_preference is not none else [] }}
+  when: tuning_cpu.governor is not none or tuning_cpu.energy_performance_preference is not none
+  tags: [tuning]

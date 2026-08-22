@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aihost.local/schemas/os-tuning.schema.json",
+  "title": "aihost OS tuning profile",
+  "description": "Versioned OS tuning desired state. Null values mean 'not managed'; explicit values are converged and reconciled by scheduled Ansible runs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile_name",
+    "state",
+    "revision",
+    "description",
+    "os_tuning"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "profile_name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_]*$"
+    },
+    "state": {
+      "description": "Promotion lifecycle state. Only 'baseline' or 'accepted' profiles may be declared authoritative in inventory.",
+      "enum": ["baseline", "candidate", "accepted", "rejected"]
+    },
+    "revision": {
+      "type": "string",
+      "description": "Profile revision label; must change whenever os_tuning content changes."
+    },
+    "description": {
+      "type": "string"
+    },
+    "parent_baseline": {
+      "type": ["string", "null"],
+      "description": "Baseline profile this candidate was derived from."
+    },
+    "benchmark_refs": {
+      "type": "array",
+      "description": "Evidence run identifiers that justify this profile's state.",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+      }
+    },
+    "os_tuning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu",
+        "numa",
+        "memory",
+        "transparent_hugepages",
+        "hugepages",
+        "io",
+        "irq",
+        "kernel",
+        "pcie",
+        "custom_kernel"
+      ],
+      "properties": {
+        "cpu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "governor",
+            "energy_performance_preference",
+            "cstate_policy",
+            "affinity_enabled",
+            "isolated_cpus"
+          ],
+          "properties": {
+            "governor": {
+              "type": ["string", "null"],
+              "enum": [null, "performance", "powersave", "schedutil", "ondemand", "conservative"]
+            },
+            "energy_performance_preference": {
+              "type": ["string", "null"],
+              "enum": [null, "performance", "balance_performance", "normal", "balance_power", "power"]
+            },
+            "cstate_policy": {
+              "description": "null/default leaves C-states untouched. disable_deep requires recorded evidence of latency benefit.",
+              "type": ["string", "null"],
+              "enum": [null, "default", "disable_deep"]
+            },
+            "affinity_enabled": {
+              "type": "boolean"
+            },
+            "isolated_cpus": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]+(-[0-9]+)?$"
+              }
+            }
+          }
+        },
+        "numa": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policy",
+            "preferred_nodes",
+            "interleave_nodes",
+            "runtime_binding_enabled"
+          ],
+          "properties": {
+            "policy": {
+              "type": "string",
+              "enum": ["default", "preferred_binding", "membind", "interleave"]
+            },
+            "preferred_nodes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "interleave_nodes": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "runtime_binding_enabled": {
+              "description": "When true, workload services are launched under numactl with the declared policy.",
+              "type": "boolean"
+            }
+          }
+        },
+        "memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "swappiness",
+            "dirty_ratio",
+            "dirty_background_ratio",
+            "zone_reclaim_mode"
+          ],
+          "properties": {
+            "swappiness": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 200
+            },
+            "dirty_ratio": {
+              "type": ["integer", "null"],
+              "minimum": 1,
+              "maximum": 99
+            },
+            "dirty_background_ratio": {
+              "type": ["integer", "null"],
+              "minimum": 1,
+              "maximum": 98
+            },
+            "zone_reclaim_mode": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 7
+            }
+          }
+        },
+        "transparent_hugepages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "defrag"],
+          "properties": {
+            "enabled": {
+              "description": "'default' preserves the distro runtime setting and manages nothing.",
+              "type": "string",
+              "enum": ["default", "always", "madvise", "never"]
+            },
+            "defrag": {
+              "type": "string",
+              "enum": ["default", "always", "defer", "defer+madvise", "madvise", "never"]
+            }
+          }
+        },
+        "hugepages": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "size_kib", "count"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "size_kib": {
+              "description": "HugeTLB page size in KiB. x86_64 supported values on this platform: 2048 (2 MiB), 1048576 (1 GiB).",
+              "type": ["integer", "null"],
+              "enum": [null, 2048, 1048576]
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "io": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheduler", "read_ahead_kb"],
+          "properties": {
+            "scheduler": {
+              "description": "Applied to NVMe queue devices only. null leaves distro defaults.",
+              "type": ["string", "null"],
+              "enum": [null, "none", "mq-deadline", "bfq", "kyber"]
+            },
+            "read_ahead_kb": {
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 16384
+            }
+          }
+        },
+        "irq": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["affinity_enabled", "managed_irq_policy"],
+          "properties": {
+            "affinity_enabled": {
+              "type": "boolean"
+            },
+            "managed_irq_policy": {
+              "type": "string",
+              "enum": ["default", "manual_affinity"]
+            }
+          }
+        },
+        "kernel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sysctl", "cmdline", "expected_release"],
+          "properties": {
+            "sysctl": {
+              "description": "Free-form vm.* keys owned by this subsystem; values must be integers so they can be compared against /proc/sys.",
+              "type": "object",
+              "propertyNames": {
+                "pattern": "^vm\\.[a-z0-9_]+$"
+              },
+              "additionalProperties": {
+                "type": "integer"
+              }
+            },
+            "cmdline": {
+              "description": "Kernel command-line parameters managed through the tuning GRUB drop-in.",
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_.=+-]+$"
+              }
+            },
+            "expected_release": {
+              "description": "Exact running-kernel pin for kernel experiments. null means 'any installed supported kernel'.",
+              "type": ["string", "null"],
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+-generic$"
+            }
+          }
+        },
+        "pcie": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "validate_rebar",
+            "validate_above_4g",
+            "validate_link_width",
+            "validate_link_speed",
+            "validate_bar_sizes",
+            "validate_p2p"
+          ],
+          "properties": {
+            "validate_rebar": {
+              "type": "boolean"
+            },
+            "validate_above_4g": {
+              "type": "boolean"
+            },
+            "validate_link_width": {
+              "type": "boolean"
+            },
+            "validate_link_speed": {
+              "type": "boolean"
+            },
+            "validate_bar_sizes": {
+              "type": "boolean"
+            },
+            "validate_p2p": {
+              "type": "boolean"
+            }
+          }
+        },
+        "custom_kernel": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["enabled", "version", "artifact_path", "sha256"],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "version": {
+              "description": "Exact package version of the custom kernel artifact.",
+              "type": ["string", "null"],
+              "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]{8}[a-z0-9.]*$"
+            },
+            "artifact_path": {
+              "description": "Repository-relative path under kernel/build/ to the .deb artifacts.",
+              "type": ["string", "null"],
+              "pattern": "^kernel/build/[A-Za-z0-9._/-]+\\.deb$"
+            },
+            "sha256": {
+              "type": ["string", "null"],
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

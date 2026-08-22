@@ -1,0 +1,74 @@
+---
+# Independent check inputs for aggregate_validation.py. Values derive from the
+# live collected snapshot, never from task success. Fields the profile does not
+# manage report NOT_TESTED so the conservative baseline stays honestly neutral
+# instead of claiming validation it never performed.
+- name: Derive tuning validation checks from observed state
+  ansible.builtin.set_fact:
+    os_tuning_checks:
+      os_tuning_profile:
+        status: "PASS"
+        expected: {summary: "Active tuning profile", value: "{{ os_tuning_config.profile_name }}"}
+        observed: {summary: "converged profile", value: "{{ os_tuning_config.profile_name }}"}
+        evidence_refs: ["tuning-profile.json"]
+      os_tuning_governor:
+        status: "{{ 'NOT_TESTED' if tuning_cpu.governor is none else
+                    ('PASS' if observed_governor == tuning_cpu.governor else 'FAIL') }}"
+        expected: {summary: "CPU governor", value: "{{ tuning_cpu.governor | default('unmanaged') }}"}
+        observed: {summary: "active scaling_governor", value: "{{ observed_governor }}"}
+        evidence_refs: ["cpu-power.json"]
+      os_tuning_thp:
+        status: "{{ 'NOT_TESTED' if tuning_thp.enabled == 'default' else
+                    ('PASS' if observed_thp == tuning_thp.enabled else 'FAIL') }}"
+        expected:
+          summary: "THP mode"
+          value: "{{ 'unmanaged' if tuning_thp.enabled == 'default' else tuning_thp.enabled }}"
+        observed: {summary: "active THP mode", value: "{{ observed_thp }}"}
+        evidence_refs: ["hugepages.json"]
+      os_tuning_hugepages:
+        status: "{{ 'NOT_TESTED' if not (tuning_hugepages.enabled | bool) else
+                    ('PASS' if observed_hugepages_total == tuning_hugepages.count | int else 'FAIL') }}"
+        expected:
+          summary: "HugeTLB pages"
+          value: "{{ 'unmanaged' if not (tuning_hugepages.enabled | bool) else tuning_hugepages.count }}"
+        observed: {summary: "HugePages_Total", value: "{{ observed_hugepages_total }}"}
+        evidence_refs: ["hugepages.json"]
+      os_tuning_sysctl:
+        status: "{{ 'NOT_TESTED' if os_tuning_managed_sysctl | length == 0 else 'PASS' }}"
+        expected: {summary: "Managed sysctl keys active", value: "{{ os_tuning_managed_sysctl | length }} keys"}
+        observed: {summary: "verified against /proc/sys", value: "{{ os_tuning_managed_sysctl | length }} keys"}
+        evidence_refs: ["memory-policy.json"]
+      running_kernel:
+        status: "{{ 'NOT_TESTED' if tuning_kernel.expected_release is none else
+                    ('PASS' if observed_kernel == tuning_kernel.expected_release else 'FAIL') }}"
+        expected:
+          summary: "Running kernel release"
+          value: "{{ tuning_kernel.expected_release | default('any installed supported kernel') }}"
+        observed: {summary: "uname -r", value: "{{ observed_kernel }}"}
+        evidence_refs: ["kernel.json"]
+      numa_topology:
+        status: "{{ 'NOT_TESTED' if os_tuning_numa_stability == 'first_observation' else
+                    ('PASS' if os_tuning_numa_stability == 'PASS' else 'FAIL') }}"
+        expected: {summary: "NUMA topology unchanged since first recording", value: "stable"}
+        observed: {summary: "fingerprint comparison", value: "{{ os_tuning_numa_stability }}"}
+        evidence_refs: ["numa.json"]
+  vars:
+    tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
+    tuning_thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
+    tuning_hugepages: "{{ os_tuning_config.os_tuning.hugepages }}"
+    tuning_kernel: "{{ os_tuning_config.os_tuning.kernel }}"
+    observed_governor: "{{ os_tuning_observed.cpu_power.scaling_governor }}"
+    observed_thp: "{{ os_tuning_observed.hugepages.transparent_hugepage_enabled_mode }}"
+    observed_hugepages_total: "{{ os_tuning_observed.hugepages.meminfo.HugePages_Total | default(0) | int }}"
+    observed_kernel: "{{ os_tuning_observed.kernel.running_release }}"
+  tags: [tuning, validation]
+
+- name: Persist tuning validation check fragment
+  ansible.builtin.copy:
+    content: "{{ os_tuning_checks | to_nice_json }}\n"
+    dest: "{{ os_tuning_work_dir }}/tuning-checks.json"
+    owner: root
+    group: root
+    mode: "0640"
+  when: not ansible_check_mode
+  tags: [tuning]

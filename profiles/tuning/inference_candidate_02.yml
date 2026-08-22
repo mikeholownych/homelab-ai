@@ -1,0 +1,60 @@
+---
+schema_version: "1.0.0"
+profile_name: inference_candidate_02
+state: candidate
+revision: "r1"
+description: >-
+  Single controlled experiment: transparent huge pages set to 'always' while
+  defrag stays at the distro default. Tests whether THP always-mode reduces
+  model-load time or TTFT for large-model inference, or whether it introduces
+  latency jitter or reclaim stalls. Compare against the recorded baseline THP
+  mode (typically madvise on Ubuntu) before any promotion. This profile is NOT
+  applied unless selected explicitly.
+parent_baseline: baseline
+benchmark_refs: []
+os_tuning:
+  cpu:
+    governor: null
+    energy_performance_preference: null
+    cstate_policy: null
+    affinity_enabled: false
+    isolated_cpus: []
+  numa:
+    policy: default
+    preferred_nodes: []
+    interleave_nodes: []
+    runtime_binding_enabled: false
+  memory:
+    swappiness: null
+    dirty_ratio: null
+    dirty_background_ratio: null
+    zone_reclaim_mode: null
+  transparent_hugepages:
+    enabled: always
+    defrag: default
+  hugepages:
+    enabled: false
+    size_kib: null
+    count: 0
+  io:
+    scheduler: null
+    read_ahead_kb: null
+  irq:
+    affinity_enabled: false
+    managed_irq_policy: default
+  kernel:
+    sysctl: {}
+    cmdline: []
+    expected_release: null
+  pcie:
+    validate_rebar: true
+    validate_above_4g: true
+    validate_link_width: true
+    validate_link_speed: true
+    validate_bar_sizes: true
+    validate_p2p: true
+  custom_kernel:
+    enabled: false
+    version: null
+    artifact_path: null
+    sha256: null

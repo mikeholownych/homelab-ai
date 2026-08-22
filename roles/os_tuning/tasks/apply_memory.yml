@@ -1,0 +1,46 @@
+---
+# Memory-policy and HugeTLB sysctls owned by this subsystem are written to a
+# dedicated drop-in so base_os and os_tuning never fight over /etc/sysctl.conf.
+- name: Apply managed memory sysctl values
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: "{{ os_tuning_sysctl_file }}"
+    sysctl_set: true
+    reload: true
+  loop: "{{ os_tuning_managed_sysctl | dict2items }}"
+  when:
+    - os_tuning_apply_mutations | bool
+    - os_tuning_managed_sysctl | length > 0
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+  tags: [tuning, baseline]
+
+- name: Remove stale managed sysctl keys no longer in the profile
+  ansible.builtin.lineinfile:
+    path: "{{ os_tuning_sysctl_file }}"
+    regexp: "^\\s*{{ item | regex_escape() }}\\s*="
+    state: absent
+  loop: "{{ os_tuning_allowed_sysctl_keys }}"
+  when:
+    - os_tuning_apply_mutations | bool
+    - item not in (os_tuning_managed_sysctl | keys)
+  loop_control:
+    label: "{{ item }} (absent)"
+  tags: [tuning]
+
+- name: Verify active sysctl values match the tuning profile
+  ansible.builtin.command:
+    argv: ["/usr/sbin/sysctl", "-n", "{{ item.key }}"]
+  register: os_tuning_sysctl_active
+  loop: "{{ os_tuning_managed_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  changed_when: false
+  check_mode: false
+  failed_when: >-
+    os_tuning_sysctl_active.rc != 0
+    or (os_tuning_sysctl_active.stdout | trim | int) != (item.value | int)
+  when: os_tuning_apply_mutations | bool
+  tags: [tuning]

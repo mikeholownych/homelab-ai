@@ -1,0 +1,67 @@
+---
+# Boot persistence for THP and HugeTLB uses a tuning-specific GRUB drop-in
+# (95-aihost-tuning.cfg) so it never collides with the base_os 90-aihost.cfg.
+# Parameters are validated against os_tuning_allowed_boot_parameter_patterns.
+- name: Render tuning kernel command-line drop-in
+  ansible.builtin.template:
+    src: 95-aihost-tuning.cfg.j2
+    dest: "{{ os_tuning_grub_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /bin/sh -n %s
+  when:
+    - os_tuning_apply_mutations | bool
+    - os_tuning_managed_cmdline | length > 0
+  notify: Apply grub configuration update for tuning
+  tags: [tuning, baseline]
+
+- name: Remove tuning command-line drop-in when nothing is managed
+  ansible.builtin.file:
+    path: "{{ os_tuning_grub_dropin_path }}"
+    state: absent
+  when:
+    - os_tuning_apply_mutations | bool
+    - os_tuning_managed_cmdline | length == 0
+  tags: [tuning]
+
+# Runtime THP writes need shell redirection into sysfs; there is no module that
+# writes single sysfs values. Idempotency is guarded by the bracketed-mode read
+# in discovery (os_tuning_observed.hugepages), so this only runs on real drift.
+# Failure handling: rc != 0 fails the task; sysfs write errors are surfaced.
+- name: Apply runtime transparent hugepage mode
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > /sys/kernel/mm/transparent_hugepage/enabled"
+      - thp-apply
+      - "{{ tuning_thp.enabled }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_thp.enabled != 'default'
+    - os_tuning_observed.hugepages.transparent_hugepage_enabled_mode != tuning_thp.enabled
+  vars:
+    tuning_thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
+  tags: [tuning, baseline]
+
+# Same rationale as the THP write above; defrag has its own sysfs control.
+- name: Apply runtime transparent hugepage defrag mode
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > /sys/kernel/mm/transparent_hugepage/defrag"
+      - thp-defrag-apply
+      - "{{ tuning_thp.defrag }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_thp.defrag != 'default'
+    - os_tuning_observed.hugepages.transparent_hugepage_defrag_mode != tuning_thp.defrag
+  vars:
+    tuning_thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
+  tags: [tuning, baseline]

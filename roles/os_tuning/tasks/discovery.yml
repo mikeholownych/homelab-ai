@@ -1,0 +1,60 @@
+---
+- name: Ensure os_tuning work directory exists
+  ansible.builtin.file:
+    path: "{{ os_tuning_work_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [tuning]
+
+- name: Ensure tuning helper install directory exists
+  ansible.builtin.file:
+    path: "{{ os_tuning_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [tuning]
+
+- name: Ensure tuning evidence directory exists
+  ansible.builtin.file:
+    path: "{{ os_tuning_evidence_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [tuning]
+
+- name: Install read-only OS tuning telemetry collector
+  ansible.builtin.copy:
+    src: collect_telemetry.py
+    dest: "{{ os_tuning_collector_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [tuning]
+
+- name: Install CPU power enforcement helper
+  ansible.builtin.copy:
+    src: set_cpu_power.py
+    dest: "{{ os_tuning_cpu_power_helper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [tuning]
+
+- name: Collect OS tuning telemetry without mutation
+  ansible.builtin.command:
+    argv: ["{{ os_tuning_collector_path }}"]
+  register: os_tuning_collection
+  changed_when: false
+  failed_when: os_tuning_collection.rc != 0
+  check_mode: false
+  tags: [tuning]
+
+- name: Parse collected telemetry snapshot
+  ansible.builtin.set_fact:
+    os_tuning_observed: "{{ os_tuning_collection.stdout | from_json }}"
+  check_mode: false
+  tags: [tuning]

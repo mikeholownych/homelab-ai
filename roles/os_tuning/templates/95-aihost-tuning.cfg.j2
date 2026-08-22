@@ -1,0 +1,4 @@
+#!/bin/sh
+# Managed by Ansible (os_tuning role). Kernel parameters declared by the active
+# tuning profile. Manual edits are reverted by scheduled reconciliation.
+GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT {{ os_tuning_managed_cmdline | join(' ') }}"
