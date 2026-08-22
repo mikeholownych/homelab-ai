@@ -110,6 +110,7 @@ class InventoryContractTests(unittest.TestCase):
             {
                 "monitoring": True,
                 "scheduled_reconciliation": True,
+                "os_tuning": True,
                 "clustering": False,
                 "cmdb_export": False,
                 "itsm_integration": False,

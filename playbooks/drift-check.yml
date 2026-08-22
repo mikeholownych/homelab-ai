@@ -18,6 +18,14 @@
         name: hardware_validation
       tags: [drift, hardware]
 
+    - name: Detect OS tuning drift without mutation
+      ansible.builtin.include_role:
+        name: os_tuning
+      vars:
+        os_tuning_apply_mutations: false
+        os_tuning_install_discovery_packages: false
+      tags: [drift, tuning]
+
     - name: Run independent validation aggregation
       ansible.builtin.include_role:
         name: validation
@@ -25,5 +33,8 @@
 
     - name: Report drift assessment status
       ansible.builtin.debug:
-        msg: "Drift assessment complete. Validation result recorded in evidence."
+        msg:
+          assessment: "Drift assessment complete. Validation result recorded in evidence."
+          active_tuning_profile: "{{ os_tuning_config.profile_name | default('unknown') }}"
+          tuning_numa_stability: "{{ os_tuning_numa_stability | default('unknown') }}"
       tags: [drift]

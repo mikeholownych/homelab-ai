@@ -16,7 +16,8 @@
     "duration",
     "telemetry",
     "correctness",
-    "failure_criteria"
+    "failure_criteria",
+    "os_tuning"
   ],
   "properties": {
     "schema_version": {
@@ -37,7 +38,11 @@
     },
     "status": {
       "type": "string",
-      "enum": ["PASS", "FAIL", "NOT_RUN"]
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT_RUN"
+      ]
     },
     "system": {
       "type": "object",
@@ -53,35 +58,91 @@
         "llama_commit"
       ],
       "properties": {
-        "hostname": {"type": "string", "minLength": 1},
-        "bios_version": {"type": "string", "minLength": 1},
-        "kernel_version": {"type": "string", "minLength": 1},
-        "intel_runtime_version": {"type": "string", "minLength": 1},
-        "level_zero_version": {"type": "string", "minLength": 1},
-        "pytorch_version": {"type": "string", "minLength": 1},
-        "vllm_version": {"type": "string", "minLength": 1},
-        "llama_commit": {"type": "string", "minLength": 7}
+        "hostname": {
+          "type": "string",
+          "minLength": 1
+        },
+        "bios_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kernel_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intel_runtime_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "level_zero_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pytorch_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vllm_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "llama_commit": {
+          "type": "string",
+          "minLength": 7
+        }
       }
     },
     "model": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["model_id", "revision", "artifact_sha256", "quantization", "split_parameters"],
+      "required": [
+        "model_id",
+        "revision",
+        "artifact_sha256",
+        "quantization",
+        "split_parameters"
+      ],
       "properties": {
-        "model_id": {"type": "string", "minLength": 1, "not": {"pattern": "^simulated://benchmark-placeholder$"}},
-        "revision": {"type": "string", "minLength": 1},
-        "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "quantization": {"type": "string", "minLength": 1},
+        "model_id": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "^simulated://benchmark-placeholder$"
+          }
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifact_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "quantization": {
+          "type": "string",
+          "minLength": 1
+        },
         "split_parameters": {
           "oneOf": [
-            {"type": "null"},
+            {
+              "type": "null"
+            },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["strategy", "shard_count"],
+              "required": [
+                "strategy",
+                "shard_count"
+              ],
               "properties": {
-                "strategy": {"type": "string", "minLength": 1},
-                "shard_count": {"type": "integer", "minimum": 1}
+                "strategy": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "shard_count": {
+                  "type": "integer",
+                  "minimum": 1
+                }
               }
             }
           ]
@@ -91,20 +152,42 @@
     "execution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["gpu_count", "tensor_parallelism", "context_window_tokens"],
+      "required": [
+        "gpu_count",
+        "tensor_parallelism",
+        "context_window_tokens"
+      ],
       "properties": {
-        "gpu_count": {"type": "integer", "minimum": 1},
-        "tensor_parallelism": {"type": "integer", "minimum": 1},
-        "context_window_tokens": {"type": "integer", "minimum": 1}
+        "gpu_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tensor_parallelism": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "context_window_tokens": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "duration": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["test_type", "seconds"],
+      "required": [
+        "test_type",
+        "seconds"
+      ],
       "properties": {
-        "test_type": {"type": "string", "minLength": 1},
-        "seconds": {"type": "number", "minimum": 0}
+        "test_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "telemetry": {
@@ -120,36 +203,75 @@
         "gpu_power_watts"
       ],
       "properties": {
-        "prompt_tokens_per_second": {"$ref": "#/$defs/telemetryMetric"},
-        "generation_tokens_per_second": {"$ref": "#/$defs/telemetryMetric"},
-        "ttft_ms": {"$ref": "#/$defs/telemetryMetric"},
-        "vram_gib_per_gpu": {"$ref": "#/$defs/telemetryMetric"},
-        "system_ram_gib": {"$ref": "#/$defs/telemetryMetric"},
-        "gpu_temperature_c": {"$ref": "#/$defs/telemetryMetric"},
-        "gpu_power_watts": {"$ref": "#/$defs/telemetryMetric"}
+        "prompt_tokens_per_second": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "generation_tokens_per_second": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "ttft_ms": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "vram_gib_per_gpu": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "system_ram_gib": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "gpu_temperature_c": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "gpu_power_watts": {
+          "$ref": "#/$defs/telemetryMetric"
+        }
       }
     },
     "correctness": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "summary", "expected", "observed"],
+      "required": [
+        "status",
+        "summary",
+        "expected",
+        "observed"
+      ],
       "properties": {
-        "status": {"type": "string", "enum": ["PASS", "FAIL", "NOT_TESTED"]},
-        "summary": {"type": "string", "minLength": 1},
+        "status": {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "NOT_TESTED"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
         "expected": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["summary"],
+          "required": [
+            "summary"
+          ],
           "properties": {
-            "summary": {"type": "string", "minLength": 1}
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         },
         "observed": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["summary"],
+          "required": [
+            "summary"
+          ],
           "properties": {
-            "summary": {"type": "string", "minLength": 1}
+            "summary": {
+              "type": "string",
+              "minLength": 1
+            }
           }
         }
       }
@@ -159,27 +281,170 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["criterion", "status", "reason", "expected", "observed"],
+        "required": [
+          "criterion",
+          "status",
+          "reason",
+          "expected",
+          "observed"
+        ],
         "properties": {
-          "criterion": {"type": "string", "minLength": 1},
-          "status": {"type": "string", "enum": ["triggered"]},
-          "reason": {"type": "string", "minLength": 1},
+          "criterion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "triggered"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
           "expected": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["summary"],
+            "required": [
+              "summary"
+            ],
             "properties": {
-              "summary": {"type": "string", "minLength": 1}
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "observed": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["summary"],
+            "required": [
+              "summary"
+            ],
             "properties": {
-              "summary": {"type": "string", "minLength": 1}
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
+        }
+      }
+    },
+    "os_tuning": {
+      "description": "Exact OS tuning provenance for this benchmark run, captured live from the running system.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "os_tuning_profile",
+        "tuning_profile_revision",
+        "cpu_governor",
+        "energy_performance_policy",
+        "numa_policy",
+        "cpu_affinity",
+        "memory_binding",
+        "thp_mode",
+        "hugepages_enabled",
+        "hugepages_size_kib",
+        "hugepages_count",
+        "swappiness",
+        "io_scheduler",
+        "irq_policy",
+        "kernel_cmdline"
+      ],
+      "properties": {
+        "os_tuning_profile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tuning_profile_revision": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cpu_governor": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "energy_performance_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "numa_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cpu_affinity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memory_binding": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thp_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hugepages_enabled": {
+          "type": "boolean"
+        },
+        "hugepages_size_kib": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "enum": [
+            null,
+            2048,
+            1048576
+          ]
+        },
+        "hugepages_count": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "swappiness": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "io_scheduler": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "irq_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kernel_cmdline": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     }
@@ -188,65 +453,104 @@
     {
       "if": {
         "properties": {
-          "status": {"const": "PASS"}
+          "status": {
+            "const": "PASS"
+          }
         },
-        "required": ["status"]
-      },
-      "then": {
-        "properties": {
-          "correctness": {
-            "properties": {
-              "status": {"const": "PASS"}
-            }
-          },
-          "failure_criteria": {"maxItems": 0}
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "status": {"const": "FAIL"}
-        },
-        "required": ["status"]
+        "required": [
+          "status"
+        ]
       },
       "then": {
         "properties": {
           "correctness": {
             "properties": {
               "status": {
-                "enum": ["PASS", "FAIL"]
+                "const": "PASS"
               }
             }
           },
-          "failure_criteria": {"minItems": 1}
+          "failure_criteria": {
+            "maxItems": 0
+          }
         }
       }
     },
     {
       "if": {
         "properties": {
-          "status": {"const": "NOT_RUN"}
+          "status": {
+            "const": "FAIL"
+          }
         },
-        "required": ["status"]
+        "required": [
+          "status"
+        ]
       },
       "then": {
         "properties": {
           "correctness": {
             "properties": {
-              "status": {"const": "NOT_TESTED"}
+              "status": {
+                "enum": [
+                  "PASS",
+                  "FAIL"
+                ]
+              }
             }
           },
-          "failure_criteria": {"maxItems": 0},
+          "failure_criteria": {
+            "minItems": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "NOT_RUN"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "correctness": {
+            "properties": {
+              "status": {
+                "const": "NOT_TESTED"
+              }
+            }
+          },
+          "failure_criteria": {
+            "maxItems": 0
+          },
           "telemetry": {
             "properties": {
-              "prompt_tokens_per_second": {"$ref": "#/$defs/telemetryMetricUnavailable"},
-              "generation_tokens_per_second": {"$ref": "#/$defs/telemetryMetricUnavailable"},
-              "ttft_ms": {"$ref": "#/$defs/telemetryMetricUnavailable"},
-              "vram_gib_per_gpu": {"$ref": "#/$defs/telemetryMetricUnavailable"},
-              "system_ram_gib": {"$ref": "#/$defs/telemetryMetricUnavailable"},
-              "gpu_temperature_c": {"$ref": "#/$defs/telemetryMetricUnavailable"},
-              "gpu_power_watts": {"$ref": "#/$defs/telemetryMetricUnavailable"}
+              "prompt_tokens_per_second": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              },
+              "generation_tokens_per_second": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              },
+              "ttft_ms": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              },
+              "vram_gib_per_gpu": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              },
+              "system_ram_gib": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              },
+              "gpu_temperature_c": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              },
+              "gpu_power_watts": {
+                "$ref": "#/$defs/telemetryMetricUnavailable"
+              }
             }
           }
         }
@@ -256,19 +560,36 @@
           "correctness": {
             "properties": {
               "status": {
-                "enum": ["PASS", "FAIL"]
+                "enum": [
+                  "PASS",
+                  "FAIL"
+                ]
               }
             }
           },
           "telemetry": {
             "properties": {
-              "prompt_tokens_per_second": {"$ref": "#/$defs/telemetryMetricMeasured"},
-              "generation_tokens_per_second": {"$ref": "#/$defs/telemetryMetricMeasured"},
-              "ttft_ms": {"$ref": "#/$defs/telemetryMetricMeasured"},
-              "vram_gib_per_gpu": {"$ref": "#/$defs/telemetryMetricMeasured"},
-              "system_ram_gib": {"$ref": "#/$defs/telemetryMetricMeasured"},
-              "gpu_temperature_c": {"$ref": "#/$defs/telemetryMetric"},
-              "gpu_power_watts": {"$ref": "#/$defs/telemetryMetric"}
+              "prompt_tokens_per_second": {
+                "$ref": "#/$defs/telemetryMetricMeasured"
+              },
+              "generation_tokens_per_second": {
+                "$ref": "#/$defs/telemetryMetricMeasured"
+              },
+              "ttft_ms": {
+                "$ref": "#/$defs/telemetryMetricMeasured"
+              },
+              "vram_gib_per_gpu": {
+                "$ref": "#/$defs/telemetryMetricMeasured"
+              },
+              "system_ram_gib": {
+                "$ref": "#/$defs/telemetryMetricMeasured"
+              },
+              "gpu_temperature_c": {
+                "$ref": "#/$defs/telemetryMetric"
+              },
+              "gpu_power_watts": {
+                "$ref": "#/$defs/telemetryMetric"
+              }
             }
           }
         }
@@ -279,52 +600,94 @@
     "telemetryMetric": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expected", "observed"],
+      "required": [
+        "expected",
+        "observed"
+      ],
       "properties": {
-        "expected": {"$ref": "#/$defs/telemetryValue"},
-        "observed": {"$ref": "#/$defs/telemetryValue"}
+        "expected": {
+          "$ref": "#/$defs/telemetryValue"
+        },
+        "observed": {
+          "$ref": "#/$defs/telemetryValue"
+        }
       }
     },
     "telemetryMetricMeasured": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expected", "observed"],
+      "required": [
+        "expected",
+        "observed"
+      ],
       "properties": {
-        "expected": {"$ref": "#/$defs/telemetryValue"},
-        "observed": {"$ref": "#/$defs/measurementValue"}
+        "expected": {
+          "$ref": "#/$defs/telemetryValue"
+        },
+        "observed": {
+          "$ref": "#/$defs/measurementValue"
+        }
       }
     },
     "telemetryMetricUnavailable": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["expected", "observed"],
+      "required": [
+        "expected",
+        "observed"
+      ],
       "properties": {
-        "expected": {"$ref": "#/$defs/telemetryValue"},
-        "observed": {"$ref": "#/$defs/unavailableValue"}
+        "expected": {
+          "$ref": "#/$defs/telemetryValue"
+        },
+        "observed": {
+          "$ref": "#/$defs/unavailableValue"
+        }
       }
     },
     "telemetryValue": {
       "oneOf": [
-        {"$ref": "#/$defs/measurementValue"},
-        {"$ref": "#/$defs/unavailableValue"}
+        {
+          "$ref": "#/$defs/measurementValue"
+        },
+        {
+          "$ref": "#/$defs/unavailableValue"
+        }
       ]
     },
     "measurementValue": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["value", "unit"],
+      "required": [
+        "value",
+        "unit"
+      ],
       "properties": {
-        "value": {"type": "number"},
-        "unit": {"type": "string", "minLength": 1}
+        "value": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "unavailableValue": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "reason"],
+      "required": [
+        "status",
+        "reason"
+      ],
       "properties": {
-        "status": {"type": "string", "const": "unavailable"},
-        "reason": {"type": "string", "minLength": 1}
+        "status": {
+          "type": "string",
+          "const": "unavailable"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     }
   }

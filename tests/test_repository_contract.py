@@ -54,6 +54,7 @@ REQUIRED_ROLE_NAMES = (
     "benchmarking",
     "cmdb_export",
     "itsm_hooks",
+    "os_tuning",
 )
 
 ROLE_SUBFILES = (

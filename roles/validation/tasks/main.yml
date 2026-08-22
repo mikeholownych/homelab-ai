@@ -21,6 +21,8 @@
       - "{{ hardware_profile | default('p620_dual_b65') }}"
       - --git-sha
       - "{{ git_commit_sha | default('0000000000000000000000000000000000000000') }}"
+      - --input-json
+      - "{{ validation_checks_input_path }}"
       - --output
       - "{{ validation_output_path }}"
       - --text-summary

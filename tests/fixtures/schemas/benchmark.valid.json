@@ -32,32 +32,74 @@
   },
   "telemetry": {
     "prompt_tokens_per_second": {
-      "expected": {"value": 1000, "unit": "tok/s"},
-      "observed": {"value": 1001, "unit": "tok/s"}
+      "expected": {
+        "value": 1000,
+        "unit": "tok/s"
+      },
+      "observed": {
+        "value": 1001,
+        "unit": "tok/s"
+      }
     },
     "generation_tokens_per_second": {
-      "expected": {"value": 120, "unit": "tok/s"},
-      "observed": {"value": 122, "unit": "tok/s"}
+      "expected": {
+        "value": 120,
+        "unit": "tok/s"
+      },
+      "observed": {
+        "value": 122,
+        "unit": "tok/s"
+      }
     },
     "ttft_ms": {
-      "expected": {"value": 2500, "unit": "ms"},
-      "observed": {"value": 2400, "unit": "ms"}
+      "expected": {
+        "value": 2500,
+        "unit": "ms"
+      },
+      "observed": {
+        "value": 2400,
+        "unit": "ms"
+      }
     },
     "vram_gib_per_gpu": {
-      "expected": {"value": 32, "unit": "GiB"},
-      "observed": {"value": 31.5, "unit": "GiB"}
+      "expected": {
+        "value": 32,
+        "unit": "GiB"
+      },
+      "observed": {
+        "value": 31.5,
+        "unit": "GiB"
+      }
     },
     "system_ram_gib": {
-      "expected": {"value": 48, "unit": "GiB"},
-      "observed": {"value": 48, "unit": "GiB"}
+      "expected": {
+        "value": 48,
+        "unit": "GiB"
+      },
+      "observed": {
+        "value": 48,
+        "unit": "GiB"
+      }
     },
     "gpu_temperature_c": {
-      "expected": {"status": "unavailable", "reason": "sensor optional in simulation"},
-      "observed": {"status": "unavailable", "reason": "sensor optional in simulation"}
+      "expected": {
+        "status": "unavailable",
+        "reason": "sensor optional in simulation"
+      },
+      "observed": {
+        "status": "unavailable",
+        "reason": "sensor optional in simulation"
+      }
     },
     "gpu_power_watts": {
-      "expected": {"status": "unavailable", "reason": "telemetry not wired in simulation"},
-      "observed": {"status": "unavailable", "reason": "telemetry not wired in simulation"}
+      "expected": {
+        "status": "unavailable",
+        "reason": "telemetry not wired in simulation"
+      },
+      "observed": {
+        "status": "unavailable",
+        "reason": "telemetry not wired in simulation"
+      }
     }
   },
   "correctness": {
@@ -70,5 +112,22 @@
       "summary": "Observed envelope matched the commissioning prompt set."
     }
   },
-  "failure_criteria": []
+  "failure_criteria": [],
+  "os_tuning": {
+    "os_tuning_profile": "baseline",
+    "tuning_profile_revision": "r0",
+    "cpu_governor": "schedutil",
+    "energy_performance_policy": "balance_performance",
+    "numa_policy": null,
+    "cpu_affinity": null,
+    "memory_binding": null,
+    "thp_mode": "madvise",
+    "hugepages_enabled": false,
+    "hugepages_size_kib": null,
+    "hugepages_count": null,
+    "swappiness": 60,
+    "io_scheduler": "none",
+    "irq_policy": "irqbalance:active",
+    "kernel_cmdline": "BOOT_IMAGE=/vmlinuz root=/dev/nvme0n1p2"
+  }
 }

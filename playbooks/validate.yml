@@ -13,5 +13,13 @@
       tags: [validation, inventory, hardware]
     - role: hardware_validation
       tags: [validation, hardware]
-    - role: validation
+    - role: os_tuning
+      tags: [validation, tuning, operations]
+  vars:
+    os_tuning_apply_mutations: false
+    os_tuning_install_discovery_packages: false
+  post_tasks:
+    - name: Run independent validation aggregation after tuning discovery
+      ansible.builtin.include_role:
+        name: validation
       tags: [validation, runtime, operations]

@@ -4,6 +4,7 @@ node_metadata:
   environment: production
   hostname: ai-p620-01
 hardware_profile: p620_dual_b65
+os_tuning_profile: baseline
 
 node_roles:
   inference: true
@@ -19,6 +20,7 @@ capabilities:
 features:
   monitoring: true
   scheduled_reconciliation: true
+  os_tuning: true
   clustering: false
   cmdb_export: false
   itsm_integration: false

@@ -21,7 +21,7 @@ PLAYBOOKS := \
 	playbooks/benchmark.yml \
 	playbooks/facts-export.yml
 
-.PHONY: bootstrap-tools lint syntax test check idempotency quality
+.PHONY: bootstrap-tools lint syntax test check tuning-smoke idempotency quality
 
 bootstrap-tools:
 	$(PYTHON_BIN) -m venv $(VENV_DIR)
@@ -41,6 +41,10 @@ test: bootstrap-tools
 check: bootstrap-tools
 	@echo "Running localhost-safe Ubuntu 24.04 contract check mode; this validates baseline wiring and does not assert host convergence."
 	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check tests/integration/baseline_os.yml
+
+tuning-smoke: bootstrap-tools
+	@echo "Running read-only OS tuning smoke against this machine (installs helpers under /usr/local/libexec, writes evidence under /var/lib/aihost)."
+	ansible-playbook -i tests/fixtures/inventory/healthy.yml tests/integration/os_tuning_smoke.yml
 
 idempotency: bootstrap-tools
 	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --mode idempotency --timeout 590

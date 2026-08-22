@@ -26,6 +26,7 @@ def get_schema_paths(schema_root: Path | None = None) -> dict[str, Path]:
         "cmdb": resolved_root / "cmdb.schema.json",
         "itsm": resolved_root / "itsm.schema.json",
         "manifest": resolved_root / "manifest.schema.json",
+        "tuning_profile": resolved_root / "os-tuning.schema.json",
     }
 
 

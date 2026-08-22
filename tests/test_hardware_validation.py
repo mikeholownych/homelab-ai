@@ -122,12 +122,20 @@ def test_realistic_lspci_parser_uses_explicit_link_fields_and_slot_width():
         (ROOT / "tests/fixtures/hardware/lspci_b65.txt").read_text(),
         (ROOT / "tests/fixtures/hardware/dmidecode_slots.txt").read_text(),
     )
-    assert pci[0] == {
-        "bdf": "0000:41:00.0", "vendor_id": "8086", "device_id": "e222",
-        "device_max_generation": 5, "device_max_width": 16,
-        "current_generation": 4, "current_width": 16, "slot_width": 16,
-        "bar_sizes_gib": [32.0], "rebar_enabled": True, "kernel_driver": None,
-    }
+    assert pci[0]["bdf"] == "0000:41:00.0"
+    assert pci[0]["vendor_id"] == "8086"
+    assert pci[0]["device_id"] == "e222"
+    assert pci[0]["device_max_generation"] == 5
+    assert pci[0]["device_max_width"] == 16
+    assert pci[0]["current_generation"] == 4
+    assert pci[0]["current_width"] == 16
+    assert pci[0]["slot_width"] == 16
+    assert pci[0]["bar_sizes_gib"] == [32.0]
+    assert pci[0]["rebar_enabled"] is True
+    assert pci[0]["kernel_driver"] is None
+    # AER counters are captured best-effort; absent sysfs on CI records clearly.
+    assert pci[0]["aer_counters"]["status"] == "unavailable"
+    assert "no AER sysfs attributes" in pci[0]["aer_counters"]["reason"]
     assert pci[1]["slot_width"] == 8
     assert pci[1]["current_width"] == 8
 

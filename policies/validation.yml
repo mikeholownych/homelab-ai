@@ -123,3 +123,45 @@ required_checks:
     applies_when: always
     expected:
       type: token_or_approle_reference_available
+  - id: os_tuning_profile
+    classification: operations
+    severity: warning
+    applies_when: when_os_tuning_enabled
+    expected:
+      type: profile_match
+  - id: os_tuning_governor
+    classification: operations
+    severity: warning
+    applies_when: when_os_tuning_manages_cpu_power
+    expected:
+      type: profile_match
+  - id: os_tuning_thp
+    classification: operations
+    severity: warning
+    applies_when: when_os_tuning_manages_thp
+    expected:
+      type: profile_match
+  - id: os_tuning_hugepages
+    classification: operations
+    severity: warning
+    applies_when: when_os_tuning_manages_hugepages
+    expected:
+      type: profile_match
+  - id: os_tuning_sysctl
+    classification: operations
+    severity: warning
+    applies_when: when_os_tuning_manages_sysctl
+    expected:
+      type: profile_match
+  - id: running_kernel
+    classification: runtime
+    severity: blocking
+    applies_when: when_kernel_pinned
+    expected:
+      type: profile_match
+  - id: numa_topology
+    classification: hardware
+    severity: warning
+    applies_when: always
+    expected:
+      type: stable_topology

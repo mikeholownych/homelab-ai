@@ -57,6 +57,13 @@ def test_aggregator_produces_valid_schema_document(tmp_path):
             "required_services": {"status": "PASS", "expected": "active", "observed": "active"},
             "scheduled_reconciliation": {"status": "PASS", "expected": "enabled", "observed": "enabled"},
             "vault_access": {"status": "PASS", "expected": "accessible", "observed": "accessible"},
+            "os_tuning_profile": {"status": "PASS", "expected": "baseline", "observed": "baseline"},
+            "os_tuning_governor": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
+            "os_tuning_thp": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
+            "os_tuning_hugepages": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
+            "os_tuning_sysctl": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
+            "running_kernel": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
+            "numa_topology": {"status": "PASS", "expected": "stable", "observed": "PASS"},
         }
     )
 

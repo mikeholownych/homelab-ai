@@ -56,6 +56,7 @@ def parse_lspci(text, slots_text):
                         "current_generation": _generation(float(sta.group(1))),
                         "current_width": int(sta.group(2)), "slot_width": slots.get(bdf),
                         "bar_sizes_gib": bars, "rebar_enabled": rebar_gib >= 16,
+                        "aer_counters": collect_aer(bdf),
                         "kernel_driver": kernel_driver.group(1) if kernel_driver else None})
     return devices
 
@@ -92,6 +93,51 @@ def sys_text(name):
     return path.read_text().strip() if path.exists() else None
 
 
+def collect_iommu():
+    """Read-only IOMMU state: kernel groups, DMAR devices, cmdline flags."""
+    try:
+        group_count = len(list(Path("/sys/kernel/iommu_groups").iterdir()))
+    except OSError:
+        group_count = None
+    try:
+        dmar_devices = sorted(path.name for path in Path("/sys/class/iommu").iterdir())
+    except OSError:
+        dmar_devices = []
+    try:
+        cmdline = Path("/proc/cmdline").read_text().split()
+    except OSError:
+        cmdline = []
+    return {
+        "kernel_iommu_groups": group_count,
+        "iommu_devices": dmar_devices,
+        "intel_iommu_on": "intel_iommu=on" in cmdline,
+        "iommu_pt": any(param.startswith("iommu.pt=") for param in cmdline),
+        "source": "sysfs+/proc/cmdline",
+    }
+
+
+def collect_aer(bdf):
+    """Per-device PCIe AER error counters when the sysfs attributes exist."""
+    counters = {}
+    base = Path("/sys/bus/pci/devices") / bdf
+    for name in ("aer_dev_correctable", "aer_dev_fatal", "aer_dev_nonfatal"):
+        path = base / name
+        if not path.exists():
+            continue
+        entries = {}
+        try:
+            for line in path.read_text().splitlines():
+                fields = line.split()
+                if len(fields) == 2:
+                    entries[fields[0]] = int(fields[1])
+        except (OSError, ValueError):
+            continue
+        counters[name] = entries
+    if not counters:
+        return {"status": "unavailable", "reason": f"no AER sysfs attributes under {bdf}"}
+    return counters
+
+
 def main():
     cpuinfo = Path("/proc/cpuinfo").read_text()
     memory_kib = int(next(line.split()[1] for line in Path("/proc/meminfo").read_text().splitlines()
@@ -121,7 +167,7 @@ def main():
                                  if line.startswith("model name")), "")},
         "memory": {"total_gib": round(memory_kib / 1024 / 1024, 2), "dimms": dimms},
         "gpus": [{key: item[key] for key in ("bdf", "vendor_id", "device_id")} for item in pci],
-        "pci": pci, "level_zero_devices": level_zero,
+        "pci": pci, "iommu": collect_iommu(), "level_zero_devices": level_zero,
         "storage": [item for item in lsblk["blockdevices"]
                     if item.get("type") == "disk" and item["name"].startswith("nvme")],
         "nics": [{"name": item.get("ifname"), "mac": item.get("address"), "mtu": item.get("mtu")}

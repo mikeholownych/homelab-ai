@@ -1,4 +1,13 @@
 ---
+- name: Resolve active tuning profile revision for benchmark provenance
+  ansible.builtin.set_fact:
+    benchmarking_tuning_revision: >-
+      {{ (lookup('ansible.builtin.file',
+         role_path + '/../../profiles/tuning/' + (os_tuning_profile | default('baseline')) + '.yml',
+         errors='ignore') | from_yaml).revision | default('unknown') }}
+  when: not ansible_check_mode
+  tags: [benchmark, operations]
+
 - name: Validate benchmark inputs
   ansible.builtin.assert:
     that:
@@ -32,5 +41,10 @@
       - "{{ benchmarking_output_path }}"
   register: benchmarking_run
   changed_when: false
+  environment:
+    AIHOST_BENCH_TUNING_PROFILE: "{{ os_tuning_profile | default('baseline') }}"
+    AIHOST_BENCH_TUNING_REVISION: "{{ benchmarking_tuning_revision | default(omit) }}"
+    AIHOST_BENCH_NUMA_POLICY: "{{ benchmarking_numa_policy | default(omit) }}"
+    AIHOST_BENCH_MEMBIND_NODES: "{{ benchmarking_membind_nodes | default(omit) }}"
   when: not ansible_check_mode
   tags: [benchmark, operations]

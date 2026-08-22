@@ -216,3 +216,23 @@ git revert <commit-sha>
 ansible-playbook playbooks/site.yml --limit ai-p620-01
 ```
 See `docs/rollback.md` for full rollback runbook.
+
+---
+
+## 19. OS Tuning Framework
+
+OS tuning is evidence-driven and versioned. The authoritative profile is
+`os_tuning_profile: baseline`, which manages nothing until benchmark evidence
+justifies a change:
+
+- Profiles live in `profiles/tuning/` and validate against
+  `schemas/os-tuning.schema.json`.
+- Workflow: baseline -> benchmark -> one controlled candidate -> benchmark ->
+  compare -> retain or reject (`docs/tuning.md`).
+- Promotion criteria and thresholds: `policies/tuning.yml`.
+- NUMA, PCIe, IRQ, CPU-power, memory, hugepages, I/O, and kernel telemetry are
+  collected into every evidence run (`numa.json`, `cpu-power.json`,
+  `interrupts.json`, `memory-policy.json`, `hugepages.json`, `io.json`,
+  `kernel.json`, `tuning-profile.json`).
+- Custom kernels remain disabled scaffolding (`kernel/`, `docs/custom-kernel.md`);
+  supported Ubuntu kernels are always tried first.

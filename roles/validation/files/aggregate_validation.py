@@ -27,6 +27,13 @@ REQUIRED_CHECKS_SPEC = {
     "required_services": {"category": "system", "classification": "service", "severity": "warning", "summary": "Required services active", "value": "active"},
     "scheduled_reconciliation": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "Reconciliation enabled", "value": "enabled"},
     "vault_access": {"category": "security", "classification": "access", "severity": "blocking", "summary": "Vault access succeeds", "value": "accessible"},
+    "os_tuning_profile": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "Active tuning profile", "value": "baseline"},
+    "os_tuning_governor": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "CPU governor matches profile", "value": "PASS"},
+    "os_tuning_thp": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "THP mode matches profile", "value": "PASS"},
+    "os_tuning_hugepages": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "HugeTLB state matches profile", "value": "PASS"},
+    "os_tuning_sysctl": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "Managed sysctl values active", "value": "PASS"},
+    "running_kernel": {"category": "system", "classification": "runtime", "severity": "blocking", "summary": "Expected kernel running", "value": "PASS"},
+    "numa_topology": {"category": "platform", "classification": "hardware", "severity": "warning", "summary": "NUMA topology stable", "value": "PASS"},
 }
 
 

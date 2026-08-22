@@ -34,6 +34,12 @@
         - container_runtime_enabled | default(false) | bool
       tags: [site, gpu, runtime]
 
+    - name: Include OS tuning role for tuning-managed nodes
+      ansible.builtin.include_role:
+        name: os_tuning
+      when: features.os_tuning | default(false) | bool
+      tags: [site, tuning, baseline]
+
     - name: Include PyTorch XPU role for inference-capable GPU nodes
       ansible.builtin.include_role:
         name: pytorch_xpu

@@ -6,9 +6,78 @@ import argparse
 import datetime
 import json
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+
+def _read_sysfs(path: str) -> Optional[str]:
+    try:
+        return Path(path).read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        return None
+
+
+def _bracketed(content: Optional[str]) -> Optional[str]:
+    if not content:
+        return None
+    match = re.search(r"\[([A-Za-z+]+)\]", content)
+    return match.group(1) if match else None
+
+
+def _sysctl_int(name: str) -> Optional[int]:
+    try:
+        output = subprocess.run(
+            ["/usr/sbin/sysctl", "-n", name], check=True, capture_output=True, text=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    try:
+        return int(output)
+    except ValueError:
+        return None
+
+
+def collect_os_tuning(tuning_profile: str, tuning_revision: str) -> Dict[str, Any]:
+    """Capture live OS tuning provenance so every benchmark is attributable."""
+    governor = _read_sysfs("/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor")
+    epp = _read_sysfs("/sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference")
+    thp_mode = _bracketed(_read_sysfs("/sys/kernel/mm/transparent_hugepage/enabled"))
+    scheduler = None
+    nvme_dirs = sorted(Path("/sys/block").glob("nvme*n*"))
+    if nvme_dirs:
+        scheduler = _bracketed(_read_sysfs(f"/sys/block/{nvme_dirs[0].name}/queue/scheduler"))
+    hugepages_total = _sysctl_int("vm.nr_hugepages") or 0
+    irqbalance = None
+    try:
+        irqbalance = subprocess.run(
+            ["systemctl", "is-active", "irqbalance"], capture_output=True, text=True
+        ).stdout.strip() or None
+    except OSError:
+        pass
+    cmdline = _read_sysfs("/proc/cmdline")
+    numa_policy = os.environ.get("AIHOST_BENCH_NUMA_POLICY")
+    cpu_affinity = os.sched_getaffinity(0) and ",".join(str(c) for c in sorted(os.sched_getaffinity(0))[:64])
+    membind = os.environ.get("AIHOST_BENCH_MEMBIND_NODES")
+    return {
+        "os_tuning_profile": tuning_profile,
+        "tuning_profile_revision": tuning_revision,
+        "cpu_governor": governor,
+        "energy_performance_policy": epp,
+        "numa_policy": numa_policy or ("interleave" if membind else None),
+        "cpu_affinity": cpu_affinity or None,
+        "memory_binding": membind,
+        "thp_mode": thp_mode,
+        "hugepages_enabled": bool(hugepages_total),
+        "hugepages_size_kib": 2048 if hugepages_total else None,
+        "hugepages_count": hugepages_total or None,
+        "swappiness": _sysctl_int("vm.swappiness"),
+        "io_scheduler": scheduler,
+        "irq_policy": f"irqbalance:{irqbalance}" if irqbalance else "irqbalance:unknown",
+        "kernel_cmdline": cmdline,
+    }
 
 
 def build_benchmark_document(
@@ -106,6 +175,10 @@ def build_benchmark_document(
             "tensor_parallelism": tensor_parallelism,
             "context_window_tokens": context_window_tokens,
         },
+        "os_tuning": collect_os_tuning(
+            os.environ.get("AIHOST_BENCH_TUNING_PROFILE", "unknown"),
+            os.environ.get("AIHOST_BENCH_TUNING_REVISION"),
+        ),
         "duration": {
             "test_type": profile_name,
             "seconds": duration_seconds,

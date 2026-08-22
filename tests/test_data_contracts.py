@@ -229,6 +229,13 @@ class DataContractTests(unittest.TestCase):
                 "required_services",
                 "scheduled_reconciliation",
                 "vault_access",
+                "os_tuning_profile",
+                "os_tuning_governor",
+                "os_tuning_thp",
+                "os_tuning_hugepages",
+                "os_tuning_sysctl",
+                "running_kernel",
+                "numa_topology",
             },
             set(checks),
         )
