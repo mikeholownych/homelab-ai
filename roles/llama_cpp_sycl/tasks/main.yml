@@ -24,6 +24,46 @@
   when: llama_cpp_sycl_service_enabled | bool
   tags: [inference, runtime, llama_cpp]
 
+- name: Require authenticated serving for network-bound llama.cpp
+  ansible.builtin.assert:
+    that:
+      - not (llama_cpp_sycl_service_enabled | bool)
+        or not (llama_cpp_sycl_install_enabled | bool)
+        or (llama_cpp_sycl_api_key_required | bool)
+        or llama_cpp_sycl_host is match('^(127\\.|\\[::1\\]|localhost$)')
+    fail_msg: >-
+      llama.cpp bound beyond loopback must require an API key
+      (llama_cpp_sycl_api_key_required=true) so Vault-backed auth is enforced.
+  tags: [inference, runtime, llama_cpp]
+
+- name: Read llama.cpp API key from Vault at runtime
+  ansible.builtin.include_role:
+    name: vault_integration
+    tasks_from: main.yml
+  vars:
+    vault_integration_operation: read
+    vault_integration_secret_ref: "{{ llama_cpp_sycl_api_key_secret_path }}"
+    vault_integration_required_secret_keys:
+      - "{{ llama_cpp_sycl_api_key_secret_file_key }}"
+  when:
+    - llama_cpp_sycl_service_enabled | bool
+    - llama_cpp_sycl_install_enabled | bool
+    - llama_cpp_sycl_api_key_required | bool
+    - not ansible_check_mode
+  no_log: true
+  tags: [inference, runtime, llama_cpp, vault]
+
+- name: Publish retrieved API key for environment rendering
+  ansible.builtin.set_fact:
+    llama_cpp_sycl_api_key: "{{ vault_integration_secret[llama_cpp_sycl_api_key_secret_file_key] }}"
+  no_log: true
+  when:
+    - llama_cpp_sycl_service_enabled | bool
+    - llama_cpp_sycl_install_enabled | bool
+    - llama_cpp_sycl_api_key_required | bool
+    - not ansible_check_mode
+  tags: [inference, runtime, llama_cpp]
+
 - name: Create llama.cpp configuration and log directories
   ansible.builtin.file:
     path: "{{ item }}"

@@ -18,6 +18,7 @@ def validate_llama(
     port: int = 8080,
     git_commit: str = "unknown",
     dual_gpu: bool = False,
+    api_key: str | None = None,
     simulated: bool = False,
 ) -> Dict[str, Any]:
     if simulated:
@@ -37,7 +38,10 @@ def validate_llama(
 
     # Live check: attempt health/models request
     url = f"http://{host}:{port}/health"
-    req = urllib.request.Request(url, headers={"User-Agent": "aihost-llama-validator"})
+    headers = {"User-Agent": "aihost-llama-validator"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=5.0) as response:
             status_code = response.getcode()
@@ -89,6 +93,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8080, help="Server port")
     parser.add_argument("--commit", default="unknown", help="Git commit SHA")
     parser.add_argument("--dual-gpu", action="store_true", help="Dual GPU mode tested")
+    parser.add_argument("--api-key", default=None, help="API key for authenticated endpoints")
     parser.add_argument("--simulated", action="store_true", help="Simulated run")
     parser.add_argument("--output", default=None, help="Output JSON path")
     args = parser.parse_args()
@@ -98,6 +103,7 @@ def main() -> int:
         port=args.port,
         git_commit=args.commit,
         dual_gpu=args.dual_gpu,
+    api_key=args.api_key,
         simulated=args.simulated,
     )
 

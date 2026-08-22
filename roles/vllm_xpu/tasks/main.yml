@@ -8,8 +8,50 @@
       - vllm_xpu_profiles is mapping
       - "vllm_xpu_active_profile in vllm_xpu_profiles"
       - (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size in [1, 2]
+      - vllm_xpu_api_key is none
     fail_msg: >-
       vllm_xpu requires a valid pinned version, image digest, and profile configuration.
+      vllm_xpu_api_key must stay null in Git; it is populated only from Vault at runtime.
+  tags: [inference, runtime, vllm]
+
+- name: Require authenticated serving for network-bound vLLM
+  ansible.builtin.assert:
+    that:
+      - not (vllm_xpu_service_enabled | bool)
+        or not (vllm_xpu_install_enabled | bool)
+        or (vllm_xpu_api_key_required | bool)
+        or vllm_xpu_host is match('^(127\\.|\\[::1\\]|localhost$)')
+    fail_msg: >-
+      vLLM bound beyond loopback must require an API key
+      (vllm_xpu_api_key_required=true) so Vault-backed auth is enforced.
+  tags: [inference, runtime, vllm]
+
+- name: Read vLLM API key from Vault at runtime
+  ansible.builtin.include_role:
+    name: vault_integration
+    tasks_from: main.yml
+  vars:
+    vault_integration_operation: read
+    vault_integration_secret_ref: "{{ vllm_xpu_api_key_secret_path }}"
+    vault_integration_required_secret_keys:
+      - "{{ vllm_xpu_api_key_secret_file_key }}"
+  when:
+    - vllm_xpu_service_enabled | bool
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_api_key_required | bool
+    - not ansible_check_mode
+  no_log: true
+  tags: [inference, runtime, vllm, vault]
+
+- name: Publish retrieved API key for environment rendering
+  ansible.builtin.set_fact:
+    vllm_xpu_api_key: "{{ vault_integration_secret[vllm_xpu_api_key_secret_file_key] }}"
+  no_log: true
+  when:
+    - vllm_xpu_service_enabled | bool
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_api_key_required | bool
+    - not ansible_check_mode
   tags: [inference, runtime, vllm]
 
 - name: Create vLLM service directories

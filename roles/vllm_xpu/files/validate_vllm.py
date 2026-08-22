@@ -13,9 +13,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 
-def check_endpoint(host: str, port: int, endpoint: str, data: Dict[str, Any] | None = None, timeout: float = 5.0) -> tuple[int, Dict[str, Any]]:
+def check_endpoint(host: str, port: int, endpoint: str, data: Dict[str, Any] | None = None, timeout: float = 5.0, api_key: str | None = None) -> tuple[int, Dict[str, Any]]:
     url = f"http://{host}:{port}{endpoint}"
     headers = {"User-Agent": "aihost-vllm-validator", "Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
     payload = json.dumps(data).encode("utf-8") if data else None
     req = urllib.request.Request(url, data=payload, headers=headers)
     try:
@@ -38,6 +40,7 @@ def validate_vllm(
     port: int = 8000,
     expected_model: str | None = None,
     expected_tp_size: int = 1,
+    api_key: str | None = None,
     simulated: bool = False,
 ) -> Dict[str, Any]:
     if simulated:
@@ -78,13 +81,14 @@ def validate_vllm(
             "reason": f"health check failed with code {health_code}: {health_data}",
         }
 
-    models_code, models_data = check_endpoint(host, port, "/v1/models")
+    models_code, models_data = check_endpoint(host, port, "/v1/models", api_key=api_key)
     models_list = models_data.get("data", [])
 
     # Test completion endpoint
     comp_code, comp_data = check_endpoint(
         host, port, "/v1/chat/completions",
-        data={"model": expected_model or (models_list[0]["id"] if models_list else "test"), "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}
+        data={"model": expected_model or (models_list[0]["id"] if models_list else "test"), "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5},
+        api_key=api_key,
     )
 
     return {
@@ -108,6 +112,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8000, help="vLLM server port")
     parser.add_argument("--model", default=None, help="Expected model ID")
     parser.add_argument("--tensor-parallel-size", type=int, default=1, help="Expected TP size")
+    parser.add_argument("--api-key", default=None, help="API key for authenticated endpoints")
     parser.add_argument("--simulated", action="store_true", help="Run simulated check")
     parser.add_argument("--output", default=None, help="Output JSON path")
     args = parser.parse_args()
@@ -117,6 +122,7 @@ def main() -> int:
         port=args.port,
         expected_model=args.model,
         expected_tp_size=args.tensor_parallel_size,
+        api_key=args.api_key,
         simulated=args.simulated,
     )
 

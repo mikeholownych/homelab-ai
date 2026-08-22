@@ -37,3 +37,9 @@ vllm_xpu_model_path: null
 
 vllm_xpu_validation_path: "/var/lib/aihost/evidence/vllm_validation.json"
 vllm_xpu_api_key_secret_path: "secret/local-ai/services/vllm/api-key"
+
+# Authenticated serving: when the service binds a non-loopback address, an API
+# key retrieved from Vault at runtime is mandatory. Never commit key material.
+vllm_xpu_api_key: null
+vllm_xpu_api_key_required: true
+vllm_xpu_api_key_secret_file_key: "key"
