@@ -54,4 +54,4 @@ tuning-idempotency: tuning-smoke
 idempotency: bootstrap-tools
 	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --mode idempotency --timeout 590
 
-quality: lint test syntax check check idempotency
+quality: lint test syntax check idempotency tuning-idempotency

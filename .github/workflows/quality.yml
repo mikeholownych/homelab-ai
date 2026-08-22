@@ -37,6 +37,8 @@ jobs:
 
       - name: Run repository quality gates
         run: make quality
+      - name: Verify OS tuning convergence idempotency
+        run: make tuning-idempotency
 
       - name: Show active Ansible config overrides
         run: ANSIBLE_CONFIG=ansible.cfg .venv/bin/ansible-config dump --only-changed
