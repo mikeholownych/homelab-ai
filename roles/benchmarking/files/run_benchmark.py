@@ -321,6 +321,70 @@ def probe_llama_completion(
     }
 
 
+def _first_line_of(path: str) -> Optional[str]:
+    try:
+        content = Path(path).read_text(encoding="utf-8", errors="replace").strip()
+        return content.splitlines()[0] if content else None
+    except OSError:
+        return None
+
+
+def _dpkg_first_version(packages: List[str]) -> Optional[str]:
+    try:
+        output = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Package}=${Version}\\n", *packages],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    lines = [ln for ln in output.splitlines() if ln]
+    return lines[0] if lines else None
+
+
+def _live_system_provenance(hostname: str) -> Dict[str, Any]:
+    """Read live system identity; 'unknown' beats fabrication."""
+    try:
+        kernel = subprocess.run(
+            ["uname", "-r"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        kernel = "unknown"
+    bios = _read_sysfs("/sys/class/dmi/id/bios_version") or "unknown"
+
+    intel_runtime = "unknown"
+    try:
+        gpu_dirs = sorted(Path("/var/cache/local-ai/intel-gpu").iterdir())
+        if gpu_dirs:
+            intel_runtime = gpu_dirs[-1].name
+    except OSError:
+        pass
+
+    l0 = _dpkg_first_version(["libze1", "libze-intel-gpu1"])
+
+    pytorch = "unknown"
+    current_link = Path("/opt/local-ai/pytorch-xpu/current")
+    try:
+        target = current_link.resolve().name
+        marker = target.find("-py")
+        pytorch = target[:marker] if marker > 0 else target
+    except OSError:
+        pass
+
+    vllm_version = _first_line_of("/etc/local-ai/vllm/VERSION") or "unknown"
+    llama_commit = _first_line_of("/opt/llama.cpp-sycl/BUILD_COMMIT") or "unknown"
+
+    return {
+        "hostname": hostname,
+        "bios_version": bios,
+        "kernel_version": kernel,
+        "intel_runtime_version": intel_runtime,
+        "level_zero_version": l0 or "unknown",
+        "pytorch_version": pytorch,
+        "vllm_version": vllm_version,
+        "llama_commit": llama_commit,
+    }
+
+
 # ------------------------------------------------------------ document build
 
 def _metric(expected_value: float, unit: str, observed: Optional[float]) -> Dict[str, Any]:
@@ -393,14 +457,19 @@ def build_benchmark_document(
         for key in expected_values
     }
 
-    correctness_status = status if status in ("PASS", "FAIL") else "NOT_TESTED"
+    if mode == "simulated" and status == "PASS":
+        status = "SIMULATED_PASS"
+    correctness_status = status if status in ("PASS", "FAIL", "SIMULATED_PASS") else "NOT_TESTED"
     correctness = {
         "status": correctness_status,
-        "summary": (
-            "Output tokens match expected deterministic output."
-            if correctness_status == "PASS"
-            else "Benchmark check failed or unverified."
-        ),
+        "summary": {
+            "SIMULATED_PASS": (
+                "Simulated placeholder metrics. NOT physical acceptance evidence; "
+                "do not use for promotion decisions."
+            ),
+            "PASS": "Output tokens match expected deterministic output.",
+        }.get(correctness_status, "Benchmark check failed or unverified."),
+
         "expected": {"summary": "Deterministic output validation match"},
         "observed": {
             "summary": "Output verified" if correctness_status == "PASS" else "No valid output verified"
@@ -418,7 +487,7 @@ def build_benchmark_document(
             "expected": {"summary": f"< {safety['guardrails']['abort_temperature_c']} C"},
             "observed": {"summary": f">= {safety['guardrails']['abort_temperature_c']} C"},
         })
-    if safety and safety.get("power_budget", {}).get("status") == "refused":
+    if status == "FAIL" and safety and safety.get("power_budget", {}).get("status") == "refused":
         failure_criteria.append({
             "criterion": "power_budget_exceeded",
             "status": "triggered",
@@ -444,16 +513,7 @@ def build_benchmark_document(
         "git_sha": git_sha,
         "simulated": simulated,
         "status": status,
-        "system": {
-            "hostname": hostname,
-            "bios_version": "M34KT39A",
-            "kernel_version": "6.8.0-40-generic",
-            "intel_runtime_version": "26.27.39122.11",
-            "level_zero_version": "1.17.6",
-            "pytorch_version": "2.12.1+xpu",
-            "vllm_version": "0.7.3",
-            "llama_commit": "b374829a435fa848d7c1775efd2dfbfb87fcf1e2",
-        },
+        "system": _live_system_provenance(hostname),
         "model": {
             "model_id": model_id,
             "revision": revision,
@@ -675,7 +735,7 @@ def main() -> int:
         out_path.write_text(formatted_json, encoding="utf-8")
 
     print(formatted_json)
-    return 0 if doc["status"] == "PASS" else 1
+    return 0 if doc["status"] in ("PASS", "SIMULATED_PASS") else 1
 
 
 if __name__ == "__main__":

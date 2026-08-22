@@ -87,6 +87,121 @@
   when: llama_cpp_sycl_install_enabled | bool
   tags: [inference, runtime, llama_cpp]
 
+- name: Install llama.cpp build prerequisites
+  ansible.builtin.apt:
+    name:
+      - build-essential
+      - cmake
+      - git
+      - pkg-config
+      - libcurl4-openssl-dev
+    state: present
+  when: llama_cpp_sycl_install_enabled | bool
+  tags: [inference, runtime, llama_cpp, baseline]
+
+# SYCL builds require the Intel DPC++ compiler (icx). It ships from the Intel
+# oneAPI repository, which is exactly the vendor-stack decision the intel_gpu
+# role gates on - so this fails closed with a precise message instead of a
+# confusing compiler error halfway through the build.
+- name: Check for Intel DPC++ compiler required by GGML_SYCL
+  ansible.builtin.command:
+    argv: ["which", "icx"]
+  register: llama_cpp_sycl_icx_probe
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  tags: [inference, runtime, llama_cpp]
+
+- name: Fail closed when the SYCL toolchain is absent
+  ansible.builtin.fail:
+    msg: >-
+      llama.cpp SYCL builds require the Intel oneAPI DPC++ compiler (icx), which is
+      provisioned together with the Intel GPU stack (see roles/intel_gpu and the
+      unresolved vendor support decision). Resolve that blocker first; do not
+      bypass with a generic compiler or the build will silently target OpenCL.
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - llama_cpp_sycl_icx_probe.rc != 0
+
+- name: Clone pinned llama.cpp source at the declared commit
+  ansible.builtin.git:
+    repo: "{{ llama_cpp_sycl_git_repo }}"
+    dest: "{{ llama_cpp_sycl_build_dir }}"
+    version: "{{ llama_cpp_sycl_git_commit }}"
+    depth: 1
+  register: llama_cpp_sycl_clone
+  when: llama_cpp_sycl_install_enabled | bool
+  tags: [inference, runtime, llama_cpp]
+
+- name: Configure llama.cpp with the pinned SYCL flags
+  ansible.builtin.command:
+    argv: "{{ ['cmake', '-B', llama_cpp_sycl_build_dir ~ '/build-sycl', '-S', llama_cpp_sycl_build_dir]
+              + llama_cpp_sycl_cmake_args }}"
+  register: llama_cpp_sycl_configure
+  changed_when: llama_cpp_sycl_configure.rc == 0
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - llama_cpp_sycl_clone is changed or llama_cpp_sycl_force_rebuild | bool
+  tags: [inference, runtime, llama_cpp]
+
+- name: Compile llama.cpp SYCL binaries
+  ansible.builtin.command:
+    argv:
+      - cmake
+      - --build
+      - "{{ llama_cpp_sycl_build_dir }}/build-sycl"
+      - --config
+      - Release
+      - -j
+      - "{{ ansible_processor_vcpus | default(4) }}"
+    args:
+      chdir: "{{ llama_cpp_sycl_build_dir }}"
+  register: llama_cpp_sycl_build
+  changed_when: llama_cpp_sycl_build.rc == 0
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - not ansible_check_mode
+    - llama_cpp_sycl_configure is changed or llama_cpp_sycl_force_rebuild | bool
+  tags: [inference, runtime, llama_cpp]
+
+- name: Install compiled binaries into the service directory
+  ansible.builtin.copy:
+    src: "{{ llama_cpp_sycl_build_dir }}/build-sycl/bin/llama-server"
+    dest: "{{ llama_cpp_sycl_install_dir }}/bin/llama-server"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - not ansible_check_mode
+    - llama_cpp_sycl_build is changed
+  tags: [inference, runtime, llama_cpp]
+
+- name: Record the exact build provenance stamp
+  ansible.builtin.copy:
+    content: "{{ {'git_commit': llama_cpp_sycl_git_commit,
+                   'cmake_args': llama_cpp_sycl_cmake_args,
+                   'built_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')} | to_nice_json }}\n"
+    dest: "{{ llama_cpp_sycl_install_dir }}/BUILD_STAMP.json"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - not ansible_check_mode
+    - llama_cpp_sycl_build is changed
+
+- name: Write plain commit file for benchmark provenance reads
+  ansible.builtin.copy:
+    content: "{{ llama_cpp_sycl_git_commit }}\n"
+    dest: "{{ llama_cpp_sycl_install_dir }}/BUILD_COMMIT"
+    owner: root
+    group: root
+    mode: "0644"
+  when: llama_cpp_sycl_install_enabled | bool
+  tags: [inference, runtime, llama_cpp]
+
 - name: Install llama.cpp systemd service unit
   ansible.builtin.template:
     src: llama-server.service.j2

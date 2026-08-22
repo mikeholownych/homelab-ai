@@ -8,7 +8,16 @@ OnFailure=aihost-alert@%n
 Type=oneshot
 User={{ scheduled_ansible_user }}
 WorkingDirectory={{ scheduled_ansible_snapshot_dir }}
-ExecStart={{ scheduled_ansible_runner_path | default('/opt/local-ai/scripts/run-ansible-snapshot') }} site.yml
+# Full wrapper argv is mandatory: the snapshot runner refuses partial
+# invocations (repo root, schema root, inventory, target, playbook, lock).
+ExecStart={{ scheduled_ansible_runner_path }} \
+  --repo-root {{ scheduled_ansible_snapshot_dir }} \
+  --schema-root {{ scheduled_ansible_snapshot_dir }}/schemas \
+  --inventory {{ scheduled_ansible_inventory_path }} \
+  --target {{ inventory_hostname }} \
+  --playbook site.yml \
+  --lock-root {{ scheduled_ansible_lock_root }} \
+  --validate-after-site
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6

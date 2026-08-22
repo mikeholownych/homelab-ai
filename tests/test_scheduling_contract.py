@@ -32,6 +32,27 @@ def test_systemd_unit_templates_use_lock_and_snapshot_runner():
     assert "LimitNOFILE=" in reconcile_service
 
 
+WRAPPER_REQUIRED_ARGS = (
+    "--repo-root",
+    "--schema-root",
+    "--inventory",
+    "--target",
+    "--playbook",
+    "--lock-root",
+)
+
+
+def test_scheduled_units_pass_full_wrapper_argv():
+    """The snapshot wrapper exits 64 on missing args; the units must send them all."""
+    for unit in ("aihost-reconcile.service.j2", "aihost-patch.service.j2"):
+        text = (REPO_ROOT / "roles/scheduled_ansible/templates" / unit).read_text()
+        for arg in WRAPPER_REQUIRED_ARGS:
+            assert arg in text, f"{unit} is missing required wrapper argument {arg}"
+        assert "{{ inventory_hostname }}" in text, f"{unit} must target its own host"
+        # Playbook name travels via --playbook, never as a bare positional.
+        assert "--playbook" in text
+
+
 def test_no_git_network_operations_in_reconcile_service():
     reconcile_service = (REPO_ROOT / "roles/scheduled_ansible/templates/aihost-reconcile.service.j2").read_text()
     assert "git pull" not in reconcile_service

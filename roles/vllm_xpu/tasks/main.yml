@@ -68,6 +68,49 @@
   when: vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
+- name: Require container runtime for container-mode vLLM
+  ansible.builtin.assert:
+    that:
+      - not (vllm_xpu_install_enabled | bool)
+      - or (vllm_xpu_runtime_mode != 'container')
+      - or (container_runtime_enabled | bool)
+    fail_msg: >-
+      vLLM container mode requires the container runtime role
+      (container_runtime_enabled=true) so GPU CDI devices exist.
+  tags: [inference, runtime, vllm]
+
+- name: Install vLLM XPU container launcher
+  ansible.builtin.copy:
+    src: vllm-xpu-runner.sh
+    dest: /usr/local/bin/vllm-xpu-runner
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_runtime_mode == 'container'
+  tags: [inference, runtime, vllm]
+
+- name: Pin the exact container image reference by digest
+  ansible.builtin.copy:
+    content: "{{ vllm_xpu_container_image }}@{{ vllm_xpu_container_digest }}\n"
+    dest: "{{ vllm_xpu_config_dir }}/image-ref"
+    owner: root
+    group: root
+    mode: "0644"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
+- name: Record deployed vLLM version stamp for evidence provenance
+  ansible.builtin.copy:
+    content: "{{ vllm_xpu_version }}\n"
+    dest: "{{ vllm_xpu_config_dir }}/VERSION"
+    owner: root
+    group: root
+    mode: "0644"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
 - name: Render non-secret vLLM configuration file
   ansible.builtin.template:
     src: vllm-config.yaml.j2

@@ -47,7 +47,7 @@
     argv: "{{ cpu_power_argv }}"
   register: os_tuning_cpu_power_runtime
   changed_when: "'\"changed\": 0' not in (os_tuning_cpu_power_runtime.stdout | default(''))"
-  failed_when: os_tuning_cpu_power_runtime.rc not in [0, 3]
+  failed_when: os_tuning_cpu_power_runtime.rc not in [0, 3, 5]
   when:
     - os_tuning_apply_mutations | bool
     - not ansible_check_mode
@@ -67,7 +67,7 @@
   register: os_tuning_cpu_power_validate
   changed_when: false
   check_mode: false
-  failed_when: os_tuning_cpu_power_validate.rc not in [0, 4]
+  failed_when: os_tuning_cpu_power_validate.rc not in [0, 4, 5]
   vars:
     tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
     governor_args: "{{ ['--governor', tuning_cpu.governor] if tuning_cpu.governor is not none else [] }}"

@@ -37,8 +37,8 @@ os_tuning_allowed_sysctl_keys:
 os_tuning_allowed_boot_parameter_patterns:
   - '^transparent_hugepage=(always|madvise|never)$'
   - '^transparent_hugepage_defrag=(always|defer|defer\+madvise|madvise|never)$'
-  - '^default_hugepagesz=([1G]B|[2M]B)$'
-  - '^hugepagesz=([1G]B|[2M]B)$'
+  - '^default_hugepagesz=(1G|2M)$'
+  - '^hugepagesz=(1G|2M)$'
   - '^hugepages=[0-9]+$'
 os_tuning_allowed_governors:
   - performance

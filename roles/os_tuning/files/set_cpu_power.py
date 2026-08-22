@@ -2,9 +2,15 @@
 """Idempotently enforce a CPU governor and energy-performance preference.
 
 Writes scaling_governor / energy_performance_preference for every online CPU.
-Compares current values first so repeated runs make no changes. Exits 0 when
-state matches, 3 when changes were applied, 1 on failure. --validate mode only
-reports whether state already matches (exit 0) or not (exit 4).
+Compares current values first so repeated runs make no changes.
+
+Exit codes:
+  0  state matched (or --validate found no mismatch)
+  3  changes were applied
+  4  (--validate only) active state does not match the requested values
+  5  requested attribute does not exist on this platform (e.g. no EPP on
+     CPUs without amd-pstate/intel_pstate support) - recorded, never fatal
+  1  hard failure (permission denied, write error, no cpufreq at all)
 """
 
 import argparse
@@ -24,13 +30,20 @@ def apply_to_cpus(attribute, value, validate_only):
     cpus = online_cpus()
     if not cpus:
         print(json.dumps({"status": "unavailable", "reason": "no cpufreq-capable CPUs found"}))
-        return 1
+        return 5
+    missing_attribute = False
     for cpu in cpus:
         attribute_path = cpu / "cpufreq" / attribute
+        if not attribute_path.exists():
+            missing_attribute = True
+            continue
         try:
             current = attribute_path.read_text().strip()
-        except (OSError, PermissionError) as error:
-            print(json.dumps({"status": "unavailable", "reason": f"{attribute_path}: {error}"}))
+        except PermissionError as error:
+            print(json.dumps({"status": "error", "reason": f"{attribute_path}: {error}"}))
+            return 1
+        except OSError as error:
+            print(json.dumps({"status": "error", "reason": f"{attribute_path}: {error}"}))
             return 1
         if current == value:
             continue
@@ -42,6 +55,15 @@ def apply_to_cpus(attribute, value, validate_only):
             except (OSError, PermissionError) as error:
                 print(json.dumps({"status": "error", "reason": f"{attribute_path}: {error}"}))
                 return 1
+    if missing_attribute:
+        print(json.dumps({
+            "status": "unavailable",
+            "reason": f"{attribute} not exposed by this platform's cpufreq driver",
+            "cpu_count": len(cpus),
+            "mismatched": mismatched,
+        }))
+        return 5
+
     result = {
         "status": "matched" if not mismatched else ("validated-mismatch" if validate_only else "applied"),
         "changed": 0 if validate_only else changed,

@@ -74,3 +74,29 @@ def test_vllm_playbook_integration():
     site = (REPO_ROOT / "playbooks/site.yml").read_text()
     assert "vllm_xpu" in site
     assert "inference" in site
+
+
+def test_container_launcher_is_real_and_digest_pinned():
+    launcher = REPO_ROOT / "roles/vllm_xpu/files/vllm-xpu-runner.sh"
+    assert launcher.exists()
+    source = launcher.read_text()
+    assert "@sha256:" in source  # refuses mutable tags at runtime
+    assert "eval " not in source
+    assert "serve --config" in source
+    tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
+    assert "/usr/local/bin/vllm-xpu-runner" in tasks
+    assert "image-ref" in tasks  # digest pin rendered to disk
+
+
+def test_config_template_uses_cli_style_keys():
+    template = (REPO_ROOT / "roles/vllm_xpu/templates/vllm-config.yaml.j2").read_text()
+    for key in ("tensor-parallel-size", "gpu-memory-utilization", "max-model-len", "enforce-eager"):
+        assert key in template, f"missing CLI-style key {key}"
+    # vLLM config keys are CLI-style; underscore variants would be silently ignored.
+    for bad in ("tensor_parallel_size:", "gpu_memory_utilization:", "max_model_len:"):
+        assert f"{bad}" not in template
+
+
+def test_container_mode_requires_runtime_role():
+    tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
+    assert "container_runtime_enabled | bool" in tasks

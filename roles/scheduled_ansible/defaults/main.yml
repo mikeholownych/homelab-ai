@@ -18,5 +18,9 @@ scheduled_ansible_benchmark_random_delay_sec: "600s"
 
 scheduled_ansible_runner_path: "/opt/local-ai/scripts/run-ansible-snapshot"
 scheduled_ansible_snapshot_dir: "/opt/local-ai"
+# Inventory path is relative to the deployed snapshot root; the target is the
+# rendered host itself so one snapshot serves the fleet.
+scheduled_ansible_inventory_path: "inventory/production/hosts.yml"
+scheduled_ansible_lock_root: "/run/lock/aihost"
 scheduled_ansible_log_dir: "/var/log/local-ai/reconciliation"
 scheduled_ansible_user: "root"

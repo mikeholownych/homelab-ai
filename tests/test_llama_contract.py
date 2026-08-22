@@ -60,3 +60,25 @@ def test_llama_cpp_tasks_check_mode_aware():
     assert "ansible_check_mode" in tasks
     assert "ignore_errors" not in tasks
     assert "NOT_TESTED" in tasks
+
+
+def test_llama_source_is_actually_built_from_pinned_commit():
+    tasks = (REPO_ROOT / "roles/llama_cpp_sycl/tasks/main.yml").read_text()
+    # Pinned clone
+    assert "ansible.builtin.git:" in tasks
+    assert "version: \"{{ llama_cpp_sycl_git_commit }}\"" in tasks
+    # Configure with role-declared flags, then compile
+    assert "llama_cpp_sycl_cmake_args }}" in tasks
+    assert "--build" in tasks
+    # Binary lands where the systemd unit expects it
+    assert f"{REPO_ROOT.name}" not in tasks  # no accidental absolute repo refs
+    assert "bin/llama-server" in tasks
+
+
+def test_sycl_toolchain_absence_fails_closed_before_building():
+    tasks = (REPO_ROOT / "roles/llama_cpp_sycl/tasks/main.yml").read_text()
+    probe_pos = tasks.find("which\", \"icx")
+    fail_pos = tasks.find("SYCL toolchain is absent")
+    build_pos = tasks.find("Compile llama.cpp SYCL binaries")
+    assert -1 < probe_pos < fail_pos < build_pos
+    assert "unresolved vendor support decision" in tasks

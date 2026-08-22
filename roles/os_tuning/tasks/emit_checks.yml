@@ -12,8 +12,9 @@
         observed: {summary: "converged profile", value: "{{ os_tuning_config.profile_name }}"}
         evidence_refs: ["tuning-profile.json"]
       os_tuning_governor:
-        status: "{{ 'NOT_TESTED' if tuning_cpu.governor is none else
-                    ('PASS' if observed_governor == tuning_cpu.governor else 'FAIL') }}"
+        status: "{{ 'NOT_TESTED' if tuning_cpu.governor is none
+                    else ('NOT_TESTED' if observed_governor is not string
+                    else ('PASS' if observed_governor == tuning_cpu.governor else 'FAIL')) }}"
         expected: {summary: "CPU governor", value: "{{ tuning_cpu.governor | default('unmanaged') }}"}
         observed: {summary: "active scaling_governor", value: "{{ observed_governor }}"}
         evidence_refs: ["cpu-power.json"]

@@ -16,6 +16,8 @@ llama_cpp_sycl_user: "aihost-runtime"
 llama_cpp_sycl_group: "render"
 
 llama_cpp_sycl_install_dir: "/opt/llama.cpp-sycl"
+llama_cpp_sycl_build_dir: "/opt/llama.cpp-sycl/src"
+llama_cpp_sycl_force_rebuild: false
 llama_cpp_sycl_config_dir: "/etc/local-ai/llama.cpp"
 llama_cpp_sycl_log_dir: "/var/log/local-ai/llama.cpp"
 llama_cpp_sycl_model_path: null

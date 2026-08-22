@@ -60,8 +60,9 @@ def test_harness_generates_schema_valid_result(tmp_path):
     )
 
     jsonschema.validate(instance=doc, schema=schema)
-    assert doc["status"] == "PASS"
+    assert doc["status"] == "SIMULATED_PASS"
     assert doc["simulated"] is True
+    assert "not physical acceptance evidence" in doc["correctness"]["summary"].lower()
     assert doc["execution"]["gpu_count"] == 1
 
 
@@ -145,3 +146,15 @@ def test_stream_parser_reports_connection_failure_not_pass():
     )
     assert result["status"] == "error"
     assert "tokens_per_second" not in result
+
+
+def test_system_provenance_is_never_fabricated():
+    mod = load_harness()
+    source = HARNESS_PATH.read_text()
+    for literal in ("M34KT39A", "6.8.0-40-generic", "26.27.39122.11", "b374829a"):
+        assert literal not in source, f"harness still hard-codes {literal}"
+    prov = mod._live_system_provenance("test-host")
+    import re
+    assert re.match(r"^\d+\.\d+\.\d+", prov["kernel_version"])
+    for value in prov.values():
+        assert isinstance(value, str) and len(value) > 0

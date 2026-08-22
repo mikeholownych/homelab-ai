@@ -7,7 +7,13 @@ OnFailure=aihost-alert@%n
 Type=oneshot
 User={{ scheduled_ansible_user }}
 WorkingDirectory={{ scheduled_ansible_snapshot_dir }}
-ExecStart={{ scheduled_ansible_runner_path }} patch.yml
+ExecStart={{ scheduled_ansible_runner_path }} \
+  --repo-root {{ scheduled_ansible_snapshot_dir }} \
+  --schema-root {{ scheduled_ansible_snapshot_dir }}/schemas \
+  --inventory {{ scheduled_ansible_inventory_path }} \
+  --target {{ inventory_hostname }} \
+  --playbook patch.yml \
+  --lock-root {{ scheduled_ansible_lock_root }}
 Nice=15
 LimitNOFILE=65536
 StandardOutput=append:{{ scheduled_ansible_log_dir }}/patch.log
