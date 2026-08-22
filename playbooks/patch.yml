@@ -27,7 +27,7 @@
     - name: Apply allowed routine OS patches when explicit apply mode is enabled
       ansible.builtin.apt:
         name: "{{ patch_policy.routine_components.os_packages.package_allowlist }}"
-        state: latest # noqa package-latest
+        state: present
         only_upgrade: true
       when:
         - patch_apply | bool
@@ -37,7 +37,7 @@
     - name: Apply allowed routine security updates when explicit apply mode is enabled
       ansible.builtin.apt:
         name: "{{ patch_policy.routine_components.security_updates.package_allowlist }}"
-        state: latest # noqa package-latest
+        state: present
         only_upgrade: true
       when:
         - patch_apply | bool

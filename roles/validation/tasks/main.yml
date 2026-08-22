@@ -20,7 +20,7 @@
       - --hardware-profile
       - "{{ hardware_profile | default('p620_dual_b65') }}"
       - --git-sha
-      - "{{ lookup('ansible.builtin.pipe', 'git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000') }}"
+      - "{{ git_commit_sha | default('0000000000000000000000000000000000000000') }}"
       - --output
       - "{{ validation_output_path }}"
       - --text-summary
@@ -34,5 +34,7 @@
 
 - name: Display validation summary
   ansible.builtin.debug:
-    msg: "{{ lookup('ansible.builtin.file', validation_summary_path, errors='ignore') | default('Validation completed.') }}"
+    msg: "{{ validation_summary | default('Validation completed.') }}"
+  vars:
+    validation_summary: "{{ lookup('ansible.builtin.file', validation_summary_path, errors='ignore') }}"
   tags: [validation, operations]

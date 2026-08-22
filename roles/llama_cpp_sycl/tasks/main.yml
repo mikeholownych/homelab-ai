@@ -8,13 +8,17 @@
       - llama_cpp_sycl_split_mode in ["none", "layer", "row"]
       - llama_cpp_sycl_tensor_split is string
     fail_msg: >-
-      llama_cpp_sycl requires an exact 40-character commit, explicit SYCL build flags, and valid split_mode/tensor_split.
+      llama_cpp_sycl requires an exact 40-character commit, explicit SYCL build flags,
+      and valid split_mode/tensor_split parameters.
   tags: [inference, runtime, llama_cpp]
 
 - name: Assert dual-GPU SYCL requires explicit certification before enabling service
   ansible.builtin.assert:
     that:
-      - not (llama_cpp_sycl_service_enabled | bool) or (llama_cpp_sycl_split_mode == 'none') or (llama_cpp_sycl_dual_gpu_support_certified | bool)
+      - >-
+        not (llama_cpp_sycl_service_enabled | bool)
+        or (llama_cpp_sycl_split_mode == 'none')
+        or (llama_cpp_sycl_dual_gpu_support_certified | bool)
     fail_msg: >-
       Multi-GPU SYCL execution in llama.cpp requires explicit dual-GPU acceptance certification.
   when: llama_cpp_sycl_service_enabled | bool

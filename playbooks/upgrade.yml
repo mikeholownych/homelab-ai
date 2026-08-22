@@ -31,7 +31,9 @@
 
     - name: Report upgrade action plan
       ansible.builtin.debug:
-        msg: "Executing {{ upgrade_mode }} for component {{ upgrade_component }} targeting version {{ upgrade_version | default('previous_known_good') }}"
+        msg: >-
+          Executing {{ upgrade_mode }} for component {{ upgrade_component }}
+          targeting version {{ upgrade_version | default('previous_known_good') }}
       tags: [upgrade, rollback]
 
     - name: Run independent validation after upgrade attempt

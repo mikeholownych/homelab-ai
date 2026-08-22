@@ -1,17 +1,17 @@
 ---
-itsm_integration_enabled: false
-itsm_adapter: "generic"
-itsm_change_id: null
-itsm_request_id: null
-itsm_approval_state: "APPROVED"
-itsm_risk: "MEDIUM"
-itsm_permitted_actions:
+itsm_hooks_integration_enabled: false
+itsm_hooks_adapter: "generic"
+itsm_hooks_change_id: null
+itsm_hooks_request_id: null
+itsm_hooks_approval_state: "APPROVED"
+itsm_hooks_risk: "MEDIUM"
+itsm_hooks_permitted_actions:
   - "RECONCILE"
   - "VALIDATE"
   - "PATCH"
   - "UPGRADE"
   - "ROLLBACK"
   - "BENCHMARK"
-itsm_requested_action: "RECONCILE"
-itsm_maintenance_window_start: "2026-01-01T00:00:00Z"
-itsm_maintenance_window_end: "2026-12-31T23:59:59Z"
+itsm_hooks_requested_action: "RECONCILE"
+itsm_hooks_maintenance_window_start: "2026-01-01T00:00:00Z"
+itsm_hooks_maintenance_window_end: "2026-12-31T23:59:59Z"
