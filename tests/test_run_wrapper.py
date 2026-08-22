@@ -120,7 +120,7 @@ def create_repo(root: Path) -> Path:
     (root / "evidence").mkdir(parents=True, exist_ok=True)
     (root / ".pytest_cache").mkdir(parents=True, exist_ok=True)
     (root / "ansible.cfg").write_text("[defaults]\nstdout_callback = yaml\n", encoding="utf-8")
-    for playbook in ("site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "bootstrap.yml"):
+    for playbook in ("site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "reboot-verify.yml", "bootstrap.yml"):
         (root / "playbooks" / playbook).write_text("---\n[]\n", encoding="utf-8")
     (root / "inventory" / "production" / "hosts.yml").write_text("all:\n  hosts:\n    ai-p620-01:\n", encoding="utf-8")
     return root

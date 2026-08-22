@@ -34,12 +34,18 @@
     },
     "status": {
       "type": "string",
-      "enum": ["captured", "incomplete"]
+      "enum": [
+        "captured",
+        "incomplete"
+      ]
     },
     "collection_target": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["node_id", "adapter"],
+      "required": [
+        "node_id",
+        "adapter"
+      ],
       "properties": {
         "node_id": {
           "type": "string",
@@ -57,17 +63,37 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "kind", "expected", "observed"],
+        "required": [
+          "id",
+          "kind",
+          "expected",
+          "observed"
+        ],
         "properties": {
-          "id": {"type": "string", "minLength": 1},
-          "kind": {"type": "string", "minLength": 1},
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
           "expected": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["summary", "path"],
+            "required": [
+              "summary",
+              "path"
+            ],
             "properties": {
-              "summary": {"type": "string", "minLength": 1},
-              "path": {"type": "string", "minLength": 1}
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "observed": {
@@ -75,10 +101,21 @@
               {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["summary", "path", "sha256", "observed_at"],
+                "required": [
+                  "summary",
+                  "path",
+                  "sha256",
+                  "observed_at"
+                ],
                 "properties": {
-                  "summary": {"type": "string", "minLength": 1},
-                  "path": {"type": "string", "minLength": 1},
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "sha256": {
                     "type": "string",
                     "pattern": "^[0-9a-f]{64}$"
@@ -93,11 +130,24 @@
               {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["summary", "status", "reason"],
+                "required": [
+                  "summary",
+                  "status",
+                  "reason"
+                ],
                 "properties": {
-                  "summary": {"type": "string", "minLength": 1},
-                  "status": {"type": "string", "const": "unavailable"},
-                  "reason": {"type": "string", "minLength": 1}
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "status": {
+                    "type": "string",
+                    "const": "unavailable"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 }
               }
             ]
@@ -142,12 +192,13 @@
         "playbook": {
           "type": "string",
           "enum": [
-            "site.yml",
-            "drift-check.yml",
-            "patch.yml",
-            "validate.yml",
             "benchmark.yml",
-            "facts-export.yml"
+            "drift-check.yml",
+            "facts-export.yml",
+            "patch.yml",
+            "reboot-verify.yml",
+            "site.yml",
+            "validate.yml"
           ]
         },
         "limit": {
@@ -157,42 +208,78 @@
         "lock": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["path", "status"],
+          "required": [
+            "path",
+            "status"
+          ],
           "properties": {
-            "path": {"type": "string", "minLength": 1},
-            "status": {"type": "string", "enum": ["acquired", "contended"]}
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "acquired",
+                "contended"
+              ]
+            }
           }
         },
         "repository": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["root", "clean", "allowlist"],
+          "required": [
+            "root",
+            "clean",
+            "allowlist"
+          ],
           "properties": {
-            "root": {"type": "string", "minLength": 1},
-            "clean": {"type": "boolean"},
+            "root": {
+              "type": "string",
+              "minLength": 1
+            },
+            "clean": {
+              "type": "boolean"
+            },
             "allowlist": {
               "type": "array",
               "minItems": 1,
-              "items": {"type": "string", "minLength": 1}
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "dirty_entries": {
               "type": "array",
-              "items": {"type": "string", "minLength": 1}
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
         "ansible": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["exit_code", "recap"],
+          "required": [
+            "exit_code",
+            "recap"
+          ],
           "properties": {
-            "exit_code": {"type": "integer", "minimum": 0},
+            "exit_code": {
+              "type": "integer",
+              "minimum": 0
+            },
             "recap": {
               "oneOf": [
                 {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["totals", "hosts"],
+                  "required": [
+                    "totals",
+                    "hosts"
+                  ],
                   "properties": {
                     "totals": {
                       "$ref": "#/$defs/recapCounters"
@@ -216,15 +303,28 @@
         "validation": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["status", "classification"],
+          "required": [
+            "status",
+            "classification"
+          ],
           "properties": {
             "status": {
               "type": "string",
-              "enum": ["PASS", "FAIL", "BLOCKED", "NOT_TESTED"]
+              "enum": [
+                "PASS",
+                "FAIL",
+                "BLOCKED",
+                "NOT_TESTED"
+              ]
             },
             "classification": {
               "type": "string",
-              "enum": ["healthy", "degraded", "blocked", "incomplete"]
+              "enum": [
+                "healthy",
+                "degraded",
+                "blocked",
+                "incomplete"
+              ]
             }
           }
         }
@@ -233,14 +333,24 @@
     "finalization": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["state", "reason", "completed_at"],
+      "required": [
+        "state",
+        "reason",
+        "completed_at"
+      ],
       "properties": {
         "state": {
           "type": "string",
-          "enum": ["complete", "incomplete"]
+          "enum": [
+            "complete",
+            "incomplete"
+          ]
         },
         "reason": {
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "completed_at": {
           "type": "string",
@@ -254,15 +364,44 @@
     "recapCounters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ok", "changed", "unreachable", "failed", "skipped", "rescued", "ignored"],
+      "required": [
+        "ok",
+        "changed",
+        "unreachable",
+        "failed",
+        "skipped",
+        "rescued",
+        "ignored"
+      ],
       "properties": {
-        "ok": {"type": "integer", "minimum": 0},
-        "changed": {"type": "integer", "minimum": 0},
-        "unreachable": {"type": "integer", "minimum": 0},
-        "failed": {"type": "integer", "minimum": 0},
-        "skipped": {"type": "integer", "minimum": 0},
-        "rescued": {"type": "integer", "minimum": 0},
-        "ignored": {"type": "integer", "minimum": 0}
+        "ok": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "changed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unreachable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rescued": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ignored": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     }
   }
