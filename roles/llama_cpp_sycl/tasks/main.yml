@@ -84,6 +84,7 @@
     owner: "{{ llama_cpp_sycl_user }}"
     group: "{{ llama_cpp_sycl_group }}"
     mode: "0640"
+  notify: Restart llama-server service
   when: llama_cpp_sycl_install_enabled | bool
   tags: [inference, runtime, llama_cpp]
 
@@ -210,7 +211,20 @@
     group: root
     mode: "0644"
   when: llama_cpp_sycl_install_enabled | bool
-  notify: Reload systemd daemon
+  notify:
+    - Reload systemd daemon
+    - Restart llama-server service
+  tags: [inference, runtime, llama_cpp]
+
+- name: Establish llama-server service desired state
+  ansible.builtin.systemd_service:
+    name: llama-server.service
+    daemon_reload: true
+    enabled: "{{ llama_cpp_sycl_service_enabled | bool }}"
+    state: "{{ 'started' if (llama_cpp_sycl_service_enabled | bool) else 'stopped' }}"
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - not ansible_check_mode
   tags: [inference, runtime, llama_cpp]
 
 - name: Record llama.cpp fallback validation state during check mode or when uncommissioned

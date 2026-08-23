@@ -12,8 +12,8 @@ llama_cpp_sycl_cmake_args:
 
 llama_cpp_sycl_host: "0.0.0.0"
 llama_cpp_sycl_port: 8080
-llama_cpp_sycl_user: "aihost-runtime"
-llama_cpp_sycl_group: "render"
+llama_cpp_sycl_user: "{{ host_runtime_account.name }}"
+llama_cpp_sycl_group: "{{ host_runtime_account.group }}"
 
 llama_cpp_sycl_install_dir: "/opt/llama.cpp-sycl"
 llama_cpp_sycl_build_dir: "/opt/llama.cpp-sycl/src"

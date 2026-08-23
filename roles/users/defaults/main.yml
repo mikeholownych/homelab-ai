@@ -9,12 +9,18 @@ users_disabled_operator_state: lock
 users_local_ai_manage_device_groups: false
 users_local_ai_device_groups: []
 users_local_ai_service_account:
-  name: local-ai
+  name: "{{ host_runtime_account.name }}"
   comment: Local AI inference service account
   enabled: true
   system: true
   shell: /usr/sbin/nologin
-  home: /var/lib/local-ai
+  home: "{{ host_runtime_account.home }}"
   create_home: true
   preserved_groups: []
+
+# Rootless-container provisioning for the runtime identity (subordinate ids,
+# linger, XDG_RUNTIME_DIR). Only meaningful when a rootless runtime is enabled.
+users_runtime_rootless_enabled: "{{ container_runtime_rootless_enabled | default(false) }}"
+users_runtime_subuid_first: 100000
+users_runtime_subuid_count: 65536
 operator_users: [] # noqa var-naming[no-role-prefix]

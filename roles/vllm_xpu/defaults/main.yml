@@ -9,8 +9,8 @@ vllm_xpu_container_digest: "sha256:d8b76e1a4731ec22d4f8ef0e5a882a1772658823f6e1f
 
 vllm_xpu_host: "0.0.0.0"
 vllm_xpu_port: 8000
-vllm_xpu_user: "aihost-runtime"
-vllm_xpu_group: "render"
+vllm_xpu_user: "{{ host_runtime_account.name }}"
+vllm_xpu_group: "{{ host_runtime_account.group }}"
 
 vllm_xpu_config_dir: "/etc/local-ai/vllm"
 vllm_xpu_config_file: "{{ vllm_xpu_config_dir }}/vllm-config.yaml"

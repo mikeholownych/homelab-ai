@@ -98,6 +98,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Restart vLLM service
   when: vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
@@ -118,6 +119,7 @@
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"
     mode: "0644"
+  notify: Restart vLLM service
   when: vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
@@ -128,6 +130,7 @@
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"
     mode: "0600"
+  notify: Restart vLLM service
   when: vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
@@ -140,6 +143,17 @@
     mode: "0644"
   when: vllm_xpu_install_enabled | bool
   notify: Reload systemd daemon
+  tags: [inference, runtime, vllm]
+
+- name: Establish vLLM service desired state
+  ansible.builtin.systemd_service:
+    name: vllm.service
+    daemon_reload: true
+    enabled: "{{ vllm_xpu_service_enabled | bool }}"
+    state: "{{ 'started' if (vllm_xpu_service_enabled | bool) else 'stopped' }}"
+  when:
+    - vllm_xpu_install_enabled | bool
+    - not ansible_check_mode
   tags: [inference, runtime, vllm]
 
 - name: Record vLLM validation state during check mode or when uncommissioned

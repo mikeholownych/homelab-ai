@@ -16,6 +16,14 @@ execution_tag_catalog:
   benchmarking:
     enabled: true
 
+# Single authoritative runtime service identity. Every role that creates
+# files/directories/units for inference workloads must consume this; no role
+# declares its own account name.
+host_runtime_account:
+  name: "aihost-runtime"
+  group: "render"
+  home: "/var/lib/aihost-runtime"
+
 runtime_commissioning_policy:
   allow_mutable_channels: false
   null_pins_allowed_only_when_disabled: true
