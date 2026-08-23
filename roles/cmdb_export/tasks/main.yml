@@ -1,4 +1,8 @@
 ---
+# Normalized CI export. Expected state comes from inventory/registry; observed
+# state is composed ONLY from independent discovery sources (hardware collector
+# snapshot, package queries, runtime stamps, service state, validation
+# evidence). Unknown stays unknown - never copied from expected.
 - name: Validate CMDB export inputs
   ansible.builtin.assert:
     that:
@@ -17,88 +21,150 @@
     mode: "0750"
   tags: [cmdb, operations]
 
-- name: Generate normalized CMDB configuration item export
+- name: Load the committed runtime lifecycle registry
+  ansible.builtin.include_vars:
+    file: "{{ cmdb_export_lifecycle_file }}"
+    name: lifecycle_registry
+  failed_when: false
+  tags: [cmdb, operations]
+
+- name: Read hardware discovery snapshot from the managed node
+  ansible.builtin.slurp:
+    src: "{{ cmdb_export_hardware_snapshot_path }}"
+  register: cmdb_export_hardware_raw
+  failed_when: false
+  check_mode: false
+  tags: [cmdb, operations]
+
+- name: Query installed Level Zero packages on the managed node
+  ansible.builtin.command:
+    argv: ["dpkg-query", "-W", "-f=${Package}=${Version}\\n",
+           "libze1", "libze-intel-gpu1", "intel-opencl-icd"]
+  register: cmdb_export_l0_packages
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  tags: [cmdb, operations]
+
+- name: Read runtime version stamps from the managed node
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop:
+    - /etc/local-ai/vllm/VERSION
+    - /opt/llama.cpp-sycl/BUILD_COMMIT
+  register: cmdb_export_stamp_results
+  failed_when: false
+  check_mode: false
+  tags: [cmdb, operations]
+
+- name: Probe runtime service states on the managed node
+  ansible.builtin.command:
+    argv: ["systemctl", "is-active", "{{ item }}"
+    ]
+  loop: [vllm.service, llama-server.service]
+  register: cmdb_export_service_states
+  changed_when: false
+  check_mode: false
+  failed_when: false
+  tags: [cmdb, operations]
+
+- name: Read last validation outcome from the managed node
+  ansible.builtin.slurp:
+    src: /var/lib/aihost/evidence/validation.json
+  register: cmdb_export_validation_raw
+  failed_when: false
+  check_mode: false
+  tags: [cmdb, operations]
+
+- name: Resolve the active PyTorch environment target
+  ansible.builtin.stat:
+    path: "{{ pytorch_xpu_current | default('/opt/local-ai/pytorch-xpu/current') }}"
+    follow: true
+  register: cmdb_export_pytorch_current
+  failed_when: false
+  tags: [cmdb, operations]
+
+- name: Compose independently sourced CMDB export
   ansible.builtin.copy:
-    content: >-
-      {{ {
-        'schema_version': '1.0.0',
-        'generated_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
-        'git_sha': lookup('pipe', 'git rev-parse HEAD 2>/dev/null || echo 0000000000000000000000000000000000000000'),
-        'simulated': false,
-        'status': 'VALIDATED',
-        'node': {
-          'node_id': inventory_hostname,
-          'hostname': ansible_facts.nodename | default(inventory_hostname),
-          'environment': environment_tier | default('production')
-        },
-        'configuration_item': {
-          'expected': {
-            'ci_id': 'ci-' ~ inventory_hostname,
-            'ci_type': 'NODE',
-            'hardware_profile': hardware_profile | default('p620_dual_b65'),
-            'capabilities': capabilities | default({
-              'gpu': true,
-              'inference': true,
-              'benchmarking': true,
-              'monitoring': true,
-              'cluster_eligible': true
-            }),
-            'cluster_membership': {
-              'name': cluster.name | default(none),
-              'membership_state': 'standalone',
-              'node_role': 'primary',
-              'roles': {
-                'worker': cluster.roles.worker | default(false),
-                'api': cluster.roles.api | default(false),
-                'scheduler': cluster.roles.scheduler | default(false),
-                'storage': cluster.roles.storage | default(false)
-              }
-            },
-            'runtime_versions': {
-              'intel_runtime': '26.27.39122.11',
-              'level_zero': '1.17.6',
-              'pytorch': '2.12.1+xpu',
-              'vllm': '0.7.3',
-              'llama_commit': 'b374829a435fa848d7c1775efd2dfbfb87fcf1e2'
-            }
+    content: "{{ {'schema_version': '1.0.0',
+      'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ'),
+      'git_sha': git_commit_sha | default('unknown'),
+      'simulated': false,
+      'status': 'EXPORTED',
+      'node': {
+        'node_id': inventory_hostname,
+        'hostname': ansible_facts.nodename | default(inventory_hostname),
+        'environment': environment_tier | default('production')
+      },
+      'configuration_item': {
+        'expected': {
+          'ci_id': 'ci-' ~ inventory_hostname,
+          'ci_type': 'NODE',
+          'hardware_profile': hardware_profile | default(none),
+          'capabilities': capabilities | default({}),
+          'cluster_membership': {
+            'name': cluster.name | default(none),
+            'membership_state': cluster.membership_state | default('standalone'),
+            'node_role': cluster.node_role | default('worker')
           },
-          'observed': {
-            'ci_id': 'ci-' ~ inventory_hostname,
-            'ci_type': 'NODE',
-            'hardware_profile': hardware_profile | default('p620_dual_b65'),
-            'capabilities': capabilities | default({
-              'gpu': true,
-              'inference': true,
-              'benchmarking': true,
-              'monitoring': true,
-              'cluster_eligible': true
-            }),
-            'cluster_membership': {
-              'name': cluster.name | default(none),
-              'membership_state': 'standalone',
-              'node_role': 'primary',
-              'roles': {
-                'worker': cluster.roles.worker | default(false),
-                'api': cluster.roles.api | default(false),
-                'scheduler': cluster.roles.scheduler | default(false),
-                'storage': cluster.roles.storage | default(false)
-              }
-            },
-            'runtime_versions': {
-              'intel_runtime': '26.27.39122.11',
-              'level_zero': '1.17.6',
-              'pytorch': '2.12.1+xpu',
-              'vllm': '0.7.3',
-              'llama_commit': 'b374829a435fa848d7c1775efd2dfbfb87fcf1e2'
-            }
+          'runtime_versions_expected': {
+            'vllm': lifecycle_registry.runtime_profiles.vllm.current | default(none),
+            'pytorch': lifecycle_registry.runtime_profiles.pytorch_xpu.current | default(none),
+            'llama_commit': lifecycle_registry.runtime_profiles.llama_cpp.current | default(none)
           }
         },
-        'relationships': [],
-        'last_convergence_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ'),
-        'last_validation_at': lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ')
-      } | to_nice_json }}
+        'observed': {
+          'ci_id': 'ci-' ~ inventory_hostname,
+          'ci_type': 'NODE',
+          'hardware_profile_observed': cmdb_hw.product_name | default(cmdb_unavailable),
+          'serial_number': cmdb_hw.serial_number | default(cmdb_unavailable),
+          'cpu_model': cmdb_hw.cpu.model | default(cmdb_unavailable),
+          'memory_total_gib': cmdb_hw.memory.total_gib | default(cmdb_unavailable),
+          'gpu_inventory': cmdb_hw.gpus | default(cmdb_unavailable),
+          'storage_devices': cmdb_hw.storage | default(cmdb_unavailable),
+          'nic_inventory': cmdb_hw.nics | default(cmdb_unavailable),
+          'bios_version': cmdb_hw.dmi.bios_version | default(cmdb_unavailable),
+          'os_kernel': ansible_facts.kernel | default(cmdb_unavailable),
+          'capabilities_observed': {
+            'level_zero_packages': cmdb_l0_stdout,
+            'vllm_service_state': cmdb_service_map['vllm.service'] | default(cmdb_unavailable),
+            'llama_service_state': cmdb_service_map['llama-server.service'] | default(cmdb_unavailable),
+            'pytorch_env_target': cmdb_pytorch_target,
+            'validation_status': cmdb_validation_status
+          },
+          'cluster_membership_observed': {
+            'membership_state': cluster.membership_state | default('standalone')
+          }
+        }
+      },
+      'relationships': [],
+      'last_convergence_at': ansible_facts.date_time.iso8601
+        | default(cmdb_unavailable),
+      'last_validation_at': cmdb_validation_generated_at} | to_nice_json }}\n"
     dest: "{{ cmdb_export_output_file }}"
     owner: root
     group: root
     mode: "0640"
+  vars:
+    cmdb_unavailable: {"status": "unavailable"}
+    cmdb_hw: >-
+      {{ (cmdb_export_hardware_raw.content | default('e30=') | b64decode | from_json) }}
+    cmdb_l0_stdout: >-
+      {{ cmdb_export_l0_packages.stdout_lines | default([]) if cmdb_export_l0_packages.rc == 0 else [] }}
+    cmdb_service_map: >-
+      {% set m = {} %}
+      {% for r in cmdb_export_service_states.results | default([]) %}
+        {% set _ = m.update({r.item | default(''): (r.stdout | trim)}) %}
+      {% endfor %}
+      {{ m }}
+    cmdb_pytorch_target: >-
+      {{ cmdb_export_pytorch_current.stat.lnk_target | default(cmdb_export_pytorch_current.stat.path)
+         if (cmdb_export_pytorch_current.stat is defined and cmdb_export_pytorch_current.stat.exists) else none }}
+    cmdb_validation_doc: >-
+      {{ cmdb_export_validation_raw.content | default('e30=') | b64decode | from_json }}
+    cmdb_validation_status: >-
+      {{ cmdb_validation_doc.status | default(none) }}
+    cmdb_validation_generated_at: >-
+      {{ cmdb_validation_doc.generated_at | default(none) }}
+  no_log: false
   tags: [cmdb, operations]

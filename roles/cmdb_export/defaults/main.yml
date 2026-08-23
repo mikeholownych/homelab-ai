@@ -3,3 +3,7 @@ cmdb_export_enabled: true
 cmdb_export_output_dir: "/var/lib/aihost/evidence"
 cmdb_export_output_file: "{{ cmdb_export_output_dir }}/cmdb_ci.json"
 cmdb_export_adapter: "generic_json"
+# Independently sourced inputs for the observed half of the export.
+cmdb_export_hardware_snapshot_path: /var/lib/local-ai/observed/observed.json
+# Expected runtime pins come from the committed lifecycle registry.
+cmdb_export_lifecycle_file: "{{ playbook_dir }}/../inventory/production/group_vars/gpu.yml"
