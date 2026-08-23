@@ -64,12 +64,19 @@ Inventory files reside under `inventory/production/` and `inventory/lab/`:
 
 HashiCorp Vault is the sole authority for secrets. Plaintext secrets and Ansible Vault are not used.
 
-1. Provision AppRole RoleID and SecretID to `/etc/vault/role-id` and `/etc/vault/secret-id` on the target host (permissions `0600` root-owned).
+**Credential placement depends on the execution model:**
+
+- **Initial operator workflow (remote controller):** `roles/vault_integration` reads AppRole credentials on the *Ansible controller* from protected local paths (see `docs/vault.md`); lookups are delegated to localhost and never logged.
+- **Scheduled self-runs (post-commissioning):** the deployed snapshot executes on the host itself, and credentials are provisioned at `/etc/vault/role-id` and `/etc/vault/secret-id` (`0600`, root-owned), ideally delivered via systemd `LoadCredential=`.
+
+1. Provision AppRole credentials to whichever location matches your execution model.
 2. During playbook execution, `roles/vault_integration` authenticates via AppRole to obtain a short-lived token.
 3. Vault path structure:
    - `secret/local-ai/shared/`: Shared fleet secrets
    - `secret/local-ai/hosts/<hostname>/`: Host-specific secrets
    - `secret/local-ai/services/`: Service API keys and certificates
+
+**Secret-at-rest note:** service API keys retrieved at convergence are rendered into root-readable runtime env files (`0600`). This means Vault is not the only live copy between reconciliations; revocation takes effect at next convergence or service restart. Moving key delivery fully to systemd credentials refreshed at unit start is the planned refinement.
 
 See `docs/vault.md` for full credential lifecycle instructions.
 

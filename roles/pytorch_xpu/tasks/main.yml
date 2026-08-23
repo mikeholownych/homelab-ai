@@ -7,6 +7,21 @@
   when: pytorch_xpu_install_enabled | bool
   tags: [gpu, runtime, inference]
 
+
+- name: Enforce lifecycle registry authority over this role's pins
+  ansible.builtin.assert:
+    that:
+      - committed_registry.current is none
+        or committed_registry.current == pytorch_xpu_version
+    fail_msg: >-
+      Divergence detected: group_vars/gpu.yml declares pytorch_xpu current
+      {{ committed_registry.current }} while the role pins pytorch_xpu_version_VAR. One authority:
+      update both in the same commit or better, keep them equal.
+  vars:
+    committed_registry_path: "{{ role_path }}/../../inventory/production/group_vars/gpu.yml"
+    committed_registry: >-
+      {{ (lookup('ansible.builtin.file', committed_registry_path, errors='ignore')
+         | from_yaml).runtime_profiles.pytorch_xpu | default({}) }}
 - name: Install pinned Python venv tooling
   ansible.builtin.apt:
     name: "python{{ pytorch_xpu_python_version }}-venv"

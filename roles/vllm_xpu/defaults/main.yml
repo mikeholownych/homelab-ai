@@ -1,4 +1,10 @@
 ---
+# Fallback identity for sandboxed probes without production group_vars;
+# inventory group_vars/all.yml is authoritative wherever present.
+host_runtime_account:  # noqa var-naming[no-role-prefix]
+  name: "aihost-runtime"
+  group: "render"
+  home: "/var/lib/aihost-runtime"
 vllm_xpu_install_enabled: false
 vllm_xpu_service_enabled: false
 vllm_xpu_version: "0.7.3"

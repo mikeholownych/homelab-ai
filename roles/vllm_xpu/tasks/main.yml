@@ -14,6 +14,21 @@
       vllm_xpu_api_key must stay null in Git; it is populated only from Vault at runtime.
   tags: [inference, runtime, vllm]
 
+
+- name: Enforce lifecycle registry authority over this role's pins
+  ansible.builtin.assert:
+    that:
+      - committed_registry.current is none
+        or committed_registry.current == vllm_xpu_version
+    fail_msg: >-
+      Divergence detected: group_vars/gpu.yml declares vllm current
+      {{ committed_registry.current }} while the role pins vllm_xpu_version_VAR. One authority:
+      update both in the same commit or better, keep them equal.
+  vars:
+    committed_registry_path: "{{ role_path }}/../../inventory/production/group_vars/gpu.yml"
+    committed_registry: >-
+      {{ (lookup('ansible.builtin.file', committed_registry_path, errors='ignore')
+         | from_yaml).runtime_profiles.vllm | default({}) }}
 - name: Require authenticated serving for network-bound vLLM
   ansible.builtin.assert:
     that:

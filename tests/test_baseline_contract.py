@@ -203,7 +203,10 @@ class BaselineContractTests(unittest.TestCase):
         self.assertEqual([], users_defaults.get("operator_users"))
         self.assertEqual("lock", users_defaults.get("users_disabled_operator_state"))
         self.assertEqual(False, users_defaults.get("users_local_ai_manage_device_groups"))
-        self.assertEqual("local-ai", users_defaults.get("users_local_ai_service_account", {}).get("name"))
+        self.assertEqual(
+            "{{ host_runtime_account.name }}",
+            users_defaults.get("users_local_ai_service_account", {}).get("name"),
+        )
         self.assertEqual("/usr/sbin/nologin", users_defaults.get("users_local_ai_service_account", {}).get("shell"))
         self.assertIn("ssh_authorized_keys", users_tasks)
         self.assertIn("exclusive: true", users_tasks)
@@ -370,7 +373,7 @@ class BaselineContractTests(unittest.TestCase):
         for required in ("base_os", "time_sync", "storage", "networking"):
             self.assertIn(required, scenario_text)
         self.assertIn("does not assert host convergence", makefile)
-        self.assertIn("quality: lint test syntax check check idempotency", makefile)
+        self.assertIn("quality: lint test syntax check idempotency tuning-idempotency", makefile)
 
     def test_staged_netplan_validation_fails_before_destination_mutation_even_in_check_mode(self) -> None:
         workspace = make_probe_workspace()

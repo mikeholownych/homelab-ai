@@ -12,6 +12,21 @@
       and valid split_mode/tensor_split parameters.
   tags: [inference, runtime, llama_cpp]
 
+
+- name: Enforce lifecycle registry authority over this role's pins
+  ansible.builtin.assert:
+    that:
+      - committed_registry.current is none
+        or committed_registry.current == llama_cpp_sycl_git_commit
+    fail_msg: >-
+      Divergence detected: group_vars/gpu.yml declares llama_cpp current
+      {{ committed_registry.current }} while the role pins llama_cpp_sycl_git_commit_VAR. One authority:
+      update both in the same commit or better, keep them equal.
+  vars:
+    committed_registry_path: "{{ role_path }}/../../inventory/production/group_vars/gpu.yml"
+    committed_registry: >-
+      {{ (lookup('ansible.builtin.file', committed_registry_path, errors='ignore')
+         | from_yaml).runtime_profiles.llama_cpp | default({}) }}
 - name: Assert dual-GPU SYCL requires explicit certification before enabling service
   ansible.builtin.assert:
     that:

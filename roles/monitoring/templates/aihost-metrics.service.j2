@@ -1,0 +1,9 @@
+[Unit]
+Description=aihost textfile metrics writer
+OnFailure=aihost-alert@%n
+
+[Service]
+Type=oneshot
+ExecStart={{ monitoring_metrics_script_path }}
+Nice=10
+IOSchedulingClass=idle

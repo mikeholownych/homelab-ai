@@ -1,0 +1,8 @@
+[Unit]
+Description=aihost textfile metrics schedule
+
+[Timer]
+OnCalendar={{ monitoring_metrics_interval }}
+
+[Install]
+WantedBy=timers.target

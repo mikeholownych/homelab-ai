@@ -55,6 +55,41 @@
     - monitoring_enabled | bool
   tags: [monitoring, evidence_sync]
 
+- name: Install the textfile metrics writer
+  ansible.builtin.copy:
+    src: write-textfile-metrics.sh
+    dest: "{{ monitoring_metrics_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: monitoring_metrics_textfile_enabled | bool
+  tags: [monitoring, telemetry]
+
+- name: Install textfile metrics units
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: "aihost-metrics.service.j2", dest: "{{ monitoring_metrics_service_path }}" }
+    - { src: "aihost-metrics.timer.j2", dest: "{{ monitoring_metrics_timer_path }}" }
+  when: monitoring_metrics_textfile_enabled | bool
+  notify: Reload monitoring daemon
+  tags: [monitoring, telemetry]
+
+- name: Establish textfile metrics timer state
+  ansible.builtin.systemd_service:
+    name: aihost-metrics.timer
+    daemon_reload: true
+    enabled: "{{ monitoring_metrics_textfile_enabled | bool }}"
+    state: "{{ 'started' if (monitoring_metrics_textfile_enabled | bool) else 'stopped' }}"
+  when:
+    - monitoring_metrics_textfile_enabled | bool
+    - not ansible_check_mode
+  tags: [monitoring, telemetry]
+
 - name: Record monitoring check mode status
   ansible.builtin.debug:
     msg: "Monitoring role check mode active"

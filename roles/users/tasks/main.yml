@@ -251,13 +251,14 @@
     - users_manage_runtime | bool
   tags: [users, baseline]
 
-- name: Enable lingering for the runtime identity under rootless runtimes
-  ansible.builtin.command:
-    argv: ["loginctl", "enable-linger", "{{ users_local_ai_service_account.name }}"]
-  register: users_linger_result
-  changed_when: users_linger_result.rc == 0
-  failed_when: >-
-    users_linger_result.rc != 0 and 'not found' not in users_linger_result.stderr | default('')
+- name: Apply lingering for the runtime identity under rootless runtimes
+  ansible.builtin.file:
+    path: "/var/lib/systemd/linger/{{ users_local_ai_service_account.name }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+    modification_time: preserve
   when:
     - users_local_ai_service_account.enabled | default(true) | bool
     - users_runtime_rootless_enabled | bool
