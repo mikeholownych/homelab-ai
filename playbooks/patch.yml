@@ -1,4 +1,14 @@
 ---
+# Patch lifecycle per policies/patching.yml.
+#
+# Assessment (default): enumerates candidate upgrades for the allowlisted
+# package sets, previews dependency expansion via apt simulation, and emits a
+# machine-readable patch-assessment.json. Never mutates packages.
+#
+# Application (patch_apply=true or policy auto_apply): applies ONLY the
+# allowlisted sets with only_upgrade; refuses when simulation shows dependency
+# expansion outside the allowlist unless explicitly permitted; reboots within
+# policy; validates afterwards.
 - name: Patch host according to lifecycle policy
   hosts: ai_hosts
   gather_facts: true
@@ -8,23 +18,113 @@
     - lifecycle
     - operations
   vars:
-    patch_apply: false
+    patch_apply: "{{ patch_policy_default_apply | default(false) }}"
     patch_allow_reboot: true
     patch_policy_file: "{{ playbook_dir }}/../policies/patching.yml"
+    patch_evidence_dir: >-
+      {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR')
+         | default('/var/lib/aihost/evidence/manual', true) }}
+    patch_dependency_expansion_permitted: false
+
   tasks:
     - name: Load patch policy definitions
       ansible.builtin.set_fact:
         patch_policy: "{{ lookup('ansible.builtin.file', patch_policy_file) | from_yaml }}"
       tags: [patch]
 
-    - name: Assess available updates for routine packages
+    - name: Derive the default apply decision from committed policy
+      ansible.builtin.set_fact:
+        patch_policy_default_apply: >-
+          {{ (patch_policy.routine_components.os_packages.auto_apply | default(false) | bool)
+             and (patch_policy.routine_components.security_updates.auto_apply | default(false) | bool) }}
+      tags: [patch]
+
+    - name: Refresh apt metadata for assessment
       ansible.builtin.apt:
         update_cache: true
-        cache_valid_time: 3600
+        cache_valid_time: 0
       when: not ansible_check_mode
       tags: [patch]
 
-    - name: Apply allowed routine OS patches when explicit apply mode is enabled
+    - name: Combine the full mutation allowlist
+      ansible.builtin.set_fact:
+        patch_allowlist: >-
+          {{ (patch_policy.routine_components.os_packages.package_allowlist | default([]))
+             + (patch_policy.routine_components.security_updates.package_allowlist | default([])) }}
+      tags: [patch]
+
+    # Simulation is read-only (-s) but still needs the refreshed cache.
+    - name: Simulate the allowlisted upgrade to enumerate exact changes
+      ansible.builtin.command:
+        argv: ["apt-get", "--simulate", "-V", "upgrade"]
+      register: patch_simulation_os
+      changed_when: false
+      failed_when: patch_simulation_os.rc != 0
+      check_mode: false
+      when: not ansible_check_mode
+      tags: [patch]
+
+    - name: Parse candidate changes out of the simulation
+      ansible.builtin.set_fact:
+        patch_candidates_raw: >-
+          {{ patch_simulation_os.stdout_lines | default([])
+             | select('match', '^Inst ') | list }}
+      tags: [patch]
+
+    - name: Structure candidates and detect dependency expansion
+      ansible.builtin.set_fact:
+        patch_candidates: >-
+          {{ parsed_candidates }}
+        patch_dependency_expansion: >-
+          {{ parsed_candidates | selectattr('in_allowlist', 'equalto', false)
+             | map(attribute='package') | list }}
+      vars:
+        parsed_candidates: >-
+          {% set entries = [] %}
+          {% for line in patch_candidates_raw %}
+            {% set fields = line.split() %}
+            {% set pkg = fields[1] %}
+            {% set versions = fields[2] if fields | length > 2 else '' %}
+            {% set _ = entries.append({
+                 'package': pkg,
+                 'candidate': versions.split(';') | first,
+                 'in_allowlist': pkg in (patch_allowlist | default([]))}) %}
+          {% endfor %}
+          {{ entries }}
+      tags: [patch]
+
+    - name: Persist the patch assessment artifact
+      ansible.builtin.copy:
+        content: "{{ {'schema_version': '1.0.0',
+                       'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ'),
+                       'mode': ('apply' if (patch_apply | bool) else 'assessment'),
+                       'allowlist': patch_allowlist,
+                       'candidates': patch_candidates,
+                       'dependency_expansion': patch_dependency_expansion,
+                       'security_provenance': {'status': 'unavailable',
+                         'reason': 'CVE mapping requires ubuntu-security-status; not wired yet'},
+                       'git_sha': git_commit_sha | default('unknown')} | to_nice_json }}\n"
+        dest: "{{ patch_evidence_dir }}/patch-assessment.json"
+        owner: root
+        group: root
+        mode: "0640"
+      when: not ansible_check_mode
+      tags: [patch]
+
+    - name: Refuse application when dependencies escape the allowlist
+      ansible.builtin.fail:
+        msg: >-
+          Applying the allowlisted set would upgrade non-allowlisted dependencies:
+          {{ patch_dependency_expansion }}. Approve explicitly with
+          -e patch_dependency_expansion_permitted=true or extend the allowlist in Git.
+      when:
+        - patch_apply | bool
+        - not ansible_check_mode
+        - patch_dependency_expansion | length > 0
+        - not (patch_dependency_expansion_permitted | bool)
+      tags: [patch]
+
+    - name: Apply allowed routine OS patches when apply mode is enabled
       ansible.builtin.apt:
         name: "{{ patch_policy.routine_components.os_packages.package_allowlist }}"
         state: present
@@ -34,7 +134,7 @@
         - not ansible_check_mode
       tags: [patch]
 
-    - name: Apply allowed routine security updates when explicit apply mode is enabled
+    - name: Apply allowed routine security updates when apply mode is enabled
       ansible.builtin.apt:
         name: "{{ patch_policy.routine_components.security_updates.package_allowlist }}"
         state: present

@@ -1,0 +1,10 @@
+[Unit]
+Description=aihost benchmark schedule
+
+[Timer]
+OnCalendar={{ scheduled_ansible_benchmark_timer_schedule }}
+RandomizedDelaySec={{ scheduled_ansible_benchmark_random_delay_sec }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

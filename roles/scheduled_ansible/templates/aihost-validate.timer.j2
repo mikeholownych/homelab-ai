@@ -1,0 +1,10 @@
+[Unit]
+Description=aihost validation schedule
+
+[Timer]
+OnCalendar={{ scheduled_ansible_validate_timer_schedule }}
+RandomizedDelaySec={{ scheduled_ansible_validate_random_delay_sec }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

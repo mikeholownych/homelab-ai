@@ -47,10 +47,48 @@
   notify: Reload systemd daemon
   tags: [scheduled_ansible, operations]
 
-- name: Manage scheduled reconciliation timer state
-  ansible.builtin.systemd:
-    name: aihost-reconcile.timer
-    state: "{{ 'started' if (scheduled_ansible_reconcile_enabled | bool) else 'stopped' }}"
-    enabled: "{{ scheduled_ansible_reconcile_enabled | bool }}"
+- name: Install validation systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: "aihost-validate.service.j2", dest: "aihost-validate.service" }
+    - { src: "aihost-validate.timer.j2", dest: "aihost-validate.timer" }
+  notify: Reload systemd daemon
+  tags: [scheduled_ansible, operations]
+
+- name: Install benchmark systemd service and timer
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: "aihost-benchmark.service.j2", dest: "aihost-benchmark.service" }
+    - { src: "aihost-benchmark.timer.j2", dest: "aihost-benchmark.timer" }
+  notify: Reload systemd daemon
+  tags: [scheduled_ansible, operations]
+
+- name: Establish desired state for every lifecycle timer
+  ansible.builtin.systemd_service:
+    name: "{{ item.name }}"
+    daemon_reload: true
+    enabled: "{{ item.enabled }}"
+    state: "{{ 'started' if (item.enabled | bool) else 'stopped' }}"
+  loop:
+    - name: aihost-reconcile.timer
+      enabled: "{{ scheduled_ansible_reconcile_enabled | bool }}"
+    - name: aihost-patch.timer
+      enabled: "{{ scheduled_ansible_patch_enabled | bool }}"
+    - name: aihost-validate.timer
+      enabled: "{{ scheduled_ansible_validate_enabled | bool }}"
+    - name: aihost-benchmark.timer
+      enabled: "{{ scheduled_ansible_benchmark_enabled | bool }}"
+  loop_control:
+    label: "{{ item.name }}={{ item.enabled }}"
   when: not ansible_check_mode
   tags: [scheduled_ansible, operations]
