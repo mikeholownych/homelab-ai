@@ -1,4 +1,13 @@
 ---
+# Controlled component transitions. The Git-committed lifecycle registry
+# (group_vars/gpu.yml + policies/upgrades.yml) is the sole authority:
+#
+#   upgrade  -> requested version MUST equal the committed `candidate`
+#   rollback -> target is the recorded `previous_known_good`
+#
+# This playbook never invents versions and never edits Git state. It applies
+# the transition, restarts the affected service, validates, and records a
+# machine-readable transition artifact.
 - name: Controlled component upgrade and rollback
   hosts: ai_hosts
   gather_facts: true
@@ -13,30 +22,98 @@
     upgrade_version: null
     upgrade_mode: "upgrade" # or "rollback"
     upgrade_policy_file: "{{ playbook_dir }}/../policies/upgrades.yml"
+    upgrade_lifecycle_file: "{{ playbook_dir }}/../inventory/production/group_vars/gpu.yml"
+    upgrade_evidence_dir: >-
+      {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR')
+         | default('/var/lib/aihost/evidence/manual', true) }}
+
   tasks:
     - name: Load upgrade policy definitions
       ansible.builtin.set_fact:
         upgrade_policy: "{{ lookup('ansible.builtin.file', upgrade_policy_file) | from_yaml }}"
       tags: [upgrade, rollback]
 
-    - name: Validate upgrade inputs
+    - name: Load the committed runtime lifecycle registry
+      ansible.builtin.include_vars:
+        file: "{{ upgrade_lifecycle_file }}"
+        name: upgrade_lifecycle_raw
+      tags: [upgrade, rollback]
+
+    - name: Validate upgrade inputs against the registry
       ansible.builtin.assert:
         that:
           - upgrade_component is string
           - upgrade_component in (upgrade_policy.lifecycle_components.keys() | list)
-          - upgrade_version is string or upgrade_mode == 'rollback'
+          - upgrade_lifecycle_raw.runtime_profiles[upgrade_component] is defined
+          - upgrade_mode in ['upgrade', 'rollback']
+          - upgrade_mode == 'rollback' or (upgrade_version | default('')) | length > 0
         fail_msg: >-
-          upgrade requires an allowed component name and version string.
+          upgrade requires a registered component, a valid mode, and an explicit
+          version for upgrades.
       tags: [upgrade, rollback]
 
-    - name: Report upgrade action plan
-      ansible.builtin.debug:
+    - name: Resolve the registry entry for this component
+      ansible.builtin.set_fact:
+        upgrade_registry_entry: "{{ upgrade_lifecycle_raw.runtime_profiles[upgrade_component] }}"
+      tags: [upgrade, rollback]
+
+    # Commissioning gate: null registry entries mean no version has ever been
+    # validated on this host; transitions before commissioning are refused.
+    - name: Refuse transitions on uncommissioned components
+      ansible.builtin.fail:
         msg: >-
-          Executing {{ upgrade_mode }} for component {{ upgrade_component }}
-          targeting version {{ upgrade_version | default('previous_known_good') }}
+          Component {{ upgrade_component }} has commissioning_state
+          {{ upgrade_registry_entry.commissioning_state }} with null pins. Complete physical
+          commissioning and commit real current/candidate/previous_known_good values first.
+      when: >-
+        upgrade_registry_entry.current is none
+        or upgrade_registry_entry.candidate is none
+        or upgrade_registry_entry.previous_known_good is none
       tags: [upgrade, rollback]
 
-    - name: Run independent validation after upgrade attempt
-      ansible.builtin.include_role:
-        name: validation
-      tags: [upgrade, rollback, validation]
+    - name: Resolve the transition target version
+      ansible.builtin.set_fact:
+        upgrade_target_version: >-
+          {{ (upgrade_registry_entry.candidate if upgrade_mode == 'upgrade'
+             else upgrade_registry_entry.previous_known_good) }}
+      tags: [upgrade, rollback]
+
+    - name: Enforce that the request matches the Git-committed authorization
+      ansible.builtin.assert:
+        that:
+          - upgrade_mode == 'rollback' or (upgrade_version == upgrade_target_version)
+        fail_msg: >-
+          Requested version {{ upgrade_version | default('none') }} does not equal the committed
+          candidate {{ upgrade_target_version }}. Change of version requires a Git commit to the
+          lifecycle registry; that commit is the authorization point.
+      tags: [upgrade, rollback]
+
+    - name: Apply the component-specific transition
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/upgrades/transition_{{ upgrade_component }}.yml"
+      vars:
+        transition_target_version: "{{ upgrade_target_version }}"
+      when: not ansible_check_mode
+      tags: [upgrade, rollback]
+
+- name: Independent validation after the transition
+  import_playbook: validate.yml
+
+- name: Record the completed transition artifact
+  hosts: ai_hosts
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Persist upgrade transition evidence
+      ansible.builtin.copy:
+        content: "{{ {'schema_version': '1.0.0',
+                       'component': upgrade_component,
+                       'mode': upgrade_mode,
+                       'from_version': upgrade_registry_entry.current,
+                       'to_version': upgrade_target_version,
+                       'authorized_by_commit': git_commit_sha | default('unknown'),
+                       'completed_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')} | to_nice_json }}\n"
+        dest: "{{ upgrade_evidence_dir }}/upgrade-transition.json"
+        owner: root
+        group: root
+        mode: "0640"
+      tags: [upgrade, rollback]

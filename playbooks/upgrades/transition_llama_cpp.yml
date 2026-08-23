@@ -1,0 +1,25 @@
+---
+# llama_cpp transition: rebuild the pinned source at the registry commit and
+# swap the installed binary. The commit is validated before any build starts.
+- name: Validate that the target version is a full commit
+  ansible.builtin.assert:
+    that:
+      - transition_target_version is match("^[0-9a-f]{40}$")
+    fail_msg: >-
+      llama_cpp registry entries must hold exact 40-character commits;
+      {{ transition_target_version }} is not one.
+
+- name: Rebuild llama.cpp at the target commit
+  ansible.builtin.include_role:
+    name: llama_cpp_sycl
+  vars:
+    llama_cpp_sycl_install_enabled: true
+    llama_cpp_sycl_git_commit: "{{ transition_target_version }}"
+    llama_cpp_sycl_force_rebuild: true
+
+- name: Restart the fallback service onto the new binary
+  ansible.builtin.systemd_service:
+    name: llama-server.service
+    state: restarted
+  when:
+    - llama_cpp_sycl_service_enabled | bool

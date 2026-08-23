@@ -6,6 +6,10 @@ vllm_xpu_runtime_mode: "container"
 vllm_xpu_container_image: "ghcr.io/vllm-project/vllm-xpu"
 vllm_xpu_container_tag: "v0.7.3"
 vllm_xpu_container_digest: "sha256:d8b76e1a4731ec22d4f8ef0e5a882a1772658823f6e1f0e4adfa5468752d5e23"
+# Digest authority for lifecycle transitions (upgrade.yml). Every deployable
+# version must have its immutable digest recorded here via Git commit.
+vllm_xpu_digest_by_tag:
+  0.7.3: "sha256:d8b76e1a4731ec22d4f8ef0e5a882a1772658823f6e1f0e4adfa5468752d5e23"
 
 vllm_xpu_host: "0.0.0.0"
 vllm_xpu_port: 8000

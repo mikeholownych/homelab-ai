@@ -52,6 +52,10 @@
         test_command: systemctl is-active ssh || true
       when: not ansible_check_mode
 
+    - name: Refresh facts after reconnect
+      ansible.builtin.setup:
+      when: not ansible_check_mode
+
     - name: Verify the running kernel matches the declared expectation
       ansible.builtin.assert:
         that:
@@ -63,15 +67,20 @@
         - reboot_verify_expected_kernel is not none
         - not ansible_check_mode
 
-    - name: Confirm GPU devices still enumerate after reboot
-      ansible.builtin.command:
-        argv: ["lspci", "-Dnn"]
-      register: reboot_verify_lspci
-      changed_when: false
-      check_mode: false
-      failed_when: >-
-        '8086:e222' not in reboot_verify_lspci.stdout
-        and (hardware_gpu_expected | default(true)) | bool
+    - name: Re-run hardware discovery as the single source of GPU truth
+      ansible.builtin.include_role:
+        name: hardware_inventory
+      when: not ansible_check_mode
+
+    - name: Confirm both GPUs enumerate after reboot via collected evidence
+      ansible.builtin.assert:
+        that:
+          - hardware_inventory_collection.stdout is string
+          - (hardware_inventory_collection.stdout | from_json).pci | selectattr('vendor_id', 'equalto', '8086')
+            | selectattr('device_id', 'equalto', 'e222') | list | length == 2
+        fail_msg: >-
+          Expected two Intel B65 GPUs (8086:e222) after reboot; discovery found a different
+          topology. Do not proceed to dependent runtimes.
       when: not ansible_check_mode
 
 - name: Run independent validation after reboot

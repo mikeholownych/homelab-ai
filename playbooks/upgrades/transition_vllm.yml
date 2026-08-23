@@ -1,0 +1,33 @@
+---
+# vllm transition: the registry version must map to a digest recorded in
+# vllm_xpu_digest_by_tag. The mutation rewrites the pinned image-ref and
+# VERSION stamp, then restarts the service via its handlers.
+- name: Resolve the digest for {{ transition_target_version }}
+  ansible.builtin.set_fact:
+    upgrade_vllm_digest: "{{ vllm_xpu_digest_by_tag[transition_target_version] | default(none) }}"
+
+- name: Refuse transitions to versions without a committed digest
+  ansible.builtin.fail:
+    msg: >-
+      No digest recorded for vLLM {{ transition_target_version }}. Add it to
+      vllm_xpu_digest_by_tag in roles/vllm_xpu/defaults/main.yml with a Git commit;
+      unverified tags are never deployed.
+  when: upgrade_vllm_digest is none
+
+- name: Rewrite the pinned image reference
+  ansible.builtin.copy:
+    content: "{{ vllm_xpu_container_image }}@{{ upgrade_vllm_digest }}\n"
+    dest: "{{ vllm_xpu_config_dir }}/image-ref"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart vLLM service
+
+- name: Update the deployed VERSION stamp
+  ansible.builtin.copy:
+    content: "{{ transition_target_version }}\n"
+    dest: "{{ vllm_xpu_config_dir }}/VERSION"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart vLLM service

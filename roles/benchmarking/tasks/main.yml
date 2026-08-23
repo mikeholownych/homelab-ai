@@ -1,4 +1,13 @@
 ---
+- name: Install the benchmark harness on the managed node
+  ansible.builtin.copy:
+    src: run_benchmark.py
+    dest: "{{ benchmarking_harness_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [benchmark, operations]
+
 - name: Resolve active tuning profile revision for benchmark provenance
   ansible.builtin.set_fact:
     benchmarking_tuning_revision: >-
@@ -30,7 +39,7 @@
   ansible.builtin.command:
     argv:
       - /usr/bin/python3
-      - "{{ role_path }}/files/run_benchmark.py"
+      - "{{ benchmarking_harness_path }}"
       - --profile
       - "{{ benchmarking_active_profile }}"
       - --hostname

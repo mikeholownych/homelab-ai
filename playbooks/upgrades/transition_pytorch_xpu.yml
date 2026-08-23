@@ -1,0 +1,30 @@
+---
+# pytorch_xpu transition: the target versioned venv must already exist on disk
+# (installed by the pytorch_xpu role). Upgrade promotes candidate->current with
+# rollback preservation; rollback swaps current/previous back.
+- name: Locate the target versioned environment
+  ansible.builtin.stat:
+    path: "{{ pytorch_xpu_root }}/{{ transition_target_version }}-py{{ pytorch_xpu_python_version }}"
+    follow: false
+  register: upgrade_pytorch_target_env
+
+- name: Refuse to promote a nonexistent environment
+  ansible.builtin.fail:
+    msg: >-
+      No installed environment for {{ transition_target_version }}. Install it via
+      pytorch_xpu first; transitions switch between validated environments, they
+      never download new ones.
+  when: not upgrade_pytorch_target_env.stat.exists
+
+- name: Promote {{ transition_target_version }} atomically (preserves previous)
+  ansible.builtin.command:
+    argv:
+      - "{{ pytorch_xpu_promoter }}"
+      - --target
+      - "{{ pytorch_xpu_root }}/{{ transition_target_version }}-py{{ pytorch_xpu_python_version }}"
+      - --current
+      - "{{ pytorch_xpu_current }}"
+      - --previous
+      - "{{ pytorch_xpu_previous }}"
+  register: upgrade_pytorch_promote
+  changed_when: "'CHANGED' in upgrade_pytorch_promote.stdout"

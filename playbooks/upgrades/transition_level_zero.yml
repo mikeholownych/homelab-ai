@@ -1,0 +1,8 @@
+---
+# Level Zero rides the Intel GPU user-space packages; same commissioning gate.
+- name: Refuse level_zero transitions until the vendor stack is commissioned
+  ansible.builtin.fail:
+    msg: >-
+      Level Zero transitions follow the Intel GPU user-space stream, which is
+      gated on the unresolved vendor support decision. Complete GPU commissioning
+      and record registry pins before attempting updates.

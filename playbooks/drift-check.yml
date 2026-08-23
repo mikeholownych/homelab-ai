@@ -31,11 +31,18 @@
         name: validation
       tags: [drift, validation]
 
-    - name: Read validation outcome for drift classification
+    - name: Read validation outcome from the managed node
+      ansible.builtin.slurp:
+        src: /var/lib/aihost/evidence/validation.json
+      register: drift_check_validation_raw
+      check_mode: false
+      failed_when: false
+      tags: [drift]
+
+    - name: Decode validation outcome for drift classification
       ansible.builtin.set_fact:
         validation_document: >-
-          {{ lookup('ansible.builtin.file',
-                    '/var/lib/aihost/evidence/validation.json', errors='ignore') | from_json }}
+          {{ drift_check_validation_raw.content | default('e30=') | b64decode | from_json }}
       tags: [drift]
 
     - name: Classify coarse drift state from validation outcome

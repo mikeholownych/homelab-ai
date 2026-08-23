@@ -1,0 +1,10 @@
+---
+# intel_gpu transitions are package-stream changes owned by the vendor-stack
+# commissioning decision. Until that decision resolves and the registry holds
+# validated pins, this transition refuses rather than guessing.
+- name: Refuse intel_gpu transitions until the vendor stack is commissioned
+  ansible.builtin.fail:
+    msg: >-
+      intel_gpu version transitions require the resolved supported-host-stack
+      (Ubuntu point release / HWE kernel) plus commissioned artifact pins. See
+      roles/intel_gpu and docs/intel-gpu.md.

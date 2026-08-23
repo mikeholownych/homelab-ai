@@ -2,6 +2,8 @@
 benchmarking_enabled: true
 benchmarking_active_profile: "small"
 benchmarking_evidence_dir: "/var/lib/aihost/evidence"
+benchmarking_install_dir: /usr/local/libexec
+benchmarking_harness_path: "{{ benchmarking_install_dir }}/local-ai-run-benchmark"
 benchmarking_output_path: "{{ benchmarking_evidence_dir }}/benchmark.json"
 
 # Execution mode: simulated until physical acceptance; real drives a live

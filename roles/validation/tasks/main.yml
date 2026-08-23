@@ -8,11 +8,20 @@
     mode: "0750"
   tags: [validation, operations]
 
+- name: Install validation aggregator on the managed node
+  ansible.builtin.copy:
+    src: aggregate_validation.py
+    dest: "{{ validation_aggregator_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [validation, operations]
+
 - name: Run independent validation aggregator
   ansible.builtin.command:
     argv:
       - /usr/bin/python3
-      - "{{ role_path }}/files/aggregate_validation.py"
+      - "{{ validation_aggregator_path }}"
       - --node-id
       - "{{ inventory_hostname }}"
       - --environment
@@ -34,9 +43,17 @@
     - validation_run.rc != 0
   tags: [validation, operations]
 
+- name: Read the generated summary from the managed node
+  ansible.builtin.slurp:
+    src: "{{ validation_summary_path }}"
+  register: validation_summary_slurp
+  check_mode: false
+  failed_when: false
+  tags: [validation, operations]
+
 - name: Display validation summary
   ansible.builtin.debug:
-    msg: "{{ validation_summary | default('Validation completed.') }}"
-  vars:
-    validation_summary: "{{ lookup('ansible.builtin.file', validation_summary_path, errors='ignore') }}"
+    msg: >-
+      {{ (validation_summary_slurp.content | default('') | b64decode)
+         | default('Validation completed.', true) }}
   tags: [validation, operations]
