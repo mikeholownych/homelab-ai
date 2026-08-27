@@ -36,14 +36,14 @@ The fleet consists of two production nodes, both running the dual-B65 inference 
 **Dell Precision 5820 Tower** (`ai-5820-01`):
 - **Model**: Dell Precision 5820 Tower
 - **CPU**: Intel Xeon W-2123 (4C / 8T)
-- **RAM**: 32 GB ECC DDR4 (4 slots; expect drop-in upgrades to 64–128 GB)
+- **RAM**: 32 GB ECC DDR4 (8 DIMM slots; Xeon W RDIMMs support up to 256 GB; exact DIMM population recorded at commissioning)
 - **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 via `storage` role) — `storage_mounts` scaffolded commented until identity capture
-- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required for dual B65)
+- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required; each B65 draws via a single 12V-2×6 connector, 2×8-pin adapter included)
 - **Network**: 1 GbE onboard
-- **GPUs**: 2 × Dell Intel Arc Pro B65 (32 GB VRAM each), PCIe Gen3 x16 link negotiation on WRX80-class 5820 platform
+- **GPUs**: 2 × ASRock Intel Arc Pro B65 Creator (32 GB VRAM each), PCIe Gen3 x16 link negotiation on the Intel C422 (LGA2066) Dell Precision 5820 platform
 - **Hardware Profile**: `profiles/hardware/d5820_dual_b65.yml`
 
-> **Aggregate VRAM caveat**: 64 GB is a *multi-device memory pool* (two independent 32 GB buffers), not a single transparent 64 GB device. Tensor-parallel deployment (TP=2) splits a model across both GPUs; a single request can never address the full 64 GB. Model sizing must respect per-device 32 GB limits.
+> **Aggregate VRAM caveat**: 64 GB is a *multi-device memory pool* (two independent 32 GB device-local memory spaces), not a single transparent 64 GB device. Whether a single inference request or model execution can address memory on both devices depends on the runtime's model-parallel implementation; TP=2 exists precisely to span a single model across both GPUs. Default model sizing respects per-device 32 GB limits.
 
 ---
 

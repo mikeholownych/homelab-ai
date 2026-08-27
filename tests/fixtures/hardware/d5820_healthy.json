@@ -1,6 +1,6 @@
 {
   "simulated": true,
-  "dmi": {"manufacturer": "Dell", "product_name": "Precision 5820 Tower", "serial_number": "SIMULATED", "asset_tag": "SIMULATED", "bios_version": "SIM-1"},
+  "dmi": {"manufacturer": "Dell", "product_name": "Precision Tower 5820", "serial_number": "SIMULATED", "asset_tag": "SIMULATED", "bios_version": "SIM-1"},
   "cpu": {"model": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz", "sockets": 1},
   "memory": {"total_gib": 32, "dimms": [{"locator": "RDIMM1", "size_gib": 16}, {"locator": "RDIMM2", "size_gib": 16}]},
   "gpus": [{"bdf": "0000:41:00.0", "vendor_id": "8086", "device_id": "e222"}, {"bdf": "0000:61:00.0", "vendor_id": "8086", "device_id": "e222"}],

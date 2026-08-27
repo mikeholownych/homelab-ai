@@ -24,10 +24,10 @@ The fleet is a two-node production group (`inventory/production/hosts.yml`), eac
 
 **`ai-5820-01`** — Dell Precision 5820 Tower (`profiles/hardware/d5820_dual_b65.yml`):
 - **CPU**: Intel Xeon W-2123 (4 cores / 8 threads)
-- **Memory**: 32 GB ECC DDR4 (4-slot; upgrade path to 64–128 GB via six 288-pin DIMM slots)
-- **GPUs**: 2 × Dell Intel Arc Pro B65 32 GB, PCIe Gen3 x16 link negotiation; host bridge reports Gen5 capability so link-speed warnings must be evaluated against the platform's real physical Gen3 topology
+- **Memory**: 32 GB ECC DDR4 today (8 DIMM slots; exact population captured at commissioning; Xeon W RDIMMs support up to 256 GB)
+- **GPUs**: 2 × ASRock Intel Arc Pro B65 Creator 32 GB, PCIe Gen3 x16 link negotiation; host bridge reports Gen5 capability so link-speed warnings must be evaluated against the platform's real physical Gen3 topology
 - **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 mounted via the `storage` role)
-- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required)
+- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required; each B65 draws via a single 12V-2×6 connector, 2×8-pin adapter included)
 - **Network**: 1 GbE onboard
 
 > **Aggregate VRAM caveat**: both nodes expose 64 GB aggregate VRAM as a *multi-device memory pool* (2 × 32 GB independent buffers). Tensor-parallel deployment (TP=2) spans a model across both GPUs; the pool is not a single transparent 64 GB device and per-device 32 GB limits govern model sizing.

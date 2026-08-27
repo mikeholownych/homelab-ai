@@ -15,8 +15,12 @@ def _check(rule, expected, observed, passed, severity, rationale):
 def classify(profile, observed):
     checks = []
     product_name = observed.get("dmi", {}).get("product_name", "")
-    expected_model = profile["platform"]["machine_type_model"]
-    checks.append(_check("machine_model", expected_model, product_name, expected_model in product_name,
+    platform = profile["platform"]
+    expected_model = platform["machine_type_model"]
+    aliases = [pattern for pattern in platform.get("product_name_patterns", [])
+               if pattern != expected_model]
+    machine_ok = expected_model in product_name or any(pattern in product_name for pattern in aliases)
+    checks.append(_check("machine_model", expected_model, product_name, machine_ok,
                          "blocking", "The hardware profile is valid only for its declared machine type."))
     cpu_model = observed.get("cpu", {}).get("model", "")
     cpu_ok = any(pattern in cpu_model for pattern in profile["cpu"]["model_patterns"])

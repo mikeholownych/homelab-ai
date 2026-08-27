@@ -106,7 +106,7 @@ Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 582
    - Confirm Dell Precision 5820 Tower, Intel Xeon W-2123, and a 950 W internal PSU rating (verify physical sticker).
 
 3. **Verify Memory/Storage**
-   - Verify 32 GB ECC DDR4; confirm both NVMe M.2 devices present. **Capture and record both NVMe UUIDs** (`lsblk -f`, `blkid`); they are required before enabling `storage_mounts` in `inventory/production/host_vars/ai-5820-01.yml` (kept commented until then).
+   - Verify 32 GB ECC DDR4 (8 DIMM slots — record which positions are populated); confirm both NVMe M.2 devices present. **Capture and record both NVMe UUIDs** (`lsblk -f`, `blkid`); they are required before enabling `storage_mounts` in `inventory/production/host_vars/ai-5820-01.yml` (kept commented until then).
 
 4. **Update Approved Firmware If Required**
    - Flash vetted Dell system BIOS and device firmware per security/hardware policy.
@@ -115,13 +115,13 @@ Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 582
    - Enable **Above 4G Decoding** and **Resizable BAR (ReBAR)**. These states are reported from Linux sysfs when visible; until then the profile records `undiscoverable_status: not_tested`. Enable **Intel VT-d/IOMMU**.
 
 6. **Verify GPU Power Harness**
-   - The Dell 10-pin motherboard power header → dual 8-pin PCIe GPU harness is mandatory for two B65 cards. Verify rating supports sustained dual-GPU load before ever powering both cards (PSU budget gates: `benchmarking_psu_capacity_watts: 950`, `benchmarking_gpu_tdp_watts: 200`).
+   - The Dell 10-pin motherboard power header → dual 8-pin PCIe GPU harness is mandatory for two B65 cards. Each B65 draws via a single 12V-2×6 connector (2×8-pin adapter included); verify the harness/PSU delivers sustained dual-GPU load before ever powering both cards (PSU budget gates: `benchmarking_psu_capacity_watts: 950`, `benchmarking_gpu_tdp_watts: 200`).
 
 7. **Remove Interim GPU**
    - If the machine carries an interim NVIDIA P4000 (or any non-approved GPU), remove it before acceptance. An unexpected device surfaces as a **warning** (`unexpected_gpu_devices`) — never blocking an approved dual-B65 result — but it must be gone for the accepted baseline.
 
 8. **Install/Configure First B65**
-   - Seat the primary Dell Intel Arc Pro B65 32 GB card in a physical x16 slot (expect Gen3 x16 negotiation; `expected_negotiated_generation: 3`, `allow_slot_limited_width: true`).
+   - Seat the primary ASRock Intel Arc Pro B65 Creator 32 GB card in a physical x16 slot (expect Gen3 x16 negotiation; `expected_negotiated_generation: 3`, `allow_slot_limited_width: true`).
 
 9. **Validate First GPU**
    - Run `ansible-playbook playbooks/validate.yml --limit ai-5820-01` to verify device enumeration, Gen3 x16 link, 32 GB VRAM, and Level Zero visibility.
@@ -178,4 +178,4 @@ Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 582
 19. **Capture Accepted Baseline**
     - Archive `evidence/ai-5820-01/<timestamp>/` as the authoritative commissioning baseline evidence.
 
-**Aggregate VRAM caveat**: 64 GB is a multi-device memory pool (2 × 32 GB independent buffers), not a single transparent 64 GB device. TP=2 spans a model across both GPUs; a single request can never address the full 64 GB.
+**Aggregate VRAM caveat**: 64 GB is a multi-device memory pool (2 × 32 GB device-local memory spaces), not a single transparent 64 GB device. TP=2 spans a model across both GPUs; whether a single request can address memory on both devices depends on the runtime's model-parallel implementation, so sizing defaults to per-device 32 GB.
