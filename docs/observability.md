@@ -30,6 +30,11 @@ sampling the same hwmon sources the benchmark harness uses plus reconciliation
 status. This gives any future Alloy deployment an immediate scrape target and
 gives cron-level history even before the full stack lands.
 
+GPU sampling is **per device**: both B65 cards contribute their own hwmon line
+(utilisation, VRAM, clocks, per-card peak temperature). The thermal gate in
+benchmark fixtures reads the peak across both devices, so neither card can hide
+a hotspot behind the other's nominal temperature.
+
 ### Why the full stack is not in this commit
 
 Repository policy forbids unverifiable pins and curl-install scripts. Alloy /

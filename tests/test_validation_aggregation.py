@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 from pathlib import Path
 import pytest
 import jsonschema
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AGGREGATOR_PATH = REPO_ROOT / "roles/validation/files/aggregate_validation.py"
@@ -111,3 +113,50 @@ def test_uncommissioned_not_tested_causes_incomplete_status():
     assert doc["status"] == "NOT_TESTED"
     assert doc["summary"]["classification"] == "incomplete"
     assert doc["summary"]["not_tested"] > 0
+
+
+def _load_d5820_profile():
+    path = REPO_ROOT / "profiles" / "hardware" / "d5820_dual_b65.yml"
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def test_hardware_profile_spec_derives_d5820_expected_values():
+    mod = load_aggregator()
+    schema = load_schema()
+
+    doc = mod.build_validation_document(
+        node_id="ai-5820-01",
+        environment="production",
+        hardware_profile="d5820_dual_b65",
+        git_sha="0123456789abcdef0123456789abcdef01234567",
+        simulated=True,
+        checks_data={},
+        hardware_profile_spec=_load_d5820_profile(),
+    )
+
+    jsonschema.validate(instance=doc, schema=schema)
+    by_id = {check["id"]: check for check in doc["checks"]}
+    assert by_id["machine_model"]["expected"]["value"] == "Precision 5820 Tower"
+    assert by_id["cpu"]["expected"]["value"] == "Intel(R) Xeon(R) W-2123"
+    assert by_id["gpu_count"]["expected"]["value"] == 2
+    assert by_id["gpu_vram"]["expected"]["value"] == 32.0
+    assert by_id["pcie_topology"]["expected"]["value"] == "Gen3"
+    assert by_id["machine_model"]["expected"]["summary"] == "Precision 5820 Tower"
+    assert doc["status"] == "NOT_TESTED"
+
+
+def test_aggregator_cli_accepts_hardware_profile_json(tmp_path):
+    profile_path = tmp_path / "d5820.json"
+    profile_path.write_text(json.dumps(_load_d5820_profile()))
+
+    process = subprocess.run(
+        [str(AGGREGATOR_PATH), "--node-id", "ai-5820-01", "--hardware-profile",
+         "d5820_dual_b65", "--git-sha", "0123456789abcdef0123456789abcdef01234567",
+         "--simulated", "--hardware-profile-json", str(profile_path)],
+        check=False, capture_output=True, text=True,
+    )
+    assert process.returncode == 0, process.stderr
+    doc = json.loads(process.stdout)
+    by_id = {check["id"]: check for check in doc["checks"]}
+    assert by_id["machine_model"]["expected"]["value"] == "Precision 5820 Tower"
+    assert by_id["gpu_count"]["expected"]["value"] == 2

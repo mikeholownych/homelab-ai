@@ -7,3 +7,6 @@ validation_install_dir: /usr/local/libexec
 validation_aggregator_path: "{{ validation_install_dir }}/local-ai-validate-aggregate"
 validation_fail_on_blocking: true
 validation_simulated: false
+validation_hardware_profile_path: >-
+  {{ playbook_dir }}/../profiles/hardware/{{ hardware_profile | default('p620_dual_b65') }}.yml
+validation_profile_json_path: "{{ validation_evidence_dir }}/hardware-profile-expected.json"

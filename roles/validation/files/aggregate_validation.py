@@ -45,6 +45,52 @@ def wrap_summary_value(raw: Any) -> Dict[str, Any]:
     return {"summary": str(raw), "value": raw}
 
 
+def _expected_harness_checks(profile: Dict[str, Any] | None) -> Dict[str, Dict[str, Any]]:
+    """Derive harness expected values from the selected hardware profile.
+
+    Returns an empty dict for no profile so callers keep P620 (REQUIRED_CHECKS_SPEC)
+    defaults untouched. Any key present here overrides the matching base spec entry.
+    """
+    if not profile:
+        return {}
+    platform = profile.get("platform") or {}
+    patterns = (profile.get("cpu") or {}).get("model_patterns") or []
+    cpu_expected = patterns[0] if patterns else "unknown"
+    count = (profile.get("gpu") or {}).get("count_expected") or 0
+    approved = (profile.get("gpu") or {}).get("approved_pci_devices") or []
+    expected = (profile.get("gpu") or {}).get("expected_models") or []
+    model = approved[0].get("model", "unknown") if approved else "unknown"
+    vram_raw = None
+    if expected:
+        memory = expected[0].get("memory_gib") or {}
+        vram_raw = memory.get("approximate")
+    vram = float(vram_raw) if isinstance(vram_raw, (int, float)) else "unknown"
+    generation = (profile.get("pcie") or {}).get("host_link") or {}
+    position = f"Gen{generation.get('expected_negotiated_generation')}" \
+        if isinstance(generation.get("expected_negotiated_generation"), int) else "unknown"
+    return {
+        "cpu": {"category": "platform", "classification": "hardware", "severity": "blocking",
+                "summary": cpu_expected, "value": cpu_expected},
+        "machine_model": {"category": "platform", "classification": "hardware", "severity": "blocking",
+                          "summary": platform.get("machine_type_model", "unknown"),
+                          "value": platform.get("machine_type_model", "unknown")},
+        "gpu_count": {"category": "compute", "classification": "hardware", "severity": "blocking",
+                      "summary": f"{count} GPU(s)", "value": count},
+        "gpu_model": {"category": "compute", "classification": "hardware", "severity": "blocking",
+                      "summary": model, "value": model},
+        "gpu_vram": {"category": "compute", "classification": "hardware", "severity": "blocking",
+                     "summary": f"{vram} GiB per GPU", "value": vram},
+        "level_zero": {"category": "compute", "classification": "runtime", "severity": "blocking",
+                       "summary": f"{count} Level Zero devices", "value": count},
+        "pytorch_xpu": {"category": "compute", "classification": "runtime", "severity": "blocking",
+                        "summary": f"{count} PyTorch XPU devices", "value": count},
+        "pcie_topology": {"category": "bus", "classification": "hardware", "severity": "blocking",
+                          "summary": f"{position} Link", "value": position},
+        "rebar": {"category": "bus", "classification": "hardware", "severity": "blocking",
+                  "summary": "Resizable BAR Enabled", "value": True},
+    }
+
+
 def classify_drift(
     predicted_changes: int,
     actual_changes: int,
@@ -71,10 +117,12 @@ def build_validation_document(
     simulated: bool,
     checks_data: Dict[str, Dict[str, Any]],
     generated_at: str | None = None,
+    hardware_profile_spec: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     if not generated_at:
         generated_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    spec = {**REQUIRED_CHECKS_SPEC, **_expected_harness_checks(hardware_profile_spec)}
     checks: List[Dict[str, Any]] = []
     has_blocked = False
     has_fail = False
@@ -84,12 +132,12 @@ def build_validation_document(
     warnings = 0
     not_tested = 0
 
-    for check_id, spec in REQUIRED_CHECKS_SPEC.items():
+    for check_id, check_spec in spec.items():
         user_check = checks_data.get(check_id, {})
         status = user_check.get("status", "NOT_TESTED")
-        severity = user_check.get("severity", spec["severity"])
+        severity = user_check.get("severity", check_spec["severity"])
         
-        expected_raw = user_check.get("expected", {"summary": spec["summary"], "value": spec["value"]})
+        expected_raw = user_check.get("expected", {"summary": check_spec["summary"], "value": check_spec["value"]})
         observed_raw = user_check.get("observed", {"summary": "not observed", "value": None} if status == "NOT_TESTED" else expected_raw)
         evidence_refs = user_check.get("evidence_refs", [f"{check_id}_evidence.json"])
 
@@ -110,8 +158,8 @@ def build_validation_document(
 
         checks.append({
             "id": check_id,
-            "category": spec["category"],
-            "classification": spec["classification"],
+            "category": check_spec["category"],
+            "classification": check_spec["classification"],
             "severity": severity,
             "status": status,
             "expected": wrap_summary_value(expected_raw),
@@ -164,11 +212,21 @@ def main() -> int:
     parser.add_argument("--input-json", default=None, help="Path to input checks JSON")
     parser.add_argument("--output", default=None, help="Path to write validation.json")
     parser.add_argument("--text-summary", default=None, help="Path to write summary txt")
+    parser.add_argument("--hardware-profile-json", default=None,
+                        help="Expected hardware profile JSON (path or inline) for harness value derivation")
     args = parser.parse_args()
 
     checks_data: Dict[str, Dict[str, Any]] = {}
     if args.input_json and Path(args.input_json).exists():
         checks_data = json.loads(Path(args.input_json).read_text(encoding="utf-8"))
+
+    profile_spec: Dict[str, Any] | None = None
+    if args.hardware_profile_json:
+        spec_path = Path(args.hardware_profile_json)
+        if spec_path.exists():
+            profile_spec = json.loads(spec_path.read_text(encoding="utf-8"))
+        else:
+            profile_spec = json.loads(args.hardware_profile_json)
 
     doc = build_validation_document(
         node_id=args.node_id,
@@ -177,6 +235,7 @@ def main() -> int:
         git_sha=args.git_sha,
         simulated=args.simulated,
         checks_data=checks_data,
+        hardware_profile_spec=profile_spec,
     )
 
     formatted_json = json.dumps(doc, indent=2)

@@ -16,8 +16,11 @@ LAB_ROOT = REPO_ROOT / "inventory" / "lab"
 PRODUCTION_INVENTORY = PRODUCTION_ROOT / "hosts.yml"
 LAB_INVENTORY = LAB_ROOT / "hosts.yml"
 PRODUCTION_HOST_VARS = PRODUCTION_ROOT / "host_vars" / "ai-p620-01.yml"
+PRODUCTION_HOST_VARS_5820 = PRODUCTION_ROOT / "host_vars" / "ai-5820-01.yml"
 PRODUCTION_GROUP_VARS = PRODUCTION_ROOT / "group_vars"
 INVENTORY_README = REPO_ROOT / "inventory" / "README.md"
+
+PRODUCTION_HOSTS = ("ai-p620-01", "ai-5820-01")
 
 REQUIRED_PATHS = (
     INVENTORY_README,
@@ -28,8 +31,14 @@ REQUIRED_PATHS = (
     PRODUCTION_GROUP_VARS / "cluster.yml",
     PRODUCTION_GROUP_VARS / "monitoring.yml",
     PRODUCTION_HOST_VARS,
+    PRODUCTION_HOST_VARS_5820,
     LAB_INVENTORY,
 )
+
+HOST_PROFILES = {
+    "ai-p620-01": "p620_dual_b65",
+    "ai-5820-01": "d5820_dual_b65",
+}
 
 IDENTITY_TAG_TOKENS = {"production", "p620_dual_b65", "inference", "gpu", "ai-p620-01"}
 
@@ -85,95 +94,98 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual([], missing, f"Missing inventory contract paths: {missing}")
 
     def test_production_host_metadata_matches_contract(self) -> None:
-        host_vars = load_yaml(PRODUCTION_HOST_VARS)
+        for hostname in PRODUCTION_HOSTS:
+            path = PRODUCTION_ROOT / "host_vars" / f"{hostname}.yml"
+            host_vars = load_yaml(path)
+            expected_profile = HOST_PROFILES[hostname]
+            with self.subTest(host=hostname):
+                self.assertEqual("CHANGE_ME", host_vars["ansible_host"])
+                self.assertEqual("production", host_vars["node_metadata"]["environment"])
+                self.assertEqual(hostname, host_vars["node_metadata"]["hostname"])
+                self.assertEqual(expected_profile, host_vars["hardware_profile"])
+                self.assertEqual({"inference": True, "gpu": True}, host_vars["node_roles"])
+                self.assertEqual("worker", host_vars["cluster"]["node_role"])
+                self.assertEqual(
+                    {"worker": True, "api": False, "scheduler": False, "storage": False},
+                    host_vars["cluster"]["roles"],
+                )
+                self.assertEqual(
+                    {
+                        "gpu": True,
+                        "inference": True,
+                        "benchmarking": True,
+                        "monitoring": True,
+                        "cluster_eligible": True,
+                    },
+                    host_vars["capabilities"],
+                )
+                self.assertEqual(
+                    {
+                        "monitoring": True,
+                        "scheduled_reconciliation": True,
+                        "os_tuning": True,
+                        "model_registry": False,
+                        "clustering": False,
+                        "cmdb_export": False,
+                        "itsm_integration": False,
+                        "ray_enabled": False,
+                        "distributed_vllm_enabled": False,
+                    },
+                    host_vars["features"],
+                )
 
-        self.assertEqual("CHANGE_ME", host_vars["ansible_host"])
-        self.assertEqual("production", host_vars["node_metadata"]["environment"])
-        self.assertEqual("p620_dual_b65", host_vars["hardware_profile"])
-        self.assertEqual({"inference": True, "gpu": True}, host_vars["node_roles"])
-        self.assertEqual("worker", host_vars["cluster"]["node_role"])
-        self.assertEqual(
-            {"worker": True, "api": False, "scheduler": False, "storage": False},
-            host_vars["cluster"]["roles"],
-        )
-        self.assertEqual(
-            {
-                "gpu": True,
-                "inference": True,
-                "benchmarking": True,
-                "monitoring": True,
-                "cluster_eligible": True,
-            },
-            host_vars["capabilities"],
-        )
-        self.assertEqual(
-            {
-                "monitoring": True,
-                "scheduled_reconciliation": True,
-                "os_tuning": True,
-                "model_registry": False,
-                "clustering": False,
-                "cmdb_export": False,
-                "itsm_integration": False,
-                "ray_enabled": False,
-                "distributed_vllm_enabled": False,
-            },
-            host_vars["features"],
-        )
+                for tag in host_vars.get("tags", []):
+                    self.assertNotIn(tag, IDENTITY_TAG_TOKENS)
 
-        for tag in host_vars.get("tags", []):
-            self.assertNotIn(tag, IDENTITY_TAG_TOKENS)
-
-        self.assertEqual(
-            {
-                "enabled": False,
-                "name": None,
-                "membership_state": "standalone",
-                "node_role": "worker",
-                "roles": {"worker": True, "api": False, "scheduler": False, "storage": False},
-                "capabilities": {
-                    "ray": False,
-                    "distributed_vllm": False,
-                    "worker_service": True,
-                    "api_service": False,
-                    "scheduler_service": False,
-                    "storage_service": False,
-                },
-                "ray_enabled": False,
-                "distributed_vllm_enabled": False,
-                "endpoints": {
-                    "api_base_url": None,
-                    "scheduler_address": None,
-                    "ray_gcs_address": None,
-                    "object_storage_url": None,
-                },
-                "fleet": {
-                    "id": None,
-                    "coordinator": None,
-                    "peer_hosts": [],
-                    "quorum_size": None,
-                },
-            },
-            host_vars["cluster"],
-        )
-        self.assertEqual(
-            {
-                "primary_bind_address": None,
-                "management_fqdn": None,
-                "metrics_endpoint": None,
-            },
-            host_vars["network_endpoints"],
-        )
+                self.assertEqual(
+                    {
+                        "enabled": False,
+                        "name": None,
+                        "membership_state": "standalone",
+                        "node_role": "worker",
+                        "roles": {"worker": True, "api": False, "scheduler": False, "storage": False},
+                        "capabilities": {
+                            "ray": False,
+                            "distributed_vllm": False,
+                            "worker_service": True,
+                            "api_service": False,
+                            "scheduler_service": False,
+                            "storage_service": False,
+                        },
+                        "ray_enabled": False,
+                        "distributed_vllm_enabled": False,
+                        "endpoints": {
+                            "api_base_url": None,
+                            "scheduler_address": None,
+                            "ray_gcs_address": None,
+                            "object_storage_url": None,
+                        },
+                        "fleet": {
+                            "id": None,
+                            "coordinator": None,
+                            "peer_hosts": [],
+                            "quorum_size": None,
+                        },
+                    },
+                    host_vars["cluster"],
+                )
+                self.assertEqual(
+                    {
+                        "primary_bind_address": None,
+                        "management_fqdn": None,
+                        "metrics_endpoint": None,
+                    },
+                    host_vars["network_endpoints"],
+                )
 
     def test_production_inventory_parses_and_keeps_host_metadata_authoritative(self) -> None:
         inventory, stderr = run_ansible_inventory(PRODUCTION_INVENTORY)
         self.assertEqual("", stderr.strip())
 
         self.assertEqual(["production", "inference", "gpu", "cluster", "monitoring"], inventory["ai_hosts"]["children"])
-        self.assertEqual(["ai-p620-01"], inventory["production"]["hosts"])
-        self.assertEqual(["ai-p620-01"], inventory["inference"]["hosts"])
-        self.assertEqual(["ai-p620-01"], inventory["gpu"]["hosts"])
-        self.assertEqual(["ai-p620-01"], inventory["cluster"]["hosts"])
+        for group in ("production", "inference", "gpu", "cluster", "monitoring"):
+            self.assertEqual(set(PRODUCTION_HOSTS), set(inventory[group]["hosts"]))
+            self.assertEqual(2, len(inventory[group]["hosts"]))
 
         hostvars = inventory["_meta"]["hostvars"]["ai-p620-01"]
         self.assertEqual("production", hostvars["node_metadata"]["environment"])
@@ -192,9 +204,24 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual("disabled", hostvars["model_selection_controls"]["benchmark_model"]["execution_state"])
         self.assertIsNone(hostvars["cluster"]["endpoints"]["api_base_url"])
 
-    def test_production_site_playbook_list_hosts_resolves_ai_host(self) -> None:
+        hostvars_5820 = inventory["_meta"]["hostvars"]["ai-5820-01"]
+        self.assertEqual("production", hostvars_5820["node_metadata"]["environment"])
+        self.assertEqual("d5820_dual_b65", hostvars_5820["hardware_profile"])
+        self.assertEqual("CHANGE_ME", hostvars_5820["ansible_host"])
+        self.assertEqual(False, hostvars_5820["features"]["clustering"])
+        self.assertEqual(False, hostvars_5820["features"]["ray_enabled"])
+        self.assertEqual(False, hostvars_5820["features"]["distributed_vllm_enabled"])
+        self.assertEqual("worker", hostvars_5820["cluster"]["node_role"])
+        self.assertEqual("unselected", hostvars_5820["model_selection_controls"]["serving_model"]["selection_state"])
+        self.assertEqual("disabled", hostvars_5820["model_selection_controls"]["benchmark_model"]["execution_state"])
+        self.assertEqual(950, hostvars_5820["benchmarking_psu_capacity_watts"])
+        self.assertEqual(200, hostvars_5820["benchmarking_gpu_tdp_watts"])
+        self.assertIsNone(hostvars_5820["cluster"]["endpoints"]["api_base_url"])
+
+    def test_production_site_playbook_list_hosts_resolves_ai_hosts(self) -> None:
         output = run_playbook_list_hosts(PRODUCTION_INVENTORY, REPO_ROOT / "playbooks" / "site.yml")
-        self.assertIn("ai-p620-01", output)
+        for hostname in PRODUCTION_HOSTS:
+            self.assertIn(hostname, output)
 
     def test_lab_inventory_parses_without_declaring_hosts(self) -> None:
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
@@ -257,8 +284,8 @@ class InventoryContractTests(unittest.TestCase):
             text=True,
         )
         lines = [line for line in result.stdout.splitlines() if line.strip()]
-        self.assertEqual(1, len(lines))
-        self.assertTrue(lines[0].endswith("ansible_host: CHANGE_ME"), lines[0])
+        self.assertEqual(2, len(lines), lines)
+        self.assertTrue(all(line.endswith("ansible_host: CHANGE_ME") for line in lines), lines)
 
 
 if __name__ == "__main__":

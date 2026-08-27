@@ -1,4 +1,9 @@
-# Hardware Commissioning Runbook: Lenovo ThinkStation P620 Dual Arc Pro B65
+# Hardware Commissioning Runbooks
+
+Two production nodes share the same software stack but are physically distinct.
+The sections below are the authoritative acceptance sequences for each host.
+
+## Lenovo ThinkStation P620 (`ai-p620-01`) — Dual Arc Pro B65
 
 ## Acceptance Sequence
 
@@ -87,3 +92,90 @@ When the physical Lenovo ThinkStation P620 workstation arrives, follow this auth
 
 18. **Capture Accepted Baseline**
     - Archive the generated evidence directory under `evidence/ai-p620-01/<timestamp>/` as the authoritative commissioning baseline evidence.
+
+---
+
+## Dell Precision 5820 Tower (`ai-5820-01`) — Dual Arc Pro B65
+
+Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 5820 arrives, follow this 19-step runbook:
+
+1. **Capture Factory State**
+   - Record serial numbers, asset tag, shipping seals, and initial inventory before booting.
+
+2. **Verify Model/CPU/PSU**
+   - Confirm Dell Precision 5820 Tower, Intel Xeon W-2123, and a 950 W internal PSU rating (verify physical sticker).
+
+3. **Verify Memory/Storage**
+   - Verify 32 GB ECC DDR4; confirm both NVMe M.2 devices present. **Capture and record both NVMe UUIDs** (`lsblk -f`, `blkid`); they are required before enabling `storage_mounts` in `inventory/production/host_vars/ai-5820-01.yml` (kept commented until then).
+
+4. **Update Approved Firmware If Required**
+   - Flash vetted Dell system BIOS and device firmware per security/hardware policy.
+
+5. **Verify BIOS Prerequisites**
+   - Enable **Above 4G Decoding** and **Resizable BAR (ReBAR)**. These states are reported from Linux sysfs when visible; until then the profile records `undiscoverable_status: not_tested`. Enable **Intel VT-d/IOMMU**.
+
+6. **Verify GPU Power Harness**
+   - The Dell 10-pin motherboard power header → dual 8-pin PCIe GPU harness is mandatory for two B65 cards. Verify rating supports sustained dual-GPU load before ever powering both cards (PSU budget gates: `benchmarking_psu_capacity_watts: 950`, `benchmarking_gpu_tdp_watts: 200`).
+
+7. **Remove Interim GPU**
+   - If the machine carries an interim NVIDIA P4000 (or any non-approved GPU), remove it before acceptance. An unexpected device surfaces as a **warning** (`unexpected_gpu_devices`) — never blocking an approved dual-B65 result — but it must be gone for the accepted baseline.
+
+8. **Install/Configure First B65**
+   - Seat the primary Dell Intel Arc Pro B65 32 GB card in a physical x16 slot (expect Gen3 x16 negotiation; `expected_negotiated_generation: 3`, `allow_slot_limited_width: true`).
+
+9. **Validate First GPU**
+   - Run `ansible-playbook playbooks/validate.yml --limit ai-5820-01` to verify device enumeration, Gen3 x16 link, 32 GB VRAM, and Level Zero visibility.
+
+10. **Install/Configure Second B65**
+    - Seat the secondary B65 in the second physical x16 slot.
+
+11. **Validate Both GPUs**
+    - Re-run discovery; expect both B65 GPUs, 64 GB **aggregate** VRAM (per-device 32 GB), and verified PCIe slot topology:
+      ```bash
+      ansible-playbook playbooks/validate.yml --limit ai-5820-01
+      ```
+
+12. **Deploy XPU Stack**
+    - Apply Intel GPU compute driver and PyTorch XPU environment:
+      ```bash
+      ansible-playbook playbooks/site.yml --limit ai-5820-01 --tags gpu,runtime
+      ```
+    - **Gate notice**: the Intel Arc Pro B65 stack remains in `unresolved_vendor_support_conflict` (Ubuntu Server 24.04 without the Desktop/6.17-HWE closure). The role fails closed *before mutation*; this runbook cannot bypass it. Commissioning can proceed through the storage/baseline portions, but `gpu,runtime` completion requires Intel's coherent B65 host-support statement (see `docs/intel-gpu.md`).
+
+13. **Deploy Inference Runtime**
+    - Deploy vLLM XPU and llama.cpp SYCL services:
+      ```bash
+      ansible-playbook playbooks/site.yml --limit ai-5820-01 --tags inference
+      ```
+
+14. **Run Single-GPU Test**
+    - ```bash
+      ansible-playbook playbooks/benchmark.yml --limit ai-5820-01 -e "benchmark_profile=small"
+      ```
+
+15. **Run Dual-GPU Test**
+    - TP=2 profile; recall per-device 32 GB / aggregate-pool semantics when sizing:
+      ```bash
+      ansible-playbook playbooks/benchmark.yml --limit ai-5820-01 -e "benchmark_profile=large_70b"
+      ```
+
+16. **Run Sustained Load / Thermal Test**
+    - The thermal gate reads **both** GPU devices (per-device peak temp; hwmon sampling covers each card):
+      ```bash
+      ansible-playbook playbooks/benchmark.yml --limit ai-5820-01 -e "benchmark_profile=sustained_load"
+      ```
+
+17. **Reboot**
+    - `sudo reboot`; verify automatic service initialization.
+
+18. **Rerun Convergence + Idempotency**
+    - ```bash
+      ansible-playbook playbooks/site.yml --limit ai-5820-01
+      ansible-playbook playbooks/drift-check.yml --limit ai-5820-01 --check
+      ```
+    - Re-run must be byte-stable (`changed=0`).
+
+19. **Capture Accepted Baseline**
+    - Archive `evidence/ai-5820-01/<timestamp>/` as the authoritative commissioning baseline evidence.
+
+**Aggregate VRAM caveat**: 64 GB is a multi-device memory pool (2 × 32 GB independent buffers), not a single transparent 64 GB device. TP=2 spans a model across both GPUs; a single request can never address the full 64 GB.

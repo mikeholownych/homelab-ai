@@ -1,6 +1,6 @@
 # Local AI Workstation Configuration-as-Code
 
-Production-quality Configuration-as-Code (CaC) repository using Ansible for managing a local AI workstation fleet, initially targeting a Lenovo ThinkStation P620 with dual Intel Arc Pro B65 32 GB GPUs running Ubuntu 24.04 LTS.
+Production-quality Configuration-as-Code (CaC) repository using Ansible for managing a local AI workstation fleet, targeting a Lenovo ThinkStation P620 and a Dell Precision 5820 Tower with dual Intel Arc Pro B65 32 GB GPUs running Ubuntu 24.04 LTS.
 
 ---
 
@@ -21,7 +21,9 @@ Production-quality Configuration-as-Code (CaC) repository using Ansible for mana
 
 ## 2. Supported Host Profile
 
-The initial primary target host is the Lenovo ThinkStation P620 configured as:
+The fleet consists of two production nodes, both running the dual-B65 inference stack:
+
+**Lenovo ThinkStation P620** (`ai-p620-01`):
 - **Model**: Lenovo ThinkStation P620 `30E1S7NJ00`
 - **CPU**: AMD Ryzen Threadripper PRO 3945WX (12C / 24T)
 - **RAM**: 48 GB ECC DDR4-3200
@@ -30,6 +32,18 @@ The initial primary target host is the Lenovo ThinkStation P620 configured as:
 - **Network**: 10 GbE onboard NIC
 - **GPUs**: 2 × ASRock Intel Arc Pro B65 (32 GB VRAM each, 64 GB aggregate VRAM, PCIe Gen4 link negotiation on P620 WRX80 platform)
 - **Hardware Profile**: `profiles/hardware/p620_dual_b65.yml`
+
+**Dell Precision 5820 Tower** (`ai-5820-01`):
+- **Model**: Dell Precision 5820 Tower
+- **CPU**: Intel Xeon W-2123 (4C / 8T)
+- **RAM**: 32 GB ECC DDR4 (4 slots; expect drop-in upgrades to 64–128 GB)
+- **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 via `storage` role) — `storage_mounts` scaffolded commented until identity capture
+- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required for dual B65)
+- **Network**: 1 GbE onboard
+- **GPUs**: 2 × Dell Intel Arc Pro B65 (32 GB VRAM each), PCIe Gen3 x16 link negotiation on WRX80-class 5820 platform
+- **Hardware Profile**: `profiles/hardware/d5820_dual_b65.yml`
+
+> **Aggregate VRAM caveat**: 64 GB is a *multi-device memory pool* (two independent 32 GB buffers), not a single transparent 64 GB device. Tensor-parallel deployment (TP=2) splits a model across both GPUs; a single request can never address the full 64 GB. Model sizing must respect per-device 32 GB limits.
 
 ---
 
@@ -170,11 +184,12 @@ Every major lifecycle run writes an evidence bundle under `evidence/<hostname>/<
 
 ---
 
-## 14. How to Add Future Hosts
+## 14. How to Add Further Hosts
 
+The current two-node fleet (`ai-p620-01`, `ai-5820-01`) was onboarded via this exact workflow; repeat it for any future host:
 1. Add node definition in `inventory/production/hosts.yml`.
 2. Create host variables file in `inventory/production/host_vars/<hostname>.yml`.
-3. Assign applicable hardware profile in `profiles/hardware/`.
+3. Assign an applicable hardware profile in `profiles/hardware/`, or create one matching the new platform.
 4. Provision SSH keys and Vault AppRole credentials.
 5. Execute bootstrap and site convergence.
 

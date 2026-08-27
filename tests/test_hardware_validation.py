@@ -50,6 +50,39 @@ def test_fixture_classification(fixture, status, rule):
         assert any(c["rule"] == rule and c["severity"] == "blocking" for c in result["checks"])
 
 
+@pytest.mark.parametrize(
+    ("fixture", "status", "rule"),
+    [
+        ("d5820_healthy", "pass", None),
+        ("d5820_p4000", "warning", "unexpected_gpu_devices"),
+    ],
+)
+def test_d5820_fixture_classification(fixture, status, rule):
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/d5820_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / f"tests/fixtures/hardware/{fixture}.json").read_text())
+    result = classifier.classify(profile, observed)
+    assert result["simulated"] is True
+    assert result["physical_acceptance"] is False
+    assert result["status"] == status
+    if rule:
+        assert any(c["rule"] == rule and c["status"] == "fail" and c["severity"] == "warning"
+                   for c in result["checks"])
+
+
+def test_unexpected_gpu_warns_but_approved_pair_still_passes():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/d5820_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/d5820_p4000.json").read_text())
+    result = classifier.classify(profile, observed)
+    for blocking_rule in ("gpu_count", "gpu_model_match", "gpu_memory", "level_zero_detected",
+                          "resizable_bar_enabled", "pcie_link_health"):
+        check = next(item for item in result["checks"] if item["rule"] == blocking_rule)
+        assert check["status"] == "pass", blocking_rule
+    assert result["status"] == "warning"
+    assert result["physical_acceptance"] is False
+
+
 def test_width_uses_physical_slot_capability():
     classifier = load_classifier()
     profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())

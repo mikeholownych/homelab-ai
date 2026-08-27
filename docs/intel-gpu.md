@@ -32,4 +32,7 @@ Primary sources (accessed 2026-08-17):
 
 Physical acceptance must prove both `e222` PCI devices, `/dev/dri` render nodes, Level Zero enumeration, approximately
 32 GiB per device, large/ReBAR state, negotiated PCIe topology, driver/runtime versions, and per-device PyTorch operations.
-Until that occurs on the P620 with both B65 cards, every such result remains `NOT_TESTED`.
+Until that occurs on the P620 and the Precision 5820 with both B65 cards, every such result remains `NOT_TESTED`. The
+fail-closed `unresolved_vendor_support_conflict` gate applies identically to both hosts (`ai-p620-01` and `ai-5820-01`);
+neither hardware profile relaxes it, and no approval boolean bypass exists. Both nodes run the same pinned B65 stack;
+once the unresolved conflict is cleared upstream, the identical role converges both hosts.

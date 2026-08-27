@@ -17,12 +17,28 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 HARDWARE_PROFILE = REPO_ROOT / "profiles" / "hardware" / "p620_dual_b65.yml"
+HARDWARE_PROFILES = sorted((REPO_ROOT / "profiles" / "hardware").glob("*_dual_b65.yml"))
 PATCHING_POLICY = REPO_ROOT / "policies" / "patching.yml"
 UPGRADES_POLICY = REPO_ROOT / "policies" / "upgrades.yml"
 DRIFT_POLICY = REPO_ROOT / "policies" / "drift.yml"
 VALIDATION_POLICY = REPO_ROOT / "policies" / "validation.yml"
 SCHEMA_DIR = REPO_ROOT / "schemas"
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "schemas"
+
+PROFILE_EXPECTATIONS = {
+    "p620_dual_b65": {
+        "machine_type_model": "30E1S7NJ00",
+        "cpu_pattern": "AMD Ryzen Threadripper PRO 3945WX",
+        "pcie_max_generation": 4,
+        "memory_expected": 48,
+    },
+    "d5820_dual_b65": {
+        "machine_type_model": "Precision 5820 Tower",
+        "cpu_pattern": "Intel(R) Xeon(R) W-2123",
+        "pcie_max_generation": 5,
+        "memory_expected": 32,
+    },
+}
 
 SCHEMA_FIXTURES = {
     "validation": FIXTURE_DIR / "validation.valid.json",
@@ -46,30 +62,45 @@ class DataContractTests(unittest.TestCase):
         script_path = REPO_ROOT / "scripts" / "validate_contract.py"
         self.assertTrue(script_path.exists(), "Expected scripts/validate_contract.py to exist")
 
-    def test_hardware_profile_matches_requested_contract(self) -> None:
-        profile = load_yaml(HARDWARE_PROFILE)
-
-        self.assertEqual("1.0.0", profile["schema_version"])
-        self.assertEqual("p620_dual_b65", profile["profile_name"])
-        self.assertEqual("30E1S7NJ00", profile["platform"]["machine_type_model"])
-        self.assertIn("AMD Ryzen Threadripper PRO 3945WX", profile["cpu"]["model_patterns"])
-        self.assertEqual(2, profile["gpu"]["count_expected"])
-        self.assertEqual("Intel Arc Pro B65", profile["gpu"]["expected_models"][0]["model"])
-        self.assertEqual(32, profile["gpu"]["expected_models"][0]["memory_gib"]["approximate"])
-        self.assertEqual(4, profile["gpu"]["expected_models"][0]["memory_gib"]["tolerance_gib"])
-        self.assertEqual(4, profile["pcie"]["host_link"]["max_generation"])
-        self.assertEqual("blocking", profile["pcie"]["material_degradation"]["default_severity"])
+    def test_hardware_profiles_match_requested_contract(self) -> None:
         self.assertEqual(
-            "not_tested",
-            profile["firmware"]["above_4g_decoding"]["undiscoverable_status"],
+            ["d5820_dual_b65.yml", "p620_dual_b65.yml"],
+            [path.name for path in HARDWARE_PROFILES],
         )
-        self.assertEqual("blocking", profile["firmware"]["resizable_bar"]["missing_severity"])
-        self.assertEqual(48, profile["memory"]["installed_gib"]["expected"])
-        self.assertEqual("warning", profile["memory"]["installed_gib"]["out_of_tolerance_severity"])
-        self.assertIn("dimm_topology", profile["discovery_fields"]["record"])
-        self.assertIn("serial_number", profile["discovery_fields"]["asset_identifiers"])
-        self.assertIn("gpu_model_match", profile["severity_rules"]["blocking"])
-        self.assertIn("level_zero_detected", profile["severity_rules"]["blocking"])
+        for profile_path in HARDWARE_PROFILES:
+            profile = load_yaml(profile_path)
+            expected = PROFILE_EXPECTATIONS[profile["profile_name"]]
+            with self.subTest(profile=profile["profile_name"]):
+                self.assertEqual("1.0.0", profile["schema_version"])
+                self.assertEqual(expected["machine_type_model"], profile["platform"]["machine_type_model"])
+                self.assertIn(expected["cpu_pattern"], profile["cpu"]["model_patterns"])
+                self.assertEqual(2, profile["gpu"]["count_expected"])
+                self.assertEqual("Intel Arc Pro B65", profile["gpu"]["expected_models"][0]["model"])
+                self.assertEqual(32, profile["gpu"]["expected_models"][0]["memory_gib"]["approximate"])
+                self.assertEqual(4, profile["gpu"]["expected_models"][0]["memory_gib"]["tolerance_gib"])
+                self.assertEqual(
+                    expected["pcie_max_generation"],
+                    profile["pcie"]["host_link"]["max_generation"],
+                )
+                self.assertEqual("blocking", profile["pcie"]["material_degradation"]["default_severity"])
+                self.assertEqual(
+                    "not_tested",
+                    profile["firmware"]["above_4g_decoding"]["undiscoverable_status"],
+                )
+                self.assertEqual("blocking", profile["firmware"]["resizable_bar"]["missing_severity"])
+                self.assertEqual(
+                    expected["memory_expected"],
+                    profile["memory"]["installed_gib"]["expected"],
+                )
+                self.assertEqual(
+                    "warning",
+                    profile["memory"]["installed_gib"]["out_of_tolerance_severity"],
+                )
+                self.assertIn("dimm_topology", profile["discovery_fields"]["record"])
+                self.assertIn("serial_number", profile["discovery_fields"]["asset_identifiers"])
+                self.assertIn("gpu_model_match", profile["severity_rules"]["blocking"])
+                self.assertIn("level_zero_detected", profile["severity_rules"]["blocking"])
+                self.assertIn("unexpected_gpu_devices", profile["severity_rules"]["warning"])
 
     def test_patching_and_upgrade_policies_separate_routine_and_high_risk_lifecycles(self) -> None:
         patching = load_yaml(PATCHING_POLICY)

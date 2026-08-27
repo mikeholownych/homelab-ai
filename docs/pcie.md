@@ -4,6 +4,15 @@ The P620 platform is PCIe 4.0; the Arc Pro B65 cards are Gen5-capable. **Gen4
 negotiated links are the expected maximum on this host and are never reported
 as faults.**
 
+The Precision 5820 (`ai-5820-01`, profile `d5820_dual_b65.yml`) is a Gen3
+platform: **Gen3 x16 negotiated links are the expected maximum there.** The B65
+report peak Gen5 capability (`host_link.max_generation: 5`) and the 5820 root
+complex may advertise Gen5, but the physical WRX80-style topology negotiates
+Gen3; `expected_negotiated_generation: 3` and `allow_slot_limited_width: true`
+encode this. A Gen5-capable integer in sysfs must therefore be evaluated against
+the platform's real physical generation, not treated as a degradation. Reported
+link width/generation below Gen3 x16 remains classifiable as degraded.
+
 ## What is captured per GPU (hardware collector -> pci.json)
 
 - PCI domain/bus/device/function (`bdf`)

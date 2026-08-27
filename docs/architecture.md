@@ -11,7 +11,10 @@ The repository implements strict configuration-as-code boundaries:
 
 ## 2. Infrastructure and Hardware Topology
 
-- **Target Node**: Lenovo ThinkStation P620 (`ai-p620-01`), Model `30E1S7NJ00`
+The fleet is a two-node production group (`inventory/production/hosts.yml`), each node a dual-B65 inference host running the same enforced software stack:
+
+**`ai-p620-01`** — Lenovo ThinkStation P620:
+- **Model**: Lenovo ThinkStation P620 `30E1S7NJ00`
 - **CPU**: AMD Ryzen Threadripper PRO 3945WX (12 cores / 24 threads)
 - **Memory**: 48 GB ECC DDR4-3200 (expandable across 8 memory channels)
 - **GPUs**: 2 × ASRock Intel Arc Pro B65 32 GB (Xe2 Battlemage architecture, 64 GB aggregate VRAM, PCIe Gen4 link negotiation)
@@ -19,7 +22,19 @@ The repository implements strict configuration-as-code boundaries:
 - **PSU**: 1000 W Platinum internal power supply
 - **Network**: 10 GbE onboard
 
+**`ai-5820-01`** — Dell Precision 5820 Tower (`profiles/hardware/d5820_dual_b65.yml`):
+- **CPU**: Intel Xeon W-2123 (4 cores / 8 threads)
+- **Memory**: 32 GB ECC DDR4 (4-slot; upgrade path to 64–128 GB via six 288-pin DIMM slots)
+- **GPUs**: 2 × Dell Intel Arc Pro B65 32 GB, PCIe Gen3 x16 link negotiation; host bridge reports Gen5 capability so link-speed warnings must be evaluated against the platform's real physical Gen3 topology
+- **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 mounted via the `storage` role)
+- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required)
+- **Network**: 1 GbE onboard
+
+> **Aggregate VRAM caveat**: both nodes expose 64 GB aggregate VRAM as a *multi-device memory pool* (2 × 32 GB independent buffers). Tensor-parallel deployment (TP=2) spans a model across both GPUs; the pool is not a single transparent 64 GB device and per-device 32 GB limits govern model sizing.
+
 ## 3. Inference Software Stack
+
+Both nodes are converged to the same pinned stack:
 
 - **OS**: Ubuntu 24.04 LTS (Noble Numbat)
 - **Compute Driver**: Intel Compute Runtime + Level Zero loader/runtime (`libze-intel-gpu1`)
@@ -27,6 +42,7 @@ The repository implements strict configuration-as-code boundaries:
 - **Primary Serving**: vLLM 0.7.3 with Intel XPU backend, OpenAI-compatible API, support for single-GPU (TP=1) and dual-GPU (TP=2)
 - **Fallback Serving**: llama.cpp with SYCL acceleration, pinned to exact Git commit, supporting GGUF offload
 - **Secret Management**: HashiCorp Vault AppRole integration, runtime secret retrieval
+- **Runtime selection** is per-host: TP=2 is the primary serve path on both nodes; llama.cpp SYCL split is the fallback. `llama_cpp_sycl_dual_gpu_support_certified` remains `false` until dual-GPU SYCL split is proven on B65 (certification is a manual commissioning step).
 
 ## 4. Operational Boundaries and Future Integration
 

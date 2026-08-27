@@ -1,0 +1,85 @@
+---
+# Dell Precision 5820 Tower — dedicated dual-GPU inference host.
+# OS on NVMe #1; NVMe #2 is reserved for model/cache data (see storage_mounts).
+ansible_host: CHANGE_ME
+node_metadata:
+  environment: production
+  hostname: ai-5820-01
+hardware_profile: d5820_dual_b65
+os_tuning_profile: baseline
+
+node_roles:
+  inference: true
+  gpu: true
+
+capabilities:
+  gpu: true
+  inference: true
+  benchmarking: true
+  monitoring: true
+  cluster_eligible: true
+
+features:
+  monitoring: true
+  scheduled_reconciliation: true
+  os_tuning: true
+  model_registry: false
+  clustering: false
+  cmdb_export: false
+  itsm_integration: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+
+network_endpoints:
+  primary_bind_address: null
+  management_fqdn: null
+  metrics_endpoint: null
+
+# Storage: OS lives on NVMe #1. NVMe #2 is the model/cache data disk. Complete
+# these entries with the real UUID captured during commissioning
+# (hardware_inventory evidence) before converging models onto this host.
+# storage_mounts:
+#   - path: /var/lib/local-ai/models
+#     src: UUID=REPLACE_WITH_NVME2_UUID
+#     fstype: ext4
+#     opts: defaults
+#     state: mounted
+#   - path: /var/lib/local-ai/cache
+#     src: UUID=SAME_NVME2_UUID
+#     fstype: ext4
+#     opts: defaults
+#     state: mounted
+
+# Benchmarking guardrails tuned to this host: 950 W PSU and ~200 W Arc Pro B65 TDP.
+benchmarking_psu_capacity_watts: 950
+benchmarking_gpu_tdp_watts: 200
+
+cluster:
+  enabled: false
+  name: null
+  membership_state: standalone
+  node_role: worker
+  roles:
+    worker: true
+    api: false
+    scheduler: false
+    storage: false
+  capabilities:
+    ray: false
+    distributed_vllm: false
+    worker_service: true
+    api_service: false
+    scheduler_service: false
+    storage_service: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+  endpoints:
+    api_base_url: null
+    scheduler_address: null
+    ray_gcs_address: null
+    object_storage_url: null
+  fleet:
+    id: null
+    coordinator: null
+    peer_hosts: []
+    quorum_size: null

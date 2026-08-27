@@ -8,6 +8,21 @@
     mode: "0750"
   tags: [validation, operations]
 
+- name: Load expected hardware profile for harness value derivation
+  ansible.builtin.include_vars:
+    file: "{{ validation_hardware_profile_path }}"
+    name: validation_hardware_expected
+  tags: [validation, operations]
+
+- name: Materialize expected hardware profile for the aggregator
+  ansible.builtin.copy:
+    content: "{{ validation_hardware_expected | to_nice_json }}\n"
+    dest: "{{ validation_profile_json_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  tags: [validation, operations]
+
 - name: Install validation aggregator on the managed node
   ansible.builtin.copy:
     src: aggregate_validation.py
@@ -36,6 +51,8 @@
       - "{{ validation_output_path }}"
       - --text-summary
       - "{{ validation_summary_path }}"
+      - --hardware-profile-json
+      - "{{ validation_profile_json_path }}"
   register: validation_run
   changed_when: false
   failed_when:

@@ -25,28 +25,42 @@ def classify(profile, observed):
     expected_gpus = profile["gpu"]["count_expected"]
     gpus = observed.get("gpus", [])
     pci = observed.get("pci", [])
-    checks.append(_check("gpu_count", expected_gpus, len(gpus), len(gpus) == expected_gpus,
-                         "blocking", "All intended accelerators must enumerate."))
-    approved = {(item["vendor_id"].lower(), item["device_id"].lower()): item["model"]
+    approved = {(str(item["vendor_id"]).lower(), str(item["device_id"]).lower()): item["model"]
                 for item in profile["gpu"]["approved_pci_devices"]}
+    approved_ids = set(approved)
+    approved_gpus = [gpu for gpu in gpus
+                     if (str(gpu.get("vendor_id", "")).lower(),
+                         str(gpu.get("device_id", "")).lower()) in approved_ids]
+    approved_pci = [item for item in pci
+                    if (str(item.get("vendor_id", "")).lower(),
+                        str(item.get("device_id", "")).lower()) in approved_ids]
+    checks.append(_check("gpu_count", expected_gpus, [gpu.get("bdf") for gpu in approved_gpus],
+                         len(approved_gpus) == expected_gpus, "blocking",
+                         "All intended accelerators must enumerate; only approved PCI devices count."))
     identities = [{"bdf": gpu.get("bdf"), "vendor_id": gpu.get("vendor_id"),
-                   "device_id": gpu.get("device_id")} for gpu in gpus]
+                   "device_id": gpu.get("device_id")} for gpu in approved_gpus]
     pci_by_bdf = {str(item.get("bdf", "")).lower(): item for item in pci if item.get("bdf")}
-    model_ok = len(gpus) == expected_gpus and len(pci_by_bdf) == expected_gpus and all(
-        (str(gpu.get("vendor_id", "")).lower(), str(gpu.get("device_id", "")).lower()) in approved
-        and str(gpu.get("bdf", "")).lower() in pci_by_bdf
+    model_ok = len(approved_gpus) == expected_gpus and all(
+        str(gpu.get("bdf", "")).lower() in pci_by_bdf
         and str(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("vendor_id", "")).lower() ==
         str(gpu.get("vendor_id", "")).lower()
         and str(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("device_id", "")).lower() ==
         str(gpu.get("device_id", "")).lower()
-        for gpu in gpus
+        for gpu in approved_gpus
     )
     checks.append(_check("gpu_model_match", profile["gpu"]["approved_pci_devices"], identities, model_ok,
                          "blocking", "GPU identity is resolved only from approved vendor/device PCI IDs."))
+    unexpected = [{"bdf": gpu.get("bdf"), "vendor_id": gpu.get("vendor_id"),
+                   "device_id": gpu.get("device_id")} for gpu in gpus
+                  if (str(gpu.get("vendor_id", "")).lower(),
+                      str(gpu.get("device_id", "")).lower()) not in approved_ids]
+    checks.append(_check("unexpected_gpu_devices", "only approved accelerator PCI IDs", unexpected,
+                         not unexpected, "warning",
+                         "Anything outside the approved accelerator set must be removed from the certified design."))
     memory_target = profile["gpu"]["expected_models"][0]["memory_gib"]["approximate"]
     memory_tolerance = profile["gpu"]["expected_models"][0]["memory_gib"]["tolerance_gib"]
     level_zero = observed.get("level_zero_devices", [])
-    pci_bdfs = {str(gpu.get("bdf", "")).lower() for gpu in gpus}
+    pci_bdfs = {str(gpu.get("bdf", "")).lower() for gpu in approved_gpus}
     level_zero_by_bdf = {str(device.get("bdf", "")).lower(): device for device in level_zero
                          if device.get("bdf")}
     trustworthy_l0 = (len(level_zero) == expected_gpus and set(level_zero_by_bdf) == pci_bdfs and
@@ -63,8 +77,9 @@ def classify(profile, observed):
     checks.append(_check("level_zero_detected", {"count": expected_gpus, "bdfs": sorted(pci_bdfs)},
                          level_zero, trustworthy_l0, "blocking",
                          "Exactly two trustworthy Level Zero devices must bind one-to-one to GPU PCI BDFs."))
-    rebar_ok = len(pci) == expected_gpus and all(item.get("rebar_enabled") is True for item in pci)
-    checks.append(_check("resizable_bar_enabled", True, [item.get("rebar_enabled") for item in pci],
+    rebar_targets = [item.get("rebar_enabled") for item in approved_pci]
+    rebar_ok = len(approved_pci) == expected_gpus and all(value is True for value in rebar_targets)
+    checks.append(_check("resizable_bar_enabled", True, rebar_targets,
                          rebar_ok, "blocking", "Large BAR is required for the intended GPU memory mapping."))
     above4g = observed.get("firmware", {}).get("above_4g_decoding", {})
     above4g_value = above4g.get("value") if isinstance(above4g, dict) else None
@@ -78,7 +93,7 @@ def classify(profile, observed):
                              "blocking", "Only an explicit sourced BIOS observation may satisfy this check."))
     ratio_min = profile["pcie"]["material_degradation"]["minimum_negotiated_to_slot_ratio"]
     unhealthy = []
-    for index, link in enumerate(pci):
+    for index, link in enumerate(approved_pci):
         slot_width = int(link.get("slot_width") or 0)
         current_width = int(link.get("current_width") or 0)
         generation = int(link.get("current_generation") or 0)
@@ -87,7 +102,7 @@ def classify(profile, observed):
             unhealthy.append({"gpu": index, "slot_width": slot_width, "current_width": current_width,
                               "expected_generation": expected_generation, "current_generation": generation})
     checks.append(_check("pcie_link_health", f">={ratio_min} of each physical slot capability", unhealthy,
-                         len(pci) == expected_gpus and not unhealthy, "blocking",
+                         len(approved_pci) == expected_gpus and not unhealthy, "blocking",
                          "Negotiated width is compared with that GPU's actual physical slot capability."))
     memory = observed.get("memory", {}).get("total_gib")
     target = profile["memory"]["installed_gib"]["expected"]
@@ -137,7 +152,7 @@ def main():
     documents = {
         "hardware.json": evidence(profile, observed,
                                   {"machine_model", "cpu_model", "gpu_count", "gpu_model_match",
-                                   "gpu_memory", "level_zero_detected"},
+                                   "gpu_memory", "level_zero_detected", "unexpected_gpu_devices"},
                                   "Platform and accelerator comparison against the selected Git profile."),
         "pci.json": evidence(profile["pcie"], observed.get("pci", []),
                              {"pcie_link_health", "resizable_bar_enabled"},

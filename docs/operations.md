@@ -1,5 +1,13 @@
 # Day-2 Operations and Administration Runbook
 
+## Fleet Scope
+
+Every procedure below targets `ai-p620-01` by example; each applies identically
+to the Precision 5820 node `ai-5820-01` (same roles, playbooks, and pins), or to
+the whole production group by omitting `--limit` or using `--limit 'ai-*'`. The
+host-specific deltas live in host variables (`hardware_profile`, benchmarking
+PSU/TDP budgets, storage mount points).
+
 ## Common Operator Procedures
 
 ### 1. Host Bootstrap

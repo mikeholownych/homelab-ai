@@ -1,19 +1,22 @@
 ---
 schema_version: 1.0.0
-profile_name: p620_dual_b65
+profile_name: d5820_dual_b65
 
 platform:
-  manufacturer: Lenovo
-  product_family: ThinkStation P620
-  machine_type_model: 30E1S7NJ00
+  manufacturer: Dell
+  product_family: Precision 5820 Tower
+  machine_type_model: "Precision 5820 Tower"
   product_name_patterns:
-    - ThinkStation P620
+    - Precision 5820
+    - Precision 5820 Tower
+    - Precision Tower 5820
 
 cpu:
-  vendor: AMD
+  vendor: Intel
   model_patterns:
-    - AMD Ryzen Threadripper PRO 3945WX
-    - AMD Ryzen Threadripper PRO 3945WX 12-Cores
+    - Intel(R) Xeon(R) W-2123
+    - Intel Xeon W-2123
+    - W-2123
   sockets_expected: 1
 
 gpu:
@@ -38,8 +41,11 @@ gpu:
 
 pcie:
   host_link:
-    max_generation: 4
-    expected_negotiated_generation: 4
+    # The Arc Pro B65 card is PCIe 5.0-capable; the Precision 5820 (Xeon
+    # W-2123, Skylake-W) platform exposes Gen3 root ports. Gen3 x16 per card
+    # is the expected full negotiation; Gen5 is informational card capability.
+    max_generation: 5
+    expected_negotiated_generation: 3
   width_expectations:
     desired_when_slot_supports: x16
     allow_slot_limited_width: true
@@ -58,7 +64,7 @@ firmware:
 
 memory:
   installed_gib:
-    expected: 48
+    expected: 32
     tolerance_gib: 4
     out_of_tolerance_severity: warning
     classification: initial_commissioning

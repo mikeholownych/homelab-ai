@@ -4,6 +4,12 @@ Priority area for the P620: the Threadripper PRO 3945WX (WRX80) exposes multiple
 NUMA nodes, and GPU-to-node locality can materially affect model-load time and
 token throughput when host-side copies dominate.
 
+The Precision 5820 (`ai-5820-01`) is a single-socket Xeon (W-2123) platform and
+presents a single NUMA node; GPU-to-node locality concerns are materially reduced
+there, but the same per-device sysfs proximity discovery applies and no locality
+is assumed for either host. The `d5820_dual_b65` profile shares the same
+NUMA/PCIe discovery and tuning switches.
+
 ## Discovery (always on)
 
 Every convergence, drift-check, and validation run collects:
@@ -49,7 +55,7 @@ These knobs exist for controlled comparison runs only.
 
 ## Workflow
 
-1. Commission the P620; capture the baseline `numa.json`.
+1. Commission each node; capture the baseline `numa.json` (both `ai-p620-01` and `ai-5820-01`).
 2. Benchmark reference runs (default placement).
 3. Create a candidate profile enabling one binding mode; certify the flag in
    inventory for the test window; converge; benchmark identical profiles.
