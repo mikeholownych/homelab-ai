@@ -78,6 +78,7 @@
           - "{{ monitoring_alert_script_path | default('/usr/local/libexec/local-ai-alert') }}"
           - aihost-drift-check
           - "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+          - "{{ drift_classification }}"
       changed_when: false
       failed_when: false
       when:

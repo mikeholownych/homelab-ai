@@ -2,10 +2,13 @@
 # Failure-notification hook for aihost systemd units. Invoked by
 # aihost-alert@.service with the failed unit name as $1.
 #
-# Behavior: append a structured line to the local alert log always; if an alert
-# command is configured in /etc/local-ai/alert.env (AIHOST_ALERT_COMMAND), it is
-# executed via argv expansion only - unit names and log content are passed as
-# arguments, never interpolated into a shell string.
+# Behavior: append a structured line to the local alert log always; the log
+# line and the forwarded command carry an optional provenance context ($3) set
+# by direct callers (e.g. drift-check.yml passes the drift classification, the
+# GPU thermal writer passes severity + peak temperature). If an alert command
+# is configured in /etc/local-ai/alert.env (AIHOST_ALERT_COMMAND), it is
+# executed via argv expansion only - unit names, timestamps, and context are
+# passed as arguments, never interpolated into a shell string.
 set -eu
 
 # Runtime configuration lands in monitoring.env (role-templated). The script is
@@ -23,9 +26,14 @@ ALERT_ENV_FILE="/etc/local-ai/alert.env"
 
 unit="${1:-unknown-unit}"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+context="${3:-}"
 
 mkdir -p "$LOG_DIR"
-printf '%s unit=%s state=failed\n' "$ts" "$unit" >>"$LOG_FILE"
+if [ -n "$context" ]; then
+    printf '%s unit=%s state=failed context=%s\n' "$ts" "$unit" "$context" >>"$LOG_FILE"
+else
+    printf '%s unit=%s state=failed\n' "$ts" "$unit" >>"$LOG_FILE"
+fi
 
 if [ ! -f "$ALERT_ENV_FILE" ]; then
     exit 0
@@ -35,5 +43,9 @@ fi
 
 if [ -n "${AIHOST_ALERT_COMMAND:-}" ]; then
     # Deliberate exec-by-name: no shell interpolation of untrusted content.
-    "$AIHOST_ALERT_COMMAND" "$unit" "$ts"
+    if [ -n "$context" ]; then
+        "$AIHOST_ALERT_COMMAND" "$unit" "$ts" "$context"
+    else
+        "$AIHOST_ALERT_COMMAND" "$unit" "$ts"
+    fi
 fi

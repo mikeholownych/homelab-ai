@@ -72,7 +72,8 @@ if [ "$severity" != "$prev" ]; then
             . "$ALERT_ENV_FILE"
             if [ -n "${AIHOST_ALERT_COMMAND:-}" ]; then
                 # Deliberate exec-by-name: no shell interpolation of content.
-                "$AIHOST_ALERT_COMMAND" "aihost-gpu-thermal" "$ts"
+                # Context carries severity + peak temperature to the operator hook.
+                "$AIHOST_ALERT_COMMAND" "aihost-gpu-thermal" "$ts" "state=critical temperature_c=$max_c"
             fi
         fi
     elif [ "$severity" = "warning" ]; then

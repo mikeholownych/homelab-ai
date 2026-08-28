@@ -33,6 +33,13 @@ class FailureVisibilityContractTests(unittest.TestCase):
         script = (MONITORING_DIR / "files" / "alert.sh").read_text(encoding="utf-8")
         self.assertNotIn("eval ", script)
         self.assertIn('"$AIHOST_ALERT_COMMAND" "$unit" "$ts"', script)
+        self.assertIn('"$AIHOST_ALERT_COMMAND" "$unit" "$ts" "$context"', script)
+
+    def test_alert_script_logs_and_forwards_optional_context(self) -> None:
+        script = (MONITORING_DIR / "files" / "alert.sh").read_text(encoding="utf-8")
+        self.assertIn('context="${3:-}"', script)
+        self.assertIn('context=%s\\n', script)
+        self.assertIn("$context", script)
 
     def test_evidence_sync_is_disabled_until_configured(self) -> None:
         defaults = load_yaml(MONITORING_DIR / "defaults" / "main.yml")
@@ -119,6 +126,7 @@ class GpuThermalGuardContractTests(unittest.TestCase):
         script = (MONITORING_DIR / "files" / "write-textfile-metrics.sh").read_text(encoding="utf-8")
         self.assertNotIn("eval ", script)
         self.assertIn('"$AIHOST_ALERT_COMMAND" "aihost-gpu-thermal" "$ts"', script)
+        self.assertIn('"state=critical temperature_c=$max_c"', script)
 
     def test_thermal_guard_defaults_are_sane(self) -> None:
         defaults = load_yaml(MONITORING_DIR / "defaults" / "main.yml")
@@ -154,6 +162,7 @@ class DriftArtifactContractTests(unittest.TestCase):
         self.assertIn("drift_classification in ['blocking_drift', 'unknown_drift']", text)
         self.assertIn("local-ai-alert", text)
         self.assertIn("aihost-drift-check", text)
+        self.assertIn('"{{ drift_classification }}"', text)
 
     def test_drift_check_artifacts_record_evidence_presence(self) -> None:
         text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")

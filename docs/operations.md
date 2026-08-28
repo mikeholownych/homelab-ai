@@ -80,8 +80,10 @@ evidence stays attributable:
 Timer failures alert through `aihost-alert@%n`: alerts always append to
 `/var/log/local-ai/alerts/alerts.log`; configure `/etc/local-ai/alert.env`
 (out-of-band, not committed) with `AIHOST_ALERT_COMMAND=/path/to/hook` to
-forward alerts elsewhere. The command receives `<unit> <timestamp>` as argv;
-content is never shell-interpolated.
+forward alerts elsewhere. The command receives `<unit> <timestamp> [<context>]`
+as argv — direct callers pass a provenance context (drift classification,
+thermal `state=critical temperature_c=<peak>`); content is never
+shell-interpolated. The local log line records the same context when present.
 
 ### 11. Evidence Durability
 Mirror the evidence tree off-host behind `monitoring_evidence_sync_enabled`
