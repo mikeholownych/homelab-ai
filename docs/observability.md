@@ -30,10 +30,30 @@ sampling the same hwmon sources the benchmark harness uses plus reconciliation
 status. This gives any future Alloy deployment an immediate scrape target and
 gives cron-level history even before the full stack lands.
 
-GPU sampling is **per device**: both B65 cards contribute their own hwmon line
-(utilisation, VRAM, clocks, per-card peak temperature). The thermal gate in
-benchmark fixtures reads the peak across both devices, so neither card can hide
-a hotspot behind the other's nominal temperature.
+GPU sampling is **per device**: both B65 cards contribute their own
+labeled series (`aihost_gpu_temperature_celsius{device="hwmon1/xe"}`) plus an
+unlabeled cross-device peak. The thermal gate in benchmark fixtures reads the
+peak across both devices, so neither card can hide a hotspot behind the other's
+nominal temperature.
+
+The metrics writer also runs a debounced **GPU thermal severity guard**
+(`aihost_gpu_thermal_severity` 0/1/2 from ok/warning/critical). Thresholds
+default to `monitoring_gpu_temp_warn_threshold_c: 75` and
+`monitoring_gpu_temp_crit_threshold_c: 85` — deliberately below the benchmark
+abort guardrail (`benchmarking_abort_temperature_c: 90`) so an operator is
+alerted before a workload would be killed. A critical transition is written to
+the alert log and forwarded through `AIHOST_ALERT_COMMAND` exactly like a unit
+failure; recovery to ok after critical logs a `state=recovered` line.
+
+**Scheduled drift alerting**: `aihost-reconcile.timer` runs the snapshot runner
+for `site.yml --validate-after-site` and then a second snapshot run for
+`drift-check.yml`, so every scheduled reconciliation classifies drift.
+`playbooks/drift-check.yml` raises an operator alert through the local alert
+hook when classification is `blocking_drift`.
+
+Scripts are installed via `copy` and are Jinja-free: runtime values (paths,
+thresholds) are read from `/etc/local-ai/monitoring.env`, a role-templated
+config file, so no literal `{{ }}` markers can leak into installed artifacts.
 
 ### Why the full stack is not in this commit
 

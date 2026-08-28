@@ -59,6 +59,30 @@ def test_no_git_network_operations_in_reconcile_service():
     assert "git fetch" not in reconcile_service
 
 
+def test_reconcile_service_runs_drift_check_after_site():
+    reconcile_service = (REPO_ROOT / "roles/scheduled_ansible/templates/aihost-reconcile.service.j2").read_text()
+    assert reconcile_service.count("ExecStart=") == 2
+    assert "--playbook site.yml" in reconcile_service
+    assert "--playbook drift-check.yml" in reconcile_service
+    # Drift classification must run after convergence so blocking drift is raised.
+    assert reconcile_service.find("--playbook drift-check.yml") > reconcile_service.find("--playbook site.yml")
+
+
+def test_drift_check_playbook_is_wrapper_allowlisted():
+    wrapper = (REPO_ROOT / "scripts" / "run-ansible-snapshot").read_text()
+    assert '"drift-check.yml"' in wrapper
+
+
+def test_monitoring_gpu_thermal_thresholds_below_benchmark_abort():
+    monitoring_defaults = load_yaml("roles/monitoring/defaults/main.yml")
+    benchmarking_defaults = load_yaml("roles/benchmarking/defaults/main.yml")
+    warn = float(monitoring_defaults["monitoring_gpu_temp_warn_threshold_c"])
+    crit = float(monitoring_defaults["monitoring_gpu_temp_crit_threshold_c"])
+    abort = float(benchmarking_defaults["benchmarking_abort_temperature_c"])
+    assert 0 < warn < crit < abort
+    assert monitoring_defaults["monitoring_gpu_temp_alert_enabled"] is True
+
+
 def test_monitoring_defaults_and_tasks_contract():
     defaults = load_yaml("roles/monitoring/defaults/main.yml")
     assert defaults["monitoring_enabled"] is True

@@ -81,12 +81,74 @@ class RebootVerifyContractTests(unittest.TestCase):
         self.assertIn('"reboot-verify.yml"', wrapper)
 
 
+class GpuThermalGuardContractTests(unittest.TestCase):
+    def test_copy_installed_scripts_are_jinja_free(self) -> None:
+        """copy-installed scripts must not carry literal Jinja markers."""
+        for relative in ("files/alert.sh", "files/write-textfile-metrics.sh"):
+            script = (MONITORING_DIR / relative).read_text(encoding="utf-8")
+            self.assertNotIn("{{", script, relative)
+            self.assertNotIn("}}", script, relative)
+            self.assertIn("/etc/local-ai/monitoring.env", script, relative)
+
+    def test_config_env_is_templated_and_carries_thresholds(self) -> None:
+        template = (MONITORING_DIR / "templates" / "monitoring.env.j2").read_text(encoding="utf-8")
+        for marker in (
+            "MONITORING_METRICS_TEXTFILE_DIR=",
+            "MONITORING_ALERT_LOG_DIR=",
+            "MONITORING_GPU_TEMP_STATE_DIR=",
+            "MONITORING_GPU_TEMP_WARN_C=",
+            "MONITORING_GPU_TEMP_CRIT_C=",
+        ):
+            self.assertIn(marker, template)
+        tasks = load_yaml(MONITORING_DIR / "tasks" / "main.yml")
+        template_task = next(
+            task for task in tasks
+            if isinstance(task, dict) and task.get("name") == "Install shared script runtime configuration"
+        )
+        self.assertEqual(template_task["ansible.builtin.template"]["mode"], "0640")
+
+    def test_metrics_writer_emits_per_device_series_and_severity(self) -> None:
+        script = (MONITORING_DIR / "files" / "write-textfile-metrics.sh").read_text(encoding="utf-8")
+        self.assertIn('device=\\"$label\\"', script)
+        self.assertIn("aihost_gpu_temperature_celsius $max_c", script)
+        self.assertIn("aihost_gpu_thermal_severity", script)
+        self.assertIn("gpu-temp.state", script)
+
+    def test_metrics_writer_alert_path_is_argv_forward_only(self) -> None:
+        script = (MONITORING_DIR / "files" / "write-textfile-metrics.sh").read_text(encoding="utf-8")
+        self.assertNotIn("eval ", script)
+        self.assertIn('"$AIHOST_ALERT_COMMAND" "aihost-gpu-thermal" "$ts"', script)
+
+    def test_thermal_guard_defaults_are_sane(self) -> None:
+        defaults = load_yaml(MONITORING_DIR / "defaults" / "main.yml")
+        self.assertLess(defaults["monitoring_gpu_temp_warn_threshold_c"], defaults["monitoring_gpu_temp_crit_threshold_c"])
+
+    def test_thermal_guard_state_directory_is_created(self) -> None:
+        tasks = load_yaml(MONITORING_DIR / "tasks" / "main.yml")
+        dirs = []
+        for task in tasks:
+            if not isinstance(task, dict) or task.get("ansible.builtin.file") is None:
+                continue
+            loop = task.get("loop")
+            if isinstance(loop, list):
+                dirs.extend(str(e) for e in loop)
+        self.assertIn("{{ monitoring_gpu_temp_state_dir }}", dirs)
+        self.assertIn("{{ monitoring_config_dir }}", dirs)
+
+
 class DriftArtifactContractTests(unittest.TestCase):
     def test_drift_check_emits_machine_readable_status(self) -> None:
         text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")
         self.assertIn("drift-status.json", text)
         for classification in ("blocking_drift", "unresolved_drift", "no_drift"):
             self.assertIn(classification, text)
+
+    def test_drift_check_alerts_operator_on_blocking_drift(self) -> None:
+        text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")
+        self.assertIn("Notify operator on blocking drift", text)
+        self.assertIn("drift_classification == 'blocking_drift'", text)
+        self.assertIn("local-ai-alert", text)
+        self.assertIn("aihost-drift-check", text)
 
 
 if __name__ == "__main__":

@@ -8,9 +8,18 @@
 # arguments, never interpolated into a shell string.
 set -eu
 
-LOG_DIR="{{ monitoring_alert_log_dir }}"
+# Runtime configuration lands in monitoring.env (role-templated). The script is
+# installed via copy, so it carries no Jinja markers itself and uses defaults
+# when the config file is absent.
+ENV_FILE="${AIHOST_MONITORING_ENV:-/etc/local-ai/monitoring.env}"
+if [ -f "$ENV_FILE" ]; then
+    # shellcheck disable=SC1090
+    . "$ENV_FILE"
+fi
+
+LOG_DIR="${MONITORING_ALERT_LOG_DIR:-/var/log/local-ai/alerts}"
 LOG_FILE="$LOG_DIR/alerts.log"
-ENV_FILE="/etc/local-ai/alert.env"
+ALERT_ENV_FILE="/etc/local-ai/alert.env"
 
 unit="${1:-unknown-unit}"
 ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -18,11 +27,11 @@ ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 mkdir -p "$LOG_DIR"
 printf '%s unit=%s state=failed\n' "$ts" "$unit" >>"$LOG_FILE"
 
-if [ ! -f "$ENV_FILE" ]; then
+if [ ! -f "$ALERT_ENV_FILE" ]; then
     exit 0
 fi
 # shellcheck disable=SC1090
-. "$ENV_FILE"
+. "$ALERT_ENV_FILE"
 
 if [ -n "${AIHOST_ALERT_COMMAND:-}" ]; then
     # Deliberate exec-by-name: no shell interpolation of untrusted content.

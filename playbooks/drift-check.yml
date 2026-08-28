@@ -68,6 +68,25 @@
         mode: "0640"
       tags: [drift]
 
+    - name: Locate the alert hook for drift notification
+      ansible.builtin.stat:
+        path: "{{ monitoring_alert_script_path | default('/usr/local/libexec/local-ai-alert') }}"
+      register: drift_alert_hook_stat
+      tags: [drift]
+
+    - name: Notify operator on blocking drift
+      ansible.builtin.command:
+        argv:
+          - "{{ monitoring_alert_script_path | default('/usr/local/libexec/local-ai-alert') }}"
+          - aihost-drift-check
+          - "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+      changed_when: false
+      failed_when: false
+      when:
+        - drift_classification == 'blocking_drift'
+        - drift_alert_hook_stat.stat.exists | bool
+      tags: [drift, alerts]
+
     - name: Report drift assessment status
       ansible.builtin.debug:
         msg:

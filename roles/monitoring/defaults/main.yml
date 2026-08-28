@@ -31,3 +31,21 @@ monitoring_metrics_interval: "*-*-* *:*:00"
 monitoring_metrics_service_path: /etc/systemd/system/aihost-metrics.service
 monitoring_metrics_timer_path: /etc/systemd/system/aihost-metrics.timer
 monitoring_metrics_script_path: /usr/local/libexec/local-ai-write-metrics
+
+# Shared runtime configuration for the (Jinja-free, copy-installed) scripts.
+# The monitoring role templates this file from the variables below; scripts
+# source it at runtime with safe fallbacks, so bash {{ }} markers never leak
+# into installed artifacts.
+monitoring_config_file: /etc/local-ai/monitoring.env
+monitoring_config_dir: /etc/local-ai
+
+# GPU thermal guard: per-device hwmon sampling with a debounced severity state
+# machine (ok/warning/critical). Critical transitions are written to the alert
+# log and forwarded through AIHOST_ALERT_COMMAND exactly like unit failures.
+# Thresholds must stay below the benchmark harness abort guardrail
+# (benchmarking_abort_temperature_c, default 90), so an alert fires before a
+# workload would be killed.
+monitoring_gpu_temp_alert_enabled: true
+monitoring_gpu_temp_warn_threshold_c: 75
+monitoring_gpu_temp_crit_threshold_c: 85
+monitoring_gpu_temp_state_dir: /var/lib/local-ai/monitoring

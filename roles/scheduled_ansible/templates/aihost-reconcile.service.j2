@@ -18,6 +18,15 @@ ExecStart={{ scheduled_ansible_runner_path }} \
   --playbook site.yml \
   --lock-root {{ scheduled_ansible_lock_root }} \
   --validate-after-site
+# Classify drift after convergence so blocking drift raises an operator alert
+# through the drift-check hook (aihost-gpu-thermal / aihost-drift-check path).
+ExecStart={{ scheduled_ansible_runner_path }} \
+  --repo-root {{ scheduled_ansible_snapshot_dir }} \
+  --schema-root {{ scheduled_ansible_snapshot_dir }}/schemas \
+  --inventory {{ scheduled_ansible_inventory_path }} \
+  --target {{ inventory_hostname }} \
+  --playbook drift-check.yml \
+  --lock-root {{ scheduled_ansible_lock_root }}
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=6

@@ -5,12 +5,18 @@
       - monitoring_enabled is boolean
       - monitoring_log_dir is string
       - not (monitoring_evidence_sync_enabled | bool) or (monitoring_evidence_sync_destination is string)
+      - monitoring_gpu_temp_alert_enabled is boolean
+      - monitoring_gpu_temp_warn_threshold_c is number
+      - monitoring_gpu_temp_crit_threshold_c is number
+      - monitoring_gpu_temp_warn_threshold_c | float | int > 0
+      - monitoring_gpu_temp_warn_threshold_c | float < monitoring_gpu_temp_crit_threshold_c | float
     fail_msg: >-
       monitoring role requires valid configuration flags; evidence sync needs a
-      destination before it can be enabled.
+      destination before it can be enabled, and GPU thermal thresholds must
+      satisfy 0 < warn < crit.
   tags: [monitoring, telemetry]
 
-- name: Create monitoring log directory
+- name: Create monitoring log and thermal guard state directories
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
@@ -20,6 +26,19 @@
   loop:
     - "{{ monitoring_log_dir }}"
     - "{{ monitoring_alert_log_dir }}"
+    - "{{ monitoring_config_dir }}"
+    - "{{ monitoring_gpu_temp_state_dir }}"
+  when:
+    - monitoring_enabled | bool
+  tags: [monitoring, telemetry]
+
+- name: Install shared script runtime configuration
+  ansible.builtin.template:
+    src: monitoring.env.j2
+    dest: "{{ monitoring_config_file }}"
+    owner: root
+    group: root
+    mode: "0640"
   when:
     - monitoring_enabled | bool
   tags: [monitoring, telemetry]
