@@ -149,6 +149,7 @@ def run_local_role_probe(
         capture_output=True,
         text=True,
         env=env,
+        timeout=600,
     )
 
 

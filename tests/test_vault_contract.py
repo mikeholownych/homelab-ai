@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import grp
+import json
 import os
 import pwd
 import shutil
@@ -108,6 +109,7 @@ def run_probe_playbook(
             capture_output=True,
             text=True,
             env=env,
+            timeout=600,
         )
 
 
@@ -123,26 +125,103 @@ def make_credentials(temp_root: Path) -> Path:
     return credentials_dir
 
 
-def run_secret_ref_validation(secret_ref: str, *, cluster_enabled: bool = False) -> subprocess.CompletedProcess[str]:
-    playbook = [
-        {
-            "hosts": "localhost",
-            "gather_facts": False,
-            "vars": {
-                "vault_integration_kv2_mount": "secret",
-                "vault_integration_secret_ref": secret_ref,
-                "vault_integration_required_secret_keys": ["required"],
-                "cluster": {"enabled": cluster_enabled},
-            },
-            "tasks": [
-                {
-                    "name": "Validate Vault logical secret reference only",
-                    "ansible.builtin.include_tasks": str(VALIDATE_SECRET_REF_TASKS_PATH),
-                }
+def run_secret_ref_validations(cases: list[tuple[str, bool]]) -> dict[str, bool]:
+    """Validate many refs in ONE probe invocation; returns {secret_ref: passed}."""
+    binary = ansible_playbook_bin()
+    if binary is None:
+        raise unittest.SkipTest("ansible-playbook is not available")
+    with tempfile.TemporaryDirectory(prefix="aihost-vault-probe-") as tmpdir:
+        temp_root = Path(tmpdir)
+        per_ref_path = temp_root / "per_ref.yml"
+        per_ref_path.write_text(
+            PER_REF_TASKS_TEMPLATE.replace("__VALIDATE_FILE__", str(VALIDATE_SECRET_REF_TASKS_PATH)),
+            encoding="utf-8",
+        )
+        verdict_path = temp_root / "verdicts.json"
+        playbook = [
+            {
+                "hosts": "localhost",
+                "gather_facts": False,
+                "vars": {
+                    "vault_integration_kv2_mount": "secret",
+                    "vault_integration_required_secret_keys": ["required"],
+                    "cases": [{"ref": ref, "cluster_enabled": cluster_enabled} for ref, cluster_enabled in cases],
+                },
+                "tasks": [
+                    {
+                        "name": "Initialize verdict accumulation",
+                        "ansible.builtin.set_fact": {"aihost_verdicts": []},
+                    },
+                    {
+                        "name": "Validate each ref",
+                        "ansible.builtin.include_tasks": str(per_ref_path),
+                        "loop": "{{ cases }}",
+                        "loop_control": {"loop_var": "candidate_case"},
+                    },
+                    {
+                        "name": "Persist verdicts",
+                        "ansible.builtin.copy": {
+                            "content": "{{ aihost_verdicts | to_json }}",
+                            "dest": str(verdict_path),
+                        },
+                    },
+                ],
+            }
+        ]
+        playbook_path = temp_root / "probe.yml"
+        write_yaml(playbook_path, playbook)
+        env = os.environ.copy()
+        env.update(
+            {
+                "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible.cfg"),
+                "ANSIBLE_ROLES_PATH": str(REPO_ROOT / "roles"),
+            }
+        )
+        result = subprocess.run(
+            [
+                binary,
+                "-i",
+                "localhost,",
+                str(playbook_path),
+                "-e",
+                "ansible_connection=local",
+                "-e",
+                "ansible_python_interpreter=/usr/bin/python3",
             ],
-        }
-    ]
-    return run_probe_playbook(playbook)
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=600,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"batched Vault probe failed\n{result.stdout}\n{result.stderr}")
+        verdicts = json.loads(verdict_path.read_text(encoding="utf-8"))
+        return {entry["ref"]: entry["passed"] for entry in verdicts}
+
+
+PER_REF_TASKS_TEMPLATE = """\
+---
+- name: Probe candidate ref
+  block:
+    - name: Invoke real validation
+      ansible.builtin.include_tasks: "__VALIDATE_FILE__"
+      vars:
+        vault_integration_secret_ref: "{{ candidate_case.ref }}"
+        cluster: "{{ {'enabled': candidate_case.cluster_enabled} }}"
+    - name: Record pass
+      ansible.builtin.set_fact:
+        aihost_verdict: {"ref": "{{ candidate_case.ref }}", "passed": true}
+  rescue:
+    - name: Record fail
+      ansible.builtin.set_fact:
+        aihost_verdict: {"ref": "{{ candidate_case.ref }}", "passed": false}
+  always:
+    - name: Accumulate verdict
+      ansible.builtin.set_fact:
+        aihost_verdicts: "{{ aihost_verdicts + [aihost_verdict] }}"
+"""
 
 
 class VaultContractTests(unittest.TestCase):
@@ -551,23 +630,28 @@ class VaultContractTests(unittest.TestCase):
             "secret/local-ai/users/name",
             "secret/local-ai/hosts/not-localhost/runtime",
         )
+        verdicts = run_secret_ref_validations(
+            [(secret_ref, False) for secret_ref in invalid_cases]
+        )
         for secret_ref in invalid_cases:
             with self.subTest(secret_ref=secret_ref):
-                result = run_secret_ref_validation(secret_ref)
-                self.assertNotEqual(0, result.returncode, f"{secret_ref!r} unexpectedly passed")
+                self.assertFalse(verdicts[secret_ref], f"{secret_ref!r} unexpectedly passed")
 
-        cluster_result = run_secret_ref_validation("secret/local-ai/clusters/runtime")
-        self.assertNotEqual(0, cluster_result.returncode, "cluster path unexpectedly passed without cluster membership")
+        cluster_verdicts = run_secret_ref_validations([("secret/local-ai/clusters/runtime", False)])
+        self.assertFalse(
+            cluster_verdicts["secret/local-ai/clusters/runtime"],
+            "cluster path unexpectedly passed without cluster membership",
+        )
 
     def test_secret_ref_validation_accepts_valid_dotted_and_dashed_name(self) -> None:
-        result = run_secret_ref_validation("secret/local-ai/services/api.v2/db-user_01")
-        self.assertEqual(0, result.returncode, f"{result.stdout}\n{result.stderr}")
-
-        cluster_result = run_secret_ref_validation(
-            "secret/local-ai/clusters/cluster-a/service.v1",
-            cluster_enabled=True,
+        verdicts = run_secret_ref_validations(
+            [
+                ("secret/local-ai/services/api.v2/db-user_01", False),
+                ("secret/local-ai/clusters/cluster-a/service.v1", True),
+            ]
         )
-        self.assertEqual(0, cluster_result.returncode, f"{cluster_result.stdout}\n{cluster_result.stderr}")
+        self.assertTrue(verdicts["secret/local-ai/services/api.v2/db-user_01"], verdicts)
+        self.assertTrue(verdicts["secret/local-ai/clusters/cluster-a/service.v1"], verdicts)
 
     def test_role_rejects_fail_closed_input_defects_before_runtime(self) -> None:
         with tempfile.TemporaryDirectory(prefix="aihost-vault-invalid-") as tmpdir:

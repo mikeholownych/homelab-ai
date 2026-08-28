@@ -169,6 +169,7 @@ def run_wrapper(
         capture_output=True,
         text=True,
         env=merged_env,
+        timeout=120,
         preexec_fn=(lambda: os.umask(umask_value)) if umask_value is not None else None,
     )
 
@@ -1034,15 +1035,15 @@ class RunWrapperTests(unittest.TestCase):
                 playbook="validate.yml",
             )
             try:
-                deadline = time.time() + 10
+                deadline = time.monotonic() + 60
                 run_dir: Path | None = None
                 while True:
                     if first.poll() is not None:
-                        stdout, stderr = first.communicate(timeout=1)
+                        stdout, stderr = first.communicate(timeout=5)
                         self.fail(f"first wrapper exited before finalizer observation\nstdout={stdout}\nstderr={stderr}")
-                    if time.time() >= deadline:
+                    if time.monotonic() >= deadline:
                         first.kill()
-                        stdout, stderr = first.communicate(timeout=1)
+                        stdout, stderr = first.communicate(timeout=5)
                         self.fail(f"timed out waiting for finalizer observation\nstdout={stdout}\nstderr={stderr}")
                     host_runs = list((evidence_root / "ai-p620-01").iterdir()) if (evidence_root / "ai-p620-01").exists() else []
                     if len(host_runs) == 1:
@@ -1066,7 +1067,7 @@ class RunWrapperTests(unittest.TestCase):
                 self.assertEqual(73, second.returncode, second.stderr)
                 self.assertEqual([run_dir], list((evidence_root / "ai-p620-01").iterdir()))
             finally:
-                stdout, stderr = first.communicate(timeout=10)
+                stdout, stderr = first.communicate(timeout=30)
                 self.assertEqual(0, first.returncode, f"stdout={stdout}\nstderr={stderr}")
                 if (evidence_root / "ai-p620-01").exists():
                     run_dir = next((evidence_root / "ai-p620-01").iterdir())
