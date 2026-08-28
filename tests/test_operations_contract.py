@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import unittest
 from pathlib import Path
 
@@ -140,15 +141,55 @@ class DriftArtifactContractTests(unittest.TestCase):
     def test_drift_check_emits_machine_readable_status(self) -> None:
         text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")
         self.assertIn("drift-status.json", text)
-        for classification in ("blocking_drift", "unresolved_drift", "no_drift"):
-            self.assertIn(classification, text)
+        self.assertIn("schema_version", text)
+        self.assertIn("classification", text)
 
-    def test_drift_check_alerts_operator_on_blocking_drift(self) -> None:
+    def test_drift_check_uses_honest_classifier_filter(self) -> None:
         text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")
-        self.assertIn("Notify operator on blocking drift", text)
-        self.assertIn("drift_classification == 'blocking_drift'", text)
+        self.assertIn("aihost_drift_classify", text)
+
+    def test_drift_check_alerts_operator_on_blocking_or_unknown_drift(self) -> None:
+        text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")
+        self.assertIn("Notify operator on blocking or indeterminate drift", text)
+        self.assertIn("drift_classification in ['blocking_drift', 'unknown_drift']", text)
         self.assertIn("local-ai-alert", text)
         self.assertIn("aihost-drift-check", text)
+
+    def test_drift_check_artifacts_record_evidence_presence(self) -> None:
+        text = (REPO_ROOT / "playbooks" / "drift-check.yml").read_text(encoding="utf-8")
+        self.assertIn("validation_evidence_present", text)
+
+
+class DriftClassifierContractTests(unittest.TestCase):
+    def _classify(self, document: object, numa: object = "PASS") -> str:
+        spec = importlib.util.spec_from_file_location(
+            "aihost_validators_drift_under_test",
+            REPO_ROOT / "filter_plugins" / "aihost_validators.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)  # type: ignore[union-attr]
+        return module.drift_classify(document, numa)
+
+    def test_blocked_validation_is_blocking_drift(self) -> None:
+        self.assertEqual("blocking_drift", self._classify({"status": "BLOCKED"}))
+        self.assertEqual("blocking_drift", self._classify({"status": "BLOCKED"}, numa="FAIL"))
+
+    def test_failed_validation_is_unresolved_drift(self) -> None:
+        self.assertEqual("unresolved_drift", self._classify({"status": "FAIL"}))
+        self.assertEqual("unresolved_drift", self._classify({"status": "PASS"}, numa="FAIL"))
+
+    def test_missing_or_not_tested_validation_is_unknown_drift(self) -> None:
+        self.assertEqual("unknown_drift", self._classify({"status": "NOT_TESTED"}))
+        self.assertEqual("unknown_drift", self._classify({}))
+        self.assertEqual("unknown_drift", self._classify(None))
+        self.assertEqual("unknown_drift", self._classify("not-a-document"))
+
+    def test_passing_validation_is_no_drift(self) -> None:
+        self.assertEqual("no_drift", self._classify({"status": "PASS"}))
+
+    def test_unknown_is_never_reported_as_no_drift(self) -> None:
+        self.assertNotEqual("no_drift", self._classify({"status": "NOT_TESTED"}))
+        self.assertNotEqual("no_drift", self._classify({}))
 
 
 if __name__ == "__main__":

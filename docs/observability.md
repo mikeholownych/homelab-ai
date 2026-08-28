@@ -49,7 +49,9 @@ failure; recovery to ok after critical logs a `state=recovered` line.
 for `site.yml --validate-after-site` and then a second snapshot run for
 `drift-check.yml`, so every scheduled reconciliation classifies drift.
 `playbooks/drift-check.yml` raises an operator alert through the local alert
-hook when classification is `blocking_drift`.
+hook when classification is `blocking_drift` or `unknown_drift`. Drift is
+classified fail-closed: a missing or `NOT_TESTED` validation outcome
+(explicit `unknown_drift`) is never reported as `no_drift`.
 
 Scripts are installed via `copy` and are Jinja-free: runtime values (paths,
 thresholds) are read from `/etc/local-ai/monitoring.env`, a role-templated

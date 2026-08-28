@@ -71,6 +71,7 @@ class FilterModule:
             "aihost_model_stamp": model_stamp,
             "aihost_catalog_invalid_entries": catalog_invalid_entries,
             "aihost_catalog_excess_variants": catalog_excess_variants,
+            "aihost_drift_classify": drift_classify,
         }
 
     @staticmethod
@@ -131,6 +132,26 @@ def catalog_invalid_entries(catalog: dict) -> list[str]:
             if tp is not None and tp not in (1, 2):
                 problems.append(f"{label}: recommended_tensor_parallel must be 1, 2, or null")
     return problems
+
+
+def drift_classify(validation_document: object, numa_stability: object = "PASS") -> str:
+    """Classify coarse drift state honestly from validation outcome.
+
+    Returns one of: blocking_drift, unresolved_drift, unknown_drift, no_drift.
+    Fail-closed: a missing/unparsed document, an unexpected status, or
+    NOT_TESTED are never reported as no_drift, because "we could not verify"
+    is not the same as "nothing drifted".
+    """
+    if not isinstance(validation_document, dict):
+        return "unknown_drift"
+    status = validation_document.get("status")
+    if status == "BLOCKED":
+        return "blocking_drift"
+    if status == "FAIL" or numa_stability == "FAIL":
+        return "unresolved_drift"
+    if status == "PASS":
+        return "no_drift"
+    return "unknown_drift"
 
 
 def catalog_excess_variants(catalog: dict) -> list[str]:
