@@ -1,0 +1,101 @@
+---
+# Curated model catalog for the dual-B65 hosts (advisory, NOT desired state).
+#
+# model_registry_models stays empty until commissioning pins exact revisions and
+# per-artifact SHA256 values (downloads are sha256-enforced). This catalog is the
+# reviewed starting point: candidate models/quantizations with honest tensor-
+# parallel sizing against the per-device 32 GiB VRAM pool.
+#
+# Sizing rule enforced by roles/model_registry/tasks/catalog.yml and
+# tests/test_model_registry_contract.py:
+#   size_gib / recommended_tensor_parallel + model_catalog_kv_cache_reserve_gib
+#   <= model_catalog_per_device_vram_gib
+# The two B65 cards are a multi-device memory pool, not one transparent 64 GiB
+# device: every variant must fit its per-device share with room for KV cache and
+# runtime overhead. Variants that violate the rule are excluded, not listed.
+
+# Per-device VRAM pool (one Intel Arc Pro B65 card).
+model_catalog_per_device_vram_gib: 32
+# Reserved for KV cache + runtime/scheduler overhead at target context.
+model_catalog_kv_cache_reserve_gib: 6
+
+# Revision policy never names main/master/HEAD. Exact tag/commit pins with real
+# SHA256 artifact hashes are recorded only in the declared desired state, per
+# host, after values are resolved and verified at commissioning.
+model_catalog_revision_policy: "tag or commit pin required at commissioning; never main/master/HEAD"
+
+model_catalog_entries:
+  - id: llama-3.1-8b-instruct
+    repo_id: meta-llama/Llama-3.1-8B-Instruct
+    access: gated
+    purpose_hint: general chat/instruct; default small serving model
+    variants:
+      - quant: bf16
+        size_gib: 16
+        recommended_tensor_parallel: 1
+        note: >-
+          Comfortably within one B65 (16 + 6 = 22 GiB <= 32); simplest
+          single-device deployment.
+      - quant: fp8
+        size_gib: 8.5
+        recommended_tensor_parallel: 1
+        note: >-
+          Lower occupancy peak, room for much longer contexts on one device.
+
+  - id: qwen2.5-32b-instruct
+    repo_id: Qwen/Qwen2.5-32B-Instruct
+    access: public
+    purpose_hint: stronger reasoning/agentic workloads on this class of host
+    variants:
+      - quant: q4_k_m
+        size_gib: 20
+        recommended_tensor_parallel: 1
+        note: >-
+          Fits a single B65 (20 + 6 = 26 GiB <= 32); keeps the second device
+          free or available for a second instance.
+      - quant: fp8
+        size_gib: 34
+        recommended_tensor_parallel: 2
+        note: >-
+          Multi-device span only: 17 + 6 = 23 GiB per B65 at TP=2. Per-device
+          32 GiB pool governs; this is not a single 64 GiB allocation.
+      - quant: bf16
+        size_gib: 64
+        recommended_tensor_parallel: null
+        note: >-
+          Excluded: 64 GiB at TP=2 still demands 32 + 6 = 38 GiB per device,
+          over the 32 GiB pool. Listed for honesty; not deployable on this host.
+
+  - id: llama-3.3-70b-instruct
+    repo_id: meta-llama/Llama-3.3-70B-Instruct
+    access: gated
+    purpose_hint: top-tier reasoning on the dual-B65 pool
+    variants:
+      - quant: q4_k_m
+        size_gib: 40
+        recommended_tensor_parallel: 2
+        note: >-
+          Multi-device span: 20 + 6 = 26 GiB per B65 at TP=2, inside the
+          32 GiB pool.
+      - quant: fp8
+        size_gib: 70
+        recommended_tensor_parallel: null
+        note: >-
+          Excluded: 35 + 6 = 41 GiB per device at TP=2 exceeds the pool.
+
+  - id: phi-4
+    repo_id: microsoft/phi-4
+    access: gated
+    purpose_hint: compact reasoning/code model
+    variants:
+      - quant: fp8
+        size_gib: 14
+        recommended_tensor_parallel: 1
+        note: >-
+          Fits one B65 with headroom (14 + 6 = 20 GiB <= 32).
+      - quant: bf16
+        size_gib: 28
+        recommended_tensor_parallel: 2
+        note: >-
+          Too large for one device at bf16 (34 GiB); spans both cards at TP=2
+          with 14 + 6 = 20 GiB per B65.

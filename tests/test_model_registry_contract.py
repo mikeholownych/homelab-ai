@@ -31,6 +31,7 @@ class ModelRegistryStructureTests(unittest.TestCase):
     REQUIRED_ROLE_FILES = (
         "defaults/main.yml",
         "tasks/main.yml",
+        "tasks/catalog.yml",
         "tasks/materialize.yml",
         "tasks/download_model.yml",
         "tasks/disk_budget.yml",
@@ -94,6 +95,54 @@ class ModelStampFilterTests(unittest.TestCase):
         model = {"repo_id": "o/m", "revision": "r", "artifacts": [{"sha256": "a" * 64}]}
         tampered = {"repo_id": "o/m", "revision": "r", "artifacts": [{"sha256": "f" * 64}]}
         self.assertNotEqual(filters["aihost_model_stamp"](model), filters["aihost_model_stamp"](tampered))
+
+
+class ModelCatalogContractTests(unittest.TestCase):
+    CATALOG = ROLE_DIR / "files" / "model-catalog.yml"
+
+    def _catalog_yaml(self) -> object:
+        return yaml.safe_load(self.CATALOG.read_text(encoding="utf-8"))
+
+    def test_catalog_is_curated_advisory_data(self) -> None:
+        catalog = self._catalog_yaml()
+        self.assertIsInstance(catalog["model_catalog_entries"], list)
+        self.assertGreater(len(catalog["model_catalog_entries"]), 0)
+        self.assertIn("model_catalog_revision_policy", catalog)
+        self.assertGreater(catalog["model_catalog_per_device_vram_gib"], 0)
+        self.assertGreaterEqual(catalog["model_catalog_kv_cache_reserve_gib"], 0)
+
+    def test_catalog_carries_no_fabricated_hashes_or_revisions(self) -> None:
+        text = self.CATALOG.read_text(encoding="utf-8")
+        self.assertNotIn("sha256:", text)
+        self.assertNotIn("revision:", text)
+        self.assertIn("never main/master/HEAD", text)
+
+    def test_catalog_variants_honor_per_device_vram_pool(self) -> None:
+        filters = load_filters()
+        excess = filters["aihost_catalog_excess_variants"](self._catalog_yaml())
+        self.assertEqual([], excess)
+
+    def test_catalog_structure_is_valid(self) -> None:
+        filters = load_filters()
+        problems = filters["aihost_catalog_invalid_entries"](self._catalog_yaml())
+        self.assertEqual([], problems)
+
+    def test_catalog_does_not_alter_desired_state_defaults(self) -> None:
+        defaults = load_yaml(ROLE_DIR / "defaults" / "main.yml")
+        self.assertFalse(defaults["model_registry_enabled"])
+        self.assertEqual({}, defaults["model_registry_models"])
+        tasks = load_yaml(ROLE_DIR / "tasks" / "main.yml")
+        self.assertTrue(any(isinstance(task, dict) and task.get("ansible.builtin.include_tasks") == "catalog.yml"
+                            for task in tasks))
+
+    def test_catalog_validated_via_filters_in_role(self) -> None:
+        catalog_tasks = load_yaml(ROLE_DIR / "tasks" / "catalog.yml")
+        joined = " ".join(str(task.get("ansible.builtin.assert", {}).get("that"))
+                          for task in catalog_tasks
+                          if isinstance(task, dict) and "ansible.builtin.assert" in task
+                          if task.get("ansible.builtin.assert") is not None)
+        self.assertIn("aihost_catalog_invalid_entries", joined)
+        self.assertIn("aihost_catalog_excess_variants", joined)
 
 
 class ModelRegistryIntegrationTests(unittest.TestCase):

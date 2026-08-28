@@ -32,6 +32,10 @@ The fleet is a two-node production group (`inventory/production/hosts.yml`), eac
 
 > **Aggregate VRAM caveat**: both nodes expose 64 GB aggregate VRAM as a *multi-device memory pool* (2 × 32 GB independent buffers). Tensor-parallel deployment (TP=2) spans a model across both GPUs; the pool is not a single transparent 64 GB device and per-device 32 GB limits govern model sizing.
 
+Curated candidate models/quantizations with per-device TP sizing for this pool
+are maintained in the [model catalog](model-catalog.md) (advisory; desired-state
+pins live in the model registry role).
+
 ## 3. Inference Software Stack
 
 Both nodes are converged to the same pinned stack:

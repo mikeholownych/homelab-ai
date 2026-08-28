@@ -9,6 +9,10 @@
     fail_msg: model_registry requires a mapping of declared models and sane safety values.
   tags: [models]
 
+- name: Validate the curated model catalog
+  ansible.builtin.include_tasks: catalog.yml
+  tags: [models]
+
 - name: Validate every declared model pin
   ansible.builtin.assert:
     that:
