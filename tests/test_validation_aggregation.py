@@ -66,6 +66,8 @@ def test_aggregator_produces_valid_schema_document(tmp_path):
             "os_tuning_sysctl": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
             "running_kernel": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
             "numa_topology": {"status": "PASS", "expected": "stable", "observed": "PASS"},
+            "intel_gpu_stack_status": {"status": "PASS", "expected": "pre_verification_fail_closed",
+                                       "observed": "pre_verification_fail_closed"},
         }
     )
 

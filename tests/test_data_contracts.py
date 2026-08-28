@@ -266,6 +266,7 @@ class DataContractTests(unittest.TestCase):
                 "os_tuning_hugepages",
                 "os_tuning_sysctl",
                 "running_kernel",
+                "intel_gpu_stack_status",
                 "numa_topology",
             },
             set(checks),
@@ -297,6 +298,10 @@ class DataContractTests(unittest.TestCase):
         self.assertEqual("warning", checks["required_services"]["severity"])
         self.assertEqual("information", checks["scheduled_reconciliation"]["severity"])
         self.assertEqual("blocking", checks["vault_access"]["severity"])
+        self.assertEqual(
+            "pre_verification_fail_closed", checks["intel_gpu_stack_status"]["expected"]["value"]
+        )
+        self.assertEqual("blocking", checks["intel_gpu_stack_status"]["severity"])
 
     def test_schema_fixtures_validate_against_draft_2020_12_contracts(self) -> None:
         format_checker = FormatChecker()

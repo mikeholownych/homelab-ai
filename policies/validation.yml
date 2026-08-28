@@ -159,6 +159,12 @@ required_checks:
     applies_when: when_kernel_pinned
     expected:
       type: profile_match
+  - id: intel_gpu_stack_status
+    classification: runtime
+    severity: blocking
+    applies_when: always
+    expected:
+      value: pre_verification_fail_closed
   - id: numa_topology
     classification: hardware
     severity: warning

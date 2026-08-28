@@ -23,19 +23,32 @@ def test_b65_on_ubuntu_2404_is_gated_on_official_omix_prerequisites():
     assert "Ubuntu Desktop 24.04.4" in defaults["intel_gpu_support_blocker"]
 
 
-def test_unresolved_host_stack_has_no_partial_apt_installation():
+def test_gated_b65_stack_has_no_partial_apt_installation():
     tasks = (ROOT / "roles/intel_gpu/tasks/main.yml").read_text()
     assert "apt_repository" not in tasks
     assert "intel-omix=" not in tasks
 
 
-def test_vendor_support_conflict_is_unconditionally_fail_closed():
+def test_b65_stack_is_unconditionally_fail_closed_until_physical_verification():
     defaults = load_yaml("roles/intel_gpu/defaults/main.yml")
-    assert defaults["intel_gpu_stack_status"] == "unresolved_vendor_support_conflict"
+    assert defaults["intel_gpu_stack_status"] == "pre_verification_fail_closed"
     tasks = load_yaml("roles/intel_gpu/tasks/main.yml")
     first = tasks[0]
     assert "ansible.builtin.fail" in first
     assert "compatibility_set_approved" not in json.dumps(defaults)
+
+
+def test_b65_support_decision_is_documented_and_evidence_carrying():
+    defaults = load_yaml("roles/intel_gpu/defaults/main.yml")
+    assert defaults["intel_gpu_support_research_as_of"] == "2026-08-27"
+    sources = defaults["intel_gpu_support_research_sources"]
+    assert isinstance(sources, list)
+    assert len(sources) >= 3
+    assert any("dgpu-docs.intel.com" in url for url in sources)
+    checklist = defaults["intel_gpu_verification_checklist"]
+    assert isinstance(checklist, list)
+    assert len(checklist) >= 3
+    assert "unresolved" not in json.dumps(defaults).lower()
 
 
 def test_gpu_role_enforces_devices_access_and_physical_checks():
@@ -193,5 +206,5 @@ def test_primary_source_provenance_is_recorded():
         "https://download.pytorch.org/whl/xpu/torch/",
     ):
         assert url in doc
-    assert "2026-08-17" in doc
+    assert "2026-08-27" in doc
     assert "NOT_TESTED" in doc

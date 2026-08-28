@@ -140,7 +140,7 @@ Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 582
       ```bash
       ansible-playbook playbooks/site.yml --limit ai-5820-01 --tags gpu,runtime
       ```
-    - **Gate notice**: the Intel Arc Pro B65 stack remains in `unresolved_vendor_support_conflict` (Ubuntu Server 24.04 without the Desktop/6.17-HWE closure). The role fails closed *before mutation*; this runbook cannot bypass it. Commissioning can proceed through the storage/baseline portions, but `gpu,runtime` completion requires Intel's coherent B65 host-support statement (see `docs/intel-gpu.md`).
+    - **Gate notice**: the Intel Arc Pro B65 stack is researched and documented (state `pre_verification_fail_closed`; see `docs/intel-gpu.md`). Installation is blocked until the in-place verifiable checklist passes: Ubuntu 24.04.4+ `base-files`, kernel >= 6.17 HWE (`linux-generic-hwe-24.04`), both `8086:e222` devices correlated by PCI BDF, and a non-simulated BDF-correlated classification PASS. The role fails closed *before mutation*; this runbook cannot bypass it. Commissioning can proceed through the storage/baseline portions, but `gpu,runtime` completion requires the checklist to pass in place.
 
 13. **Deploy Inference Runtime**
     - Deploy vLLM XPU and llama.cpp SYCL services:

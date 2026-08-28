@@ -6,10 +6,33 @@ host_runtime_account:  # noqa var-naming[no-role-prefix]
   group: "render"
   home: "/var/lib/aihost-runtime"
 intel_gpu_install_enabled: false
-intel_gpu_stack_status: unresolved_vendor_support_conflict
+# Arc Pro B65 has official Intel support (see support_decision/research). The
+# remaining gap is our headless Ubuntu Server 24.04 install surface: Intel's
+# OMIX matrix validates Desktop 24.04.4 / Desktop 24.04 with the 6.17 HWE kernel.
+# Server reach that surface via the same linux-generic-hwe-24.04 kernel package,
+# but installation stays fail-closed until the in-place checklist PASSes.
+intel_gpu_stack_status: pre_verification_fail_closed
 intel_gpu_physical_validation_enabled: false
+intel_gpu_support_research_as_of: "2026-08-27"
+intel_gpu_support_decision: >-
+  Intel officially supports Arc Pro B65 (8086:e222) for general-purpose
+  compute: the Xe KMD enables it by default from Ubuntu 25.10+/kernel 6.17, and
+  Intel OMIX validates B50/B60/B65/B70 on Ubuntu Desktop 26.04, Ubuntu Desktop
+  24.04.4, or Ubuntu Desktop 24.04 with the 6.17 Hardware Enablement kernel. No
+  unsupported inference from B50/B60/B580 results is performed anywhere in this
+  repository. Installation remains fail-closed until the checks below PASS
+  in-place on physical hardware.
+intel_gpu_verification_checklist:
+  - ubuntu_point_release >= minimum (24.04.4) via base-files package
+  - running_kernel >= minimum (6.17) from the 24.04 HWE series
+  - both 8086:e222 devices enumerated and correlated by PCI BDF
+  - BDF-correlated hardware classification PASS on non-simulated evidence
+  - Level Zero / PyTorch XPU reports exactly the expected device contract
 intel_gpu_support_blocker: >-
   Intel OMIX supports Arc Pro B65 on Ubuntu Desktop 24.04.4 or Ubuntu 24.04 with kernel 6.17 HWE only.
+  Server installs need the same HWE kernel surface
+  (linux-generic-hwe-24.04); the intel_gpu_verification_checklist
+  (see intel_gpu_support_decision and docs/intel-gpu.md) must PASS in place first.
 intel_gpu_minimum_ubuntu_point_release: "24.04.4"
 intel_gpu_minimum_kernel: "6.17"
 intel_gpu_target_pci_ids: ["8086:e222"]
@@ -19,3 +42,11 @@ intel_gpu_vram_tolerance_gib: 1
 intel_gpu_service_accounts: ["{{ host_runtime_account.name }}"]
 intel_gpu_artifact_dir: /var/cache/local-ai/intel-gpu/26.27.39122.11
 intel_gpu_runtime_evidence_path: /var/lib/local-ai/evidence/gpu-runtime.json
+intel_gpu_support_research_sources:
+  - https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html
+  - https://dgpu-docs.intel.com/installation-guides/installing-omix.html
+  - https://dgpu-docs.intel.com/installation-guides/index.html
+  - https://ubuntu.com/kernel/docs/reference/hwe-kernels/
+  - https://github.com/intel/compute-runtime/releases/tag/26.27.39122.11
+  - https://docs.pytorch.org/docs/stable/notes/get_start_xpu.html
+  - https://download.pytorch.org/whl/xpu/torch/

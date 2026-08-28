@@ -34,6 +34,7 @@ REQUIRED_CHECKS_SPEC = {
     "os_tuning_sysctl": {"category": "operations", "classification": "operations", "severity": "warning", "summary": "Managed sysctl values active", "value": "PASS"},
     "running_kernel": {"category": "system", "classification": "runtime", "severity": "blocking", "summary": "Expected kernel running", "value": "PASS"},
     "numa_topology": {"category": "platform", "classification": "hardware", "severity": "warning", "summary": "NUMA topology stable", "value": "PASS"},
+    "intel_gpu_stack_status": {"category": "compute", "classification": "runtime", "severity": "blocking", "summary": "B65 stack status", "value": "pre_verification_fail_closed"},
 }
 
 
