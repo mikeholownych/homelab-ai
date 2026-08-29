@@ -259,3 +259,19 @@ justifies a change:
   `kernel.json`, `tuning-profile.json`).
 - Custom kernels remain disabled scaffolding (`kernel/`, `docs/custom-kernel.md`);
   supported Ubuntu kernels are always tried first.
+
+---
+
+## 20. Observability Stack
+
+A continuous telemetry ingestion layer ships as the `observability` role
+(Grafana Alloy -> VictoriaMetrics + vmalert recording rules -> Grafana, and
+logs to Loki), hash-pinned to exact upstream artifact SHA-256s and installed
+only via `get_url` with `checksum` verification. It is **fail-closed**:
+`observability_install_enabled` defaults to `false` and
+`observability_stack_status` to `pre_verification_fail_closed`. Nothing
+downloads or starts until the commissioning checklist in
+`docs/observability.md` passes on physical hardware, when the Grafana admin
+password is read from Vault
+(`secret/local-ai/observability/grafana-admin`) into a mode-0600 file. Enable
+per host with `features.observability: true`.

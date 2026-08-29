@@ -81,6 +81,65 @@ def test_power_budget_refusal_math():
     assert refused["estimated_watts"] > refused["limit_watts"]
 
 
+def test_scheduled_profile_split_defaults_preserve_active_profile_behavior():
+    defaults = load_yaml("roles/benchmarking/defaults/main.yml")
+    assert defaults["benchmarking_scheduled_profiles"] == []
+    assert defaults["benchmarking_scheduled_index_path"]
+    assert defaults["benchmarking_scheduled_max_total_duration_seconds"] > 0
+
+
+def test_benchmark_role_supports_scheduled_profile_split():
+    tasks = load_yaml("roles/benchmarking/tasks/main.yml")
+    names = [task.get("name", "") for task in tasks]
+    assert "Resolve scheduled benchmark profile split" in names
+    assert "Validate scheduled benchmark profile split" in names
+    assert "Emit scheduled benchmark evidence index" in names
+
+    run = next(
+        task for task in tasks if task.get("name") == "Run inference benchmark harness"
+    )
+    assert run["loop"] == "{{ benchmarking_run_profiles }}"
+    argv = run["ansible.builtin.command"]["argv"]
+    assert "--profile" in argv
+    output_expression = argv[argv.index("--output") + 1]
+    assert "'benchmark-' ~ item ~ '.json'" in output_expression
+    assert "'benchmark.json'" in output_expression
+
+    index = next(
+        task
+        for task in tasks
+        if task.get("name") == "Emit scheduled benchmark evidence index"
+    )
+    assert "benchmarking_scheduled_index_path" in str(
+        index["ansible.builtin.copy"]["dest"]
+    )
+
+
+def test_scheduled_split_falls_back_to_active_profile_and_validates_budget():
+    tasks = load_yaml("roles/benchmarking/tasks/main.yml")
+
+    resolve = next(
+        task
+        for task in tasks
+        if task.get("name") == "Resolve scheduled benchmark profile split"
+    )
+    resolve_text = str(resolve["ansible.builtin.set_fact"])
+    assert "benchmarking_scheduled_profiles" in resolve_text
+    assert "benchmarking_active_profile" in resolve_text
+    assert "benchmarking_scheduled_run" in resolve_text
+
+    validate = next(
+        task
+        for task in tasks
+        if task.get("name") == "Validate scheduled benchmark profile split"
+    )
+    rendered = " ".join(str(cond) for cond in validate["ansible.builtin.assert"]["that"])
+    assert "difference" in rendered
+    assert "unique" in rendered
+    assert "sum" in rendered
+    assert "benchmarking_scheduled_max_total_duration_seconds" in rendered
+
+
 def test_real_mode_fails_honestly_without_server(tmp_path):
     import subprocess
     import sys as _sys

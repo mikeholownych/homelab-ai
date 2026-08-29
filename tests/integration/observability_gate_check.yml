@@ -1,0 +1,55 @@
+---
+# Localhost-safe observability wiring gate. Runs the observability role in
+# check mode under commission settings so every config/unit template and its
+# gating expressions render without touching the host, while proving the role
+# records NOT_TESTED validation and downloads/start steps stay inert. The real
+# host stays fail-closed (default `pre_verification_fail_closed`) until the
+# commissioning checklist in docs/observability.md passes on hardware.
+- name: Localhost-safe observability role wiring gate (check mode)
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  vars:
+    observability_gate_root: "{{ playbook_dir }}/../../.ansible/observability-gate-check"
+    observability_install_enabled: true
+    observability_stack_status: commissioned
+    observability_grafana_admin_password: >-
+      {{ lookup('env', 'OBSERVABILITY_GRAFANA_ADMIN_GATE_TEST')
+         | default('localhost-safe-gate-only', true) }}
+    observability_install_root: "{{ observability_gate_root }}/opt/local-ai/observability"
+    observability_config_dir: "{{ observability_gate_root }}/etc/local-ai/observability"
+    observability_log_dir: "{{ observability_gate_root }}/log/local-ai/observability"
+    observability_data_root: "{{ observability_gate_root }}/lib/local-ai/observability"
+    observability_textfile_metrics_dir: "{{ observability_gate_root }}/lib/local-ai/metrics"
+  tasks:
+    - name: Validate localhost-safe observability wiring gate
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Ubuntu"
+          - ansible_facts.distribution_version is version("24.04", "==")
+          - ansible_check_mode
+        fail_msg: observability gate checks require an Ubuntu 24.04 controller in check mode.
+      check_mode: true
+      tags:
+        - observability
+        - telemetry
+
+    - name: Include observability role to prove commissioned-path wiring
+      ansible.builtin.include_role:
+        name: observability
+      tags:
+        - observability
+        - telemetry
+
+    - name: Assert role recorded NOT_TESTED validation with no install artifacts
+      ansible.builtin.assert:
+        that:
+          - observability_validation_status == 'NOT_TESTED'
+        fail_msg: >-
+          observability role must record NOT_TESTED validation in check mode;
+          a real install was never permitted.
+      check_mode: true
+      tags:
+        - observability
+        - telemetry

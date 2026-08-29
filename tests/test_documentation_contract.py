@@ -27,6 +27,7 @@ def test_readme_covers_required_topics():
         "validation",
         "benchmark",
         "evidence",
+        "observability",
         "future host",
         "clustering",
         "cmdb",

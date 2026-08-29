@@ -53,3 +53,4 @@ Both nodes are converged to the same pinned stack:
 - **Clustering**: Standalone single-node initial topology designed with fleet-shaped inventory metadata for future Ray / distributed vLLM clusters.
 - **CMDB Export**: Product-neutral Configuration Item (CI) export adhering to `schemas/cmdb.schema.json`.
 - **ITSM Hooks**: Bounded change authorization envelope adhering to `schemas/itsm.schema.json`.
+- **Observability**: Continuous ingestion via the `observability` role (Grafana Alloy -> VictoriaMetrics + vmalert recording rules -> Grafana, logs -> Loki), hash-pinned and fail-closed until the commissioning checklist in `docs/observability.md` passes; telemetry feeds every evidence and benchmarking run.

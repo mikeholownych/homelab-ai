@@ -84,6 +84,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Download pinned VictoriaMetrics archive
@@ -96,6 +97,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Download pinned vmutils archive (vmalert)
@@ -108,6 +110,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Download pinned Grafana archive
@@ -120,6 +123,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Download pinned Loki archive
@@ -132,6 +136,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Extract Grafana Alloy binary
@@ -144,6 +149,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Extract VictoriaMetrics binary
@@ -156,6 +162,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Extract vmutils tarball for vmalert
@@ -168,6 +175,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Extract Grafana bundle
@@ -180,6 +188,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Extract Loki binary
@@ -192,6 +201,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Verify extracted binaries match pinned inner checksums
@@ -205,6 +215,7 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Install Alloy configuration
@@ -337,6 +348,7 @@
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
     - observability_units_installed.changed
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Enable and start observability services
@@ -354,4 +366,5 @@
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
     - item.enabled
+    - not ansible_check_mode
   tags: [observability]

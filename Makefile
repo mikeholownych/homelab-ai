@@ -40,8 +40,9 @@ test: bootstrap-tools
 	$(PYTEST) -q
 
 check: bootstrap-tools
-	@echo "Running localhost-safe Ubuntu 24.04 contract check mode; this validates baseline wiring and does not assert host convergence."
+	@echo "Running localhost-safe Ubuntu 24.04 contract check mode; this validates baseline and observability wiring and does not assert host convergence."
 	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check tests/integration/baseline_os.yml
+	ANSIBLE_CONFIG=ansible.cfg $(ANSIBLE_PLAYBOOK) -i tests/fixtures/inventory/healthy.yml --check tests/integration/observability_gate_check.yml
 
 tuning-smoke: bootstrap-tools
 	@echo "Running read-write OS tuning convergence against this machine (installs helpers under /usr/local/libexec, writes state under /var/lib/aihost)."

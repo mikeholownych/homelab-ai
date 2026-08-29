@@ -21,6 +21,15 @@ benchmarking_iterations: 5
 benchmarking_request_timeout_sec: 120
 benchmarking_min_generation_tokens_per_sec: 30
 
+# Scheduled benchmark profile split. When non-empty, a scheduled benchmark run
+# executes each listed profile once (one evidence file per profile) and emits a
+# split index instead of a single active-profile run; keep empty to preserve
+# the current single active profile behaviour. The scheduled set must contain
+# only defined profiles, no duplicates, and must fit the total duration budget.
+benchmarking_scheduled_profiles: []
+benchmarking_scheduled_index_path: "{{ benchmarking_evidence_dir }}/benchmark-scheduled.json"
+benchmarking_scheduled_max_total_duration_seconds: 900
+
 # Thermal and power guardrails; the harness refuses to run outside these.
 benchmarking_psu_capacity_watts: 1000
 benchmarking_gpu_tdp_watts: 225

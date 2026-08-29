@@ -115,6 +115,19 @@ class ObservabilityRoleContractTests(unittest.TestCase):
             resolved_url = render_jinja_vars(get_url["url"], self.defaults)
             self.assertTrue(resolved_url.startswith("https://"), task["name"])
 
+    def test_execution_tasks_are_check_mode_inert(self) -> None:
+        execution_prefixes = ("Download pinned", "Extract ", "Verify extracted", "Enable and start")
+        for task in self.tasks:
+            if not task.get("name", "").startswith(execution_prefixes):
+                continue
+            self.assertIn("not ansible_check_mode", task["when"], task["name"])
+        daemon_reload = next(
+            task
+            for task in self.tasks
+            if task.get("name") == "Reload systemd for new observability units"
+        )
+        self.assertIn("not ansible_check_mode", daemon_reload["when"])
+
     def test_no_mutable_latest_or_dangerous_patterns_in_role(self) -> None:
         scanned = []
         for root in (OBSERVABILITY_DIR,):
@@ -172,6 +185,19 @@ class ObservabilityRoleContractTests(unittest.TestCase):
         )
         self.assertIn("GF_SECURITY_ADMIN_PASSWORD", admin_env)
         self.assertIsNone(self.defaults["observability_grafana_admin_password"])
+
+    def test_gate_check_integration_playbook_wired_into_make_check(self) -> None:
+        gate = REPO_ROOT / "tests" / "integration" / "observability_gate_check.yml"
+        self.assertTrue(gate.is_file())
+        content = gate.read_text(encoding="utf-8")
+        self.assertIn("observability_install_enabled: true", content)
+        self.assertIn("observability_stack_status: commissioned", content)
+        self.assertIn("ansible_check_mode", content)
+        self.assertIn("observability_validation_status", content)
+        self.assertIn("NOT_TESTED", content)
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        self.assertIn("observability_gate_check.yml", makefile)
+        self.assertIn("--check", makefile)
 
 
 if __name__ == "__main__":

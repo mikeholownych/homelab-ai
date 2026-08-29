@@ -46,6 +46,17 @@ Execute configurable benchmark profiles:
 ansible-playbook playbooks/benchmark.yml --limit ai-p620-01 -e "benchmark_profile=small"
 ansible-playbook playbooks/benchmark.yml --limit ai-p620-01 -e "benchmark_profile=large_70b"
 ```
+Profiles include: `small`, `medium_32b`, `large_70b`, `low_precision_moe`,
+and `sustained_load`.
+
+A scheduled run can cover multiple profiles in one pass instead of a single
+active profile by setting a non-empty `benchmarking_scheduled_profiles` list
+(committed in group/host vars). Each profile then writes its own evidence file
+`benchmark-<profile>.json` and a split index
+`benchmark-scheduled.json` is emitted; the requested set must contain only
+defined profiles, no duplicates, and must fit within
+`benchmarking_scheduled_max_total_duration_seconds`. Empty keeps the classic
+single active-profile run.
 
 ### 7. Patching
 Assess or apply routine security patches:
@@ -99,3 +110,18 @@ scripts/run-ansible-snapshot ... --playbook reboot-verify.yml ...
 The playbook verifies a pinned kernel image exists before rebooting, asserts
 the running kernel after return, confirms GPU enumeration, then imports
 `validate.yml`.
+
+### 13. Observability Stack
+The telemetry ingestion layer is installed, not at commissioning-adjacent
+drift time, but only once `observability_stack_status` is set to
+`commissioned` with `observability_install_enabled: true` (see
+`docs/observability.md` for the pre-flight checklist and the Vault secret
+`secret/local-ai/observability/grafana-admin`).
+```bash
+ansible-playbook playbooks/site.yml --limit ai-p620-01 --tags observability
+```
+Components: Alloy scrapes node + vLLM `/metrics` and the GPU textfile
+directory, remote-writes to VictoriaMetrics, and forwards logs to Loki; vmalert
+evaluates recording rules (host-level GPU thermal/severity always, per-tuning
+profile series once live `/metrics` names are validated); Grafana serves the
+host overview dashboard. All services bind loopback only.

@@ -90,7 +90,11 @@ check is recorded in `observability_verification_checklist`; host-level series
 
 Install all five components together (Alloy, VictoriaMetrics, vmalert, Loki,
 Grafana) or prune individual ones via `observability_*_enabled` flags before
-launch.
+launch. In check mode the role is fully inert: it renders every config/unit
+template and records `observability_validation_status: NOT_TESTED`, but never
+downloads, extracts, verifies, or starts services (see
+`tests/integration/observability_gate_check.yml`, wired into `make check`), so
+a CI/controller check run never touches the network.
 
 ### Why the full stack is not installed yet
 

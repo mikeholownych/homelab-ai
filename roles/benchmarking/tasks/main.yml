@@ -35,13 +35,40 @@
     mode: "0750"
   tags: [benchmark, operations]
 
+- name: Resolve scheduled benchmark profile split
+  ansible.builtin.set_fact:
+    benchmarking_scheduled_run: "{{ benchmarking_scheduled_profiles | length > 0 }}"
+    benchmarking_run_profiles: >-
+      {{ benchmarking_scheduled_profiles
+         if (benchmarking_scheduled_profiles | length > 0)
+         else [benchmarking_active_profile] }}
+  tags: [benchmark, operations]
+
+- name: Validate scheduled benchmark profile split
+  ansible.builtin.assert:
+    that:
+      - benchmarking_run_profiles | length > 0
+      - >-
+        benchmarking_run_profiles | difference(benchmarking_profiles | list) | length == 0
+      - >-
+        benchmarking_run_profiles | length == (benchmarking_run_profiles | unique | length)
+      - >-
+        (benchmarking_run_profiles
+        | map('extract', benchmarking_profiles, 'duration_seconds')
+        | map('float', 30.0) | sum) <= benchmarking_scheduled_max_total_duration_seconds
+    fail_msg: >-
+      scheduled benchmark profiles must be a non-empty allowed, duplicate-free
+      set within the split budget of
+      {{ benchmarking_scheduled_max_total_duration_seconds }}s.
+  tags: [benchmark, operations]
+
 - name: Run inference benchmark harness
   ansible.builtin.command:
     argv:
       - /usr/bin/python3
       - "{{ benchmarking_harness_path }}"
       - --profile
-      - "{{ benchmarking_active_profile }}"
+      - "{{ item }}"
       - --hostname
       - "{{ inventory_hostname }}"
       - --git-sha
@@ -59,11 +86,11 @@
       - --iterations
       - "{{ benchmarking_iterations | string }}"
       - --duration
-      - "{{ benchmarking_profiles[benchmarking_active_profile].duration_seconds | default(30) | string }}"
+      - "{{ benchmarking_profiles[item].duration_seconds | default(30) | string }}"
       - --tensor-parallelism
-      - "{{ benchmarking_profiles[benchmarking_active_profile].tensor_parallelism | string }}"
+      - "{{ benchmarking_profiles[item].tensor_parallelism | string }}"
       - --gpu-count
-      - "{{ benchmarking_profiles[benchmarking_active_profile].gpu_count | string }}"
+      - "{{ benchmarking_profiles[item].gpu_count | string }}"
       - --psu-capacity-watts
       - "{{ benchmarking_psu_capacity_watts | string }}"
       - --gpu-tdp-watts
@@ -71,7 +98,12 @@
       - --abort-temperature-c
       - "{{ benchmarking_abort_temperature_c | string }}"
       - --output
-      - "{{ benchmarking_output_path }}"
+      - >-
+        {{ benchmarking_evidence_dir ~ '/' ~ (benchmarking_scheduled_run |
+           ternary('benchmark-' ~ item ~ '.json', 'benchmark.json')) }}
+  loop: "{{ benchmarking_run_profiles }}"
+  loop_control:
+    label: "{{ item }}"
   register: benchmarking_run
   changed_when: false
   environment:
@@ -80,4 +112,24 @@
     AIHOST_BENCH_NUMA_POLICY: "{{ benchmarking_numa_policy | default(omit) }}"
     AIHOST_BENCH_MEMBIND_NODES: "{{ benchmarking_membind_nodes | default(omit) }}"
   when: not ansible_check_mode
+  tags: [benchmark, operations]
+
+- name: Map scheduled benchmark profile evidence outputs
+  ansible.builtin.set_fact:
+    benchmarking_scheduled_evidence_outputs: >-
+      {{ benchmarking_scheduled_evidence_outputs | default([]) +
+         [benchmarking_evidence_dir ~ '/benchmark-' ~ item ~ '.json'] }}
+  loop: "{{ benchmarking_run_profiles }}"
+  tags: [benchmark, operations]
+
+- name: Emit scheduled benchmark evidence index
+  ansible.builtin.copy:
+    dest: "{{ benchmarking_scheduled_index_path }}"
+    mode: "0640"
+    content: >-
+      {{ {'split': true, 'profiles': benchmarking_run_profiles,
+          'outputs': benchmarking_scheduled_evidence_outputs} | to_nice_json }}
+  when:
+    - not ansible_check_mode
+    - benchmarking_scheduled_run
   tags: [benchmark, operations]
