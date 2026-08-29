@@ -1,0 +1,96 @@
+---
+# Continuous performance/optimization observability layer.
+#
+# Fail-closed by default: nothing is installed until the stack is explicitly
+# commissioned on physical hardware. Mirrors the Intel GPU role's
+# intel_gpu_stack_status pattern. Every upstream artifact below is hash-pinned
+# (sha256) exactly like every other component in this repository; see
+# docs/observability.md for the agreed architecture.
+
+observability_install_enabled: false
+observability_stack_status: pre_verification_fail_closed
+
+# Per-component toggles; default all-on so the commissioning run brings up the
+# full agreed stack, while any single component can be excluded ahead of time.
+observability_alloy_enabled: true
+observability_vm_enabled: true
+observability_vmalert_enabled: true
+observability_grafana_enabled: true
+observability_loki_enabled: true
+# Populated by the commissioning run on physical hardware; verified before any
+# binary is downloaded or started.
+observability_verification_checklist: []
+
+observability_as_of: "2026-08-27"
+observability_server_bind_address: "127.0.0.1"
+
+observability_install_root: /opt/local-ai/observability
+observability_config_dir: /etc/local-ai/observability
+observability_log_dir: /var/log/local-ai/observability
+observability_data_root: /var/lib/local-ai/observability
+
+# Written by the monitoring role; scraped by Alloy's textfile collector.
+observability_textfile_metrics_dir: /var/lib/local-ai/metrics
+
+# ---------------------------------------------------------------------------
+# Grafana Alloy agent - scrapes node + vLLM /metrics + GPU textfile dir and
+# remote-writes to VictoriaMetrics.
+# ---------------------------------------------------------------------------
+observability_alloy_version: v1.19.2
+observability_alloy_sha256: 3694ea4e1044b367e1c21ffe28117f209c5989fa5e604d000321809f871ab701
+observability_alloy_archive_url: https://github.com/grafana/alloy/releases/download/v1.19.2/alloy-linux-amd64.zip
+observability_alloy_http_port: 12345
+
+# vLLM /metrics endpoint scraped by Alloy (loopback only).
+observability_vllm_metrics_port: 8000
+observability_vllm_scrape_enabled: true
+
+# ---------------------------------------------------------------------------
+# VictoriaMetrics single-node TSDB.
+# ---------------------------------------------------------------------------
+observability_vm_version: v1.150.0
+observability_vm_sha256: 22bfe77be3de1ad03f214a005129312536d77ed4e293b66c186df417ee40a61d
+observability_vm_release_dir: https://github.com/VictoriaMetrics/VictoriaMetrics/releases/download/v1.150.0/
+observability_vm_archive_name: victoria-metrics-linux-amd64-v1.150.0.tar.gz
+observability_vm_archive_url: "{{ observability_vm_release_dir }}{{ observability_vm_archive_name }}"
+observability_vm_binary_inner_sha256: 8aaafea8ea32ed04eea3064386110c6978d5db66e462406e6c9eb3b89c496d20
+observability_vm_http_port: 8428
+observability_vm_retention_days: 45
+
+# ---------------------------------------------------------------------------
+# vmalert - evaluates recording rules against VictoriaMetrics and writes
+# derived series back so throughput/watt and TTFT trend series exist as first
+# class metrics (distributed in the VictoriaMetrics vmutils tarball).
+# ---------------------------------------------------------------------------
+observability_vmutils_sha256: dbfb3a747d40de62142bcd6ec615377b27c346cced03763eba3cf6a8ba946bb7
+observability_vmutils_archive_url: "{{ observability_vm_release_dir }}vmutils-linux-amd64-v1.150.0.tar.gz"
+observability_vmalert_binary_inner_sha256: f00e5b78f414d58310ac194c885005811ee3787a913bc7578f44c907014c9b6b
+observability_vmalert_http_port: 8880
+# vLLM metric names must be validated against the live endpoint at
+# commissioning before the throughput recording rules are enabled.
+observability_vllm_recording_rules_enabled: false
+
+# ---------------------------------------------------------------------------
+# Grafana OSS - dashboards over the VictoriaMetrics datasource.
+# ---------------------------------------------------------------------------
+observability_grafana_version: 13.2.0
+observability_grafana_sha256: 4669384cdb0bb5b4a3f804927e57490d17f4cc47258cd1698fc124e99ee58265
+observability_grafana_archive_url: https://dl.grafana.com/oss/release/grafana-13.2.0.linux-amd64.tar.gz
+observability_grafana_http_port: 3000
+observability_grafana_admin_password: null
+
+# ---------------------------------------------------------------------------
+# Loki - log aggregation fed by Alloy.
+# ---------------------------------------------------------------------------
+observability_loki_version: v3.7.6
+observability_loki_sha256: 09d213427516581210bf39a5dca0b290722a3c17a623c5d6b654a85d6d5248ea
+observability_loki_archive_url: https://github.com/grafana/loki/releases/download/v3.7.6/loki-linux-amd64.zip
+observability_loki_http_port: 3100
+observability_loki_retention_days: 30
+
+# Last-resort message for the gate.
+observability_install_blocker: >-
+  The observability stack install is disabled pending physical B65 node
+  commissioning. Set observability_stack_status to 'commissioned' and enable
+  observability_install_enabled only after the verification checklist has run
+  on the target host.

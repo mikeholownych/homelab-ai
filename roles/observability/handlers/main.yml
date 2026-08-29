@@ -1,0 +1,4 @@
+---
+- name: Reload observability services
+  ansible.builtin.debug:
+    msg: "Observability configuration updated; restart pending at commissioning"

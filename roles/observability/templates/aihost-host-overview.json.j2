@@ -1,0 +1,57 @@
+{
+  "title": "aihost host overview",
+  "uid": "aihost-host-overview",
+  "tags": ["aihost"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "timezone": "browser",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "tuning_profile",
+        "label": "tuning_profile",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+        "query": {
+          "query": "label_values(aihost_gpu_temperature_celsius, tuning_profile)",
+          "refId": "TuningProfileVariable"
+        },
+        "includeAll": true,
+        "multi": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "GPU temperature peak (all cards)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:gpu_temperature_celsius:peak",
+          "legendFormat": "peak",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "GPU thermal severity",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:gpu_thermal_severity:peak",
+          "legendFormat": "severity",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}

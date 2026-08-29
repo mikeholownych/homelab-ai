@@ -1,0 +1,15 @@
+---
+galaxy_info:
+  author: aihost-foundation
+  description: >-
+    Continuous performance/optimization observability layer: Grafana Alloy
+    agent, VictoriaMetrics TSDB with vmalert recording rules, Loki log
+    storage, and Grafana dashboards. Hash-pinned upstream artifacts, fail-closed
+    until commissioned on physical hardware.
+  license: MIT
+  min_ansible_version: "2.19"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - noble
+dependencies: []

@@ -1,0 +1,19 @@
+[Unit]
+Description=Loki log storage (aihost observability)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={{ observability_install_root }}/bin/loki \
+  -config.file={{ observability_config_dir }}/loki/config.yml \
+  -config.expand-env=true
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ observability_data_root }}/loki
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+---
+# Observability layer (Grafana Alloy -> VictoriaMetrics/vmalert -> Grafana,
+# logs -> Loki). All config rides on role defaults; hosts opt in via
+# features.observability and the stack only installs after physical
+# commissioning sets observability_stack_status to 'commissioned'.
+observability_defaults:
+  enabled: false
+  stack_status: pre_verification_fail_closed
+
+observability_secret_paths:
+  grafana_admin: secret/local-ai/observability/grafana-admin

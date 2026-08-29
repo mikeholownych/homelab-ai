@@ -1,0 +1,25 @@
+[Unit]
+Description=Grafana dashboards (aihost observability)
+After=aihost-observability-victoriametrics.service
+
+[Service]
+Type=simple
+EnvironmentFile={{ observability_config_dir }}/grafana/admin.env
+ExecStart={{ observability_install_root }}/grafana-{{ observability_grafana_version }}/bin/grafana server \
+  --homepath={{ observability_install_root }}/grafana-{{ observability_grafana_version }} \
+  cfg:default.server.http_addr={{ observability_server_bind_address }} \
+  cfg:default.server.http_port={{ observability_grafana_http_port }} \
+  cfg:default.paths.data={{ observability_data_root }}/grafana \
+  cfg:default.paths.logs={{ observability_log_dir }}/grafana \
+  cfg:default.paths.plugins={{ observability_install_root }}/grafana-{{ observability_grafana_version }}/public/plugins \
+  cfg:default.paths.provisioning={{ observability_config_dir }}/grafana/provisioning
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ observability_data_root }}/grafana
+
+[Install]
+WantedBy=multi-user.target

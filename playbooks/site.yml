@@ -78,6 +78,15 @@
         - site
         - foundation
 
+    - name: Include observability role when the feature is enabled
+      ansible.builtin.include_role:
+        name: observability
+      when: features.observability | default(false) | bool
+      tags:
+        - site
+        - foundation
+        - observability
+
     - name: Include scheduled reconciliation role when the feature is enabled
       ansible.builtin.include_role:
         name: scheduled_ansible

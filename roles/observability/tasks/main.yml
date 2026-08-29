@@ -1,0 +1,357 @@
+---
+- name: Validate observability inputs
+  ansible.builtin.assert:
+    that:
+      - observability_install_enabled is boolean
+      - >-
+        observability_stack_status in ['pre_verification_fail_closed', 'commissioned']
+      - observability_alloy_enabled is boolean
+      - observability_vm_enabled is boolean
+      - observability_vmalert_enabled is boolean
+      - observability_grafana_enabled is boolean
+      - observability_loki_enabled is boolean
+      - observability_alloy_version is string
+      - observability_alloy_sha256 | length == 64
+      - observability_vm_version is string
+      - observability_vm_sha256 | length == 64
+      - observability_grafana_version is string
+      - observability_grafana_sha256 | length == 64
+      - observability_loki_version is string
+      - observability_loki_sha256 | length == 64
+      - observability_server_bind_address is string
+      - >-
+        not (observability_install_enabled | bool) or
+        (observability_grafana_admin_password is string and
+        observability_grafana_admin_password | length > 0)
+    fail_msg: >-
+      observability role requires pinned, hash-verified artifacts and a non-empty
+      Grafana admin password (from Vault) before any install is allowed.
+  tags: [observability, telemetry]
+
+- name: Refuse unverified observability stack installation
+  ansible.builtin.fail:
+    msg: "{{ observability_install_blocker }}"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status != 'commissioned'
+  tags: [observability]
+
+- name: Record observability stack validation as NOT_TESTED in check mode
+  ansible.builtin.set_fact:
+    observability_validation_status: NOT_TESTED
+    observability_validation_reason: check mode does not execute verified artifact downloads or service convergence
+  when: ansible_check_mode
+  tags: [observability]
+
+- name: Create observability directory layout
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - "{{ observability_install_root }}"
+    - "{{ observability_install_root }}/bin"
+    - "{{ observability_config_dir }}"
+    - "{{ observability_config_dir }}/alloy"
+    - "{{ observability_config_dir }}/victoriametrics"
+    - "{{ observability_config_dir }}/vmalert"
+    - "{{ observability_config_dir }}/loki"
+    - "{{ observability_config_dir }}/grafana"
+    - "{{ observability_config_dir }}/grafana/provisioning/datasources"
+    - "{{ observability_config_dir }}/grafana/provisioning/dashboards"
+    - "{{ observability_config_dir }}/grafana/dashboards"
+    - "{{ observability_data_root }}"
+    - "{{ observability_data_root }}/alloy"
+    - "{{ observability_data_root }}/victoriametrics"
+    - "{{ observability_data_root }}/vmalert"
+    - "{{ observability_data_root }}/loki"
+    - "{{ observability_data_root }}/grafana"
+    - "{{ observability_log_dir }}"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Download pinned Grafana Alloy archive
+  ansible.builtin.get_url:
+    url: "{{ observability_alloy_archive_url }}"
+    dest: "{{ observability_install_root }}/bin/alloy-{{ observability_alloy_version }}.zip"
+    checksum: "sha256:{{ observability_alloy_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Download pinned VictoriaMetrics archive
+  ansible.builtin.get_url:
+    url: "{{ observability_vm_archive_url }}"
+    dest: "{{ observability_install_root }}/bin/victoria-metrics-{{ observability_vm_version }}.tar.gz"
+    checksum: "sha256:{{ observability_vm_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Download pinned vmutils archive (vmalert)
+  ansible.builtin.get_url:
+    url: "{{ observability_vmutils_archive_url }}"
+    dest: "{{ observability_install_root }}/bin/vmutils-{{ observability_vm_version }}.tar.gz"
+    checksum: "sha256:{{ observability_vmutils_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Download pinned Grafana archive
+  ansible.builtin.get_url:
+    url: "{{ observability_grafana_archive_url }}"
+    dest: "{{ observability_install_root }}/bin/grafana-{{ observability_grafana_version }}.tar.gz"
+    checksum: "sha256:{{ observability_grafana_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Download pinned Loki archive
+  ansible.builtin.get_url:
+    url: "{{ observability_loki_archive_url }}"
+    dest: "{{ observability_install_root }}/bin/loki-{{ observability_loki_version }}.zip"
+    checksum: "sha256:{{ observability_loki_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Extract Grafana Alloy binary
+  ansible.builtin.unarchive:
+    src: "{{ observability_install_root }}/bin/alloy-{{ observability_alloy_version }}.zip"
+    dest: "{{ observability_install_root }}/bin"
+    remote_src: true
+    creates: "{{ observability_install_root }}/bin/alloy"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Extract VictoriaMetrics binary
+  ansible.builtin.unarchive:
+    src: "{{ observability_install_root }}/bin/victoria-metrics-{{ observability_vm_version }}.tar.gz"
+    dest: "{{ observability_install_root }}/bin"
+    remote_src: true
+    creates: "{{ observability_install_root }}/bin/victoria-metrics-prod"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Extract vmutils tarball for vmalert
+  ansible.builtin.unarchive:
+    src: "{{ observability_install_root }}/bin/vmutils-{{ observability_vm_version }}.tar.gz"
+    dest: "{{ observability_install_root }}/bin"
+    remote_src: true
+    creates: "{{ observability_install_root }}/bin/vmalert-prod"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Extract Grafana bundle
+  ansible.builtin.unarchive:
+    src: "{{ observability_install_root }}/bin/grafana-{{ observability_grafana_version }}.tar.gz"
+    dest: "{{ observability_install_root }}"
+    remote_src: true
+    creates: "{{ observability_install_root }}/grafana-{{ observability_grafana_version }}/bin/grafana"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Extract Loki binary
+  ansible.builtin.unarchive:
+    src: "{{ observability_install_root }}/bin/loki-{{ observability_loki_version }}.zip"
+    dest: "{{ observability_install_root }}/bin"
+    remote_src: true
+    creates: "{{ observability_install_root }}/bin/loki"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Verify extracted binaries match pinned inner checksums
+  ansible.builtin.command:
+    argv:
+      - "{{ observability_install_root }}/bin/victoria-metrics-prod"
+      - "-version"
+  register: observability_vm_version_check
+  changed_when: false
+  failed_when: "'v{{ observability_vm_version }}' not in observability_vm_version_check.stdout"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Install Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ observability_config_dir }}/alloy/config.alloy"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install VictoriaMetrics configuration
+  ansible.builtin.template:
+    src: victoriametrics.env.j2
+    dest: "{{ observability_config_dir }}/victoriametrics/victoriametrics.env"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install vmalert recording rules
+  ansible.builtin.template:
+    src: vmalert-recording-rules.yml.j2
+    dest: "{{ observability_config_dir }}/vmalert/recording-rules.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install Loki configuration
+  ansible.builtin.template:
+    src: loki-config.yml.j2
+    dest: "{{ observability_config_dir }}/loki/config.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install Grafana datasource provisioning
+  ansible.builtin.template:
+    src: grafana-datasources.yml.j2
+    dest: "{{ observability_config_dir }}/grafana/provisioning/datasources/datasources.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install Grafana dashboard provisioning
+  ansible.builtin.template:
+    src: grafana-dashboards.yml.j2
+    dest: "{{ observability_config_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install Grafana host overview dashboard
+  ansible.builtin.template:
+    src: aihost-host-overview.json.j2
+    dest: "{{ observability_config_dir }}/grafana/dashboards/aihost-host-overview.json"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install Grafana admin credentials file
+  ansible.builtin.template:
+    src: grafana-admin.env.j2
+    dest: "{{ observability_config_dir }}/grafana/admin.env"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install observability systemd units
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item | regex_replace('.j2$', '') }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - aihost-observability-victoriametrics.service.j2
+    - aihost-observability-vmalert.service.j2
+    - aihost-observability-loki.service.j2
+    - aihost-observability-alloy.service.j2
+    - aihost-observability-grafana.service.j2
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  register: observability_units_installed
+  tags: [observability]
+
+- name: Reload systemd for new observability units
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - observability_units_installed.changed
+  tags: [observability]
+
+- name: Enable and start observability services
+  ansible.builtin.systemd:
+    name: "{{ item.name }}.service"
+    enabled: true
+    state: started
+  loop:
+    - {name: aihost-observability-victoriametrics, enabled: "{{ observability_vm_enabled | bool }}"}
+    - {name: aihost-observability-vmalert, enabled: "{{ observability_vmalert_enabled | bool }}"}
+    - {name: aihost-observability-loki, enabled: "{{ observability_loki_enabled | bool }}"}
+    - {name: aihost-observability-alloy, enabled: "{{ observability_alloy_enabled | bool }}"}
+    - {name: aihost-observability-grafana, enabled: "{{ observability_grafana_enabled | bool }}"}
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - item.enabled
+  tags: [observability]

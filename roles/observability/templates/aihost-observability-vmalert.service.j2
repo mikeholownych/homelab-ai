@@ -1,0 +1,24 @@
+[Unit]
+Description=vmalert recording rules (aihost observability)
+After=aihost-observability-victoriametrics.service
+Requires=aihost-observability-victoriametrics.service
+
+[Service]
+Type=simple
+EnvironmentFile={{ observability_config_dir }}/victoriametrics/victoriametrics.env
+ExecStart={{ observability_install_root }}/bin/vmalert-prod \
+  -datasource.url=http://${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VM_HTTP_PORT} \
+  -remoteWrite.url=http://${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VM_HTTP_PORT}/api/v1/write \
+  -remoteWrite.storagePath=${OBSERVABILITY_VMALERT_STATE_PATH} \
+  -rule=${OBSERVABILITY_VMALERT_RULES_PATH} \
+  -httpListenAddr=${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VMALERT_HTTP_PORT}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ observability_data_root }}/vmalert
+
+[Install]
+WantedBy=multi-user.target

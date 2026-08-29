@@ -1,0 +1,22 @@
+[Unit]
+Description=VictoriaMetrics TSDB (aihost observability)
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile={{ observability_config_dir }}/victoriametrics/victoriametrics.env
+ExecStart={{ observability_install_root }}/bin/victoria-metrics-prod \
+  -storageDataPath=${OBSERVABILITY_VM_DATA_PATH} \
+  -httpListenAddr=${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VM_HTTP_PORT} \
+  -retentionPeriod=${OBSERVABILITY_VM_RETENTION} \
+  -selfScrapeInterval=1m
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ observability_data_root }}/victoriametrics
+
+[Install]
+WantedBy=multi-user.target

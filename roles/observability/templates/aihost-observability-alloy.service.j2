@@ -1,0 +1,20 @@
+[Unit]
+Description=Grafana Alloy agent (aihost observability)
+After=aihost-observability-victoriametrics.service aihost-observability-loki.service
+
+[Service]
+Type=simple
+ExecStart={{ observability_install_root }}/bin/alloy run \
+  {{ observability_config_dir }}/alloy/config.alloy \
+  --server.http.listen-addr={{ observability_server_bind_address }}:{{ observability_alloy_http_port }} \
+  --storage.path={{ observability_data_root }}/alloy
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ observability_data_root }}/alloy
+
+[Install]
+WantedBy=multi-user.target

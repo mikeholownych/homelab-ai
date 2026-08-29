@@ -15,9 +15,11 @@ Target architecture agreed for this host:
 
 | Component | Role | Status |
 |---|---|---|
-| Grafana Alloy | agent: scrape node + vLLM `/metrics`, GPU textfile dir, remote-write to VictoriaMetrics, forward logs to Loki | **not installed** - requires network-resolved pinned artifacts at commissioning |
-| VictoriaMetrics single-node | TSDB store + recording rules for throughput/watt, TTFT trends per tuning profile | **not installed** |
-| Grafana | dashboards over VM datasources | **not installed** |
+| Grafana Alloy | agent: scrape node + vLLM `/metrics`, GPU textfile dir, remote-write to VictoriaMetrics, forward logs to Loki | **role provided, hash-pinned** (`v1.19.2`) - install gated at commissioning |
+| VictoriaMetrics single-node | TSDB store + recording rules for throughput/watt, TTFT trends per tuning profile | **role provided, hash-pinned** (`v1.150.0`) - install gated at commissioning |
+| vmalert | evaluates recording rules, writes derived series back to VictoriaMetrics | **role provided** (from the pinned `vmutils` tarball) |
+| Grafana | dashboards over VM datasources | **role provided, hash-pinned** (`13.2.0`) - install gated at commissioning |
+| Loki | local log aggregation fed by Alloy | **role provided, hash-pinned** (`v3.7.6`) - install gated at commissioning |
 | xpumd / Level Zero telemetry | GPU utilisation, VRAM, clocks, thermals into textfile dir | **pending hardware** |
 | vLLM metrics endpoint | already exposed by the service; scraped by Alloy once deployed | available when service runs |
 | Prometheus textfile collector dir | offline-provable bridge today | **implemented below** |
@@ -59,9 +61,40 @@ Scripts are installed via `copy` and are Jinja-free: runtime values (paths,
 thresholds) are read from `/etc/local-ai/monitoring.env`, a role-templated
 config file, so no literal `{{ }}` markers can leak into installed artifacts.
 
-### Why the full stack is not in this commit
+### Deployed as the `observability` role
 
-Repository policy forbids unverifiable pins and curl-install scripts. Alloy /
-VictoriaMetrics / Grafana versions must be resolved against current upstream
-releases and hash-pinned exactly like every other component - that is a
-commissioning-time Git commit, not a guess committed blind.
+The continuous layer lives in `roles/observability` (included from `site.yml`
+behind `features.observability`, default off). It fetches every upstream
+artifact via `get_url` with an exact `sha256` pin and never runs unverifiable
+install scripts; all binaries, configs and systemd units are laid down by the
+role. Services bind loopback only.
+
+Install is **fail-closed and commissioning-gated**, mirroring the Intel GPU
+role: `observability_stack_status` defaults to `pre_verification_fail_closed`
+and `observability_install_enabled` to `false`. Nothing downloads or starts
+until the commissioning run on physical hardware flips both to
+`commissioned` / `true`. The Grafana admin password is read from Vault
+(`secret/local-ai/observability/grafana-admin`) into a mode-0600 env file; no
+credential is committed. The vLLM dependence in the throughput recording rules
+stays disabled (`observability_vllm_recording_rules_enabled: false`) until the
+live `/metrics` series names are validated against the running service and that
+check is recorded in `observability_verification_checklist`; host-level series
+(textfile GPU thermals/severity) are always synthesized.
+
+**Verification checklist (run at commissioning, before enabling install):**
+1. Physical dual-B65 host is present with runtime account and filesystems.
+2. Grafana admin secret exists in Vault at `secret/local-ai/observability/grafana-admin`.
+3. vLLM `/metrics` endpoint responds on the configured port; validate recording-rule expressions.
+4. VM `/api/v1/status/active_tsdb` returns after first scrape cycle; Alloy `/metrics` shows textfile series.
+5. Recording rule output `aihost:gpu_temperature_celsius:peak` present in VM.
+
+Install all five components together (Alloy, VictoriaMetrics, vmalert, Loki,
+Grafana) or prune individual ones via `observability_*_enabled` flags before
+launch.
+
+### Why the full stack is not installed yet
+
+Physical B65 hardware has not arrived. Per repository policy, an install that
+cannot be converged on the real target is never claimed as verified: the role
+is pinned, committed and linted, but its download/start steps only execute once
+the commissioning checklist above has passed on the host.
