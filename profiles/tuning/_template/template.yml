@@ -1,0 +1,82 @@
+---
+# =============================================================================
+# OS tuning profile template
+# =============================================================================
+# Copy this file to profiles/tuning/<profile_name>.yml for a NEW tuning profile.
+# Then reference it from inventory production host_vars via:
+#   os_tuning_profile: <profile_name>
+#
+# Start a new host from the shipped baseline (profiles/tuning/baseline.yml),
+# which manages nothing until benchmark evidence justifies a change. When you
+# do create a candidate, promote it only per policies/tuning.yml after
+# benchmark evidence. Every profile validates against
+# schemas/os-tuning.schema.json.
+#
+# Null values mean "not managed"; explicit values are converged and
+# reconciled. Prefer leaving fields null/disabled unless you have evidence.
+# =============================================================================
+
+schema_version: "1.0.0"
+# Must equal the filename stem and the host_vars os_tuning_profile value.
+profile_name: REPLACE_ME_PROFILE
+# Lifecycle: baseline | candidate | accepted | rejected. Only baseline or
+# accepted may be declared authoritative in inventory.
+state: baseline
+# Bump whenever os_tuning content changes.
+revision: "r1"
+description: REPLACE_ME
+# Keep null for baseline; candidates must name their parent baseline.
+parent_baseline: null
+# Evidence run identifiers (benchmark refs) that justify this profile.
+benchmark_refs: []
+
+os_tuning:
+  cpu:
+    # "performance" | "powersave" | "schedutil" | "ondemand" ... null = unmanaged
+    governor: null
+    energy_performance_preference: null
+    cstate_policy: null
+    affinity_enabled: false
+    isolated_cpus: []
+  numa:
+    policy: default
+    preferred_nodes: []
+    interleave_nodes: []
+    runtime_binding_enabled: false
+  memory:
+    swappiness: null
+    dirty_ratio: null
+    dirty_background_ratio: null
+    zone_reclaim_mode: null
+  transparent_hugepages:
+    # "always" | "madvise" | "never" | "default"
+    enabled: default
+    defrag: default
+  hugepages:
+    enabled: false
+    size_kib: null
+    count: 0
+  io:
+    # "none" | "mq-deadline" | "kyber" ... null = unmanaged
+    scheduler: null
+    read_ahead_kb: null
+  irq:
+    affinity_enabled: false
+    managed_irq_policy: default
+  kernel:
+    sysctl: {}
+    cmdline: []
+    expected_release: null
+  pcie:
+    validate_rebar: true
+    validate_above_4g: true
+    validate_link_width: true
+    validate_link_speed: true
+    validate_bar_sizes: true
+    validate_p2p: true
+  custom_kernel:
+    # Custom kernels remain disabled scaffolding (docs/custom-kernel.md).
+    enabled: false
+    version: null
+    artifact_path: null
+    sha256: null

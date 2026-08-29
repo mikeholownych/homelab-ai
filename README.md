@@ -188,10 +188,11 @@ Every major lifecycle run writes an evidence bundle under `evidence/<hostname>/<
 
 The current two-node fleet (`ai-p620-01`, `ai-5820-01`) was onboarded via this exact workflow; repeat it for any future host:
 1. Add node definition in `inventory/production/hosts.yml`.
-2. Create host variables file in `inventory/production/host_vars/<hostname>.yml`.
-3. Assign an applicable hardware profile in `profiles/hardware/`, or create one matching the new platform.
-4. Provision SSH keys and Vault AppRole credentials.
-5. Execute bootstrap and site convergence.
+2. Copy `inventory/production/host_vars/TEMPLATE.yml` to `inventory/production/host_vars/<hostname>.yml` and replace every `REPLACE_ME` value. Every field is annotated inline; keep `os_tuning_profile: baseline` until benchmark evidence justifies a change.
+3. If the new platform is not already covered, copy `profiles/hardware/template.yml` to `profiles/hardware/<profile>.yml` and complete it from `dmidecode`, `lspci`, and sysfs evidence (the shipped profiles are worked examples). Reference it via `hardware_profile` in the host vars.
+4. For OS tuning changes, copy `profiles/tuning/_template/template.yml` to `profiles/tuning/<profile>.yml`; it must validate against `schemas/os-tuning.schema.json` (see `docs/tuning.md` and `policies/tuning.yml`).
+5. Provision SSH keys and Vault AppRole credentials.
+6. Execute bootstrap and site convergence.
 
 ---
 

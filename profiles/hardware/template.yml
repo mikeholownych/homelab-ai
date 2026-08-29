@@ -1,0 +1,116 @@
+---
+# =============================================================================
+# Hardware profile template
+# =============================================================================
+# Copy this file to profiles/hardware/<profile_name>.yml for a NEW platform.
+# Then reference it from inventory production host_vars via:
+#   hardware_profile: <profile_name>
+# The two shipped profiles (profiles/hardware/p620_dual_b65.yml and
+# profiles/hardware/d5820_dual_b65.yml) are worked examples derived from real
+# commissioning evidence.
+#
+# The classifier (roles/hardware_validation/files/classify_hardware.py) reads
+# this shape: every REPLACE_ME field must hold a real value before the host can
+# reach physical acceptance. Keep `severity_rules` blocking only for conditions
+# that genuinely prevent inference on the approved GPU stack.
+# =============================================================================
+
+schema_version: 1.0.0
+# Must equal the filename stem and the host_vars hardware_profile value.
+profile_name: REPLACE_ME_PROFILE
+
+platform:
+  manufacturer: REPLACE_ME
+  product_family: REPLACE_ME
+  # Exact model string from dmidecode product name / product version.
+  machine_type_model: REPLACE_ME
+  # Substrings that match ProductName during hardware collection.
+  product_name_patterns:
+    - REPLACE_ME
+
+cpu:
+  vendor: REPLACE_ME
+  # Substrings matching the processor model string (lscpu / dmidecode).
+  model_patterns:
+    - REPLACE_ME
+  sockets_expected: REPLACE_ME
+
+gpu:
+  # Expected device count for the approved accelerator configuration.
+  count_expected: REPLACE_ME
+  approved_pci_devices:
+    - vendor_id: "REPLACE_ME"
+      device_id: REPLACE_ME
+      model: REPLACE_ME
+      # Evidence source for the kernel/stack support claim.
+      source: REPLACE_ME
+      source_url: REPLACE_ME
+  # Per-device expected memory; the aggregate pool is expected_count x this.
+  expected_models:
+    - vendor: REPLACE_ME
+      model: REPLACE_ME
+      memory_gib:
+        approximate: REPLACE_ME
+        tolerance_gib: REPLACE_ME
+
+pcie:
+  host_link:
+    max_generation: REPLACE_ME
+    expected_negotiated_generation: REPLACE_ME
+  width_expectations:
+    # Set to x16 unless the slot physically only carries x8.
+    desired_when_slot_supports: x16
+    # True on towers/2U where upper x16 slots electrically run x8.
+    allow_slot_limited_width: true
+  material_degradation:
+    default_severity: blocking
+    # Never below this link-to-slot ratio at physical acceptance.
+    minimum_negotiated_to_slot_ratio: 0.5
+
+firmware:
+  above_4g_decoding:
+    required: true
+    missing_severity: blocking
+    # Until the board reports the state, record as not_tested.
+    undiscoverable_status: not_tested
+  resizable_bar:
+    required: true
+    missing_severity: blocking
+
+memory:
+  installed_gib:
+    expected: REPLACE_ME
+    tolerance_gib: REPLACE_ME
+    out_of_tolerance_severity: warning
+    classification: initial_commissioning
+
+# Fields recorded into hardware.json / discovery evidence.
+discovery_fields:
+  record:
+    - dimm_topology
+    - nvme_devices
+    - nic_inventory
+    - bios_version
+    - firmware_inventory
+    - power_supply_inventory
+  asset_identifiers:
+    - serial_number
+    - asset_tag
+    - service_tag
+
+# Status is the highest severity of matching checks. Only gate on what is
+# required for a safe, accepted inference baseline.
+severity_rules:
+  information:
+    - dimm_topology_observed
+    - firmware_inventory_observed
+  warning:
+    - memory_capacity
+    - unexpected_gpu_devices
+  blocking:
+    - gpu_count
+    - gpu_model_match
+    - resizable_bar_enabled
+    - above_4g_decoding_enabled
+    - level_zero_detected
+    - pcie_link_health

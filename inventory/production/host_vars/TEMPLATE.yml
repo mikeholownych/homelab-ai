@@ -1,0 +1,114 @@
+---
+# =============================================================================
+# Host configuration template
+# =============================================================================
+# Copy this file to inventory/production/host_vars/<your-hostname>.yml, then:
+#   1. Register the host in inventory/production/hosts.yml (add it to the
+#      ai_hosts child groups this host belongs to: production, inference, gpu,
+#      monitoring, and optionally cluster).
+#   2. Replace every REPLACE_ME value with real data for your build.
+#   3. Point hardware_profile at a profile that exists in profiles/hardware/
+#      (author one from profiles/hardware/template.yml if yours is new).
+#   4. Keep os_tuning_profile at baseline until benchmark evidence justifies a
+#      candidate in profiles/tuning/ (see docs/tuning.md and policies/tuning.yml).
+#   5. Provision credentials (SSH key + Vault AppRole), then onboard:
+#        ansible-playbook playbooks/bootstrap.yml --limit <your-hostname>
+#        ansible-playbook playbooks/site.yml --limit <your-hostname>
+# See README section "How to Add Further Hosts" and docs/commissioning.md.
+# =============================================================================
+
+# SSH connection address for the target host. This is the single operator
+# input that the inventory contract intentionally leaves open; replace it with
+# the real IP or FQDN before running any playbook.
+ansible_host: REPLACE_ME_WITH_IP_OR_FQDN
+
+node_metadata:
+  # Ansible reserves the flat variable name `environment`, so environment
+  # identity lives here instead of a top-level `environment` key.
+  environment: production
+  # Must match the inventory host name (the filename stem and hosts.yml entry).
+  hostname: REPLACE_ME_HOSTNAME
+  # Existing profiles: profiles/hardware/p620_dual_b65.yml and
+  # profiles/hardware/d5820_dual_b65.yml. Author new ones from
+  # profiles/hardware/template.yml.
+  hardware_profile: REPLACE_ME_PROFILE
+  # Existing profiles: baseline, custom_kernel_candidate, inference_candidate_01,
+  # inference_candidate_02. baseline manages nothing until benchmark evidence
+  # justifies a single-subsystem candidate.
+  os_tuning_profile: baseline
+
+node_roles:
+  # Host composes and serves inference workloads on the GPU stack.
+  inference: true
+  # Host owns the Intel GPU compute stack (intel_gpu role and friends).
+  gpu: true
+
+capabilities:
+  gpu: true
+  inference: true
+  benchmarking: true
+  monitoring: true
+  cluster_eligible: true
+
+features:
+  monitoring: true
+  scheduled_reconciliation: true
+  os_tuning: true
+  model_registry: false
+  clustering: false
+  cmdb_export: false
+  itsm_integration: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+
+network_endpoints:
+  primary_bind_address: null
+  management_fqdn: null
+  metrics_endpoint: null
+
+# Optional: dedicated data mounts are controlled here. Populate with the real
+# filesystem UUIDs captured during commissioning (lsblk -f / blkid) before
+# uncommenting and enabling; keep them commented until then so the host
+# converges without prematurely attaching storage.
+# storage_mounts:
+#   - path: /var/lib/local-ai/models
+#     src: UUID=REPLACE_ME_STORAGE_UUID
+#     fstype: ext4
+#     opts: defaults
+#     state: mounted
+
+# Benchmarking guardrails must reflect the real PSU wattage and GPU TDP of the
+# physical build; they gate sustained-load and thermal benchmarks.
+benchmarking_psu_capacity_watts: REPLACE_ME_PSU_WATTS
+benchmarking_gpu_tdp_watts: REPLACE_ME_GPU_TDP_WATTS
+
+cluster:
+  # Standalone default. Enable only after reviewing docs/clustering.md.
+  enabled: false
+  name: null
+  membership_state: standalone
+  node_role: worker
+  roles:
+    worker: true
+    api: false
+    scheduler: false
+    storage: false
+  capabilities:
+    ray: false
+    distributed_vllm: false
+    worker_service: true
+    api_service: false
+    scheduler_service: false
+    storage_service: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+  endpoints:
+    api_base_url: null
+    scheduler_address: null
+    ray_gcs_address: null
+    object_storage_url: null
+  fleet:
+    id: null
+    coordinator: null
+    peer_hosts: []
+    quorum_size: null
