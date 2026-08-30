@@ -275,3 +275,7 @@ downloads or starts until the commissioning checklist in
 password is read from Vault
 (`secret/local-ai/observability/grafana-admin`) into a mode-0600 file. Enable
 per host with `features.observability: true`.
+
+A complete index of the design, runbook, and reference documents (hardware
+commissioning, GPU/XPU, NUMA/PCIe, tuning, security, model catalog, Vault,
+observability, and more) lives in [`docs/README.md`](docs/README.md).

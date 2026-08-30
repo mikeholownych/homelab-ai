@@ -90,3 +90,15 @@ def test_monitoring_defaults_and_tasks_contract():
     tasks = (REPO_ROOT / "roles/monitoring/tasks/main.yml").read_text()
     assert "ansible_check_mode" in tasks
     assert "ignore_errors" not in tasks
+
+
+def test_scheduled_benchmark_timer_runs_split_enabled_playbook():
+    benchmark_service = (REPO_ROOT / "roles/scheduled_ansible/templates/aihost-benchmark.service.j2").read_text()
+    assert "--playbook benchmark.yml" in benchmark_service
+    assert "{{ inventory_hostname }}" in benchmark_service
+    benchmark_playbook = (REPO_ROOT / "playbooks/benchmark.yml").read_text()
+    assert "benchmarking" in benchmark_playbook
+    benchmark_timer = (REPO_ROOT / "roles/scheduled_ansible/templates/aihost-benchmark.timer.j2").read_text()
+    assert "OnCalendar={{ scheduled_ansible_benchmark_timer_schedule }}" in benchmark_timer
+    assert "Persistent=true" in benchmark_timer
+    assert "RandomizedDelaySec={{ scheduled_ansible_benchmark_random_delay_sec }}" in benchmark_timer

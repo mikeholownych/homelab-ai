@@ -68,3 +68,14 @@ def test_commissioning_sequence_present():
 def test_architecture_and_operations_docs_exist():
     assert ARCHITECTURE_PATH.exists()
     assert OPERATIONS_PATH.exists()
+
+
+def test_docs_index_lists_every_document():
+    index_path = REPO_ROOT / "docs/README.md"
+    assert index_path.exists()
+    index_text = index_path.read_text(encoding="utf-8")
+    docs_dir = ARCHITECTURE_PATH.parent
+    for candidate in sorted(docs_dir.glob("*.md")):
+        if candidate.name == "README.md":
+            continue
+        assert candidate.name in index_text, f"docs index omits {candidate.name}"
