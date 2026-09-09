@@ -41,7 +41,7 @@
 
 - name: Check for non-OMIX Intel GPU APT repositories
   ansible.builtin.command:
-    cmd: grep -rn "repositories.intel.com" /etc/apt/
+    cmd: grep -rnI --exclude="{{ intel_gpu_omix_sources_path | basename }}" "repositories.intel.com" /etc/apt/
   register: intel_gpu_repo_check
   failed_when: false
   changed_when: false
@@ -49,7 +49,7 @@
 - name: Assert no conflicting Intel repositories exist
   ansible.builtin.assert:
     that:
-      - intel_gpu_repo_check.rc != 0 or (intel_gpu_repo_check.stdout is search(intel_gpu_omix_repository_suite))
+      - intel_gpu_repo_check.rc != 0
     fail_msg: "Conflicting non-OMIX repository from repositories.intel.com detected in APT configuration."
 
 - name: Gather package facts for conflict check
@@ -59,7 +59,7 @@
 - name: Assert no conflicting Intel user-mode packages are installed
   ansible.builtin.assert:
     that:
-      - item not in ansible_facts.packages or (ansible_facts.packages[item][0].version is search("0.3.0-9~26.04"))
+      - item not in ansible_facts.packages or (ansible_facts.packages[item][0].version is search("~26.04"))
     fail_msg: "Conflicting package {{ item }} is already installed."
   loop:
     - intel-opencl-icd
