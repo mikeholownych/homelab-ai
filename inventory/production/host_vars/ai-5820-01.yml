@@ -80,7 +80,7 @@ vllm_xpu_tensor_parallel_size: 2
 vllm_xpu_active_profile: large
 vllm_xpu_enforce_eager: true
 vllm_xpu_gpu_memory_utilization: 0.35
-vllm_xpu_max_model_len: 4096
+vllm_xpu_max_model_len: 32768
 vllm_xpu_model_id: "Qwen/Qwen2.5-7B-Instruct-AWQ"
 
 cluster:

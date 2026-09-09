@@ -16,3 +16,5 @@ disable-log-stats: false
 {% if vllm_xpu_api_key %}
 api-key: "{{ vllm_xpu_api_key }}"
 {% endif %}
+enable-auto-tool-choice: true
+tool-call-parser: hermes
