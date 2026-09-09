@@ -48,6 +48,17 @@ commissioning workflow owns that decision.
 The OMIX 0.3.0 repository metadata and `intel-omix=0.3.0-9~24.04` were inspected. They are not presented as a production
 closure: the OMIX package surface is Desktop-flagged, and no Server snapshot is committed until the checklist above PASSes.
 
+## Ubuntu 26.04 Resolute OMIX 0.3.0 Stack
+
+For Ubuntu 26.04 (`resolute`), the OMIX 0.3.0 package suite is pinned to immutable upstream release artifacts:
+- Repository: `https://repositories.intel.com/gpu/ubuntu`
+- Suite: `resolute/intel-omix/0.3.0 unified`
+- Keyring: `/etc/apt/keyrings/intel-graphics.gpg` (SHA-256: `2a75e2fc92645f63d39190100969e3b6fe2417b8c9ff0f0bc91951e6d8198888`, Fingerprint: `E0258B57D9C442D5DB1855C271740E4DE392BFE3`)
+- Pinned packages: `intel-omix=0.3.0-9~26.04`, `intel-omix-dev=0.3.0-9~26.04`
+- Fail-closed preflight: asserts kernel >= 7.0, both `8086:e222` PCI BDFs present, no `ppa:kobuk-team/intel-graphics`, no conflicting non-OMIX repositories, and no conflicting pre-installed compute packages.
+- Server qualification boundary: Intel qualifies OMIX on Ubuntu Desktop; on Ubuntu Server 26.04, evidence-based verification of Level Zero and PyTorch XPU device operations is required prior to host acceptance.
+
+
 ## Primary sources
 
 - https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html (accessed 2026-08-27)

@@ -208,3 +208,35 @@ def test_primary_source_provenance_is_recorded():
         assert url in doc
     assert "2026-08-27" in doc
     assert "NOT_TESTED" in doc
+
+
+def test_omix_resolute_contract_declares_exact_inputs():
+    defaults = load_yaml("roles/intel_gpu/defaults/main.yml")
+    assert defaults["intel_gpu_omix_release"] == "0.3.0"
+    assert defaults["intel_gpu_omix_repository_url"] == "https://repositories.intel.com/gpu/ubuntu"
+    assert defaults["intel_gpu_omix_repository_suite"] == "resolute/intel-omix/0.3.0"
+    assert defaults["intel_gpu_omix_repository_components"] == ["unified"]
+    assert defaults["intel_gpu_omix_signing_key_url"] == "https://repositories.intel.com/gpu/intel-graphics.key"
+    assert defaults["intel_gpu_omix_signing_key_sha256"] == "2a75e2fc92645f63d39190100969e3b6fe2417b8c9ff0f0bc91951e6d8198888"
+    assert defaults["intel_gpu_omix_signing_key_fingerprint"] == "E0258B57D9C442D5DB1855C271740E4DE392BFE3"
+    assert defaults["intel_gpu_omix_packages"] == {
+        "intel-omix": "0.3.0-9~26.04",
+        "intel-omix-dev": "0.3.0-9~26.04",
+    }
+
+
+def test_omix_preflight_checks_conflicts_and_forbids_kobuk_ppa():
+    preflight = (ROOT / "roles/intel_gpu/tasks/preflight.yml").read_text()
+    assert "kobuk-team/intel-graphics" in preflight
+    assert "repositories.intel.com" in preflight
+    assert "ansible_distribution_version" in preflight
+    assert "ansible_kernel" in preflight
+
+
+def test_omix_tasks_manage_verified_keyring_and_sources():
+    tasks = (ROOT / "roles/intel_gpu/tasks/omix.yml").read_text()
+    assert "intel-omix.sources" in tasks
+    assert "intel-graphics" in tasks
+    assert "ansible.builtin.get_url" in tasks
+    assert "intel-omix=" in tasks
+
