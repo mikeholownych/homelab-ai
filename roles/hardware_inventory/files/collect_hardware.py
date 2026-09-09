@@ -24,7 +24,9 @@ def parse_slots(text):
     slots = {}
     for block in text.split("Handle "):
         bdf = re.search(r"Bus Address:\s*([0-9a-fA-F:.]+)", block)
-        width = re.search(r"Type:\s*x?(\d+) PCI Express", block)
+        width = re.search(r"Data Bus Width:\s*(\d+)x", block) or \
+                re.search(r"Type:\s*x?(\d+)\s+PCI Express", block) or \
+                re.search(r"Type:\s*PCI Express.*?\bx(\d+)", block)
         if bdf and width:
             slots[bdf.group(1).lower()] = int(width.group(1))
     return slots
@@ -65,12 +67,43 @@ def parse_lspci(text, slots_text):
         rebar_gib = int(rebar.group(1)) / 1024 if rebar and rebar.group(2) == "M" else \
             int(rebar.group(1)) if rebar else 0
         drm_card, render_node = collect_drm_nodes(bdf)
+        slot_width = slots.get(bdf)
+        max_gen = _generation(float(cap.group(1)))
+        max_width = int(cap.group(2))
+        cur_gen = _generation(float(sta.group(1)))
+        cur_width = int(sta.group(2))
+        if slot_width is None:
+            pci_dev_path = Path("/sys/bus/pci/devices") / bdf
+            if pci_dev_path.exists():
+                for parent in pci_dev_path.resolve().parents:
+                    p_bdf = parent.name.lower()
+                    if p_bdf in slots:
+                        slot_width = slots[p_bdf]
+                        speed_f = parent / "current_link_speed"
+                        width_f = parent / "current_link_width"
+                        max_s_f = parent / "max_link_speed"
+                        max_w_f = parent / "max_link_width"
+                        if speed_f.exists() and width_f.exists():
+                            try:
+                                s_val = float(re.search(r"(\d+(?:\.\d+)?)", speed_f.read_text()).group(1))
+                                cur_gen = _generation(s_val)
+                                cur_width = int(width_f.read_text().strip())
+                            except Exception:
+                                pass
+                        if max_s_f.exists() and max_w_f.exists():
+                            try:
+                                ms_val = float(re.search(r"(\d+(?:\.\d+)?)", max_s_f.read_text()).group(1))
+                                max_gen = _generation(ms_val)
+                                max_width = int(max_w_f.read_text().strip())
+                            except Exception:
+                                pass
+                        break
         devices.append({"bdf": bdf, "vendor_id": identity.group(2).lower(),
                         "device_id": identity.group(3).lower(),
-                        "device_max_generation": _generation(float(cap.group(1))),
-                        "device_max_width": int(cap.group(2)),
-                        "current_generation": _generation(float(sta.group(1))),
-                        "current_width": int(sta.group(2)), "slot_width": slots.get(bdf),
+                        "device_max_generation": max_gen,
+                        "device_max_width": max_width,
+                        "current_generation": cur_gen,
+                        "current_width": cur_width, "slot_width": slot_width,
                         "bar_sizes_gib": bars, "rebar_enabled": rebar_gib >= 16,
                         "aer_counters": collect_aer(bdf),
                         "kernel_driver": kernel_driver.group(1) if kernel_driver else None,
@@ -94,18 +127,24 @@ def parse_level_zero(text):
     payload = json.loads(text)
     devices = []
     for item in _walk(payload):
-        bdf = next((item.get(key) for key in ("pci_bdf", "pciAddress", "bdf") if item.get(key)), None)
-        memory = next((item.get(key) for key in ("global_memory_size", "globalMemorySize", "memory_bytes")
+        bdf = next((item.get(key) for key in ("pci_bdf", "pciAddress", "bdf", "pci_bdf_address") if item.get(key)), None)
+        memory = next((item.get(key) for key in ("global_memory_size", "globalMemorySize", "memory_bytes", "memory_physical_size_byte")
                        if item.get(key) is not None), None)
         uuid = next((item.get(key) for key in ("uuid", "device_uuid", "deviceUuid", "deviceUUID", "level_zero_uuid")
                      if item.get(key)), None)
         if bdf and memory is not None:
-            dev = {"bdf": str(bdf).lower(), "name": item.get("name"),
-                   "memory_gib": int(memory) / (1024 ** 3),
+            dev = {"bdf": str(bdf).lower(), "name": item.get("name") or item.get("device_name"),
+                   "memory_gib": round(int(memory) / (1024 ** 3)),
                    "memory_source": "level_zero_global_memory"}
             if uuid:
                 dev["uuid"] = str(uuid)
                 dev["level_zero_uuid"] = str(uuid)
+            xpu_ord = item.get("device_id")
+            if xpu_ord is not None:
+                try:
+                    dev["xpu_ordinal"] = int(xpu_ord)
+                except (ValueError, TypeError):
+                    pass
             devices.append(dev)
     unique = {item["bdf"]: item for item in devices}
     return [unique[bdf] for bdf in sorted(unique)]
@@ -166,7 +205,27 @@ def main():
     memory_kib = int(next(line.split()[1] for line in Path("/proc/meminfo").read_text().splitlines()
                           if line.startswith("MemTotal:")))
     pci = parse_lspci(run(["lspci", "-Dnnvv"]), run(["dmidecode", "--type", "slot"]))
-    level_zero = parse_level_zero(run(["zeinfo", "-j"], required=False))
+    level_zero_raw = run(["zeinfo", "-j"], required=False)
+    if not level_zero_raw.strip():
+        xpu_raw = run(["xpu-smi", "discovery", "-j"], required=False)
+        if xpu_raw.strip():
+            try:
+                disco = json.loads(xpu_raw)
+                detailed = []
+                for d in disco.get("device_list", []):
+                    dev_id = d.get("device_id")
+                    if dev_id is not None:
+                        det = run(["xpu-smi", "discovery", "-d", str(dev_id), "-j"], required=False)
+                        if det.strip():
+                            detailed.append(json.loads(det))
+                        else:
+                            detailed.append(d)
+                    else:
+                        detailed.append(d)
+                level_zero_raw = json.dumps({"devices": detailed})
+            except Exception:
+                pass
+    level_zero = parse_level_zero(level_zero_raw)
     lsblk = json.loads(run(["lsblk", "--json", "--bytes", "-o",
                             "NAME,TYPE,SIZE,MODEL,SERIAL,WWN,REV,FSTYPE,MOUNTPOINTS"]))
     links = json.loads(run(["ip", "-json", "link", "show"]))
@@ -187,6 +246,7 @@ def main():
         bdf = item["bdf"]
         l0_dev = level_zero_by_bdf.get(bdf, {})
         l0_uuid = l0_dev.get("level_zero_uuid") or l0_dev.get("uuid")
+        xpu_ord = l0_dev.get("xpu_ordinal") if l0_dev.get("xpu_ordinal") is not None else item.get("xpu_ordinal")
         drm_card = item.get("drm_card")
         render_node = item.get("render_node")
         if drm_card is None or render_node is None:
@@ -203,8 +263,20 @@ def main():
             "drm_card": drm_card,
             "render_node": render_node,
             "level_zero_uuid": l0_uuid,
-            "xpu_ordinal": item.get("xpu_ordinal"),
+            "xpu_ordinal": xpu_ord,
         })
+    above_4g = {"value": None, "source": "not exposed by Linux sources",
+                "confidence": "unknown"}
+    for candidate_path in (Path("/var/lib/local-ai/hardware/bios_export.json"),
+                           Path("/etc/local-ai/bios_export.json")):
+        if candidate_path.is_file():
+            try:
+                data = json.loads(candidate_path.read_text())
+                if "above_4g_decoding" in data:
+                    above_4g = data["above_4g_decoding"]
+                    break
+            except Exception:
+                pass
     observed = {
         "simulated": False,
         "dmi": {"manufacturer": sys_text("sys_vendor"), "product_name": sys_text("product_name"),
@@ -220,8 +292,7 @@ def main():
         "nics": [{"name": item.get("ifname"), "mac": item.get("address"), "mtu": item.get("mtu")}
                  for item in links if item.get("link_type") == "ether"],
         "firmware": {"bios_version": sys_text("bios_version"),
-                     "above_4g_decoding": {"value": None, "source": "not exposed by Linux sources",
-                                            "confidence": "unknown"},
+                     "above_4g_decoding": above_4g,
                      "devices": json.loads(firmware_text) if firmware_text else []},
         "power_supplies": [{"raw": block.strip()} for block in psu_text.split("System Power Supply")
                             if "Power Unit Group" in block],
