@@ -17,9 +17,19 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DOCKERFILE_PATH = REPO_ROOT / "tests" / "integration" / "Dockerfile.baseline"
-PINNED_BASE_IMAGE = "ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea"
-HARNESS_IMAGE = "aihost-baseline-harness:ubuntu24.04-sha561618e2"
+HARNESS_INVENTORY = "tests/fixtures/inventory/resolute.yml"
+RELEASE_CONFIGS = {
+    "noble": {
+        "dockerfile": REPO_ROOT / "tests" / "integration" / "Dockerfile.baseline",
+        "pinned_base_image": "ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea",
+        "harness_image": "aihost-baseline-harness:noble-sha561618e2",
+    },
+    "resolute": {
+        "dockerfile": REPO_ROOT / "tests" / "integration" / "Dockerfile.resolute",
+        "pinned_base_image": "ubuntu@sha256:2260313b31c8c011cd2eebe728008efac1b3982be73eb71348ea2648d2c0e09b",
+        "harness_image": "aihost-baseline-harness:resolute-sha2260313b",
+    },
+}
 BUILD_TIMEOUT_SECONDS = 300
 RUN_TIMEOUT_SECONDS = 300
 CLEANUP_TIMEOUT_SECONDS = 30
@@ -30,9 +40,11 @@ class HarnessError(RuntimeError):
 
 
 class DockerBaselineHarness:
-    def __init__(self, timeout_seconds: int) -> None:
+    def __init__(self, timeout_seconds: int, release: str) -> None:
+        self.release = release
+        self.release_config = RELEASE_CONFIGS[release]
         self.deadline = time.monotonic() + timeout_seconds
-        self.container_name = f"aihost-baseline-{uuid.uuid4().hex[:12]}"
+        self.container_name = f"aihost-baseline-{release}-{uuid.uuid4().hex[:12]}"
         self.cleaned = False
         for sig in (signal.SIGINT, signal.SIGTERM):
             signal.signal(sig, self._handle_signal)
@@ -101,18 +113,18 @@ class DockerBaselineHarness:
             raise HarnessError("Docker is required for baseline container idempotency tests but was not found in PATH.")
         version = self.run(["docker", "version", "--format", "{{.Server.Version}}"]).stdout.strip()
         print(f"Using Docker server {version}")
-        print(f"Using pinned base image {PINNED_BASE_IMAGE}")
+        print(f"Using pinned {self.release} base image {self.release_config['pinned_base_image']}")
 
     def build_image(self) -> None:
-        print("Building pinned Ubuntu baseline harness image...")
+        print(f"Building pinned Ubuntu {self.release} baseline harness image...")
         completed = self.run(
             [
                 "docker",
                 "build",
                 "--file",
-                str(DOCKERFILE_PATH),
+                str(self.release_config["dockerfile"]),
                 "--tag",
-                HARNESS_IMAGE,
+                str(self.release_config["harness_image"]),
                 str(REPO_ROOT),
             ],
             timeout_override=min(BUILD_TIMEOUT_SECONDS, self.remaining_seconds()),
@@ -137,7 +149,7 @@ class DockerBaselineHarness:
                 "aihost-baseline",
                 "--volume",
                 f"{REPO_ROOT}:/src:ro",
-                HARNESS_IMAGE,
+                str(self.release_config["harness_image"]),
                 "sleep",
                 "infinity",
             ]
@@ -176,9 +188,7 @@ class DockerBaselineHarness:
                 "ANSIBLE_CONFIG=ansible.cfg",
                 "ansible-playbook",
                 "-i",
-                "localhost,",
-                "-c",
-                "local",
+                HARNESS_INVENTORY,
                 playbook,
                 "-e",
                 json.dumps(extra_vars),
@@ -426,6 +436,12 @@ def run_full_idempotency(harness: DockerBaselineHarness) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run baseline convergence probes inside a pinned Ubuntu Docker container.")
     parser.add_argument(
+        "--release",
+        choices=("noble", "resolute"),
+        default="noble",
+        help="Pinned Ubuntu release used for this isolated harness run.",
+    )
+    parser.add_argument(
         "--mode",
         choices=("idempotency", "users-groups-transition"),
         default="idempotency",
@@ -441,7 +457,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    harness = DockerBaselineHarness(timeout_seconds=args.timeout)
+    harness = DockerBaselineHarness(timeout_seconds=args.timeout, release=args.release)
     try:
         harness.require_docker()
         harness.build_image()

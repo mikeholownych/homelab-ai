@@ -1,14 +1,76 @@
 ---
-- name: Validate Ubuntu 24.04 base OS target
+- name: Validate base OS platform resolver inputs
   ansible.builtin.assert:
     that:
-      - not base_os_enforce_platform_guard | bool or ansible_facts.distribution == base_os_supported_distribution
       - >-
         not base_os_enforce_platform_guard | bool
-        or ansible_facts.distribution_version is version(base_os_supported_release, "==")
+        or ansible_facts.distribution | default("") == base_os_supported_distribution
+      - >-
+        not base_os_enforce_platform_guard | bool
+        or ansible_facts.distribution_version | default("") in base_os_supported_releases
+      - >-
+        not base_os_enforce_platform_guard | bool
+        or ansible_facts.distribution_version | default("") in base_os_platforms
+      - >-
+        not base_os_enforce_platform_guard | bool
+        or ansible_facts.distribution_release | default("") | length > 0
     fail_msg: >-
-      base_os supports only Ubuntu 24.04 hosts unless the localhost-safe
-      override is enabled.
+      base_os requires an explicitly supported Ubuntu release and release
+      codename before it can mutate the host.
+
+- name: Record base OS platform identity
+  ansible.builtin.set_fact:
+    base_os_resolved_release: "{{ ansible_facts.distribution_version | default('24.04') }}"
+    base_os_resolved_codename: "{{ ansible_facts.distribution_release | default('noble') }}"
+
+- name: Select base OS platform record
+  ansible.builtin.set_fact:
+    base_os_resolved_platform: >-
+      {{
+        base_os_platforms[base_os_resolved_release]
+        if base_os_enforce_platform_guard | bool
+        else {
+          'codename': base_os_resolved_codename,
+          'apt_suites': [
+            base_os_resolved_codename,
+            base_os_resolved_codename ~ '-updates',
+            base_os_resolved_codename ~ '-backports',
+            base_os_resolved_codename ~ '-security'
+          ]
+        }
+      }}
+
+- name: Derive base OS package suites from selected platform
+  ansible.builtin.set_fact:
+    base_os_apt_suites: "{{ base_os_resolved_platform.apt_suites | list }}"
+
+- name: Identify selected base OS security suites
+  ansible.builtin.set_fact:
+    base_os_security_suites: "{{ base_os_apt_suites | select('match', '.*-security$') | list }}"
+
+- name: Validate selected base OS platform record
+  ansible.builtin.assert:
+    that:
+      - >-
+        not base_os_enforce_platform_guard | bool
+        or base_os_resolved_platform.codename == ansible_facts.distribution_release
+      - base_os_resolved_platform.codename == base_os_resolved_codename
+      - base_os_apt_suites | length > 0
+      - >-
+        (base_os_apt_suites | difference([
+          base_os_resolved_codename,
+          base_os_resolved_codename ~ '-updates',
+          base_os_resolved_codename ~ '-backports',
+          base_os_resolved_codename ~ '-security'
+        ])) | length == 0
+      - base_os_security_suites | length == 1
+    fail_msg: >-
+      base_os platform metadata must match the gathered Ubuntu codename, keep
+      every package suite within that release, and declare one security suite.
+
+- name: Record selected base OS security suite
+  ansible.builtin.set_fact:
+    base_os_security_suite: "{{ base_os_security_suites | first }}"
 
 - name: Validate base OS package source inputs
   ansible.builtin.assert:
@@ -18,7 +80,7 @@
       - base_os_apt_architectures | length > 0
       - (base_os_apt_architectures | difference(base_os_allowed_architectures)) | length == 0
       - base_os_apt_suites | length > 0
-      - (base_os_apt_suites | difference(["noble", "noble-updates", "noble-backports", "noble-security"])) | length == 0
+      - base_os_security_suite in base_os_apt_suites
       - base_os_apt_components | length > 0
       - (base_os_apt_components | difference(["main", "restricted", "universe", "multiverse"])) | length == 0
       - base_os_allowed_sysctl is iterable

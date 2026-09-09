@@ -1,16 +1,16 @@
 ---
 base_os_supported_distribution: Ubuntu
-base_os_supported_release: "24.04"
+base_os_supported_releases:
+  - "24.04"
+  - "26.04"
+base_os_platforms: "{{ supported_platforms }}"
 base_os_enforce_platform_guard: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
 base_os_root_dir: ""
 base_os_manage_ubuntu_sources: false
 base_os_archive_uri: https://archive.ubuntu.com/ubuntu
 base_os_security_uri: https://security.ubuntu.com/ubuntu
-base_os_apt_suites:
-  - noble
-  - noble-updates
-  - noble-backports
-  - noble-security
+base_os_apt_suites: []
+base_os_security_suite: ""
 base_os_apt_components:
   - main
   - restricted

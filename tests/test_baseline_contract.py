@@ -156,6 +156,21 @@ def run_local_role_probe(
 class BaselineContractTests(unittest.TestCase):
     maxDiff = None
 
+    def test_base_os_selects_suites_from_validated_release(self) -> None:
+        defaults = load_role_yaml("base_os", "defaults/main.yml")
+        tasks = read_text(ROLE_ROOT / "base_os" / "tasks" / "main.yml")
+
+        self.assertEqual(["24.04", "26.04"], defaults.get("base_os_supported_releases"))
+        self.assertEqual("{{ supported_platforms }}", defaults.get("base_os_platforms"))
+        self.assertIn("base_os_resolved_platform", tasks)
+        self.assertIn("ansible_facts.distribution_release", tasks)
+
+    def test_sources_template_uses_resolved_security_suite(self) -> None:
+        text = read_text(ROLE_ROOT / "base_os" / "templates" / "aihost-baseline.sources.j2")
+
+        self.assertNotIn("noble-security", text)
+        self.assertIn("base_os_security_suite", text)
+
     def test_bootstrap_platform_gate_precedes_apt_mutation(self) -> None:
         text = read_text(PLAYBOOKS["bootstrap"])
 
@@ -1806,6 +1821,8 @@ class BaselineContractTests(unittest.TestCase):
         makefile = read_text(REPO_ROOT / "Makefile")
         harness_path = REPO_ROOT / "tests" / "integration" / "baseline_container_harness.py"
         dockerfile_path = REPO_ROOT / "tests" / "integration" / "Dockerfile.baseline"
+        resolute_dockerfile_path = REPO_ROOT / "tests" / "integration" / "Dockerfile.resolute"
+        resolute_inventory_path = REPO_ROOT / "tests" / "fixtures" / "inventory" / "resolute.yml"
         harness_text = read_text(harness_path)
         self.assertIn(str(harness_path.relative_to(REPO_ROOT)), makefile)
         self.assertNotIn("baseline_idempotency.yml", makefile)
@@ -1825,6 +1842,34 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn('"none"', harness_text)
         self.assertIn("BUILD_TIMEOUT_SECONDS = 300", harness_text)
         self.assertIn("RUN_TIMEOUT_SECONDS = 300", harness_text)
+        self.assertIn('choices=("noble", "resolute")', harness_text)
+        self.assertIn("--release noble", makefile)
+        self.assertIn("--release resolute", makefile)
+        self.assertTrue(resolute_dockerfile_path.exists(), "Expected pinned Ubuntu Resolute Dockerfile to exist")
+        resolute_dockerfile_text = read_text(resolute_dockerfile_path)
+        self.assertRegex(resolute_dockerfile_text, r"FROM ubuntu@sha256:[0-9a-f]{64}")
+        self.assertNotIn("FROM ubuntu:26.04", resolute_dockerfile_text)
+        self.assertRegex(resolute_dockerfile_text, r"ansible-core=\S+")
+        self.assertRegex(resolute_dockerfile_text, r"openssh-server=\S+")
+        resolute_inventory = load_yaml(resolute_inventory_path)
+        self.assertEqual(
+            {
+                "24.04": {
+                    "codename": "noble",
+                    "apt_suites": ["noble", "noble-updates", "noble-backports", "noble-security"],
+                },
+                "26.04": {
+                    "codename": "resolute",
+                    "apt_suites": [
+                        "resolute",
+                        "resolute-updates",
+                        "resolute-backports",
+                        "resolute-security",
+                    ],
+                },
+            },
+            resolute_inventory["all"]["vars"]["supported_platforms"],
+        )
 
 
 if __name__ == "__main__":

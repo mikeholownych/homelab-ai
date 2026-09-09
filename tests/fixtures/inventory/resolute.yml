@@ -1,0 +1,25 @@
+---
+all:
+  vars:
+    supported_platforms:
+      "24.04":
+        codename: noble
+        apt_suites:
+          - noble
+          - noble-updates
+          - noble-backports
+          - noble-security
+      "26.04":
+        codename: resolute
+        apt_suites:
+          - resolute
+          - resolute-updates
+          - resolute-backports
+          - resolute-security
+  children:
+    ai_hosts:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_host: 127.0.0.1
+          ansible_python_interpreter: /usr/bin/python3
