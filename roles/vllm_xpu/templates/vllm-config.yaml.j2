@@ -13,3 +13,6 @@ gpu-memory-utilization: {{ vllm_xpu_gpu_memory_utilization | default((vllm_xpu_p
 max-model-len: {{ vllm_xpu_max_model_len | default((vllm_xpu_profiles[vllm_xpu_active_profile]).max_model_len) }}
 enforce-eager: {{ (vllm_xpu_enforce_eager | default((vllm_xpu_profiles[vllm_xpu_active_profile]).enforce_eager)) | lower }}
 disable-log-stats: false
+{% if vllm_xpu_api_key %}
+api-key: "{{ vllm_xpu_api_key }}"
+{% endif %}

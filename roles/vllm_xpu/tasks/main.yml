@@ -127,13 +127,13 @@
   when: vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
-- name: Render non-secret vLLM configuration file
+- name: Render vLLM configuration file
   ansible.builtin.template:
     src: vllm-config.yaml.j2
     dest: "{{ vllm_xpu_config_file }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"
-    mode: "0644"
+    mode: "0600"
   notify: Restart vLLM service
   when: vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]

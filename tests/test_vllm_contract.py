@@ -100,3 +100,14 @@ def test_config_template_uses_cli_style_keys():
 def test_container_mode_requires_runtime_role():
     tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
     assert "container_runtime_enabled | bool" in tasks
+
+def test_ai5820_vllm_is_lan_bound_and_authenticated():
+    hostvars = load_yaml("inventory/production/host_vars/ai-5820-01.yml")
+    assert isinstance(hostvars, dict)
+    assert hostvars["vllm_xpu_host"] == "0.0.0.0"
+    assert hostvars["vllm_xpu_api_key_required"] is True
+    tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
+    assert "vllm_xpu_api_key_required" in tasks
+    template = (REPO_ROOT / "roles/vllm_xpu/templates/vllm-config.yaml.j2").read_text()
+    assert "api-key:" in template
+    assert "vllm_xpu_api_key" in template
