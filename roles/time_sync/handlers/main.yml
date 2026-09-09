@@ -6,3 +6,6 @@
   when:
     - time_sync_manage_runtime | bool
     - time_sync_manage_services | bool
+    - >-
+      (time_sync_provider == 'systemd-timesyncd' and 'systemd-timesyncd.service' in ansible_facts.services) or
+      (time_sync_provider == 'chrony' and 'chrony.service' in ansible_facts.services)

@@ -432,6 +432,24 @@ class BaselineContractTests(unittest.TestCase):
                     str(second_root),
                 )
             )
+            self.assertTrue(
+                module.path_is_safe_descendant(
+                    "/etc/default/locale",
+                    "/",
+                )
+            )
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    "/etc/../etc/default/locale",
+                    "/",
+                )
+            )
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    "/",
+                    "/",
+                )
+            )
 
     def test_base_os_selects_suites_from_validated_release(self) -> None:
         defaults = load_role_yaml("base_os", "defaults/main.yml")

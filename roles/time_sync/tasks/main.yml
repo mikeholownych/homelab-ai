@@ -73,6 +73,7 @@
     - time_sync_manage_runtime | bool
     - time_sync_manage_services | bool
     - time_sync_provider == "systemd-timesyncd"
+    - "'systemd-timesyncd.service' in ansible_facts.services"
 
 - name: Stop chrony when systemd-timesyncd is selected
   ansible.builtin.systemd:
@@ -94,6 +95,7 @@
     - time_sync_manage_runtime | bool
     - time_sync_manage_services | bool
     - time_sync_provider == "chrony"
+    - "'chrony.service' in ansible_facts.services"
 
 - name: Stop systemd-timesyncd when chrony is selected
   ansible.builtin.systemd:

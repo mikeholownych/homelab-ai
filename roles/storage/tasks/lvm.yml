@@ -15,18 +15,21 @@
     cmd: pvs --reportformat json --units b --nosuffix
   register: storage_pvs_cmd
   changed_when: false
+  check_mode: false
 
 - name: Collect LVM volume group report
   ansible.builtin.command:
     cmd: vgs --reportformat json --units b --nosuffix
   register: storage_vgs_cmd
   changed_when: false
+  check_mode: false
 
 - name: Collect LVM logical volume report
   ansible.builtin.command:
     cmd: lvs --reportformat json --units b --nosuffix
   register: storage_lvs_cmd
   changed_when: false
+  check_mode: false
 
 - name: Inspect existing mount points
   ansible.builtin.command:
@@ -34,6 +37,7 @@
   register: storage_findmnt_cmd
   failed_when: false
   changed_when: false
+  check_mode: false
 
 - name: Probe filesystem on target logical volume
   ansible.builtin.command:
@@ -41,6 +45,7 @@
   register: storage_blkid_cmd
   failed_when: false
   changed_when: false
+  check_mode: false
 
 - name: Parse LVM reports
   ansible.builtin.set_fact:
@@ -138,7 +143,9 @@
     dev: "/dev/{{ storage_lvm.vg }}/{{ storage_lvm.lv }}"
     fstype: "{{ storage_lvm.fstype }}"
     force: false
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not (ansible_check_mode and not storage_lv_exists)
 
 - name: Determine filesystem UUID
   ansible.builtin.command:
@@ -151,7 +158,9 @@
       - "/dev/{{ storage_lvm.vg }}/{{ storage_lvm.lv }}"
   register: storage_lvm_uuid
   changed_when: false
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
 
 - name: Mount logical volume by UUID
   ansible.posix.mount:
@@ -160,7 +169,9 @@
     fstype: "{{ storage_lvm.fstype }}"
     opts: defaults
     state: mounted
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
 
 - name: Ensure local-ai standard subdirectories exist
   ansible.builtin.file:
@@ -173,28 +184,36 @@
     - "{{ storage_lvm.mount_path }}/models"
     - "{{ storage_lvm.mount_path }}/cache"
     - "{{ storage_lvm.mount_path }}/evidence"
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
 
 - name: Collect updated LVM reports for evidence
   ansible.builtin.command:
     cmd: pvs --reportformat json --units b --nosuffix
   register: storage_pvs_evidence_cmd
   changed_when: false
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
 
 - name: Collect updated volume group report for evidence
   ansible.builtin.command:
     cmd: vgs --reportformat json --units b --nosuffix
   register: storage_vgs_evidence_cmd
   changed_when: false
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
 
 - name: Collect updated logical volume report for evidence
   ansible.builtin.command:
     cmd: lvs --reportformat json --units b --nosuffix
   register: storage_lvs_evidence_cmd
   changed_when: false
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
 
 - name: Persist storage layout evidence
   ansible.builtin.copy:
@@ -223,4 +242,6 @@
     owner: root
     group: root
     mode: "0640"
-  when: storage_manage_runtime | bool
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode

@@ -31,8 +31,8 @@
           - ansible_facts.distribution_version in supported_platforms
           - ansible_facts.distribution_release == supported_platforms[ansible_facts.distribution_version].codename
           - >-
-            (ansible_facts.distribution_version == '24.04' and ansible_kernel is version('6.17', '>=')) or
-            (ansible_facts.distribution_version == '26.04' and ansible_kernel is version('7.0', '>='))
+            (ansible_facts.distribution_version == '24.04' and ansible_facts.kernel is version('6.17', '>=')) or
+            (ansible_facts.distribution_version == '26.04' and ansible_facts.kernel is version('7.0', '>='))
         fail_msg: >-
           Platform or kernel preflight check failed for {{ inventory_hostname }}.
           Ubuntu 24.04 requires kernel >= 6.17; Ubuntu 26.04 requires kernel >= 7.0.
@@ -58,7 +58,7 @@
               'distribution': ansible_facts.distribution,
               'distribution_version': ansible_facts.distribution_version,
               'distribution_release': ansible_facts.distribution_release,
-              'kernel': ansible_kernel,
+              'kernel': ansible_facts.kernel,
               'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
             } | to_nice_json
           }}
@@ -267,7 +267,9 @@
               'status': 'pass',
               'node': inventory_hostname,
               'reboot_required': reboot_required | bool,
-              'reboot_verify_command': 'ansible-playbook -i inventory/production/hosts.yml playbooks/reboot-verify.yml --limit ' ~ inventory_hostname,
+              'reboot_verify_command':
+                ('ansible-playbook -i inventory/production/hosts.yml '
+                 ~ 'playbooks/reboot-verify.yml --limit ' ~ inventory_hostname),
               'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
             } | to_nice_json
           }}
@@ -280,7 +282,7 @@
       ansible.builtin.debug:
         msg: >-
           Reboot is required after OMIX installation. Do not automatically reboot in this workflow.
-          Execute 'ansible-playbook -i inventory/production/hosts.yml playbooks/reboot-verify.yml --limit {{ inventory_hostname }}'
+          Execute playbooks/reboot-verify.yml --limit {{ inventory_hostname }}
           before proceeding to Phase 6 (gpu_validation).
       when: reboot_required | bool
 

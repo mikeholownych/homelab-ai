@@ -49,14 +49,18 @@ The fleet consists of two production nodes, both running the dual-B65 inference 
 
 ## 3. Initial Ubuntu Install Assumptions
 
-- Base OS: **Ubuntu 24.04 LTS (Server or Minimal Desktop)**
-- Standard partition layout with ext4/XFS on root NVMe
+- Supported Base OS releases:
+  - **Ubuntu 24.04 LTS (Noble Numbat)**: Qualified baseline release (e.g. `ai-p620-01`), kernel >= 6.17 HWE.
+  - **Ubuntu 26.04 LTS (Resolute Raccoon)**: Commissioning target release (e.g. `ai-5820-01`), kernel >= 7.0.
+- Standard partition layout with ext4/XFS on root NVMe; dedicated linear LVM volume on secondary storage.
 - Initial administrative user with `sudo` permissions
 - Basic network connectivity and SSH server active
 - BIOS settings configured:
   - Above 4G Decoding: **Enabled**
   - Resizable BAR (ReBAR): **Enabled**
-  - IOMMU (AMD-Vi): **Enabled**
+  - IOMMU (AMD-Vi / Intel VT-d): **Enabled**
+
+> **OMIX Server qualification caveat and package boundary**: Official upstream Intel OMIX 0.3.0 documentation explicitly qualifies Ubuntu Desktop 24.04.4. Ubuntu Server deployments (both 24.04 and 26.04) operate under qualification caveats; acceptance requires recorded, schema-valid evidence at every stage rather than assumptions. The package boundary is strictly isolated by release: Ubuntu 24.04 remains fail-closed before mutation (`ppa:kobuk-team/intel-graphics` forbidden), while Ubuntu 26.04 installs exact pinned packages (`intel-omix=0.3.0-9~26.04`, `intel-omix-dev=0.3.0-9~26.04`) from Intel's official repository suite `resolute/intel-omix/0.3.0` verified with signing key `E0258B57D9C442D5DB1855C271740E4DE392BFE3`.
 
 ---
 

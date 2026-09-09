@@ -38,14 +38,19 @@ pins live in the model registry role).
 
 ## 3. Inference Software Stack
 
-Both nodes are converged to the same pinned stack:
+Both nodes are converged to release-aware pinned stacks:
 
-- **OS**: Ubuntu 24.04 LTS (Noble Numbat)
-- **Compute Driver**: Intel Compute Runtime + Level Zero loader/runtime (`libze-intel-gpu1`)
-- **PyTorch**: PyTorch 2.12.1+xpu in pinned virtual environment
-- **Primary Serving**: vLLM 0.7.3 with Intel XPU backend, OpenAI-compatible API, support for single-GPU (TP=1) and dual-GPU (TP=2)
-- **Fallback Serving**: llama.cpp with SYCL acceleration, pinned to exact Git commit, supporting GGUF offload
-- **Secret Management**: HashiCorp Vault AppRole integration, runtime secret retrieval
+- **OS Platforms**:
+  - **Ubuntu 24.04 LTS (Noble Numbat)**: Baseline qualified release with kernel >= 6.17 HWE (used on `ai-p620-01`).
+  - **Ubuntu 26.04 LTS (Resolute Raccoon)**: Commissioning target release with kernel >= 7.0 (used on `ai-5820-01`).
+- **Compute Driver**:
+  - On Ubuntu 24.04: Intel Compute Runtime + Level Zero loader/runtime (`libze-intel-gpu1`), fail-closed before mutation (`ppa:kobuk-team/intel-graphics` forbidden).
+  - On Ubuntu 26.04: Official upstream Intel OMIX 0.3.0 unified stack (`intel-omix=0.3.0-9~26.04`, `intel-omix-dev=0.3.0-9~26.04`) from `https://repositories.intel.com/gpu/ubuntu` suite `resolute/intel-omix/0.3.0` signed with key `E0258B57D9C442D5DB1855C271740E4DE392BFE3`.
+- **OMIX Server Qualification Caveat**: Official upstream Intel documentation qualifies Ubuntu Desktop releases; running on Ubuntu Server operates under qualification caveats, mandating structured evidence generation across PCI, DRM, Level Zero, and PyTorch acceptance checks.
+- **PyTorch**: PyTorch 2.12.1+xpu in pinned virtual environment with immutable dependency lock and SHA-256 validation.
+- **Primary Serving**: vLLM 0.7.3 with Intel XPU backend, OpenAI-compatible API, support for single-GPU (TP=1) and dual-GPU (TP=2).
+- **Fallback Serving**: llama.cpp with SYCL acceleration, pinned to exact Git commit, supporting GGUF offload.
+- **Secret Management**: HashiCorp Vault AppRole integration, runtime secret retrieval.
 - **Runtime selection** is per-host: TP=2 is the primary serve path on both nodes; llama.cpp SYCL split is the fallback. `llama_cpp_sycl_dual_gpu_support_certified` remains `false` until dual-GPU SYCL split is proven on B65 (certification is a manual commissioning step).
 
 ## 4. Operational Boundaries and Future Integration

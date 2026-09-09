@@ -83,6 +83,9 @@ def path_is_safe_descendant(value: object, allowed_root: object) -> bool:
     if allowed_root_path not in candidate_path.parents:
         return False
 
+    if allowed_root_path == Path("/"):
+        return True
+
     try:
         if allowed_root_path.resolve(strict=False) != allowed_root_path:
             return False
