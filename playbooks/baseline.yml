@@ -44,7 +44,9 @@
     - name: Include storage baseline role
       ansible.builtin.include_role:
         name: storage
-      when: storage_mounts | default([]) | length > 0
+      when: >-
+        (storage_mounts | default([]) | length > 0)
+        or (storage_lvm.enabled | default(false) | bool)
       tags:
         - baseline
         - storage

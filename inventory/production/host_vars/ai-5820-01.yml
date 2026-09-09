@@ -39,20 +39,19 @@ network_endpoints:
   management_fqdn: null
   metrics_endpoint: null
 
-# Storage: OS lives on NVMe #1. NVMe #2 is the model/cache data disk. Complete
-# these entries with the real UUID captured during commissioning
-# (hardware_inventory evidence) before converging models onto this host.
-# storage_mounts:
-#   - path: /var/lib/local-ai/models
-#     src: UUID=REPLACE_WITH_NVME2_UUID
-#     fstype: ext4
-#     opts: defaults
-#     state: mounted
-#   - path: /var/lib/local-ai/cache
-#     src: UUID=SAME_NVME2_UUID
-#     fstype: ext4
-#     opts: defaults
-#     state: mounted
+# Storage: Guarded LVM volume spanned across both NVMe drives.
+storage_lvm:
+  enabled: true
+  vg: ubuntu-vg
+  lv: local-ai-lv
+  size: 550g
+  fstype: xfs
+  mount_path: /var/lib/local-ai
+  reserve_gib: 50
+  expected_pvs:
+    - /dev/nvme0n1p3
+    - /dev/nvme1n1p1
+
 
 # Benchmarking guardrails tuned to this host: 950 W PSU and ~200 W Arc Pro B65 TDP.
 benchmarking_psu_capacity_watts: 950

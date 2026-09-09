@@ -7,3 +7,5 @@ storage_allowed_fstypes:
   - btrfs
   - vfat
 storage_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
+storage_lvm: {}
+storage_lvm_evidence_path: /var/lib/local-ai/evidence/storage-layout.json
