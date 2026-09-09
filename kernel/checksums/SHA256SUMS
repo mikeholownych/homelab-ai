@@ -1,0 +1,3 @@
+13e542eda56494c7a20209fe3cf6d252cb29b175d912d8a41c9e74cc2fd20ca5  kernel/config/xe2-intel-gpu.config
+9b157edbba6baf64c8cd548d3c54bfc4167a20a36928723b8d12690c05ec9f90  kernel/config/drm-xe.config
+82257aea48b8fd0da1f9c54ff8245b0e08629255a61ed83c1fb404eecd6f683a  kernel/metadata/kernel-metadata.template.yml

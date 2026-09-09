@@ -1,0 +1,15 @@
+---
+# Kernel build metadata template
+schema_version: "1.0.0"
+kernel:
+  upstream_version: "6.12.0"
+  source_url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.tar.xz"
+  source_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+  package_version: "6.12.0-20260903custom1"
+patches: []
+config_fragments:
+  - "kernel/config/xe2-intel-gpu.config"
+artifact:
+  package_name: "linux-image-6.12.0-custom_6.12.0-20260903custom1_amd64.deb"
+  artifact_path: "kernel/build/linux-image-6.12.0-custom_6.12.0-20260903custom1_amd64.deb"
+  sha256: "0000000000000000000000000000000000000000000000000000000000000000"

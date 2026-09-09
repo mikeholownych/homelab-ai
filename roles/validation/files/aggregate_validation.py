@@ -142,6 +142,9 @@ def build_validation_document(
         observed_raw = user_check.get("observed", {"summary": "not observed", "value": None} if status == "NOT_TESTED" else expected_raw)
         evidence_refs = user_check.get("evidence_refs", [f"{check_id}_evidence.json"])
 
+        if severity == "warning":
+            warnings += 1
+
         if status == "BLOCKED":
             has_blocked = True
             blocking_failures += 1
@@ -223,10 +226,13 @@ def main() -> int:
 
     profile_spec: Dict[str, Any] | None = None
     if args.hardware_profile_json:
-        spec_path = Path(args.hardware_profile_json)
-        if spec_path.exists():
-            profile_spec = json.loads(spec_path.read_text(encoding="utf-8"))
-        else:
+        try:
+            spec_path = Path(args.hardware_profile_json)
+            if spec_path.exists():
+                profile_spec = json.loads(spec_path.read_text(encoding="utf-8"))
+            else:
+                profile_spec = json.loads(args.hardware_profile_json)
+        except OSError:
             profile_spec = json.loads(args.hardware_profile_json)
 
     doc = build_validation_document(

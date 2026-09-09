@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Token resolver for Vault AppRole credentials with mock/fallback support for testing.
+set -euo pipefail
+
+VAULT_ADDR="${VAULT_ADDR:-{{ vault_integration_addr }}}"
+VAULT_AUTH_MOUNT="${VAULT_AUTH_MOUNT:-{{ vault_integration_auth_mount }}}"
+ROLE_ID_PATH="${VAULT_ROLE_ID_FILE:-${CREDENTIALS_DIRECTORY:-/etc/aihost/credentials}/{{ vault_integration_role_id_credential_filename }}}"
+SECRET_ID_PATH="${VAULT_SECRET_ID_FILE:-${CREDENTIALS_DIRECTORY:-/etc/aihost/credentials}/{{ vault_integration_secret_id_credential_filename }}}"
+
+# Mock input support for testing and CI dry-runs
+if [[ "${VAULT_MOCK_AUTH:-false}" == "true" ]]; then
+  echo "mock-token-$(date +%s)"
+  exit 0
+fi
+
+# Fallback path verification
+if [[ ! -r "${ROLE_ID_PATH}" || ! -r "${SECRET_ID_PATH}" ]]; then
+  {% if vault_integration_role_id_credential_fallback_paths | default([]) | length > 0 %}
+  ROLE_ID_PATH="{{ vault_integration_role_id_credential_fallback_paths | first }}"
+  {% endif %}
+  {% if vault_integration_secret_id_credential_fallback_paths | default([]) | length > 0 %}
+  SECRET_ID_PATH="{{ vault_integration_secret_id_credential_fallback_paths | first }}"
+  {% endif %}
+fi
+
+if [[ ! -r "${ROLE_ID_PATH}" || ! -r "${SECRET_ID_PATH}" ]]; then
+  echo "Error: AppRole credentials unreadable from primary or fallback paths." >&2
+  exit 1
+fi
+
+ROLE_ID="$(<"${ROLE_ID_PATH}")"
+SECRET_ID="$(<"${SECRET_ID_PATH}")"
+
+if [[ -z "${ROLE_ID}" || -z "${SECRET_ID}" ]]; then
+  echo "Error: AppRole credential contents are empty." >&2
+  exit 1
+fi
+
+# Authenticate via Vault AppRole HTTP API
+python3 -c "
+import json, urllib.request
+req = urllib.request.Request(
+    '${VAULT_ADDR}/v1/auth/${VAULT_AUTH_MOUNT}/login',
+    data=json.dumps({'role_id': '${ROLE_ID}', 'secret_id': '${SECRET_ID}'}).encode('utf-8'),
+    headers={'Content-Type': 'application/json'},
+    method='POST'
+)
+with urllib.request.urlopen(req) as resp:
+    data = json.loads(resp.read().decode('utf-8'))
+    print(data['auth']['client_token'])
+"

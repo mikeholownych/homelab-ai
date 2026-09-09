@@ -23,6 +23,7 @@ model_registry_keep_revisions_per_model: 2
 model_registry_prune_undeclared: false
 
 # Optional token for gated repositories; retrieved from Vault only when set.
+model_registry_hf_token: null
 model_registry_hf_token_secret_path: null
 model_registry_hf_token_secret_file_key: "token"
 

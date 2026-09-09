@@ -8,7 +8,7 @@ model: >-
 revision: "{{ vllm_xpu_model_revision | default('main') }}"
 host: "{{ vllm_xpu_host }}"
 port: {{ vllm_xpu_port }}
-tensor-parallel-size: {{ (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size }}
+tensor-parallel-size: {{ vllm_xpu_tensor_parallel_size | default((vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size) }}
 gpu-memory-utilization: {{ (vllm_xpu_profiles[vllm_xpu_active_profile]).gpu_memory_utilization }}
 max-model-len: {{ (vllm_xpu_profiles[vllm_xpu_active_profile]).max_model_len }}
 enforce-eager: {{ (vllm_xpu_profiles[vllm_xpu_active_profile]).enforce_eager | lower }}

@@ -1,0 +1,4 @@
+# SHA256SUMS template for kernel artifacts, configs, and patches
+# Format: <sha256>  <relative_path>
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  kernel/config/xe2-intel-gpu.config
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  kernel/metadata/kernel-metadata.template.yml

@@ -24,6 +24,44 @@
   no_log: true
   tags: [models, vault]
 
+- name: Resolve effective Hugging Face authentication token
+  ansible.builtin.set_fact:
+    _model_registry_effective_hf_token: >-
+      {{
+        vault_integration_secret[model_registry_hf_token_secret_file_key]
+        if (vault_integration_secret is defined and vault_integration_secret and
+            model_registry_hf_token_secret_file_key in vault_integration_secret)
+        else (model_registry_hf_token | default(lookup('ansible.builtin.env', 'HF_TOKEN') | default(none, true)))
+      }}
+  no_log: true
+  tags: [models]
+
+- name: Verify disk budget headroom and minimum 120GB available space prior to downloading model weights
+  ansible.builtin.assert:
+    that:
+      - (model_registry_cache_free_gib | default(1000) | float) >= 120.0
+      - (model_entry.value.size_gib | default(0) | float) <= (model_registry_cache_free_gib | default(1000) | float)
+    fail_msg: >-
+      Insufficient disk space for model '{{ model_entry.key }}': minimum 120 GiB required on partition (observed
+      {{ model_registry_cache_free_gib | default('unknown') }} GiB) and model requires
+      {{ model_entry.value.size_gib | default(0) }} GiB.
+  tags: [models]
+
+- name: Verify credential presence or local cache availability before remote mirror access
+  ansible.builtin.assert:
+    that:
+      - >-
+        (_model_registry_effective_hf_token is not none and
+         (_model_registry_effective_hf_token | string | trim | length > 0)) or
+        ((model_entry.value.local_cache_path | default('')) | length > 0) or
+        ((model_registry_cache_root ~ '/' ~ model_entry.key ~ '/' ~ model_entry.value.revision) is directory)
+    fail_msg: >-
+      Credential check failed for model '{{ model_entry.key }}': neither active HF_TOKEN nor
+      verified local disk cache path was found.
+  when:
+    - model_entry.value.auth_required | default(false) | bool or (model_registry_require_auth | default(false) | bool)
+  tags: [models]
+
 - name: Download pinned artifacts with checksum enforcement
   ansible.builtin.get_url:
     url: >-
@@ -36,13 +74,16 @@
     group: root
     timeout: "{{ model_registry_http_timeout_sec }}"
     headers: >-
-      {{ {'Authorization': 'Bearer ' ~ vault_integration_secret[model_registry_hf_token_secret_file_key]}
-         if model_registry_hf_token_secret_path is not none else omit }}
+      {{
+        {'Authorization': 'Bearer ' ~ _model_registry_effective_hf_token}
+        if (_model_registry_effective_hf_token is not none and _model_registry_effective_hf_token | length > 0)
+        else omit
+      }}
   loop: "{{ model_entry.value.artifacts }}"
   loop_control:
     label: "{{ artifact.path }}"
   when: not ansible_check_mode
-  no_log: "{{ model_registry_hf_token_secret_path is not none }}"
+  no_log: "{{ _model_registry_effective_hf_token is not none and _model_registry_effective_hf_token | length > 0 }}"
   tags: [models]
 
 - name: Promote verified revision into the cache atomically

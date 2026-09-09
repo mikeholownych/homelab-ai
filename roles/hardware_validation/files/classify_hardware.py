@@ -12,6 +12,13 @@ def _check(rule, expected, observed, passed, severity, rationale):
             "rationale": rationale}
 
 
+def _norm_id(val):
+    if val is None:
+        return ""
+    s = str(val).lower().strip()
+    return s[2:] if s.startswith("0x") else s
+
+
 def classify(profile, observed):
     checks = []
     product_name = observed.get("dmi", {}).get("product_name", "")
@@ -29,15 +36,15 @@ def classify(profile, observed):
     expected_gpus = profile["gpu"]["count_expected"]
     gpus = observed.get("gpus", [])
     pci = observed.get("pci", [])
-    approved = {(str(item["vendor_id"]).lower(), str(item["device_id"]).lower()): item["model"]
+    approved = {(_norm_id(item["vendor_id"]), _norm_id(item["device_id"])): item["model"]
                 for item in profile["gpu"]["approved_pci_devices"]}
     approved_ids = set(approved)
     approved_gpus = [gpu for gpu in gpus
-                     if (str(gpu.get("vendor_id", "")).lower(),
-                         str(gpu.get("device_id", "")).lower()) in approved_ids]
+                     if (_norm_id(gpu.get("vendor_id", "")),
+                         _norm_id(gpu.get("device_id", ""))) in approved_ids]
     approved_pci = [item for item in pci
-                    if (str(item.get("vendor_id", "")).lower(),
-                        str(item.get("device_id", "")).lower()) in approved_ids]
+                    if (_norm_id(item.get("vendor_id", "")),
+                        _norm_id(item.get("device_id", ""))) in approved_ids]
     checks.append(_check("gpu_count", expected_gpus, [gpu.get("bdf") for gpu in approved_gpus],
                          len(approved_gpus) == expected_gpus, "blocking",
                          "All intended accelerators must enumerate; only approved PCI devices count."))
@@ -46,18 +53,18 @@ def classify(profile, observed):
     pci_by_bdf = {str(item.get("bdf", "")).lower(): item for item in pci if item.get("bdf")}
     model_ok = len(approved_gpus) == expected_gpus and all(
         str(gpu.get("bdf", "")).lower() in pci_by_bdf
-        and str(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("vendor_id", "")).lower() ==
-        str(gpu.get("vendor_id", "")).lower()
-        and str(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("device_id", "")).lower() ==
-        str(gpu.get("device_id", "")).lower()
+        and _norm_id(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("vendor_id", "")) ==
+        _norm_id(gpu.get("vendor_id", ""))
+        and _norm_id(pci_by_bdf[str(gpu.get("bdf", "")).lower()].get("device_id", "")) ==
+        _norm_id(gpu.get("device_id", ""))
         for gpu in approved_gpus
     )
     checks.append(_check("gpu_model_match", profile["gpu"]["approved_pci_devices"], identities, model_ok,
                          "blocking", "GPU identity is resolved only from approved vendor/device PCI IDs."))
     unexpected = [{"bdf": gpu.get("bdf"), "vendor_id": gpu.get("vendor_id"),
                    "device_id": gpu.get("device_id")} for gpu in gpus
-                  if (str(gpu.get("vendor_id", "")).lower(),
-                      str(gpu.get("device_id", "")).lower()) not in approved_ids]
+                  if (_norm_id(gpu.get("vendor_id", "")),
+                      _norm_id(gpu.get("device_id", ""))) not in approved_ids]
     checks.append(_check("unexpected_gpu_devices", "only approved accelerator PCI IDs", unexpected,
                          not unexpected, "warning",
                          "Anything outside the approved accelerator set must be removed from the certified design."))

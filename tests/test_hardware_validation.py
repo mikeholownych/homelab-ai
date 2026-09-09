@@ -83,6 +83,17 @@ def test_unexpected_gpu_warns_but_approved_pair_still_passes():
     assert result["physical_acceptance"] is False
 
 
+def test_d5820_rebar_disabled_fails_closed():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/d5820_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/d5820_healthy.json").read_text())
+    observed["pci"][0]["rebar_enabled"] = False
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "blocking"
+    assert any(c["rule"] == "resizable_bar_enabled" and c["status"] == "fail" and c["severity"] == "blocking"
+               for c in result["checks"])
+
+
 def test_width_uses_physical_slot_capability():
     classifier = load_classifier()
     profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
@@ -165,7 +176,8 @@ def test_realistic_lspci_parser_uses_explicit_link_fields_and_slot_width():
     assert pci[0]["slot_width"] == 16
     assert pci[0]["bar_sizes_gib"] == [32.0]
     assert pci[0]["rebar_enabled"] is True
-    assert pci[0]["kernel_driver"] is None
+    assert pci[0]["kernel_driver"] == "xe"
+    assert pci[1]["kernel_driver"] == "xe"
     # AER counters are captured best-effort; absent sysfs on CI records clearly.
     assert pci[0]["aer_counters"]["status"] == "unavailable"
     assert "no AER sysfs attributes" in pci[0]["aer_counters"]["reason"]

@@ -43,6 +43,15 @@ fi
 
 log "starting $IMAGE_REF"
 
+export ONEAPI_DEVICE_SELECTOR="${ONEAPI_DEVICE_SELECTOR:-level_zero:0,1}"
+export ZE_AFFINITY_MASK="${ZE_AFFINITY_MASK:-0,1}"
+export CL_TARGET_OPENCL_DEVICE_ENTRY=1
+export SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1
+export OMP_PROC_BIND=true
+export OMP_PLACES=cores
+
+TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-2}"
+
 exec "$RUNTIME_BIN" run \
     --rm \
     --name vllm-xpu \
@@ -50,7 +59,13 @@ exec "$RUNTIME_BIN" run \
     --security-opt no-new-privileges \
     --device "$CDI_DEVICE" \
     --env-file "$ENV_FILE" \
+    -e ONEAPI_DEVICE_SELECTOR="$ONEAPI_DEVICE_SELECTOR" \
+    -e ZE_AFFINITY_MASK="$ZE_AFFINITY_MASK" \
+    -e CL_TARGET_OPENCL_DEVICE_ENTRY="$CL_TARGET_OPENCL_DEVICE_ENTRY" \
+    -e SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS="$SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS" \
+    -e OMP_PROC_BIND="$OMP_PROC_BIND" \
+    -e OMP_PLACES="$OMP_PLACES" \
     -v "$CONFIG_FILE":/cfg/vllm-config.yaml:ro \
     -v "$MODEL_CACHE":/models:rw \
     "$IMAGE_REF" \
-    serve --config /cfg/vllm-config.yaml
+    serve --config /cfg/vllm-config.yaml --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" "$@"

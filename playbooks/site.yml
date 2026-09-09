@@ -46,6 +46,30 @@
       when: features.os_tuning | default(false) | bool
       tags: [site, tuning, baseline]
 
+    - name: Enforce aggressive host compute performance posture
+      tags: [site, tuning, performance]
+      when:
+        - capabilities.inference | default(false) | bool
+        - not ansible_check_mode
+      block:
+        - name: Install cpufrequtils for CPU frequency scaling management
+          ansible.builtin.apt:
+            name: cpufrequtils
+            state: present
+
+        - name: Enforce performance scaling governor across all CPU cores
+          ansible.builtin.command:
+            cmd: cpufreq-set -r -g performance
+          changed_when: false
+
+        - name: Force Transparent Hugepages to always at runtime
+          ansible.builtin.command:
+            argv:
+              - /bin/sh
+              - -ec
+              - "printf '%s\n' always > /sys/kernel/mm/transparent_hugepage/enabled"
+          changed_when: false
+
     - name: Include PyTorch XPU role for inference-capable GPU nodes
       ansible.builtin.include_role:
         name: pytorch_xpu

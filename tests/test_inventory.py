@@ -40,6 +40,11 @@ HOST_PROFILES = {
     "ai-5820-01": "d5820_dual_b65",
 }
 
+HOST_CONNECTIONS = {
+    "ai-p620-01": {"ansible_host": "CHANGE_ME"},
+    "ai-5820-01": {"ansible_host": "10.0.8.5", "ansible_user": "mike"},
+}
+
 IDENTITY_TAG_TOKENS = {"production", "p620_dual_b65", "inference", "gpu", "ai-p620-01"}
 
 
@@ -99,7 +104,8 @@ class InventoryContractTests(unittest.TestCase):
             host_vars = load_yaml(path)
             expected_profile = HOST_PROFILES[hostname]
             with self.subTest(host=hostname):
-                self.assertEqual("CHANGE_ME", host_vars["ansible_host"])
+                for key, value in HOST_CONNECTIONS[hostname].items():
+                    self.assertEqual(value, host_vars[key])
                 self.assertEqual("production", host_vars["node_metadata"]["environment"])
                 self.assertEqual(hostname, host_vars["node_metadata"]["hostname"])
                 self.assertEqual(expected_profile, host_vars["hardware_profile"])
@@ -208,7 +214,8 @@ class InventoryContractTests(unittest.TestCase):
         hostvars_5820 = inventory["_meta"]["hostvars"]["ai-5820-01"]
         self.assertEqual("production", hostvars_5820["node_metadata"]["environment"])
         self.assertEqual("d5820_dual_b65", hostvars_5820["hardware_profile"])
-        self.assertEqual("CHANGE_ME", hostvars_5820["ansible_host"])
+        self.assertEqual("10.0.8.5", hostvars_5820["ansible_host"])
+        self.assertEqual("mike", hostvars_5820["ansible_user"])
         self.assertEqual(False, hostvars_5820["features"]["clustering"])
         self.assertEqual(False, hostvars_5820["features"]["ray_enabled"])
         self.assertEqual(False, hostvars_5820["features"]["distributed_vllm_enabled"])
@@ -224,11 +231,17 @@ class InventoryContractTests(unittest.TestCase):
         for hostname in PRODUCTION_HOSTS:
             self.assertIn(hostname, output)
 
-    def test_lab_inventory_parses_without_declaring_hosts(self) -> None:
+    def test_lab_inventory_parses_and_mirrors_production_structure(self) -> None:
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
         self.assertEqual("", stderr.strip())
-        self.assertEqual({}, inventory["_meta"]["hostvars"])
-        self.assertEqual([], inventory.get("lab", {}).get("hosts", []))
+        self.assertIn("ai-5820-test-01", inventory["_meta"]["hostvars"])
+        self.assertEqual(["ai-5820-test-01"], inventory["lab"]["hosts"])
+        for group in ("inference", "gpu", "cluster", "monitoring"):
+            self.assertIn("ai-5820-test-01", inventory[group]["hosts"])
+        hostvars = inventory["_meta"]["hostvars"]["ai-5820-test-01"]
+        self.assertEqual("lab", hostvars["node_metadata"]["environment"])
+        self.assertEqual("d5820_dual_b65", hostvars["hardware_profile"])
+        self.assertEqual("127.0.0.1", hostvars["ansible_host"])
 
     def test_group_vars_use_only_secret_path_references_and_disabled_commissioning_profiles(self) -> None:
         all_vars = load_yaml(PRODUCTION_GROUP_VARS / "all.yml")
@@ -285,7 +298,7 @@ class InventoryContractTests(unittest.TestCase):
             text=True,
         )
         lines = [line for line in result.stdout.splitlines() if line.strip()]
-        self.assertEqual(2, len(lines), lines)
+        self.assertEqual(1, len(lines), lines)
         self.assertTrue(all(line.endswith("ansible_host: CHANGE_ME") for line in lines), lines)
 
 

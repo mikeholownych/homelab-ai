@@ -1,13 +1,27 @@
-0000:41:00.0 Display controller [0380]: Intel Corporation Device [8086:e222]
-	LnkCap: Port #0, Speed 32GT/s, Width x16
-	LnkSta: Speed 16GT/s (downgraded), Width x16
+0000:41:00.0 Display controller [0380]: Intel Corporation Device [8086:e222] (rev 01)
+	Subsystem: ASRock Incorporation Device [1849:e222]
+	Flags: bus master, fast devsel, latency 0, IRQ 165
+	Memory at b0000000 (64-bit, non-prefetchable) [size=16M]
 	Region 2: Memory at 4000000000 (64-bit, prefetchable) [size=32G]
+	Capabilities: [40] Power Management version 3
+	Capabilities: [70] Express (v2) Endpoint, MSI 00
+		LnkCap: Port #0, Speed 32GT/s, Width x16
+		LnkSta: Speed 16GT/s (downgraded), Width x16
 	Capabilities: [420 v1] Physical Resizable BAR
 		BAR 2: current size: 32GB, supported: 256MB 32GB
+	Kernel driver in use: xe
+	Kernel modules: xe, i915
 
-0000:61:00.0 Display controller [0380]: Intel Corporation Device [8086:e222]
-	LnkCap: Port #0, Speed 32GT/s, Width x16
-	LnkSta: Speed 16GT/s (downgraded), Width x8 (downgraded)
+0000:61:00.0 Display controller [0380]: Intel Corporation Device [8086:e222] (rev 01)
+	Subsystem: ASRock Incorporation Device [1849:e222]
+	Flags: bus master, fast devsel, latency 0, IRQ 166
+	Memory at b1000000 (64-bit, non-prefetchable) [size=16M]
 	Region 2: Memory at 4800000000 (64-bit, prefetchable) [size=32G]
+	Capabilities: [40] Power Management version 3
+	Capabilities: [70] Express (v2) Endpoint, MSI 00
+		LnkCap: Port #0, Speed 32GT/s, Width x16
+		LnkSta: Speed 16GT/s (downgraded), Width x8 (downgraded)
 	Capabilities: [420 v1] Physical Resizable BAR
 		BAR 2: current size: 32GB, supported: 256MB 32GB
+	Kernel driver in use: xe
+	Kernel modules: xe, i915

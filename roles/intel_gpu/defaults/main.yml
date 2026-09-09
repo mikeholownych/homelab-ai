@@ -40,6 +40,7 @@ intel_gpu_expected_count: 2
 intel_gpu_expected_vram_gib: 32
 intel_gpu_vram_tolerance_gib: 1
 intel_gpu_service_accounts: ["{{ host_runtime_account.name }}"]
+intel_gpu_manage_modprobe: false
 intel_gpu_artifact_dir: /var/cache/local-ai/intel-gpu/26.27.39122.11
 intel_gpu_runtime_evidence_path: /var/lib/local-ai/evidence/gpu-runtime.json
 intel_gpu_support_research_sources:

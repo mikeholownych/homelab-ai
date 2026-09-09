@@ -83,3 +83,17 @@
 
 # hardware_inventory records PCI IDs, firmware, kernel driver, PCIe and Level Zero data.
 # hardware_validation binds Level Zero memory to the same PCI BDF and applies VRAM tolerance and ReBAR policy.
+
+- name: Deploy performance modprobe configuration for Intel Xe driver
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/xe.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      options xe force_probe=e222
+      options xe use_immediate_fences=1
+      options xe scheduler_max_priorities=4
+  when:
+    - intel_gpu_manage_modprobe | default(false) | bool
+  tags: [gpu, driver]

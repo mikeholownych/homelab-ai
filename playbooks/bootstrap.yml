@@ -1,11 +1,29 @@
 ---
 - name: Bootstrap Ubuntu access baseline
   hosts: ai_hosts
-  gather_facts: true
+  gather_facts: false
   tags:
     - bootstrap
     - foundation
   pre_tasks:
+    - name: Install minimal Python serialization prerequisites via raw SSH execution
+      ansible.builtin.raw: >-
+        test -e /usr/bin/python3 &&
+        python3 -c 'import yaml, jsonschema' 2>/dev/null ||
+        (DEBIAN_FRONTEND=noninteractive apt-get update -y &&
+         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
+         python3-minimal python3-pip python3-yaml python3-jsonschema)
+      changed_when: false
+      tags:
+        - bootstrap
+        - foundation
+
+    - name: Gather facts after python prerequisites are guaranteed
+      ansible.builtin.setup:
+      tags:
+        - bootstrap
+        - foundation
+
     - name: Validate Ubuntu 24.04 bootstrap target
       ansible.builtin.assert:
         that:

@@ -31,7 +31,10 @@ llama_cpp_sycl_model_path: null
 llama_cpp_sycl_n_gpu_layers: 99
 llama_cpp_sycl_split_mode: "layer"
 llama_cpp_sycl_tensor_split: "1,1"
-llama_cpp_sycl_device_selector: "level_zero:0"
+llama_cpp_sycl_devices: "0,1"
+llama_cpp_sycl_device_selector: "level_zero:0,1"
+llama_cpp_sycl_ld_library_path: >-
+  /opt/intel/oneapi/compiler/latest/lib:/opt/intel/oneapi/mkl/latest/lib:/usr/local/lib:/usr/lib/x86_64-linux-gnu
 
 llama_cpp_sycl_dual_gpu_support_certified: false
 llama_cpp_sycl_validation_path: "/var/lib/aihost/evidence/llama_validation.json"
