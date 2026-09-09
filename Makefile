@@ -20,7 +20,8 @@ PLAYBOOKS := \
 	playbooks/validate.yml \
 	playbooks/benchmark.yml \
 	playbooks/facts-export.yml \
-	playbooks/reboot-verify.yml
+	playbooks/reboot-verify.yml \
+	playbooks/commission.yml
 
 .PHONY: bootstrap-tools lint syntax test check tuning-smoke idempotency quality
 

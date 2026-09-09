@@ -1,0 +1,414 @@
+---
+# Commissioning entrypoint for dedicated local AI hosts.
+# Enforces strict phase-gated progression with evidence checkpoints.
+# Mandatory usage:
+#   ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01
+
+- name: "Phase 1: Preflight assertions and read-only discovery"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: false
+  tags:
+    - preflight
+  pre_tasks:
+    - name: Validate raw Ubuntu release before mutation
+      ansible.builtin.raw: >-
+        set -eu;
+        . /etc/os-release;
+        case "${ID}:${VERSION_ID}:${VERSION_CODENAME}" in
+          ubuntu:24.04:noble|ubuntu:26.04:resolute) exit 0 ;;
+          *) printf 'unsupported platform: %s:%s:%s\n' "$ID" "$VERSION_ID" "$VERSION_CODENAME" >&2; exit 42 ;;
+        esac
+      changed_when: false
+
+    - name: Gather facts after raw platform check
+      ansible.builtin.setup:
+
+    - name: Validate supported platform and kernel contract
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Ubuntu"
+          - ansible_facts.distribution_version in supported_platforms
+          - ansible_facts.distribution_release == supported_platforms[ansible_facts.distribution_version].codename
+          - >-
+            (ansible_facts.distribution_version == '24.04' and ansible_kernel is version('6.17', '>=')) or
+            (ansible_facts.distribution_version == '26.04' and ansible_kernel is version('7.0', '>='))
+        fail_msg: >-
+          Platform or kernel preflight check failed for {{ inventory_hostname }}.
+          Ubuntu 24.04 requires kernel >= 6.17; Ubuntu 26.04 requires kernel >= 7.0.
+
+  tasks:
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist preflight evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'preflight',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'distribution': ansible_facts.distribution,
+              'distribution_version': ansible_facts.distribution_version,
+              'distribution_release': ansible_facts.distribution_release,
+              'kernel': ansible_kernel,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/preflight.json
+        owner: root
+        group: root
+        mode: "0640"
+
+- name: "Phase 2: Bootstrap raw access and Python foundation"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: false
+  tags:
+    - bootstrap
+  tasks:
+    - name: Include base OS bootstrap role
+      ansible.builtin.include_role:
+        name: base_os
+      vars:
+        base_os_phase: bootstrap
+
+    - name: Include time synchronization bootstrap role
+      ansible.builtin.include_role:
+        name: time_sync
+
+    - name: Include local user bootstrap role
+      ansible.builtin.include_role:
+        name: users
+
+    - name: Include SSH bootstrap role
+      ansible.builtin.include_role:
+        name: ssh
+
+    - name: Include vault integration bootstrap role
+      ansible.builtin.include_role:
+        name: vault_integration
+      vars:
+        vault_integration_operation: bootstrap
+      when:
+        - vault_integration_bootstrap_validate_credentials | default(false) | bool
+          or vault_integration_bootstrap_configure_references | default(false) | bool
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist bootstrap evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'bootstrap',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/bootstrap.json
+        owner: root
+        group: root
+        mode: "0640"
+
+- name: "Phase 3: Baseline convergence and idempotency verification"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - baseline_idempotency
+  tasks:
+    - name: Include base OS baseline role
+      ansible.builtin.include_role:
+        name: base_os
+      vars:
+        base_os_phase: baseline
+
+    - name: Include time synchronization baseline role
+      ansible.builtin.include_role:
+        name: time_sync
+
+    - name: Include networking baseline role
+      ansible.builtin.include_role:
+        name: networking
+      when: >-
+        networking_manage_netplan | default(false) | bool
+        or networking_ethernets | default({}) | length > 0
+
+    - name: Include users baseline role
+      ansible.builtin.include_role:
+        name: users
+
+    - name: Include SSH baseline role
+      ansible.builtin.include_role:
+        name: ssh
+
+    - name: Include security baseline role
+      ansible.builtin.include_role:
+        name: security
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist baseline idempotency evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'baseline_idempotency',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/baseline_idempotency.json
+        owner: root
+        group: root
+        mode: "0640"
+
+- name: "Phase 4: Guarded LVM storage management"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - storage
+  tasks:
+    - name: Include storage role
+      ansible.builtin.include_role:
+        name: storage
+      when: >-
+        (storage_mounts | default([]) | length > 0)
+        or (storage_lvm.enabled | default(false) | bool)
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist storage evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'storage',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'lvm_enabled': storage_lvm.enabled | default(false),
+              'mount_path': storage_lvm.mount_path | default('/var/lib/local-ai'),
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/storage.json
+        owner: root
+        group: root
+        mode: "0640"
+
+- name: "Phase 5: Pinned Intel GPU OMIX stack installation"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - omix
+  tasks:
+    - name: Include Intel GPU role
+      ansible.builtin.include_role:
+        name: intel_gpu
+      when: capabilities.gpu | default(false) | bool
+
+    - name: Check whether reboot is required after OMIX driver installation
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: commission_reboot_stat
+
+    - name: Register reboot_required fact
+      ansible.builtin.set_fact:
+        reboot_required: "{{ commission_reboot_stat.stat.exists | default(false) }}"
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist OMIX evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'omix',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'reboot_required': reboot_required | bool,
+              'reboot_verify_command': 'ansible-playbook -i inventory/production/hosts.yml playbooks/reboot-verify.yml --limit ' ~ inventory_hostname,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/omix.json
+        owner: root
+        group: root
+        mode: "0640"
+
+    - name: Operator checkpoint notice when reboot is required
+      ansible.builtin.debug:
+        msg: >-
+          Reboot is required after OMIX installation. Do not automatically reboot in this workflow.
+          Execute 'ansible-playbook -i inventory/production/hosts.yml playbooks/reboot-verify.yml --limit {{ inventory_hostname }}'
+          before proceeding to Phase 6 (gpu_validation).
+      when: reboot_required | bool
+
+- name: "Phase 6: Dual-BDF GPU compute acceptance validation"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - gpu_validation
+  tasks:
+    - name: Collect live hardware inventory
+      ansible.builtin.include_role:
+        name: hardware_inventory
+
+    - name: Classify hardware against version-controlled profile
+      ansible.builtin.include_role:
+        name: hardware_validation
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist GPU validation evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'gpu_validation',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/gpu_validation.json
+        owner: root
+        group: root
+        mode: "0640"
+
+- name: "Phase 7: Pinned PyTorch XPU environment validation and promotion"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - pytorch_xpu
+  tasks:
+    - name: Include PyTorch XPU role
+      ansible.builtin.include_role:
+        name: pytorch_xpu
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist PyTorch XPU evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'pytorch_xpu',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/pytorch_xpu.json
+        owner: root
+        group: root
+        mode: "0640"
+
+- name: "Phase 8: Verified inference runtime qualification"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - inference
+  tasks:
+    - name: Include vLLM XPU role
+      ansible.builtin.include_role:
+        name: vllm_xpu
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+        - runtime_profiles.vllm.enabled | default(false) | bool
+
+    - name: Include llama.cpp SYCL role
+      ansible.builtin.include_role:
+        name: llama_cpp_sycl
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+        - runtime_profiles.llama_cpp.enabled | default(false) | bool
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Persist inference qualification evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'inference',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'vllm_enabled': runtime_profiles.vllm.enabled | default(false),
+              'llama_cpp_enabled': runtime_profiles.llama_cpp.enabled | default(false),
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/inference.json
+        owner: root
+        group: root
+        mode: "0640"

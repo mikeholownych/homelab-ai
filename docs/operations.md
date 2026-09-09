@@ -125,3 +125,29 @@ directory, remote-writes to VictoriaMetrics, and forwards logs to Loki; vmalert
 evaluates recording rules (host-level GPU thermal/severity always, per-tuning
 profile series once live `/metrics` names are validated); Grafana serves the
 host overview dashboard. All services bind loopback only.
+
+### 14. Phase-Gated Host Commissioning
+For initial node commissioning or major baseline re-acceptance, use the ordered entrypoint `playbooks/commission.yml`:
+```bash
+# Dry preflight
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags preflight --diff
+
+# Sequential phase execution
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags bootstrap
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags baseline_idempotency
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags storage
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags omix
+
+# Controlled reboot verification if reboot is required after OMIX
+ansible-playbook -i inventory/production/hosts.yml playbooks/reboot-verify.yml --limit ai-5820-01
+
+# Compute acceptance and runtime validation
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags gpu_validation
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags pytorch_xpu
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags inference
+
+# Full rerun
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01
+```
+Note: Ubuntu Server acceptance is evidence-based and linear LVM is not redundant.
+
