@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import ipaddress
+import posixpath
 import re
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
@@ -61,12 +62,34 @@ def invalid_logrotate_paths(values: Iterable[object]) -> list[str]:
     return invalid
 
 
+def path_is_strictly_within(value: object, allowed_root: object) -> bool:
+    if not isinstance(value, str) or not isinstance(allowed_root, str):
+        return False
+    if not value or not allowed_root or "\x00" in value or "\x00" in allowed_root:
+        return False
+
+    candidate = PurePosixPath(value)
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        return False
+    if value != posixpath.normpath(value):
+        return False
+
+    try:
+        resolved_candidate = Path(value).resolve(strict=False)
+        resolved_root = Path(allowed_root).resolve(strict=False)
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+    return resolved_candidate != resolved_root and resolved_root in resolved_candidate.parents
+
+
 class FilterModule:
     def filters(self) -> dict[str, object]:
         return {
             "aihost_invalid_cidrs": invalid_cidrs,
             "aihost_invalid_ports": invalid_ports,
             "aihost_invalid_logrotate_paths": invalid_logrotate_paths,
+            "aihost_path_is_strictly_within": path_is_strictly_within,
             "aihost_boot_param_allowed": self.boot_param_allowed,
             "aihost_model_stamp": model_stamp,
             "aihost_catalog_invalid_entries": catalog_invalid_entries,

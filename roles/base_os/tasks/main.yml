@@ -8,11 +8,39 @@
           baseline_skip_platform_guard | default(false) | bool
           and baseline_localhost_safe_mode | default(false) | bool
           and not base_os_mutating_operations_enabled | bool
+          and not base_os_manage_ubuntu_sources | bool
+          and not base_os_proxy_enabled | bool
+          and not base_os_manage_admin_packages | bool
+          and not base_os_manage_journald_service | bool
+          and not base_os_manage_locale_generation | bool
+          and not base_os_manage_timezone | bool
+          and not base_os_manage_package_policy | bool
+          and not base_os_manage_unattended_upgrades_service | bool
+          and not base_os_manage_boot_parameters | bool
+          and not base_os_update_grub_manage_runtime | bool
           and inventory_hostname == "localhost"
           and ansible_connection | default("") == "local"
         )
     fail_msg: >-
-      base_os platform guard bypass requires non-mutating localhost-safe mode.
+      base_os platform guard bypass requires non-mutating localhost-safe mode
+      with all base_os mutation switches disabled.
+  tags:
+    - base_os_platform_guard
+
+- name: Validate base OS platform guard sandbox
+  ansible.builtin.assert:
+    that:
+      - >-
+        base_os_enforce_platform_guard | bool
+        or ansible_check_mode
+        or base_os_root_dir | aihost_path_is_strictly_within(
+          (role_path | dirname | dirname) ~ '/.ansible'
+        )
+    fail_msg: >-
+      base_os platform guard bypass requires Ansible check mode or an absolute,
+      normalized, non-empty sandbox root below the repository .ansible test root.
+  tags:
+    - base_os_platform_guard
 
 - name: Validate base OS platform resolver prerequisites
   ansible.builtin.assert:

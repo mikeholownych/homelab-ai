@@ -83,7 +83,7 @@ def ansible_playbook_bin() -> str:
 
 
 def make_probe_workspace() -> Path:
-    return Path(tempfile.mkdtemp(prefix="aihost-baseline-probe-"))
+    return Path(tempfile.mkdtemp(prefix="baseline-probe-", dir=REPO_ROOT / ".ansible"))
 
 
 def load_filter_module():
@@ -107,17 +107,23 @@ def load_baseline_harness_module():
 
 
 def run_base_os_validation_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
-    with tempfile.TemporaryDirectory(prefix="aihost-base-os-validation-") as tmpdir:
+    with tempfile.TemporaryDirectory(
+        prefix="base-os-validation-",
+        dir=REPO_ROOT / ".ansible",
+    ) as tmpdir:
         workspace = Path(tmpdir)
         common_vars: dict[str, object] = {
             "base_os_root_dir": str(workspace / "root"),
             "base_os_logrotate_validate_command": "/usr/bin/env true %s",
+            "base_os_manage_ubuntu_sources": False,
+            "base_os_proxy_enabled": False,
             "base_os_manage_admin_packages": False,
             "base_os_manage_journald_service": False,
             "base_os_manage_locale_generation": False,
             "base_os_manage_timezone": False,
             "base_os_manage_package_policy": False,
             "base_os_manage_unattended_upgrades_service": False,
+            "base_os_manage_boot_parameters": False,
             "base_os_update_grub_manage_runtime": False,
         }
         common_vars.update(role_vars)
@@ -138,6 +144,53 @@ def run_base_os_validation_probe(role_vars: dict[str, object]) -> subprocess.Com
             }
         ]
         return run_local_role_probe(yaml.safe_dump(playbook, sort_keys=False), workspace=workspace)
+
+
+def run_base_os_guard_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory(
+        prefix="base-os-guard-",
+        dir=REPO_ROOT / ".ansible",
+    ) as tmpdir:
+        workspace = Path(tmpdir)
+        common_vars: dict[str, object] = {
+            "baseline_skip_platform_guard": True,
+            "baseline_localhost_safe_mode": True,
+            "base_os_root_dir": str(workspace / "root"),
+            "base_os_mutating_operations_enabled": False,
+            "base_os_manage_ubuntu_sources": False,
+            "base_os_proxy_enabled": False,
+            "base_os_manage_admin_packages": False,
+            "base_os_manage_journald_service": False,
+            "base_os_manage_locale_generation": False,
+            "base_os_manage_timezone": False,
+            "base_os_manage_package_policy": False,
+            "base_os_manage_unattended_upgrades_service": False,
+            "base_os_manage_boot_parameters": False,
+            "base_os_update_grub_manage_runtime": False,
+        }
+        common_vars.update(role_vars)
+        playbook = [
+            {
+                "name": "Base OS guard validation probe",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": common_vars,
+                "tasks": [
+                    {
+                        "name": "Include base OS role guard",
+                        "ansible.builtin.include_role": {"name": "base_os"},
+                        "tags": ["base_os_platform_guard"],
+                    }
+                ],
+            }
+        ]
+        return run_local_role_probe(
+            yaml.safe_dump(playbook, sort_keys=False),
+            workspace=workspace,
+            extra_args=["--tags", "base_os_platform_guard"],
+        )
 
 
 def ssh_keygen_bin() -> str:
@@ -166,11 +219,18 @@ def run_local_role_probe(
     workspace: Path | None = None,
     check: bool = False,
     extra_env: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if workspace is None:
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="role-probe-", dir=REPO_ROOT / ".ansible") as tmpdir:
             temp_root = Path(tmpdir)
-            return run_local_role_probe(playbook_text, workspace=temp_root, check=check, extra_env=extra_env)
+            return run_local_role_probe(
+                playbook_text,
+                workspace=temp_root,
+                check=check,
+                extra_env=extra_env,
+                extra_args=extra_args,
+            )
 
     playbook_path = workspace / "probe.yml"
     playbook_path.write_text(playbook_text, encoding="utf-8")
@@ -186,6 +246,8 @@ def run_local_role_probe(
     ]
     if check:
         command.append("--check")
+    if extra_args:
+        command.extend(extra_args)
     command.append(str(playbook_path))
     return subprocess.run(
         command,
@@ -228,6 +290,49 @@ class BaselineContractTests(unittest.TestCase):
 
         self.assertNotEqual(0, result.returncode)
         self.assertIn("platform guard bypass requires non-mutating localhost-safe mode", result.stdout + result.stderr)
+
+    def test_base_os_guard_bypass_rejects_unsafe_sandbox_roots(self) -> None:
+        unsafe_roots = {
+            "empty": "",
+            "filesystem root": "/",
+            "outside repository test root": "/tmp/aihost-base-os-outside",
+            "relative": ".ansible/base-os-relative",
+            "parent traversal": str(REPO_ROOT / ".ansible" / "sandbox" / ".." / "escaped"),
+        }
+
+        for label, root_dir in unsafe_roots.items():
+            with self.subTest(root=label):
+                result = run_base_os_guard_probe({"base_os_root_dir": root_dir})
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("repository .ansible test root", result.stdout + result.stderr)
+
+    def test_base_os_guard_bypass_accepts_valid_fixture_root(self) -> None:
+        result = run_base_os_guard_probe({})
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_base_os_guard_bypass_rejects_each_mutation_switch(self) -> None:
+        mutation_switches = (
+            "base_os_mutating_operations_enabled",
+            "base_os_manage_ubuntu_sources",
+            "base_os_proxy_enabled",
+            "base_os_manage_admin_packages",
+            "base_os_manage_journald_service",
+            "base_os_manage_locale_generation",
+            "base_os_manage_timezone",
+            "base_os_manage_package_policy",
+            "base_os_manage_unattended_upgrades_service",
+            "base_os_manage_boot_parameters",
+            "base_os_update_grub_manage_runtime",
+        )
+
+        for variable in mutation_switches:
+            with self.subTest(variable=variable):
+                result = run_base_os_guard_probe({variable: True})
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("all base_os mutation switches disabled", result.stdout + result.stderr)
 
     def test_base_os_rejects_malicious_newline_codename_in_safe_mode(self) -> None:
         result = run_base_os_validation_probe(
@@ -757,7 +862,7 @@ class BaselineContractTests(unittest.TestCase):
                   become: false
                   vars:
                     baseline_localhost_safe_mode: true
-                    baseline_skip_platform_guard: true
+                    baseline_skip_platform_guard: false
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
                     base_os_manage_boot_parameters: true
@@ -817,7 +922,7 @@ class BaselineContractTests(unittest.TestCase):
                   become: false
                   vars:
                     baseline_localhost_safe_mode: true
-                    baseline_skip_platform_guard: true
+                    baseline_skip_platform_guard: false
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
                     base_os_manage_boot_parameters: false
