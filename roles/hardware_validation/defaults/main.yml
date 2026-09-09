@@ -6,3 +6,5 @@ hardware_validation_evidence_dir: >-
   {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR') |
      default('/var/lib/local-ai/evidence/manual', true) }}
 hardware_validation_fail_on_blocking: true
+hardware_validation_work_dir: /var/lib/local-ai/hardware
+hardware_validation_observed_path: "{{ hardware_validation_work_dir }}/observed.json"

@@ -66,6 +66,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
 - name: "Phase 2: Bootstrap raw access and Python foundation"
   hosts: ai_hosts
@@ -125,6 +126,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
 - name: "Phase 3: Baseline convergence and idempotency verification"
   hosts: ai_hosts
@@ -186,6 +188,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
 - name: "Phase 4: Guarded LVM storage management"
   hosts: ai_hosts
@@ -227,6 +230,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
 - name: "Phase 5: Pinned Intel GPU OMIX stack installation"
   hosts: ai_hosts
@@ -238,6 +242,11 @@
     - name: Include Intel GPU role
       ansible.builtin.include_role:
         name: intel_gpu
+        apply:
+          tags:
+            - omix
+      vars:
+        intel_gpu_install_enabled: true
       when: capabilities.gpu | default(false) | bool
 
     - name: Check whether reboot is required after OMIX driver installation
@@ -277,6 +286,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
     - name: Operator checkpoint notice when reboot is required
       ansible.builtin.debug:
@@ -296,10 +306,16 @@
     - name: Collect live hardware inventory
       ansible.builtin.include_role:
         name: hardware_inventory
+        apply:
+          tags:
+            - gpu_validation
 
     - name: Classify hardware against version-controlled profile
       ansible.builtin.include_role:
         name: hardware_validation
+        apply:
+          tags:
+            - gpu_validation
 
     - name: Ensure checkpoints directory exists
       ansible.builtin.file:
@@ -325,6 +341,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
 - name: "Phase 7: Pinned PyTorch XPU environment validation and promotion"
   hosts: ai_hosts
@@ -333,9 +350,15 @@
   tags:
     - pytorch_xpu
   tasks:
-    - name: Include PyTorch XPU role
+    - name: Include PyTorch XPU role  # noqa var-naming[no-role-prefix]
       ansible.builtin.include_role:
         name: pytorch_xpu
+        apply:
+          tags:
+            - pytorch_xpu
+      vars:
+        intel_gpu_install_enabled: true
+        pytorch_xpu_install_enabled: true
       when:
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
@@ -364,6 +387,7 @@
         owner: root
         group: root
         mode: "0640"
+        force: false
 
 - name: "Phase 8: Verified inference runtime qualification"
   hosts: ai_hosts
@@ -375,6 +399,9 @@
     - name: Include vLLM XPU role
       ansible.builtin.include_role:
         name: vllm_xpu
+        apply:
+          tags:
+            - inference
       when:
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
@@ -383,6 +410,9 @@
     - name: Include llama.cpp SYCL role
       ansible.builtin.include_role:
         name: llama_cpp_sycl
+        apply:
+          tags:
+            - inference
       when:
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
@@ -414,3 +444,4 @@
         owner: root
         group: root
         mode: "0640"
+        force: false

@@ -2,10 +2,12 @@
 - name: Validate Ubuntu 26.04 release and kernel version
   ansible.builtin.assert:
     that:
-      - ansible_distribution == "Ubuntu"
-      - ansible_distribution_version == "26.04"
-      - ansible_distribution_release == "resolute"
-      - ansible_kernel is version(intel_gpu_omix_minimum_kernel, ">=")
+      - (ansible_facts.distribution | default(ansible_distribution | default(''))) == "Ubuntu"
+      - (ansible_facts.distribution_version | default(ansible_distribution_version | default(''))) == "26.04"
+      - (ansible_facts.distribution_release | default(ansible_distribution_release | default(''))) == "resolute"
+      - >-
+        (ansible_facts.kernel | default(ansible_kernel | default('0.0.0')))
+        is version(intel_gpu_omix_minimum_kernel, ">=")
     fail_msg: >-
       OMIX 0.3.0 installation requires Ubuntu 26.04 (resolute) with kernel >= {{ intel_gpu_omix_minimum_kernel }}.
 

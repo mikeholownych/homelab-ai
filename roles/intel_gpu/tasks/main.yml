@@ -4,22 +4,22 @@
     msg: "{{ intel_gpu_support_blocker }}"
   when:
     - intel_gpu_install_enabled | bool
-    - (ansible_distribution_version | default('24.04')) == '24.04'
+    - (ansible_facts.distribution_version | default(ansible_distribution_version | default('24.04'))) == '24.04'
   tags: [gpu, runtime]
 
 - name: Run Intel OMIX preflight on Ubuntu 26.04
   ansible.builtin.include_tasks: preflight.yml
   when:
     - intel_gpu_install_enabled | bool
-    - (ansible_distribution_version | default('')) == '26.04'
-  tags: [gpu, runtime, preflight]
+    - (ansible_facts.distribution_version | default(ansible_distribution_version | default(''))) == '26.04'
+  tags: [gpu, runtime, preflight, omix]
 
 - name: Install pinned Intel OMIX stack on Ubuntu 26.04
   ansible.builtin.include_tasks: omix.yml
   when:
     - intel_gpu_install_enabled | bool
-    - (ansible_distribution_version | default('')) == '26.04'
-  tags: [gpu, runtime]
+    - (ansible_facts.distribution_version | default(ansible_distribution_version | default(''))) == '26.04'
+  tags: [gpu, runtime, omix]
 
 
 - name: Record Intel GPU validation as NOT_TESTED in check mode
