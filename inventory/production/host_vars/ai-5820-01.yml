@@ -3,6 +3,8 @@
 # OS on NVMe #1; NVMe #2 is reserved for model/cache data (see storage_mounts).
 ansible_host: 10.0.8.5
 ansible_user: mike
+platform_release: "26.04"
+platform_codename: resolute
 node_metadata:
   environment: production
   hostname: ai-5820-01
