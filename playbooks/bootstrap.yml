@@ -37,12 +37,12 @@
     - name: Validate supported Ubuntu bootstrap target
       ansible.builtin.assert:
         that:
-          - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
-          - not baseline_platform_guard_enabled | bool or ansible_distribution_version in supported_platforms
+          - not baseline_platform_guard_enabled | bool or ansible_facts.distribution == "Ubuntu"
+          - not baseline_platform_guard_enabled | bool or ansible_facts.distribution_version in supported_platforms
           - >-
             not baseline_platform_guard_enabled | bool
-            or ansible_distribution_release
-            == supported_platforms[ansible_distribution_version].codename
+            or ansible_facts.distribution_release
+            == supported_platforms[ansible_facts.distribution_version].codename
         fail_msg: >-
           Bootstrap is supported only for declared Ubuntu releases with a matching
           codename unless the localhost-safe fact-check override is enabled.

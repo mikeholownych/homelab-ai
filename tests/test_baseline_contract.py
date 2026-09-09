@@ -173,6 +173,28 @@ class BaselineContractTests(unittest.TestCase):
         self.assertNotIn("baseline_skip_platform_guard", raw_gate)
         self.assertIn("/etc/os-release", raw_gate)
 
+    def test_bootstrap_fact_gate_uses_explicit_ansible_facts_namespace(self) -> None:
+        play = load_yaml(PLAYBOOKS["bootstrap"])[0]
+        platform_task = next(
+            task
+            for task in play["pre_tasks"]
+            if task["name"] == "Validate supported Ubuntu bootstrap target"
+        )
+        checks = "\n".join(platform_task["ansible.builtin.assert"]["that"])
+
+        for required in (
+            "ansible_facts.distribution",
+            "ansible_facts.distribution_version",
+            "ansible_facts.distribution_release",
+        ):
+            self.assertIn(required, checks)
+        for prohibited in (
+            "ansible_distribution",
+            "ansible_distribution_version",
+            "ansible_distribution_release",
+        ):
+            self.assertNotIn(prohibited, checks)
+
     def test_bootstrap_baseline_and_site_playbooks_compose_expected_roles(self) -> None:
         bootstrap_text = read_text(PLAYBOOKS["bootstrap"])
         baseline_text = read_text(PLAYBOOKS["baseline"])
