@@ -1,14 +1,157 @@
 ---
-- name: Validate Ubuntu 24.04 base OS target
+- name: Validate base OS platform guard mode
   ansible.builtin.assert:
     that:
-      - not base_os_enforce_platform_guard | bool or ansible_facts.distribution == base_os_supported_distribution
+      - >-
+        base_os_enforce_platform_guard | bool
+        or (
+          baseline_skip_platform_guard | default(false) | bool
+          and baseline_localhost_safe_mode | default(false) | bool
+          and not base_os_mutating_operations_enabled | bool
+          and not base_os_manage_ubuntu_sources | bool
+          and not base_os_proxy_enabled | bool
+          and not base_os_manage_admin_packages | bool
+          and not base_os_manage_journald_service | bool
+          and not base_os_manage_locale_generation | bool
+          and not base_os_manage_timezone | bool
+          and not base_os_manage_package_policy | bool
+          and not base_os_manage_unattended_upgrades_service | bool
+          and not base_os_manage_boot_parameters | bool
+          and not base_os_update_grub_manage_runtime | bool
+          and inventory_hostname == "localhost"
+          and ansible_connection | default("") == "local"
+        )
+    fail_msg: >-
+      base_os platform guard bypass requires non-mutating localhost-safe mode
+      with all base_os mutation switches disabled.
+  tags:
+    - base_os_platform_guard
+
+- name: Validate base OS platform guard sandbox
+  ansible.builtin.assert:
+    that:
+      - >-
+        base_os_enforce_platform_guard | bool
+        or ansible_check_mode
+        or base_os_root_dir | aihost_path_is_strictly_within(
+          (role_path | dirname | dirname) ~ '/.ansible'
+        )
+    fail_msg: >-
+      base_os platform guard bypass requires Ansible check mode or an absolute,
+      normalized, non-empty sandbox root below the repository .ansible test root.
+  tags:
+    - base_os_platform_guard
+
+- name: Validate base OS managed path safety
+  ansible.builtin.assert:
+    that:
+      - >-
+        item | aihost_path_is_safe_descendant(
+          (base_os_root_dir | default('', true)) | ternary(base_os_root_dir, '/')
+        )
+    fail_msg: >-
+      base_os managed paths must stay canonically beneath the target filesystem root
+      without traversing unmanaged symlinks: {{ item }}
+  loop:
+    - "{{ base_os_sources_path }}"
+    - "{{ base_os_proxy_path }}"
+    - "{{ base_os_disable_periodic_path }}"
+    - "{{ base_os_journald_path }}"
+    - "{{ base_os_logrotate_path }}"
+    - "{{ base_os_locale_path }}"
+    - "{{ base_os_grub_dropin_path }}"
+    - "{{ base_os_package_holds_state_path }}"
+    - "{{ base_os_package_preferences_path }}"
+  tags:
+    - base_os_path_guard
+    - base_os_platform_guard
+
+
+- name: Validate base OS platform resolver prerequisites
+  ansible.builtin.assert:
+    that:
+      - ansible_facts is mapping
+      - ansible_facts.distribution_version is defined
+      - ansible_facts.distribution_release is defined
+      - ansible_facts.distribution_release is string
+      - ansible_facts.distribution_release is match("^[a-z]+$")
+      - supported_platforms is defined
+      - supported_platforms is mapping
+    fail_msg: >-
+      base_os requires gathered release facts, a strict lowercase Ubuntu
+      codename, and the supported_platforms mapping before platform selection.
+
+- name: Validate base OS platform identity before selection
+  ansible.builtin.assert:
+    that:
       - >-
         not base_os_enforce_platform_guard | bool
-        or ansible_facts.distribution_version is version(base_os_supported_release, "==")
+        or ansible_facts.distribution | default("") == base_os_supported_distribution
+      - ansible_facts.distribution_version in base_os_supported_releases
+      - ansible_facts.distribution_version in supported_platforms
+      - base_os_platforms == supported_platforms
     fail_msg: >-
-      base_os supports only Ubuntu 24.04 hosts unless the localhost-safe
-      override is enabled.
+      base_os requires an explicitly supported Ubuntu release and release
+      codename before it can mutate the host.
+
+- name: Record base OS platform identity
+  ansible.builtin.set_fact:
+    base_os_resolved_release: "{{ ansible_facts.distribution_version }}"
+    base_os_resolved_codename: "{{ ansible_facts.distribution_release }}"
+
+- name: Select base OS platform record
+  ansible.builtin.set_fact:
+    base_os_resolved_platform: "{{ base_os_platforms[base_os_resolved_release] }}"
+
+- name: Validate selected base OS platform record shape
+  ansible.builtin.assert:
+    that:
+      - base_os_resolved_platform is mapping
+      - "'codename' in base_os_resolved_platform"
+      - "'apt_suites' in base_os_resolved_platform"
+    fail_msg: >-
+      base_os selected platform records require codename and apt_suites fields.
+
+- name: Validate selected base OS platform record values
+  ansible.builtin.assert:
+    that:
+      - base_os_resolved_platform.codename is string
+      - base_os_resolved_platform.codename is match("^[a-z]+$")
+      - base_os_resolved_platform.codename == base_os_resolved_codename
+      - base_os_resolved_platform.apt_suites is iterable
+      - base_os_resolved_platform.apt_suites is not string
+    fail_msg: >-
+      base_os selected platform metadata must use the gathered strict
+      lowercase Ubuntu codename and declare an apt suite list.
+
+- name: Derive base OS package suites from selected platform
+  ansible.builtin.set_fact:
+    base_os_apt_suites: "{{ base_os_resolved_platform.apt_suites | list }}"
+    base_os_expected_apt_suites:
+      - "{{ base_os_resolved_codename }}"
+      - "{{ base_os_resolved_codename }}-updates"
+      - "{{ base_os_resolved_codename }}-backports"
+      - "{{ base_os_resolved_codename }}-security"
+
+- name: Identify selected base OS security suites
+  ansible.builtin.set_fact:
+    base_os_security_suites: "{{ base_os_apt_suites | select('match', '.*-security$') | list }}"
+    base_os_archive_suites: "{{ base_os_apt_suites | reject('match', '.*-security$') | list }}"
+
+- name: Validate selected base OS platform record
+  ansible.builtin.assert:
+    that:
+      - base_os_apt_suites == base_os_expected_apt_suites
+      - base_os_security_suites | length == 1
+      - base_os_archive_suites | length > 0
+    fail_msg: >-
+      base_os platform metadata must use the exact canonical suite order:
+      codename, codename-updates, codename-backports, codename-security, with
+      non-empty archive suites and exactly one security suite.
+
+- name: Record selected base OS security suite
+  ansible.builtin.set_fact:
+    base_os_security_suite: "{{ base_os_security_suites | first }}"
 
 - name: Validate base OS package source inputs
   ansible.builtin.assert:
@@ -18,7 +161,8 @@
       - base_os_apt_architectures | length > 0
       - (base_os_apt_architectures | difference(base_os_allowed_architectures)) | length == 0
       - base_os_apt_suites | length > 0
-      - (base_os_apt_suites | difference(["noble", "noble-updates", "noble-backports", "noble-security"])) | length == 0
+      - base_os_archive_suites | length > 0
+      - base_os_security_suite in base_os_apt_suites
       - base_os_apt_components | length > 0
       - (base_os_apt_components | difference(["main", "restricted", "universe", "multiverse"])) | length == 0
       - base_os_allowed_sysctl is iterable

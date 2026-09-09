@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ipaddress
+import posixpath
 import re
-from pathlib import PurePosixPath
+import stat
+from pathlib import Path, PurePosixPath
 from typing import Iterable
 
 
@@ -61,12 +63,78 @@ def invalid_logrotate_paths(values: Iterable[object]) -> list[str]:
     return invalid
 
 
+def path_is_safe_descendant(value: object, allowed_root: object) -> bool:
+    if not isinstance(value, str) or not isinstance(allowed_root, str):
+        return False
+    if not value or not allowed_root or "\x00" in value or "\x00" in allowed_root:
+        return False
+
+    candidate = PurePosixPath(value)
+    root = PurePosixPath(allowed_root)
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        return False
+    if not root.is_absolute() or ".." in root.parts:
+        return False
+    if value != posixpath.normpath(value) or allowed_root != posixpath.normpath(allowed_root):
+        return False
+
+    candidate_path = Path(value)
+    allowed_root_path = Path(allowed_root)
+    if allowed_root_path not in candidate_path.parents:
+        return False
+
+    if allowed_root_path == Path("/"):
+        return True
+
+    try:
+        if allowed_root_path.resolve(strict=False) != allowed_root_path:
+            return False
+    except (OSError, RuntimeError, ValueError):
+        return False
+
+    current = allowed_root_path
+    for part in candidate_path.relative_to(allowed_root_path).parts:
+        try:
+            current_stat = current.lstat()
+        except FileNotFoundError:
+            break
+        except OSError:
+            return False
+        if stat.S_ISLNK(current_stat.st_mode):
+            return False
+        current /= part
+    else:
+        try:
+            current_stat = current.lstat()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        if stat.S_ISLNK(current_stat.st_mode):
+            return False
+
+    return True
+
+
+def path_is_strictly_within(value: object, allowed_root: object) -> bool:
+    if not path_is_safe_descendant(value, allowed_root):
+        return False
+
+    try:
+        allowed_root_stat = Path(str(allowed_root)).lstat()
+    except (OSError, ValueError):
+        return False
+    return stat.S_ISDIR(allowed_root_stat.st_mode)
+
+
 class FilterModule:
     def filters(self) -> dict[str, object]:
         return {
             "aihost_invalid_cidrs": invalid_cidrs,
             "aihost_invalid_ports": invalid_ports,
             "aihost_invalid_logrotate_paths": invalid_logrotate_paths,
+            "aihost_path_is_safe_descendant": path_is_safe_descendant,
+            "aihost_path_is_strictly_within": path_is_strictly_within,
             "aihost_boot_param_allowed": self.boot_param_allowed,
             "aihost_model_stamp": model_stamp,
             "aihost_catalog_invalid_entries": catalog_invalid_entries,

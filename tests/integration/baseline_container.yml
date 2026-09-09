@@ -10,7 +10,7 @@
       ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJXH3onYv0WQGFFS0XUQ0K3Mx3P4W+H6Ww2x8a6l0g2m baseline-initial@example
     baseline_operator_key_transition: >-
       ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILW2Wl9JY+v7k2Qw4VgU4t4M1Lh8mK5A2n5s7a1Qd1Yw baseline-transition@example
-    base_os_manage_ubuntu_sources: false
+    base_os_manage_ubuntu_sources: true
     base_os_manage_admin_packages: false
     base_os_manage_journald_service: false
     base_os_manage_locale_generation: false
@@ -26,7 +26,7 @@
         else [
           {
             'package': 'sudo',
-            'pin': 'release a=noble',
+            'pin': 'release a=' ~ baseline_harness_release,
             'priority': 1001
           }
         ]

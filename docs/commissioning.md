@@ -179,3 +179,88 @@ Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 582
     - Archive `evidence/ai-5820-01/<timestamp>/` as the authoritative commissioning baseline evidence.
 
 **Aggregate VRAM caveat**: 64 GB is a multi-device memory pool (2 × 32 GB device-local memory spaces), not a single transparent 64 GB device. TP=2 spans a model across both GPUs; whether a single request can address memory on both devices depends on the runtime's model-parallel implementation, so sizing defaults to per-device 32 GB.
+
+---
+
+## Phase-Gated Host Commissioning (`playbooks/commission.yml`)
+
+The primary entrypoint for complete host commissioning is `playbooks/commission.yml`. It targets `ai_hosts`, enforces `any_errors_fatal: true`, and progresses through eight ordered phases with structured evidence checkpoints persisted under `/var/lib/local-ai/evidence/checkpoints/`.
+
+Because the playbook targets `ai_hosts`, the `--limit` flag is mandatory in production:
+```bash
+--limit ai-5820-01
+```
+
+### Commissioning Principles
+
+1. **Evidence-Based Acceptance**:
+   Ubuntu Server acceptance is evidence-based and linear LVM is not redundant. Official Intel OMIX documentation qualifies Ubuntu Desktop 24.04.4 while Ubuntu Server 26.04 operates under qualification caveats; acceptance requires recorded, schema-valid evidence at every stage rather than assumption.
+2. **Storage Architecture**:
+   The linear LVM configuration concatenates physical partitions (`/dev/nvme0n1p3` and `/dev/nvme1n1p1`) into a single 550 GiB continuous filesystem mounted by UUID at `/var/lib/local-ai`. Linear LVM is not redundant: it maximizes space for model weights and caches without RAID overhead, while disaster recovery is handled via configuration management and model re-download.
+3. **Controlled Operator Checkpoints**:
+   Reboots are never performed automatically within `playbooks/commission.yml`. If the OMIX driver installation flags a pending reboot (`/var/run/reboot-required`), the `omix` phase records `reboot_required: true` and halts. The operator executes `playbooks/reboot-verify.yml` before proceeding.
+
+### Ordered Phase Commands
+
+Execute the commissioning runbook through the following sequence:
+
+#### 1. Dry Preflight
+Assert platform compatibility, kernel version, NVMe PV topology, and target GPU BDFs without mutating host state:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags preflight --diff
+```
+
+#### 2. Bootstrap Phase
+Install minimal Python prerequisites, configure initial access, and verify raw platform identity:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags bootstrap
+```
+
+#### 3. Baseline Idempotency Phase
+Apply base OS hardening, time sync, users, SSH configuration, and verify convergence:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags baseline_idempotency
+```
+
+#### 4. Storage Management Phase
+Verify NVMe physical volume prerequisites, allocate the 550 GiB logical volume on `ubuntu-vg`, format with XFS, and mount by UUID:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags storage
+```
+
+#### 5. Pinned OMIX Stack Phase
+Install the pinned Intel OMIX repository keyring, deb822 sources, and exact user-space packages:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags omix
+```
+
+#### Operator Checkpoint: Reboot Verification (if required)
+If OMIX installation requires a kernel driver reload or system reboot:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/reboot-verify.yml --limit ai-5820-01
+```
+
+#### 6. GPU Validation Phase
+Run hardware inventory collection and strict classification. Requires bijective correlation across both BDFs, both DRM cards, both render nodes, and distinct Level Zero UUIDs:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags gpu_validation
+```
+
+#### 7. PyTorch XPU Validation Phase
+Run isolated per-device probes on `xpu:0` and `xpu:1`, followed by dual-visible verification (`torch.xpu.device_count() == 2`), before promoting the virtual environment:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags pytorch_xpu
+```
+
+#### 8. Inference Runtime Qualification Phase
+Validate and enable inference profiles (vLLM XPU tensor-parallel and llama.cpp SYCL) according to host capabilities:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01 --tags inference
+```
+
+#### Complete Rerun Command
+Once all checkpoints pass, full idempotent convergence may be executed end-to-end:
+```bash
+ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --limit ai-5820-01
+```
+

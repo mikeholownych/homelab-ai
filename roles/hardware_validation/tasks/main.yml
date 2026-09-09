@@ -35,7 +35,7 @@
 - name: Materialize expected profile for pure comparison
   ansible.builtin.copy:
     content: "{{ hardware_validation_expected | to_nice_json }}\n"
-    dest: "{{ hardware_inventory_work_dir }}/expected.json"
+    dest: "{{ hardware_inventory_work_dir | default(hardware_validation_work_dir) }}/expected.json"
     owner: root
     group: root
     mode: "0640"
@@ -46,9 +46,9 @@
     argv:
       - "{{ hardware_validation_classifier_path }}"
       - --profile
-      - "{{ hardware_inventory_work_dir }}/expected.json"
+      - "{{ hardware_inventory_work_dir | default(hardware_validation_work_dir) }}/expected.json"
       - --observed
-      - "{{ hardware_inventory_observed_path }}"
+      - "{{ hardware_inventory_observed_path | default(hardware_validation_observed_path) }}"
       - --output-dir
       - "{{ hardware_validation_evidence_dir }}"
   register: hardware_validation_result

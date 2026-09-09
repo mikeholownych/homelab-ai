@@ -20,7 +20,8 @@ PLAYBOOKS := \
 	playbooks/validate.yml \
 	playbooks/benchmark.yml \
 	playbooks/facts-export.yml \
-	playbooks/reboot-verify.yml
+	playbooks/reboot-verify.yml \
+	playbooks/commission.yml
 
 .PHONY: bootstrap-tools lint syntax test check tuning-smoke idempotency quality
 
@@ -53,6 +54,7 @@ tuning-idempotency: tuning-smoke
 	scripts/check-tuning-idempotency
 
 idempotency: bootstrap-tools
-	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --mode idempotency --timeout 590
+	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --release noble --mode idempotency --timeout 590
+	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --release resolute --mode idempotency --timeout 590
 
 quality: lint test syntax check idempotency tuning-idempotency

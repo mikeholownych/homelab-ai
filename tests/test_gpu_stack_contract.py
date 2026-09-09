@@ -139,6 +139,75 @@ def test_validator_serializes_torch_import_failure():
     assert '"torch import failed"' in source
 
 
+def test_validator_fails_when_only_one_xpu_device_observed():
+    spec = importlib.util.spec_from_file_location("validate_xpu", VALIDATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class XPU:
+        @staticmethod
+        def is_available(): return True
+
+        @staticmethod
+        def device_count(): return 1
+
+    class Torch:
+        __version__ = "test"
+        xpu = XPU()
+
+    result = module.validate(Torch(), expected_count=2)
+    assert result["status"] == "FAIL"
+    assert "expected 2 XPU devices, observed 1" in result["error"]
+
+
+def test_validator_fails_if_per_device_tensor_synchronize_fails():
+    spec = importlib.util.spec_from_file_location("validate_xpu", VALIDATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    class Tensor:
+        def __init__(self, value): self.value = value
+        def __add__(self, other): return Tensor(self.value + other.value)
+        def item(self): return self.value
+
+    class Props:
+        name = "Intel Arc Pro B65"
+        total_memory = 32 * 1024**3
+
+    class XPU:
+        @staticmethod
+        def is_available(): return True
+        @staticmethod
+        def device_count(): return 2
+        @staticmethod
+        def get_device_properties(_index): return Props()
+        @staticmethod
+        def synchronize(index):
+            if index == 1:
+                raise RuntimeError("device 1 hardware execution error")
+
+    class Torch:
+        __version__ = "test"
+        xpu = XPU()
+        @staticmethod
+        def tensor(value, device): return Tensor(value)
+
+    result = module.validate(Torch(), expected_count=2)
+    assert result["status"] == "FAIL"
+    assert "device 1 hardware execution error" in result["error"]
+
+
+def test_validator_requires_dual_visible_process_and_device_ordinal_support():
+    spec = importlib.util.spec_from_file_location("validate_xpu", VALIDATOR)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    source = VALIDATOR.read_text()
+    assert "--device-index" in source
+    tasks = (ROOT / "roles/pytorch_xpu/tasks/main.yml").read_text()
+    assert "Validate each individual XPU device" in tasks
+
+
+
 def test_container_runtime_is_opt_in_and_maps_dri_only():
     defaults = load_yaml("roles/container_runtime/defaults/main.yml")
     assert defaults["container_runtime_enabled"] is False
@@ -208,3 +277,35 @@ def test_primary_source_provenance_is_recorded():
         assert url in doc
     assert "2026-08-27" in doc
     assert "NOT_TESTED" in doc
+
+
+def test_omix_resolute_contract_declares_exact_inputs():
+    defaults = load_yaml("roles/intel_gpu/defaults/main.yml")
+    assert defaults["intel_gpu_omix_release"] == "0.3.0"
+    assert defaults["intel_gpu_omix_repository_url"] == "https://repositories.intel.com/gpu/ubuntu"
+    assert defaults["intel_gpu_omix_repository_suite"] == "resolute/intel-omix/0.3.0"
+    assert defaults["intel_gpu_omix_repository_components"] == ["unified"]
+    assert defaults["intel_gpu_omix_signing_key_url"] == "https://repositories.intel.com/gpu/intel-graphics.key"
+    assert defaults["intel_gpu_omix_signing_key_sha256"] == "2a75e2fc92645f63d39190100969e3b6fe2417b8c9ff0f0bc91951e6d8198888"
+    assert defaults["intel_gpu_omix_signing_key_fingerprint"] == "E0258B57D9C442D5DB1855C271740E4DE392BFE3"
+    assert defaults["intel_gpu_omix_packages"] == {
+        "intel-omix": "0.3.0-9~26.04",
+        "intel-omix-dev": "0.3.0-9~26.04",
+    }
+
+
+def test_omix_preflight_checks_conflicts_and_forbids_kobuk_ppa():
+    preflight = (ROOT / "roles/intel_gpu/tasks/preflight.yml").read_text()
+    assert "kobuk-team/intel-graphics" in preflight
+    assert "repositories.intel.com" in preflight
+    assert "ansible_distribution_version" in preflight
+    assert "ansible_kernel" in preflight
+
+
+def test_omix_tasks_manage_verified_keyring_and_sources():
+    tasks = (ROOT / "roles/intel_gpu/tasks/omix.yml").read_text()
+    assert "intel-omix.sources" in tasks
+    assert "intel-graphics" in tasks
+    assert "ansible.builtin.get_url" in tasks
+    assert "intel-omix=" in tasks
+

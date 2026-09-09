@@ -1,0 +1,66 @@
+---
+- name: Validate Ubuntu 26.04 release and kernel version
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.distribution | default(ansible_distribution | default(''))) == "Ubuntu"
+      - (ansible_facts.distribution_version | default(ansible_distribution_version | default(''))) == "26.04"
+      - (ansible_facts.distribution_release | default(ansible_distribution_release | default(''))) == "resolute"
+      - >-
+        (ansible_facts.kernel | default(ansible_kernel | default('0.0.0')))
+        is version(intel_gpu_omix_minimum_kernel, ">=")
+    fail_msg: >-
+      OMIX 0.3.0 installation requires Ubuntu 26.04 (resolute) with kernel >= {{ intel_gpu_omix_minimum_kernel }}.
+
+- name: Query target GPU PCI devices
+  ansible.builtin.command:
+    cmd: "lspci -d {{ item }} -n"
+  register: intel_gpu_pci_check
+  changed_when: false
+  loop: "{{ intel_gpu_target_pci_ids }}"
+
+- name: Assert expected Intel GPU device count is present
+  ansible.builtin.assert:
+    that:
+      - (intel_gpu_pci_check.results | map(attribute="stdout_lines") | flatten | length) == intel_gpu_expected_count
+    fail_msg: >-
+      Expected exactly {{ intel_gpu_expected_count }} PCI devices with IDs {{ intel_gpu_target_pci_ids }}, but found
+      {{ intel_gpu_pci_check.results | map(attribute="stdout_lines") | flatten | length }}.
+
+- name: Check for forbidden Intel graphics PPA
+  ansible.builtin.command:
+    cmd: grep -rnE "ppa\\.launchpadcontent\\.net/kobuk-team|ppa:kobuk-team/intel-graphics" /etc/apt/
+  register: intel_gpu_kobuk_ppa_check
+  failed_when: false
+  changed_when: false
+
+- name: Assert no forbidden Intel graphics PPA is configured
+  ansible.builtin.assert:
+    that:
+      - intel_gpu_kobuk_ppa_check.rc != 0
+    fail_msg: "Forbidden PPA ppa:kobuk-team/intel-graphics detected in APT sources."
+
+- name: Check for non-OMIX Intel GPU APT repositories
+  ansible.builtin.command:
+    cmd: grep -rn "repositories.intel.com" /etc/apt/
+  register: intel_gpu_repo_check
+  failed_when: false
+  changed_when: false
+
+- name: Assert no conflicting Intel repositories exist
+  ansible.builtin.assert:
+    that:
+      - intel_gpu_repo_check.rc != 0 or (intel_gpu_repo_check.stdout is search(intel_gpu_omix_repository_suite))
+    fail_msg: "Conflicting non-OMIX repository from repositories.intel.com detected in APT configuration."
+
+- name: Gather package facts for conflict check
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Assert no conflicting Intel user-mode packages are installed
+  ansible.builtin.assert:
+    that:
+      - item not in ansible_facts.packages or (ansible_facts.packages[item][0].version is search("0.3.0-9~26.04"))
+    fail_msg: "Conflicting package {{ item }} is already installed."
+  loop:
+    - intel-opencl-icd
+    - libze-intel-gpu1

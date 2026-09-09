@@ -1,0 +1,80 @@
+---
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Intel graphics ASCII-armored signing key
+  ansible.builtin.get_url:
+    url: "{{ intel_gpu_omix_signing_key_url }}"
+    dest: /tmp/intel-graphics.key
+    checksum: "sha256:{{ intel_gpu_omix_signing_key_sha256 }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dearmor Intel graphics signing key
+  ansible.builtin.command:
+    cmd: "gpg --dearmor -o /tmp/intel-graphics.gpg.tmp /tmp/intel-graphics.key"
+  changed_when: false
+
+- name: Inspect dearmored key fingerprint
+  ansible.builtin.command:
+    cmd: "gpg --show-keys --with-colons /tmp/intel-graphics.gpg.tmp"
+  register: intel_gpu_omix_gpg_inspect
+  changed_when: false
+
+- name: Validate Intel signing key fingerprint
+  ansible.builtin.assert:
+    that:
+      - intel_gpu_omix_gpg_inspect.stdout is search(intel_gpu_omix_signing_key_fingerprint)
+    fail_msg: >-
+      Downloaded Intel signing key fingerprint does not match expected
+      {{ intel_gpu_omix_signing_key_fingerprint }}.
+
+- name: Atomically install Intel graphics keyring
+  ansible.builtin.copy:
+    src: /tmp/intel-graphics.gpg.tmp
+    dest: "{{ intel_gpu_omix_keyring_path }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure pinned Intel OMIX APT deb822 source
+  ansible.builtin.template:
+    src: intel-omix.sources.j2
+    dest: "{{ intel_gpu_omix_sources_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: intel_gpu_omix_sources_render
+
+- name: Install pinned Intel OMIX packages
+  ansible.builtin.apt:
+    name:
+      - "intel-omix={{ intel_gpu_omix_packages['intel-omix'] }}"
+      - "intel-omix-dev={{ intel_gpu_omix_packages['intel-omix-dev'] }}"
+    state: present
+    update_cache: "{{ intel_gpu_omix_sources_render.changed }}"
+
+- name: Gather package facts after Intel OMIX installation
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Record resolved Intel OMIX package versions
+  ansible.builtin.set_fact:
+    intel_gpu_omix_installed_versions:
+      intel_omix: "{{ ansible_facts.packages['intel-omix'][0].version | default('unknown') }}"
+      intel_omix_dev: "{{ ansible_facts.packages['intel-omix-dev'][0].version | default('unknown') }}"
+
+- name: Remove temporary Intel keyring files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/intel-graphics.key
+    - /tmp/intel-graphics.gpg.tmp

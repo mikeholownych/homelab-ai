@@ -1,0 +1,247 @@
+---
+- name: Validate storage_lvm configuration inputs
+  ansible.builtin.assert:
+    that:
+      - storage_lvm.vg is defined and storage_lvm.vg is string and storage_lvm.vg | length > 0
+      - storage_lvm.lv is defined and storage_lvm.lv is string and storage_lvm.lv | length > 0
+      - storage_lvm.size is defined and storage_lvm.size is string and storage_lvm.size | length > 0
+      - storage_lvm.fstype is defined and storage_lvm.fstype in storage_allowed_fstypes
+      - storage_lvm.mount_path is defined and storage_lvm.mount_path is match("^/")
+      - storage_lvm.expected_pvs is defined and storage_lvm.expected_pvs | length > 0
+    fail_msg: "storage_lvm inputs must specify vg, lv, size, fstype, mount_path, and expected_pvs."
+
+- name: Collect LVM physical volume report
+  ansible.builtin.command:
+    cmd: pvs --reportformat json --units b --nosuffix
+  register: storage_pvs_cmd
+  changed_when: false
+  check_mode: false
+
+- name: Collect LVM volume group report
+  ansible.builtin.command:
+    cmd: vgs --reportformat json --units b --nosuffix
+  register: storage_vgs_cmd
+  changed_when: false
+  check_mode: false
+
+- name: Collect LVM logical volume report
+  ansible.builtin.command:
+    cmd: lvs --reportformat json --units b --nosuffix
+  register: storage_lvs_cmd
+  changed_when: false
+  check_mode: false
+
+- name: Inspect existing mount points
+  ansible.builtin.command:
+    cmd: "findmnt --json {{ storage_lvm.mount_path }}"
+  register: storage_findmnt_cmd
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
+- name: Probe filesystem on target logical volume
+  ansible.builtin.command:
+    cmd: "blkid -p /dev/{{ storage_lvm.vg }}/{{ storage_lvm.lv }}"
+  register: storage_blkid_cmd
+  failed_when: false
+  changed_when: false
+  check_mode: false
+
+- name: Parse LVM reports
+  ansible.builtin.set_fact:
+    storage_pvs_report: "{{ (storage_pvs_cmd.stdout | from_json)['report'][0]['pv'] | default([]) }}"
+    storage_vgs_report: "{{ (storage_vgs_cmd.stdout | from_json)['report'][0]['vg'] | default([]) }}"
+    storage_lvs_report: "{{ (storage_lvs_cmd.stdout | from_json)['report'][0]['lv'] | default([]) }}"
+
+- name: Identify target volume group and logical volume
+  ansible.builtin.set_fact:
+    storage_target_vg: >-
+      {{ (storage_vgs_report | selectattr('vg_name', 'equalto', storage_lvm.vg) | list | first) | default({}) }}
+    storage_existing_lv: >-
+      {{ (storage_lvs_report | selectattr('lv_name', 'equalto', storage_lvm.lv)
+          | selectattr('vg_name', 'equalto', storage_lvm.vg) | list | first) | default({}) }}
+    storage_lv_exists: >-
+      {{ (storage_lvs_report | selectattr('lv_name', 'equalto', storage_lvm.lv)
+          | selectattr('vg_name', 'equalto', storage_lvm.vg) | list | length) > 0 }}
+
+- name: Validate target volume group exists
+  ansible.builtin.assert:
+    that:
+      - storage_target_vg.vg_name is defined
+      - storage_target_vg.vg_name == storage_lvm.vg
+    fail_msg: "Target volume group '{{ storage_lvm.vg }}' not found in LVM report."
+
+- name: Validate expected physical volumes belong to target volume group
+  ansible.builtin.assert:
+    that:
+      - item in (storage_pvs_report | map(attribute='pv_name') | list)
+      - >-
+        ((storage_pvs_report | selectattr('pv_name', 'equalto', item) | list | first).vg_name
+         | default('')) == storage_lvm.vg
+    fail_msg: "Expected PV '{{ item }}' is missing or not a member of volume group '{{ storage_lvm.vg }}'."
+  loop: "{{ storage_lvm.expected_pvs }}"
+
+- name: Parse requested sizes in bytes
+  ansible.builtin.set_fact:
+    storage_req_size_bytes: "{{ (storage_lvm.size | regex_replace('[gG]$', '') | int) * 1024 * 1024 * 1024 }}"
+    storage_reserve_bytes: "{{ (storage_lvm.reserve_gib | default(0) | int) * 1024 * 1024 * 1024 }}"
+
+- name: Validate volume group free space when logical volume is absent
+  ansible.builtin.assert:
+    that:
+      - (storage_target_vg.vg_free | int) >= (storage_req_size_bytes | int + storage_reserve_bytes | int)
+    fail_msg: >-
+      Target volume group '{{ storage_lvm.vg }}' does not have sufficient free space
+      ({{ storage_target_vg.vg_free }} bytes available,
+      {{ storage_req_size_bytes | int + storage_reserve_bytes | int }} bytes required).
+  when: not storage_lv_exists
+
+- name: Validate existing logical volume matches declaration
+  ansible.builtin.assert:
+    that:
+      - (storage_existing_lv.lv_size | int) >= (storage_req_size_bytes | int)
+    fail_msg: >-
+      Existing LV '{{ storage_lvm.lv }}' size ({{ storage_existing_lv.lv_size }} bytes)
+      is smaller than requested size ({{ storage_req_size_bytes }} bytes).
+  when: storage_lv_exists
+
+- name: Validate existing filesystem matches declaration if present
+  ansible.builtin.assert:
+    that:
+      - storage_blkid_cmd.stdout is search('TYPE="' ~ storage_lvm.fstype ~ '"')
+    fail_msg: >-
+      Existing LV '{{ storage_lvm.lv }}' has incompatible filesystem:
+      {{ storage_blkid_cmd.stdout }}. Expected {{ storage_lvm.fstype }}.
+  when:
+    - storage_lv_exists
+    - storage_blkid_cmd.rc == 0
+    - storage_blkid_cmd.stdout | length > 0
+
+- name: Validate mountpoint is not mounted to a different device
+  ansible.builtin.assert:
+    that:
+      - >-
+        ((storage_findmnt_cmd.stdout | from_json)['filesystems'][0]['source'] | default('')) is search(storage_lvm.lv)
+        or ((storage_findmnt_cmd.stdout | from_json)['filesystems'][0]['fstype'] | default('')) == storage_lvm.fstype
+    fail_msg: >-
+      Target mount path '{{ storage_lvm.mount_path }}' is already mounted with another device or filesystem:
+      {{ storage_findmnt_cmd.stdout }}
+  when:
+    - storage_findmnt_cmd.rc == 0
+    - (storage_findmnt_cmd.stdout | default('{}') | from_json)['filesystems'] is defined
+
+- name: Ensure target logical volume exists
+  community.general.lvol:
+    vg: "{{ storage_lvm.vg }}"
+    lv: "{{ storage_lvm.lv }}"
+    size: "{{ storage_lvm.size }}"
+    resizefs: false
+  when: storage_manage_runtime | bool
+
+- name: Format logical volume filesystem
+  community.general.filesystem:
+    dev: "/dev/{{ storage_lvm.vg }}/{{ storage_lvm.lv }}"
+    fstype: "{{ storage_lvm.fstype }}"
+    force: false
+  when:
+    - storage_manage_runtime | bool
+    - not (ansible_check_mode and not storage_lv_exists)
+
+- name: Determine filesystem UUID
+  ansible.builtin.command:
+    argv:
+      - blkid
+      - -s
+      - UUID
+      - -o
+      - value
+      - "/dev/{{ storage_lvm.vg }}/{{ storage_lvm.lv }}"
+  register: storage_lvm_uuid
+  changed_when: false
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
+
+- name: Mount logical volume by UUID
+  ansible.posix.mount:
+    path: "{{ storage_lvm.mount_path }}"
+    src: "UUID={{ storage_lvm_uuid.stdout | trim }}"
+    fstype: "{{ storage_lvm.fstype }}"
+    opts: defaults
+    state: mounted
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
+
+- name: Ensure local-ai standard subdirectories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ storage_lvm.mount_path }}/models"
+    - "{{ storage_lvm.mount_path }}/cache"
+    - "{{ storage_lvm.mount_path }}/evidence"
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
+
+- name: Collect updated LVM reports for evidence
+  ansible.builtin.command:
+    cmd: pvs --reportformat json --units b --nosuffix
+  register: storage_pvs_evidence_cmd
+  changed_when: false
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
+
+- name: Collect updated volume group report for evidence
+  ansible.builtin.command:
+    cmd: vgs --reportformat json --units b --nosuffix
+  register: storage_vgs_evidence_cmd
+  changed_when: false
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
+
+- name: Collect updated logical volume report for evidence
+  ansible.builtin.command:
+    cmd: lvs --reportformat json --units b --nosuffix
+  register: storage_lvs_evidence_cmd
+  changed_when: false
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode
+
+- name: Persist storage layout evidence
+  ansible.builtin.copy:
+    content: >-
+      {{
+        {
+          'vg_name': storage_lvm.vg,
+          'lv_name': storage_lvm.lv,
+          'mount_path': storage_lvm.mount_path,
+          'fstype': storage_lvm.fstype,
+          'fs_uuid': storage_lvm_uuid.stdout | default('') | trim,
+          'vg_size_bytes': ((storage_vgs_evidence_cmd.stdout | from_json)['report'][0]['vg']
+                            | selectattr('vg_name', 'equalto', storage_lvm.vg)
+                            | list | first).vg_size | default('0'),
+          'vg_free_bytes': ((storage_vgs_evidence_cmd.stdout | from_json)['report'][0]['vg']
+                            | selectattr('vg_name', 'equalto', storage_lvm.vg)
+                            | list | first).vg_free | default('0'),
+          'lv_size_bytes': ((storage_lvs_evidence_cmd.stdout | from_json)['report'][0]['lv']
+                            | selectattr('lv_name', 'equalto', storage_lvm.lv)
+                            | list | first).lv_size | default('0'),
+          'pvs': (storage_pvs_evidence_cmd.stdout | from_json)['report'][0]['pv']
+                 | selectattr('vg_name', 'equalto', storage_lvm.vg) | list
+        } | to_nice_json
+      }}
+    dest: "{{ storage_lvm_evidence_path }}"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - storage_manage_runtime | bool
+    - not ansible_check_mode

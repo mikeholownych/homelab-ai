@@ -30,6 +30,21 @@ def parse_slots(text):
     return slots
 
 
+def collect_drm_nodes(bdf):
+    """Find drm_card (/dev/dri/card*) and render_node (/dev/dri/renderD*) under sysfs."""
+    drm_dir = Path("/sys/bus/pci/devices") / bdf / "drm"
+    drm_card = None
+    render_node = None
+    if drm_dir.exists() and drm_dir.is_dir():
+        for entry in sorted(drm_dir.iterdir()):
+            name = entry.name
+            if re.match(r"^card\d+$", name) and not drm_card:
+                drm_card = f"/dev/dri/{name}"
+            elif re.match(r"^renderD\d+$", name) and not render_node:
+                render_node = f"/dev/dri/{name}"
+    return drm_card, render_node
+
+
 def parse_lspci(text, slots_text):
     slots = parse_slots(slots_text)
     devices = []
@@ -49,6 +64,7 @@ def parse_lspci(text, slots_text):
         kernel_driver = re.search(r"Kernel driver in use:\s*(\S+)", section)
         rebar_gib = int(rebar.group(1)) / 1024 if rebar and rebar.group(2) == "M" else \
             int(rebar.group(1)) if rebar else 0
+        drm_card, render_node = collect_drm_nodes(bdf)
         devices.append({"bdf": bdf, "vendor_id": identity.group(2).lower(),
                         "device_id": identity.group(3).lower(),
                         "device_max_generation": _generation(float(cap.group(1))),
@@ -57,7 +73,8 @@ def parse_lspci(text, slots_text):
                         "current_width": int(sta.group(2)), "slot_width": slots.get(bdf),
                         "bar_sizes_gib": bars, "rebar_enabled": rebar_gib >= 16,
                         "aer_counters": collect_aer(bdf),
-                        "kernel_driver": kernel_driver.group(1) if kernel_driver else None})
+                        "kernel_driver": kernel_driver.group(1) if kernel_driver else None,
+                        "drm_card": drm_card, "render_node": render_node})
     return devices
 
 
@@ -80,10 +97,16 @@ def parse_level_zero(text):
         bdf = next((item.get(key) for key in ("pci_bdf", "pciAddress", "bdf") if item.get(key)), None)
         memory = next((item.get(key) for key in ("global_memory_size", "globalMemorySize", "memory_bytes")
                        if item.get(key) is not None), None)
+        uuid = next((item.get(key) for key in ("uuid", "device_uuid", "deviceUuid", "deviceUUID", "level_zero_uuid")
+                     if item.get(key)), None)
         if bdf and memory is not None:
-            devices.append({"bdf": str(bdf).lower(), "name": item.get("name"),
-                            "memory_gib": int(memory) / (1024 ** 3),
-                            "memory_source": "level_zero_global_memory"})
+            dev = {"bdf": str(bdf).lower(), "name": item.get("name"),
+                   "memory_gib": int(memory) / (1024 ** 3),
+                   "memory_source": "level_zero_global_memory"}
+            if uuid:
+                dev["uuid"] = str(uuid)
+                dev["level_zero_uuid"] = str(uuid)
+            devices.append(dev)
     unique = {item["bdf"]: item for item in devices}
     return [unique[bdf] for bdf in sorted(unique)]
 
@@ -158,6 +181,30 @@ def main():
         locator, size = re.search(r"Locator:\s*(.+)", block), re.search(r"Size:\s*(.+)", block)
         if locator and size and "No Module Installed" not in size.group(1):
             dimms.append({"locator": locator.group(1).strip(), "size": size.group(1).strip()})
+    level_zero_by_bdf = {item["bdf"]: item for item in level_zero if item.get("bdf")}
+    gpu_records = []
+    for item in pci:
+        bdf = item["bdf"]
+        l0_dev = level_zero_by_bdf.get(bdf, {})
+        l0_uuid = l0_dev.get("level_zero_uuid") or l0_dev.get("uuid")
+        drm_card = item.get("drm_card")
+        render_node = item.get("render_node")
+        if drm_card is None or render_node is None:
+            sys_card, sys_render = collect_drm_nodes(bdf)
+            drm_card = drm_card or sys_card
+            render_node = render_node or sys_render
+        gpu_records.append({
+            "bdf": bdf,
+            "vendor_id": item["vendor_id"],
+            "device_id": item["device_id"],
+            "pci_bdf": bdf,
+            "pci_id": f"{item['vendor_id']}:{item['device_id']}",
+            "kernel_driver": item.get("kernel_driver"),
+            "drm_card": drm_card,
+            "render_node": render_node,
+            "level_zero_uuid": l0_uuid,
+            "xpu_ordinal": item.get("xpu_ordinal"),
+        })
     observed = {
         "simulated": False,
         "dmi": {"manufacturer": sys_text("sys_vendor"), "product_name": sys_text("product_name"),
@@ -166,7 +213,7 @@ def main():
         "cpu": {"model": next((line.split(":", 1)[1].strip() for line in cpuinfo.splitlines()
                                  if line.startswith("model name")), "")},
         "memory": {"total_gib": round(memory_kib / 1024 / 1024, 2), "dimms": dimms},
-        "gpus": [{key: item[key] for key in ("bdf", "vendor_id", "device_id")} for item in pci],
+        "gpus": gpu_records,
         "pci": pci, "iommu": collect_iommu(), "level_zero_devices": level_zero,
         "storage": [item for item in lsblk["blockdevices"]
                     if item.get("type") == "disk" and item["name"].startswith("nvme")],

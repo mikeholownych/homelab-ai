@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -11,6 +13,7 @@ import textwrap
 import unittest
 import getpass
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -81,8 +84,25 @@ def ansible_playbook_bin() -> str:
     raise AssertionError("ansible-playbook is required for localhost role probes")
 
 
+def repo_test_sandbox_root() -> Path:
+    try:
+        resolved_repo_root = REPO_ROOT.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise RuntimeError("Repository test root must be a real directory, not a symlink") from exc
+    if resolved_repo_root != REPO_ROOT:
+        raise RuntimeError("Repository test root must be a real directory, not a symlink")
+
+    sandbox_root = REPO_ROOT / ".ansible"
+    if sandbox_root.is_symlink():
+        raise RuntimeError("Repository .ansible test sandbox must be a real directory, not a symlink")
+    sandbox_root.mkdir(parents=True, exist_ok=True)
+    if not sandbox_root.is_dir() or sandbox_root.resolve(strict=True) != sandbox_root:
+        raise RuntimeError("Repository .ansible test sandbox must be a real directory, not a symlink")
+    return sandbox_root
+
+
 def make_probe_workspace() -> Path:
-    return Path(tempfile.mkdtemp(prefix="aihost-baseline-probe-"))
+    return Path(tempfile.mkdtemp(prefix="baseline-probe-", dir=repo_test_sandbox_root()))
 
 
 def load_filter_module():
@@ -93,6 +113,157 @@ def load_filter_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def load_baseline_harness_module():
+    module_path = REPO_ROOT / "tests" / "integration" / "baseline_container_harness.py"
+    spec = importlib.util.spec_from_file_location("baseline_container_harness", module_path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("Unable to load baseline container harness")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_base_os_validation_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory(
+        prefix="base-os-validation-",
+        dir=repo_test_sandbox_root(),
+    ) as tmpdir:
+        workspace = Path(tmpdir)
+        common_vars: dict[str, object] = {
+            "base_os_root_dir": str(workspace / "root"),
+            "base_os_logrotate_validate_command": "/usr/bin/env true %s",
+            "base_os_manage_ubuntu_sources": False,
+            "base_os_proxy_enabled": False,
+            "base_os_manage_admin_packages": False,
+            "base_os_manage_journald_service": False,
+            "base_os_manage_locale_generation": False,
+            "base_os_manage_timezone": False,
+            "base_os_manage_package_policy": False,
+            "base_os_manage_unattended_upgrades_service": False,
+            "base_os_manage_boot_parameters": False,
+            "base_os_update_grub_manage_runtime": False,
+        }
+        common_vars.update(role_vars)
+        playbook = [
+            {
+                "name": "Base OS platform validation probe",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": common_vars,
+                "tasks": [
+                    {
+                        "name": "Include base OS role",
+                        "ansible.builtin.include_role": {"name": "base_os"},
+                    }
+                ],
+            }
+        ]
+        return run_local_role_probe(yaml.safe_dump(playbook, sort_keys=False), workspace=workspace)
+
+
+def run_base_os_guard_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory(
+        prefix="base-os-guard-",
+        dir=repo_test_sandbox_root(),
+    ) as tmpdir:
+        workspace = Path(tmpdir)
+        common_vars: dict[str, object] = {
+            "baseline_skip_platform_guard": True,
+            "baseline_localhost_safe_mode": True,
+            "base_os_root_dir": str(workspace / "root"),
+            "base_os_mutating_operations_enabled": False,
+            "base_os_manage_ubuntu_sources": False,
+            "base_os_proxy_enabled": False,
+            "base_os_manage_admin_packages": False,
+            "base_os_manage_journald_service": False,
+            "base_os_manage_locale_generation": False,
+            "base_os_manage_timezone": False,
+            "base_os_manage_package_policy": False,
+            "base_os_manage_unattended_upgrades_service": False,
+            "base_os_manage_boot_parameters": False,
+            "base_os_update_grub_manage_runtime": False,
+        }
+        common_vars.update(role_vars)
+        playbook = [
+            {
+                "name": "Base OS guard validation probe",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": common_vars,
+                "tasks": [
+                    {
+                        "name": "Include base OS role guard",
+                        "ansible.builtin.include_role": {"name": "base_os"},
+                        "tags": ["base_os_platform_guard"],
+                    }
+                ],
+            }
+        ]
+        return run_local_role_probe(
+            yaml.safe_dump(playbook, sort_keys=False),
+            workspace=workspace,
+            extra_args=["--tags", "base_os_platform_guard"],
+        )
+
+
+def run_base_os_path_guard_probe(
+    role_vars: dict[str, object],
+    *,
+    setup: Callable[[Path], None] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory(
+        prefix="base-os-path-guard-",
+        dir=repo_test_sandbox_root(),
+    ) as tmpdir:
+        workspace = Path(tmpdir)
+        (workspace / "root").mkdir()
+        if setup is not None:
+            setup(workspace)
+        common_vars: dict[str, object] = {
+            "baseline_skip_platform_guard": True,
+            "baseline_localhost_safe_mode": True,
+            "base_os_root_dir": str(workspace / "root"),
+            "base_os_mutating_operations_enabled": False,
+            "base_os_manage_ubuntu_sources": False,
+            "base_os_proxy_enabled": False,
+            "base_os_manage_admin_packages": False,
+            "base_os_manage_journald_service": False,
+            "base_os_manage_locale_generation": False,
+            "base_os_manage_timezone": False,
+            "base_os_manage_package_policy": False,
+            "base_os_manage_unattended_upgrades_service": False,
+            "base_os_manage_boot_parameters": False,
+            "base_os_update_grub_manage_runtime": False,
+        }
+        common_vars.update(role_vars)
+        playbook = [
+            {
+                "name": "Base OS managed path validation probe",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": common_vars,
+                "tasks": [
+                    {
+                        "name": "Include base OS managed path guard",
+                        "ansible.builtin.include_role": {"name": "base_os"},
+                        "tags": ["base_os_path_guard"],
+                    }
+                ],
+            }
+        ]
+        return run_local_role_probe(
+            yaml.safe_dump(playbook, sort_keys=False),
+            workspace=workspace,
+            extra_args=["--tags", "base_os_path_guard"],
+        )
 
 
 def ssh_keygen_bin() -> str:
@@ -121,11 +292,18 @@ def run_local_role_probe(
     workspace: Path | None = None,
     check: bool = False,
     extra_env: dict[str, str] | None = None,
+    extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if workspace is None:
-        with tempfile.TemporaryDirectory() as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="role-probe-", dir=repo_test_sandbox_root()) as tmpdir:
             temp_root = Path(tmpdir)
-            return run_local_role_probe(playbook_text, workspace=temp_root, check=check, extra_env=extra_env)
+            return run_local_role_probe(
+                playbook_text,
+                workspace=temp_root,
+                check=check,
+                extra_env=extra_env,
+                extra_args=extra_args,
+            )
 
     playbook_path = workspace / "probe.yml"
     playbook_path.write_text(playbook_text, encoding="utf-8")
@@ -141,6 +319,8 @@ def run_local_role_probe(
     ]
     if check:
         command.append("--check")
+    if extra_args:
+        command.extend(extra_args)
     command.append(str(playbook_path))
     return subprocess.run(
         command,
@@ -155,6 +335,308 @@ def run_local_role_probe(
 
 class BaselineContractTests(unittest.TestCase):
     maxDiff = None
+
+    def test_probe_workspace_creates_missing_repo_sandbox_parent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="clean-checkout-") as tmpdir:
+            clean_checkout = Path(tmpdir) / "repo"
+            clean_checkout.mkdir()
+            self.assertFalse((clean_checkout / ".ansible").exists())
+
+            with mock.patch(f"{__name__}.REPO_ROOT", clean_checkout):
+                workspace = make_probe_workspace()
+
+            self.assertTrue((clean_checkout / ".ansible").is_dir())
+            self.assertEqual(clean_checkout / ".ansible", workspace.parent)
+
+    def test_probe_workspace_rejects_symlinked_repo_sandbox_parent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="symlinked-checkout-") as tmpdir:
+            clean_checkout = Path(tmpdir) / "repo"
+            external_root = Path(tmpdir) / "external"
+            clean_checkout.mkdir()
+            external_root.mkdir()
+            (clean_checkout / ".ansible").symlink_to(external_root, target_is_directory=True)
+
+            with mock.patch(f"{__name__}.REPO_ROOT", clean_checkout):
+                with self.assertRaisesRegex(RuntimeError, "must be a real directory, not a symlink"):
+                    repo_test_sandbox_root()
+
+    def test_path_validator_rejects_symlinked_allowed_root_components(self) -> None:
+        module = load_filter_module()
+        with tempfile.TemporaryDirectory(prefix="symlinked-sandbox-") as tmpdir:
+            temp_root = Path(tmpdir)
+            external_root = temp_root / "external"
+            external_root.mkdir()
+
+            repo_with_linked_sandbox = temp_root / "linked-sandbox-repo"
+            repo_with_linked_sandbox.mkdir()
+            linked_sandbox = repo_with_linked_sandbox / ".ansible"
+            linked_sandbox.symlink_to(external_root, target_is_directory=True)
+            self.assertFalse(
+                module.path_is_strictly_within(
+                    str(linked_sandbox / "probe"),
+                    str(linked_sandbox),
+                )
+            )
+
+            real_repo = temp_root / "real-repo"
+            real_sandbox = real_repo / ".ansible"
+            real_sandbox.mkdir(parents=True)
+            linked_repo = temp_root / "linked-repo"
+            linked_repo.symlink_to(real_repo, target_is_directory=True)
+            self.assertFalse(
+                module.path_is_strictly_within(
+                    str(linked_repo / ".ansible" / "probe"),
+                    str(linked_repo / ".ansible"),
+                )
+            )
+            self.assertTrue(
+                module.path_is_strictly_within(
+                    str(real_sandbox / "probe"),
+                    str(real_sandbox),
+                )
+            )
+
+    def test_managed_path_validator_rejects_parent_and_target_symlinks(self) -> None:
+        module = load_filter_module()
+        with tempfile.TemporaryDirectory(prefix="managed-path-symlink-") as tmpdir:
+            temp_root = Path(tmpdir)
+            sandbox_root = temp_root / "sandbox"
+            outside_root = temp_root / "outside"
+            sandbox_root.mkdir()
+            outside_root.mkdir()
+
+            (sandbox_root / "etc").symlink_to(outside_root, target_is_directory=True)
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    str(sandbox_root / "etc" / "apt" / "20auto-upgrades"),
+                    str(sandbox_root),
+                )
+            )
+
+            second_root = temp_root / "second-sandbox"
+            target_parent = second_root / "etc" / "apt" / "apt.conf.d"
+            target_parent.mkdir(parents=True)
+            outside_target = outside_root / "proxy.conf"
+            outside_target.write_text("sentinel\n", encoding="utf-8")
+            target_path = target_parent / "90-aihost-proxy"
+            target_path.symlink_to(outside_target)
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    str(target_path),
+                    str(second_root),
+                )
+            )
+            self.assertTrue(
+                module.path_is_safe_descendant(
+                    str(second_root / "etc" / "default" / "locale"),
+                    str(second_root),
+                )
+            )
+            self.assertTrue(
+                module.path_is_safe_descendant(
+                    "/etc/default/locale",
+                    "/",
+                )
+            )
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    "/etc/../etc/default/locale",
+                    "/",
+                )
+            )
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    "/",
+                    "/",
+                )
+            )
+
+    def test_base_os_selects_suites_from_validated_release(self) -> None:
+        defaults = load_role_yaml("base_os", "defaults/main.yml")
+        tasks = read_text(ROLE_ROOT / "base_os" / "tasks" / "main.yml")
+
+        self.assertEqual(["24.04", "26.04"], defaults.get("base_os_supported_releases"))
+        self.assertEqual("{{ supported_platforms }}", defaults.get("base_os_platforms"))
+        self.assertIn("base_os_resolved_platform", tasks)
+        self.assertIn("ansible_facts.distribution_release", tasks)
+
+    def test_sources_template_uses_resolved_security_suite(self) -> None:
+        text = read_text(ROLE_ROOT / "base_os" / "templates" / "aihost-baseline.sources.j2")
+
+        self.assertNotIn("noble-security", text)
+        self.assertIn("base_os_security_suite", text)
+
+    def test_base_os_rejects_platform_guard_bypass_for_mutating_run(self) -> None:
+        result = run_base_os_validation_probe(
+            {
+                "baseline_skip_platform_guard": True,
+                "baseline_localhost_safe_mode": True,
+                "base_os_mutating_operations_enabled": True,
+                "ansible_facts": {},
+            }
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("platform guard bypass requires non-mutating localhost-safe mode", result.stdout + result.stderr)
+
+    def test_base_os_guard_bypass_rejects_unsafe_sandbox_roots(self) -> None:
+        unsafe_roots = {
+            "empty": "",
+            "filesystem root": "/",
+            "outside repository test root": "/tmp/aihost-base-os-outside",
+            "relative": ".ansible/base-os-relative",
+            "parent traversal": str(REPO_ROOT / ".ansible" / "sandbox" / ".." / "escaped"),
+        }
+
+        for label, root_dir in unsafe_roots.items():
+            with self.subTest(root=label):
+                result = run_base_os_guard_probe({"base_os_root_dir": root_dir})
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("repository .ansible test root", result.stdout + result.stderr)
+
+    def test_base_os_guard_bypass_accepts_valid_fixture_root(self) -> None:
+        result = run_base_os_guard_probe({})
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_base_os_guard_bypass_rejects_each_mutation_switch(self) -> None:
+        mutation_switches = (
+            "base_os_mutating_operations_enabled",
+            "base_os_manage_ubuntu_sources",
+            "base_os_proxy_enabled",
+            "base_os_manage_admin_packages",
+            "base_os_manage_journald_service",
+            "base_os_manage_locale_generation",
+            "base_os_manage_timezone",
+            "base_os_manage_package_policy",
+            "base_os_manage_unattended_upgrades_service",
+            "base_os_manage_boot_parameters",
+            "base_os_update_grub_manage_runtime",
+        )
+
+        for variable in mutation_switches:
+            with self.subTest(variable=variable):
+                result = run_base_os_guard_probe({variable: True})
+
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("all base_os mutation switches disabled", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_rejects_outside_proxy_override(self) -> None:
+        result = run_base_os_path_guard_probe(
+            {"base_os_proxy_path": "/tmp/aihost-outside-proxy"}
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("managed paths must stay canonically beneath", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_rejects_root_parent_symlink_escape(self) -> None:
+        def setup(workspace: Path) -> None:
+            outside_root = workspace / "outside"
+            outside_root.mkdir()
+            (workspace / "root" / "etc").symlink_to(outside_root, target_is_directory=True)
+
+        result = run_base_os_path_guard_probe({}, setup=setup)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("managed paths must stay canonically beneath", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_rejects_target_symlink(self) -> None:
+        def setup(workspace: Path) -> None:
+            proxy_parent = workspace / "root" / "etc" / "apt" / "apt.conf.d"
+            proxy_parent.mkdir(parents=True)
+            outside_target = workspace / "outside-proxy"
+            outside_target.write_text("sentinel\n", encoding="utf-8")
+            (proxy_parent / "90-aihost-proxy").symlink_to(outside_target)
+
+        result = run_base_os_path_guard_probe({}, setup=setup)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("managed paths must stay canonically beneath", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_accepts_valid_sandbox_paths(self) -> None:
+        result = run_base_os_path_guard_probe({})
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_base_os_rejects_malicious_newline_codename_in_safe_mode(self) -> None:
+        result = run_base_os_validation_probe(
+            {
+                "baseline_skip_platform_guard": True,
+                "baseline_localhost_safe_mode": True,
+                "base_os_mutating_operations_enabled": False,
+                "ansible_facts": {
+                    "distribution": "Ubuntu",
+                    "distribution_version": "24.04",
+                    "distribution_release": "noble\nmalicious",
+                },
+            }
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("lowercase Ubuntu codename", result.stdout + result.stderr)
+
+    def test_base_os_rejects_incomplete_platform_suite_record(self) -> None:
+        result = run_base_os_validation_probe(
+            {
+                "baseline_skip_platform_guard": False,
+                "baseline_localhost_safe_mode": False,
+                "base_os_mutating_operations_enabled": False,
+                "ansible_facts": {
+                    "distribution": "Ubuntu",
+                    "distribution_version": "26.04",
+                    "distribution_release": "resolute",
+                },
+                "supported_platforms": {
+                    "26.04": {
+                        "codename": "resolute",
+                        "apt_suites": ["resolute", "resolute-updates", "resolute-security"],
+                    }
+                },
+            }
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("exact canonical suite order", result.stdout + result.stderr)
+
+    def test_bootstrap_platform_gate_precedes_apt_mutation(self) -> None:
+        text = read_text(PLAYBOOKS["bootstrap"])
+
+        self.assertLess(
+            text.index("Validate raw Ubuntu release before mutation"),
+            text.index("apt-get update"),
+        )
+        self.assertIn("ubuntu:24.04:noble", text)
+        self.assertIn("ubuntu:26.04:resolute", text)
+
+    def test_production_bootstrap_does_not_bypass_platform_guard(self) -> None:
+        text = read_text(PLAYBOOKS["bootstrap"])
+        raw_gate = text[: text.index("Install minimal Python serialization prerequisites")]
+
+        self.assertNotIn("baseline_skip_platform_guard", raw_gate)
+        self.assertIn("/etc/os-release", raw_gate)
+
+    def test_bootstrap_fact_gate_uses_explicit_ansible_facts_namespace(self) -> None:
+        play = load_yaml(PLAYBOOKS["bootstrap"])[0]
+        platform_task = next(
+            task
+            for task in play["pre_tasks"]
+            if task["name"] == "Validate supported Ubuntu bootstrap target"
+        )
+        checks = "\n".join(platform_task["ansible.builtin.assert"]["that"])
+
+        for required in (
+            "ansible_facts.distribution",
+            "ansible_facts.distribution_version",
+            "ansible_facts.distribution_release",
+        ):
+            self.assertIn(required, checks)
+        for prohibited in (
+            "ansible_distribution",
+            "ansible_distribution_version",
+            "ansible_distribution_release",
+        ):
+            self.assertNotIn(prohibited, checks)
 
     def test_bootstrap_baseline_and_site_playbooks_compose_expected_roles(self) -> None:
         bootstrap_text = read_text(PLAYBOOKS["bootstrap"])
@@ -558,6 +1040,7 @@ class BaselineContractTests(unittest.TestCase):
               gather_facts: true
               become: false
               vars:
+                baseline_localhost_safe_mode: true
                 baseline_skip_platform_guard: true
                 base_os_root_dir: "{{ playbook_dir }}/root"
                 base_os_mutating_operations_enabled: false
@@ -603,7 +1086,8 @@ class BaselineContractTests(unittest.TestCase):
                   gather_facts: true
                   become: false
                   vars:
-                    baseline_skip_platform_guard: true
+                    baseline_localhost_safe_mode: true
+                    baseline_skip_platform_guard: false
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
                     base_os_manage_boot_parameters: true
@@ -662,7 +1146,8 @@ class BaselineContractTests(unittest.TestCase):
                   gather_facts: true
                   become: false
                   vars:
-                    baseline_skip_platform_guard: true
+                    baseline_localhost_safe_mode: true
+                    baseline_skip_platform_guard: false
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
                     base_os_manage_boot_parameters: false
@@ -1471,6 +1956,7 @@ class BaselineContractTests(unittest.TestCase):
                   gather_facts: true
                   become: false
                   vars:
+                    baseline_localhost_safe_mode: true
                     baseline_skip_platform_guard: true
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
@@ -1767,13 +2253,15 @@ class BaselineContractTests(unittest.TestCase):
         makefile = read_text(REPO_ROOT / "Makefile")
         harness_path = REPO_ROOT / "tests" / "integration" / "baseline_container_harness.py"
         dockerfile_path = REPO_ROOT / "tests" / "integration" / "Dockerfile.baseline"
+        resolute_dockerfile_path = REPO_ROOT / "tests" / "integration" / "Dockerfile.resolute"
+        resolute_inventory_path = REPO_ROOT / "tests" / "fixtures" / "inventory" / "resolute.yml"
         harness_text = read_text(harness_path)
         self.assertIn(str(harness_path.relative_to(REPO_ROOT)), makefile)
         self.assertNotIn("baseline_idempotency.yml", makefile)
         self.assertIn("timeout -k 10s 600s", makefile)
         self.assertTrue(dockerfile_path.exists(), "Expected pinned Ubuntu Dockerfile for baseline harness to exist")
         dockerfile_text = read_text(dockerfile_path)
-        self.assertIn("FROM ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea", dockerfile_text)
+        self.assertIn("FROM ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467", dockerfile_text)
         self.assertNotIn("FROM ubuntu:24.04", dockerfile_text)
         self.assertNotIn("curl", dockerfile_text)
         self.assertRegex(dockerfile_text, r"ansible-core=\S+")
@@ -1786,6 +2274,81 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn('"none"', harness_text)
         self.assertIn("BUILD_TIMEOUT_SECONDS = 300", harness_text)
         self.assertIn("RUN_TIMEOUT_SECONDS = 300", harness_text)
+        self.assertIn('choices=("noble", "resolute")', harness_text)
+        self.assertIn("assert_apt_sources", harness_text)
+        self.assertIn("Pin: release a=", harness_text)
+        self.assertIn("--release noble", makefile)
+        self.assertIn("--release resolute", makefile)
+        self.assertTrue(resolute_dockerfile_path.exists(), "Expected pinned Ubuntu Resolute Dockerfile to exist")
+        resolute_dockerfile_text = read_text(resolute_dockerfile_path)
+        self.assertIn(
+            "FROM ubuntu@sha256:889d056d5c6c0bfb55789ff3710681d68e50713cb562d2196dc07110599c7a6f",
+            resolute_dockerfile_text,
+        )
+        self.assertNotIn("FROM ubuntu:26.04", resolute_dockerfile_text)
+        self.assertRegex(resolute_dockerfile_text, r"ansible-core=\S+")
+        self.assertRegex(resolute_dockerfile_text, r"openssh-server=\S+")
+        resolute_inventory = load_yaml(resolute_inventory_path)
+        self.assertEqual(
+            {
+                "24.04": {
+                    "codename": "noble",
+                    "apt_suites": ["noble", "noble-updates", "noble-backports", "noble-security"],
+                },
+                "26.04": {
+                    "codename": "resolute",
+                    "apt_suites": [
+                        "resolute",
+                        "resolute-updates",
+                        "resolute-backports",
+                        "resolute-security",
+                    ],
+                },
+            },
+            resolute_inventory["all"]["vars"]["supported_platforms"],
+        )
+
+        harness_module = load_baseline_harness_module()
+        expected_digests = {
+            "noble": "ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467",
+            "resolute": "ubuntu@sha256:889d056d5c6c0bfb55789ff3710681d68e50713cb562d2196dc07110599c7a6f",
+        }
+        expected_suites = {
+            "noble": ["noble", "noble-updates", "noble-backports", "noble-security"],
+            "resolute": ["resolute", "resolute-updates", "resolute-backports", "resolute-security"],
+        }
+        required_pins = (
+            "ansible-core",
+            "auditd",
+            "ca-certificates",
+            "chrony",
+            "iproute2",
+            "iptables",
+            "jq",
+            "locales",
+            "logrotate",
+            "netplan.io",
+            "openssh-server",
+            "python3",
+            "python3-apt",
+            "rsync",
+            "sudo",
+            "ufw",
+        )
+        for release, config in harness_module.RELEASE_CONFIGS.items():
+            release_dockerfile = Path(config["dockerfile"])
+            release_dockerfile_text = read_text(release_dockerfile)
+            self.assertEqual(expected_digests[release], config["pinned_base_image"])
+            self.assertEqual(f"FROM {config['pinned_base_image']}", release_dockerfile_text.splitlines()[0])
+            self.assertEqual(expected_suites[release][:-1], config["archive_suites"])
+            self.assertEqual(expected_suites[release][-1], config["security_suite"])
+            for package in required_pins:
+                self.assertRegex(release_dockerfile_text, rf"(?m)^\s+{re.escape(package)}=\S+")
+
+        container_playbook = read_text(REPO_ROOT / "tests" / "integration" / "baseline_container.yml")
+        self.assertIn("base_os_manage_ubuntu_sources: true", container_playbook)
+        self.assertIn("baseline_harness_release", container_playbook)
+        self.assertNotIn("pin': 'release a=noble", container_playbook)
 
 
 if __name__ == "__main__":

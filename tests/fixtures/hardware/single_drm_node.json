@@ -1,35 +1,26 @@
 {
   "simulated": true,
   "dmi": {
-    "manufacturer": "Dell",
-    "product_name": "Precision Tower 5820",
+    "manufacturer": "Lenovo",
+    "product_name": "30E1S7NJ00 ThinkStation P620",
     "serial_number": "SIMULATED",
     "asset_tag": "SIMULATED",
     "bios_version": "SIM-1"
   },
   "cpu": {
-    "model": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz",
+    "model": "AMD Ryzen Threadripper PRO 3945WX 12-Cores",
     "sockets": 1
   },
   "memory": {
-    "total_gib": 32,
+    "total_gib": 48,
     "dimms": [
       {
-        "locator": "RDIMM1",
-        "size_gib": 16
-      },
-      {
-        "locator": "RDIMM2",
+        "locator": "DIMM1",
         "size_gib": 16
       }
     ]
   },
   "gpus": [
-    {
-      "bdf": "0000:01:00.0",
-      "vendor_id": "10de",
-      "device_id": "1bb1"
-    },
     {
       "bdf": "0000:41:00.0",
       "vendor_id": "8086",
@@ -49,8 +40,8 @@
       "pci_bdf": "0000:61:00.0",
       "pci_id": "8086:e222",
       "kernel_driver": "xe",
-      "drm_card": "/dev/dri/card1",
-      "render_node": "/dev/dri/renderD129",
+      "drm_card": null,
+      "render_node": null,
       "level_zero_uuid": "00000000-0000-0000-0000-000000006100",
       "xpu_ordinal": 1
     }
@@ -75,35 +66,20 @@
   ],
   "pci": [
     {
-      "bdf": "0000:01:00.0",
-      "vendor_id": "10de",
-      "device_id": "1bb1",
-      "slot_width": 16,
-      "current_width": 16,
-      "device_max_generation": 3,
-      "current_generation": 3,
-      "bar_sizes_gib": [
-        8
-      ],
-      "rebar_enabled": false
-    },
-    {
       "bdf": "0000:41:00.0",
       "vendor_id": "8086",
       "device_id": "e222",
       "slot_width": 16,
       "current_width": 16,
       "device_max_generation": 5,
-      "current_generation": 3,
+      "current_generation": 4,
       "bar_sizes_gib": [
         32
       ],
       "rebar_enabled": true,
-      "drm_card": "/dev/dri/card0",
-      "render_node": "/dev/dri/renderD128",
       "kernel_driver": "xe",
-      "level_zero_uuid": "00000000-0000-0000-0000-000000004100",
-      "xpu_ordinal": 0
+      "drm_card": "/dev/dri/card0",
+      "render_node": "/dev/dri/renderD128"
     },
     {
       "bdf": "0000:61:00.0",
@@ -112,16 +88,14 @@
       "slot_width": 16,
       "current_width": 16,
       "device_max_generation": 5,
-      "current_generation": 3,
+      "current_generation": 4,
       "bar_sizes_gib": [
         32
       ],
       "rebar_enabled": true,
-      "drm_card": "/dev/dri/card1",
-      "render_node": "/dev/dri/renderD129",
       "kernel_driver": "xe",
-      "level_zero_uuid": "00000000-0000-0000-0000-000000006100",
-      "xpu_ordinal": 1
+      "drm_card": null,
+      "render_node": null
     }
   ],
   "firmware": {

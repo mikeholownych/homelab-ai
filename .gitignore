@@ -1,5 +1,6 @@
 .ansible/
 .pytest_cache/
+.venv
 .venv/
 __pycache__/
 evidence/*
@@ -9,4 +10,3 @@ evidence/*
 # Custom-kernel build artifacts are never committed; metadata/checksums are.
 kernel/build/*
 !kernel/build/.gitkeep
-.worktrees/

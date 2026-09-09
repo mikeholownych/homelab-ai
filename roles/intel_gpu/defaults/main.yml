@@ -51,3 +51,17 @@ intel_gpu_support_research_sources:
   - https://github.com/intel/compute-runtime/releases/tag/26.27.39122.11
   - https://docs.pytorch.org/docs/stable/notes/get_start_xpu.html
   - https://download.pytorch.org/whl/xpu/torch/
+intel_gpu_omix_release: "0.3.0"
+intel_gpu_omix_repository_url: https://repositories.intel.com/gpu/ubuntu
+intel_gpu_omix_repository_suite: resolute/intel-omix/0.3.0
+intel_gpu_omix_repository_components:
+  - unified
+intel_gpu_omix_signing_key_url: https://repositories.intel.com/gpu/intel-graphics.key
+intel_gpu_omix_signing_key_sha256: 2a75e2fc92645f63d39190100969e3b6fe2417b8c9ff0f0bc91951e6d8198888
+intel_gpu_omix_signing_key_fingerprint: E0258B57D9C442D5DB1855C271740E4DE392BFE3
+intel_gpu_omix_keyring_path: /etc/apt/keyrings/intel-graphics.gpg
+intel_gpu_omix_sources_path: /etc/apt/sources.list.d/intel-omix.sources
+intel_gpu_omix_packages:
+  intel-omix: "0.3.0-9~26.04"
+  intel-omix-dev: "0.3.0-9~26.04"
+intel_gpu_omix_minimum_kernel: "7.0"

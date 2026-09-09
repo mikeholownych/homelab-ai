@@ -4,6 +4,22 @@ secret_paths:
   automation: secret/local-ai/automation
   vault_bootstrap: secret/local-ai/bootstrap
 
+supported_platforms:
+  "24.04":
+    codename: noble
+    apt_suites:
+      - noble
+      - noble-updates
+      - noble-backports
+      - noble-security
+  "26.04":
+    codename: resolute
+    apt_suites:
+      - resolute
+      - resolute-updates
+      - resolute-backports
+      - resolute-security
+
 execution_tag_catalog:
   foundation:
     enabled: true
