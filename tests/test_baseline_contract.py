@@ -12,6 +12,7 @@ import textwrap
 import unittest
 import getpass
 from pathlib import Path
+from unittest import mock
 
 import yaml
 
@@ -82,8 +83,14 @@ def ansible_playbook_bin() -> str:
     raise AssertionError("ansible-playbook is required for localhost role probes")
 
 
+def repo_test_sandbox_root() -> Path:
+    sandbox_root = REPO_ROOT / ".ansible"
+    sandbox_root.mkdir(parents=True, exist_ok=True)
+    return sandbox_root
+
+
 def make_probe_workspace() -> Path:
-    return Path(tempfile.mkdtemp(prefix="baseline-probe-", dir=REPO_ROOT / ".ansible"))
+    return Path(tempfile.mkdtemp(prefix="baseline-probe-", dir=repo_test_sandbox_root()))
 
 
 def load_filter_module():
@@ -109,7 +116,7 @@ def load_baseline_harness_module():
 def run_base_os_validation_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
     with tempfile.TemporaryDirectory(
         prefix="base-os-validation-",
-        dir=REPO_ROOT / ".ansible",
+        dir=repo_test_sandbox_root(),
     ) as tmpdir:
         workspace = Path(tmpdir)
         common_vars: dict[str, object] = {
@@ -149,7 +156,7 @@ def run_base_os_validation_probe(role_vars: dict[str, object]) -> subprocess.Com
 def run_base_os_guard_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
     with tempfile.TemporaryDirectory(
         prefix="base-os-guard-",
-        dir=REPO_ROOT / ".ansible",
+        dir=repo_test_sandbox_root(),
     ) as tmpdir:
         workspace = Path(tmpdir)
         common_vars: dict[str, object] = {
@@ -222,7 +229,7 @@ def run_local_role_probe(
     extra_args: list[str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     if workspace is None:
-        with tempfile.TemporaryDirectory(prefix="role-probe-", dir=REPO_ROOT / ".ansible") as tmpdir:
+        with tempfile.TemporaryDirectory(prefix="role-probe-", dir=repo_test_sandbox_root()) as tmpdir:
             temp_root = Path(tmpdir)
             return run_local_role_probe(
                 playbook_text,
@@ -262,6 +269,18 @@ def run_local_role_probe(
 
 class BaselineContractTests(unittest.TestCase):
     maxDiff = None
+
+    def test_probe_workspace_creates_missing_repo_sandbox_parent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="clean-checkout-") as tmpdir:
+            clean_checkout = Path(tmpdir) / "repo"
+            clean_checkout.mkdir()
+            self.assertFalse((clean_checkout / ".ansible").exists())
+
+            with mock.patch(f"{__name__}.REPO_ROOT", clean_checkout):
+                workspace = make_probe_workspace()
+
+            self.assertTrue((clean_checkout / ".ansible").is_dir())
+            self.assertEqual(clean_checkout / ".ansible", workspace.parent)
 
     def test_base_os_selects_suites_from_validated_release(self) -> None:
         defaults = load_role_yaml("base_os", "defaults/main.yml")
