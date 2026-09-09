@@ -156,6 +156,23 @@ def run_local_role_probe(
 class BaselineContractTests(unittest.TestCase):
     maxDiff = None
 
+    def test_bootstrap_platform_gate_precedes_apt_mutation(self) -> None:
+        text = read_text(PLAYBOOKS["bootstrap"])
+
+        self.assertLess(
+            text.index("Validate raw Ubuntu release before mutation"),
+            text.index("apt-get update"),
+        )
+        self.assertIn("ubuntu:24.04:noble", text)
+        self.assertIn("ubuntu:26.04:resolute", text)
+
+    def test_production_bootstrap_does_not_bypass_platform_guard(self) -> None:
+        text = read_text(PLAYBOOKS["bootstrap"])
+        raw_gate = text[: text.index("Install minimal Python serialization prerequisites")]
+
+        self.assertNotIn("baseline_skip_platform_guard", raw_gate)
+        self.assertIn("/etc/os-release", raw_gate)
+
     def test_bootstrap_baseline_and_site_playbooks_compose_expected_roles(self) -> None:
         bootstrap_text = read_text(PLAYBOOKS["bootstrap"])
         baseline_text = read_text(PLAYBOOKS["baseline"])

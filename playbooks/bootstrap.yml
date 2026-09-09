@@ -6,6 +6,16 @@
     - bootstrap
     - foundation
   pre_tasks:
+    - name: Validate raw Ubuntu release before mutation
+      ansible.builtin.raw: >-
+        set -eu;
+        . /etc/os-release;
+        case "${ID}:${VERSION_ID}:${VERSION_CODENAME}" in
+          ubuntu:24.04:noble|ubuntu:26.04:resolute) exit 0 ;;
+          *) printf 'unsupported platform: %s:%s:%s\n' "$ID" "$VERSION_ID" "$VERSION_CODENAME" >&2; exit 42 ;;
+        esac
+      changed_when: false
+
     - name: Install minimal Python serialization prerequisites via raw SSH execution
       ansible.builtin.raw: >-
         test -e /usr/bin/python3 &&
@@ -24,12 +34,18 @@
         - bootstrap
         - foundation
 
-    - name: Validate Ubuntu 24.04 bootstrap target
+    - name: Validate supported Ubuntu bootstrap target
       ansible.builtin.assert:
         that:
           - not baseline_platform_guard_enabled | bool or ansible_distribution == "Ubuntu"
-          - not baseline_platform_guard_enabled | bool or ansible_distribution_version is version("24.04", "==")
-        fail_msg: Bootstrap is supported only for Ubuntu 24.04 hosts unless the localhost-safe override is enabled.
+          - not baseline_platform_guard_enabled | bool or ansible_distribution_version in supported_platforms
+          - >-
+            not baseline_platform_guard_enabled | bool
+            or ansible_distribution_release
+            == supported_platforms[ansible_distribution_version].codename
+        fail_msg: >-
+          Bootstrap is supported only for declared Ubuntu releases with a matching
+          codename unless the localhost-safe fact-check override is enabled.
       vars:
         baseline_platform_guard_enabled: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
       tags:

@@ -6,14 +6,18 @@
     - baseline
     - foundation
   pre_tasks:
-    - name: Validate Ubuntu 24.04 baseline target
+    - name: Validate supported Ubuntu baseline target
       ansible.builtin.assert:
         that:
           - not baseline_platform_guard_enabled | bool or ansible_facts.distribution == "Ubuntu"
-          - not baseline_platform_guard_enabled | bool or ansible_facts.distribution_version is version("24.04", "==")
+          - not baseline_platform_guard_enabled | bool or ansible_facts.distribution_version in supported_platforms
+          - >-
+            not baseline_platform_guard_enabled | bool
+            or ansible_facts.distribution_release
+            == supported_platforms[ansible_facts.distribution_version].codename
         fail_msg: >-
-          Baseline convergence is supported only for Ubuntu 24.04 hosts unless
-          the localhost-safe override is enabled.
+          Baseline convergence is supported only for declared Ubuntu releases
+          with a matching codename unless the localhost-safe override is enabled.
       vars:
         baseline_platform_guard_enabled: "{{ not (baseline_skip_platform_guard | default(false) | bool) }}"
       tags:
