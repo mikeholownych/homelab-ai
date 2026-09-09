@@ -14,3 +14,7 @@ pytorch_xpu_validator: /usr/local/libexec/local-ai-validate-xpu
 pytorch_xpu_evidence_dir: /var/lib/local-ai/evidence
 pytorch_xpu_expected_count: 2
 pytorch_xpu_validation_path: "{{ pytorch_xpu_evidence_dir }}/xpu-validation.json"
+pytorch_xpu_deadsnakes_keyring_path: /etc/apt/keyrings/deadsnakes.gpg
+pytorch_xpu_deadsnakes_sources_path: /etc/apt/sources.list.d/deadsnakes.sources
+pytorch_xpu_deadsnakes_key_url: https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xF23C5A6CF475977595C89F51BA6932366A755776
+

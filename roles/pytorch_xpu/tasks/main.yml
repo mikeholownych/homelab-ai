@@ -22,11 +22,76 @@
     committed_registry: >-
       {{ (lookup('ansible.builtin.file', committed_registry_path, errors='ignore')
          | from_yaml).runtime_profiles.pytorch_xpu | default({}) }}
+- name: Ensure APT keyrings directory exists for deadsnakes on Ubuntu 26.04
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - ansible_facts.distribution_version == '26.04'
+  tags: [gpu, runtime]
+
+- name: Download deadsnakes PPA signing key on Ubuntu 26.04
+  ansible.builtin.get_url:
+    url: "{{ pytorch_xpu_deadsnakes_key_url }}"
+    dest: /tmp/deadsnakes.key
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - ansible_facts.distribution_version == '26.04'
+    - not ansible_check_mode
+  tags: [gpu, runtime]
+
+- name: Dearmor deadsnakes PPA signing key on Ubuntu 26.04
+  ansible.builtin.command:
+    cmd: "gpg --dearmor -o {{ pytorch_xpu_deadsnakes_keyring_path }} /tmp/deadsnakes.key"
+    creates: "{{ pytorch_xpu_deadsnakes_keyring_path }}"
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - ansible_facts.distribution_version == '26.04'
+    - not ansible_check_mode
+  tags: [gpu, runtime]
+
+- name: Configure deadsnakes PPA deb822 source on Ubuntu 26.04
+  ansible.builtin.copy:
+    content: |
+      Types: deb
+      URIs: https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu
+      Suites: {{ ansible_facts.distribution_release }}
+      Components: main
+      Signed-By: {{ pytorch_xpu_deadsnakes_keyring_path }}
+    dest: "{{ pytorch_xpu_deadsnakes_sources_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: pytorch_xpu_deadsnakes_sources_render
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - ansible_facts.distribution_version == '26.04'
+  tags: [gpu, runtime]
+
+- name: Update apt cache when deadsnakes sources changed
+  ansible.builtin.apt:
+    update_cache: true
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - ansible_facts.distribution_version == '26.04'
+    - pytorch_xpu_deadsnakes_sources_render.changed | default(false)
+    - not ansible_check_mode
+  tags: [gpu, runtime]
+
 - name: Install pinned Python venv tooling
   ansible.builtin.apt:
     name: "python{{ pytorch_xpu_python_version }}-venv"
     state: present
-  when: pytorch_xpu_install_enabled | bool
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - not ansible_check_mode
   tags: [gpu, runtime]
 
 - name: Ensure PyTorch XPU and validator parent directories exist
