@@ -52,12 +52,33 @@ export OMP_PLACES=cores
 
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-2}"
 
+# Strip redundant 'serve' or 'serve --config <path>' from $@ if passed from systemd ExecStart
+if [ "$#" -gt 0 ] && [ "$1" = "serve" ]; then
+    shift
+    if [ "$#" -gt 1 ] && [ "$1" = "--config" ]; then
+        shift 2
+    fi
+fi
+
+EXTRA_MOUNTS=""
+if [ -d /dev/dri/by-path ]; then
+    EXTRA_MOUNTS="-v /dev/dri/by-path:/dev/dri/by-path:ro"
+fi
+
+GROUP_FLAGS=""
+if [ "$RUNTIME_BIN" = "podman" ]; then
+    GROUP_FLAGS="--group-add keep-groups"
+fi
+
+# shellcheck disable=SC2086
 exec "$RUNTIME_BIN" run \
     --rm \
     --name vllm-xpu \
     --network host \
+    --ipc host \
     --security-opt no-new-privileges \
     --device "$CDI_DEVICE" \
+    $GROUP_FLAGS \
     --env-file "$ENV_FILE" \
     -e ONEAPI_DEVICE_SELECTOR="$ONEAPI_DEVICE_SELECTOR" \
     -e ZE_AFFINITY_MASK="$ZE_AFFINITY_MASK" \
@@ -65,7 +86,9 @@ exec "$RUNTIME_BIN" run \
     -e SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS="$SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS" \
     -e OMP_PROC_BIND="$OMP_PROC_BIND" \
     -e OMP_PLACES="$OMP_PLACES" \
+    $EXTRA_MOUNTS \
     -v "$CONFIG_FILE":/cfg/vllm-config.yaml:ro \
     -v "$MODEL_CACHE":/models:rw \
+    --entrypoint vllm \
     "$IMAGE_REF" \
     serve --config /cfg/vllm-config.yaml --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" "$@"

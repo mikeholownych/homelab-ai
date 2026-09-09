@@ -6,12 +6,14 @@ Wants=network-online.target
 [Service]
 Type=simple
 User={{ vllm_xpu_user }}
-Group={{ vllm_xpu_group }}
+Group={{ vllm_xpu_user }}
+SupplementaryGroups={{ vllm_xpu_group }} video
 WorkingDirectory={{ vllm_xpu_config_dir }}
 EnvironmentFile={{ vllm_xpu_env_file }}
 ExecStart=/usr/local/bin/vllm-xpu-runner serve --config {{ vllm_xpu_config_file }}
 Restart=on-failure
 RestartSec=10s
+TimeoutStartSec=600s
 TimeoutStopSec=60s
 LimitNOFILE=65536
 LimitMEMLOCK=infinity
@@ -21,10 +23,9 @@ StandardError=append:{{ vllm_xpu_log_dir }}/vllm-error.log
 # Security hardening
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }}
+ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }} {{ host_runtime_account.home }}
 PrivateTmp=true
-ProtectKernelModules=true
-ProtectKernelTunables=true
+ProtectControlGroups=true
 
 [Install]
 WantedBy=multi-user.target

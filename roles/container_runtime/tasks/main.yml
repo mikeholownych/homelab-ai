@@ -37,21 +37,8 @@
   tags: [runtime, gpu]
 
 - name: Expose configured DRI render nodes through CDI
-  ansible.builtin.copy:
-    content: |
-      cdiVersion: "0.5.0"
-      kind: "local-ai.intel/gpu"
-      annotations:
-        local-ai/device-mappings: "{{ container_runtime_device_mappings | join(',') }}"
-      devices:
-      {% for node in container_runtime_render_nodes %}
-        - name: "gpu{{ loop.index0 }}"
-          containerEdits:
-            deviceNodes:
-              - path: "{{ node }}"
-                hostPath: "{{ node }}"
-                permissions: "rwm"
-      {% endfor %}
+  ansible.builtin.template:
+    src: local-ai-dri.yaml.j2
     dest: /etc/cdi/local-ai-dri.yaml
     owner: root
     group: root

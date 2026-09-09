@@ -59,8 +59,29 @@ benchmarking_gpu_tdp_watts: 200
 
 # Inference runtime parameters for dual-GPU Alchemist Arc Pro B65
 intel_gpu_manage_modprobe: true
+container_runtime_enabled: true
+container_runtime_package: podman
+container_runtime_package_version: "5.7.0+ds2-3build1"
+container_runtime_rootless_enabled: true
+
+users_local_ai_device_groups:
+  - render
+  - video
+
+vllm_xpu_install_enabled: true
+vllm_xpu_service_enabled: true
+vllm_xpu_version: "0.29.0"
+vllm_xpu_container_image: "docker.io/vllm/vllm-openai-xpu"
+vllm_xpu_container_tag: "v0.29.0"
+vllm_xpu_container_digest: "sha256:4bdfd5b928b4a6a95c92b1edc861f13587a797a32db8c1bc96ca4e2c0d58629d"
+vllm_xpu_host: "127.0.0.1"
+vllm_xpu_api_key_required: false
 vllm_xpu_tensor_parallel_size: 2
 vllm_xpu_active_profile: large
+vllm_xpu_enforce_eager: true
+vllm_xpu_gpu_memory_utilization: 0.35
+vllm_xpu_max_model_len: 4096
+vllm_xpu_model_id: "Qwen/Qwen2.5-7B-Instruct-AWQ"
 
 cluster:
   enabled: false

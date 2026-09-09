@@ -1,0 +1,26 @@
+cdiVersion: "0.6.0"
+kind: "local-ai.intel/gpu"
+annotations:
+  local-ai/device-mappings: "{{ container_runtime_device_mappings | join(',') }}"
+devices:
+  - name: "all"
+    containerEdits:
+      deviceNodes:
+{% for node in container_runtime_render_nodes %}
+        - path: "{{ node }}"
+          hostPath: "{{ node }}"
+          permissions: "rwm"
+{% endfor %}
+{% for card in ['/dev/dri/card1', '/dev/dri/card2'] %}
+        - path: "{{ card }}"
+          hostPath: "{{ card }}"
+          permissions: "rwm"
+{% endfor %}
+{% for node in container_runtime_render_nodes %}
+  - name: "gpu{{ loop.index0 }}"
+    containerEdits:
+      deviceNodes:
+        - path: "{{ node }}"
+          hostPath: "{{ node }}"
+          permissions: "rwm"
+{% endfor %}

@@ -87,8 +87,8 @@
   ansible.builtin.assert:
     that:
       - not (vllm_xpu_install_enabled | bool)
-      - or (vllm_xpu_runtime_mode != 'container')
-      - or (container_runtime_enabled | bool)
+        or (vllm_xpu_runtime_mode != 'container')
+        or (container_runtime_enabled | bool)
     fail_msg: >-
       vLLM container mode requires the container runtime role
       (container_runtime_enabled=true) so GPU CDI devices exist.
