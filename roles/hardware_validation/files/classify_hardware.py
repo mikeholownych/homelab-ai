@@ -88,6 +88,56 @@ def classify(profile, observed):
     checks.append(_check("level_zero_detected", {"count": expected_gpus, "bdfs": sorted(pci_bdfs)},
                          level_zero, trustworthy_l0, "blocking",
                          "Exactly two trustworthy Level Zero devices must bind one-to-one to GPU PCI BDFs."))
+    correlated_gpus = []
+    for gpu in approved_gpus:
+        bdf = str(gpu.get("pci_bdf") or gpu.get("bdf") or "").lower()
+        pci_dev = pci_by_bdf.get(bdf, {})
+        l0_dev = level_zero_by_bdf.get(bdf, {})
+        vendor_id = _norm_id(gpu.get("vendor_id") or pci_dev.get("vendor_id"))
+        device_id = _norm_id(gpu.get("device_id") or pci_dev.get("device_id"))
+        pci_id = f"{vendor_id}:{device_id}" if vendor_id and device_id else None
+        kernel_driver = gpu.get("kernel_driver") or pci_dev.get("kernel_driver")
+        drm_card = gpu.get("drm_card") or pci_dev.get("drm_card")
+        render_node = gpu.get("render_node") or pci_dev.get("render_node")
+        l0_uuid = (gpu.get("level_zero_uuid") or l0_dev.get("level_zero_uuid") or
+                   l0_dev.get("uuid") or l0_dev.get("device_uuid"))
+        xpu_ordinal = gpu.get("xpu_ordinal") if gpu.get("xpu_ordinal") is not None else pci_dev.get("xpu_ordinal")
+        correlated_gpus.append({
+            "pci_bdf": bdf if bdf else None,
+            "pci_id": pci_id,
+            "kernel_driver": kernel_driver,
+            "drm_card": drm_card,
+            "render_node": render_node,
+            "level_zero_uuid": l0_uuid,
+            "xpu_ordinal": xpu_ordinal,
+        })
+    corr_bdfs = [c["pci_bdf"] for c in correlated_gpus if c["pci_bdf"]]
+    corr_renders = [c["render_node"] for c in correlated_gpus
+                    if c["render_node"] and c["render_node"].startswith("/dev/dri/renderD")]
+    corr_cards = [c["drm_card"] for c in correlated_gpus
+                  if c["drm_card"] and c["drm_card"].startswith("/dev/dri/card")]
+    corr_uuids = [c["level_zero_uuid"] for c in correlated_gpus if c["level_zero_uuid"]]
+    corr_xpu = [c["xpu_ordinal"] for c in correlated_gpus if c["xpu_ordinal"] is not None]
+    bijective_ok = (
+        len(correlated_gpus) == expected_gpus
+        and len(corr_bdfs) == expected_gpus and len(set(corr_bdfs)) == expected_gpus
+        and len(corr_renders) == expected_gpus and len(set(corr_renders)) == expected_gpus
+        and len(corr_cards) == expected_gpus and len(set(corr_cards)) == expected_gpus
+        and len(corr_uuids) == expected_gpus and len(set(corr_uuids)) == expected_gpus
+        and len(level_zero) == expected_gpus and set(level_zero_by_bdf) == set(corr_bdfs)
+        and (len(corr_xpu) == 0 or (len(corr_xpu) == expected_gpus
+                                   and len(set(str(x) for x in corr_xpu)) == expected_gpus))
+        and all(c["pci_bdf"] and c["render_node"] and c["drm_card"] and c["level_zero_uuid"]
+                for c in correlated_gpus)
+    )
+    checks.append(_check(
+        "dual_bdf_correlation",
+        f"Bijective 1-to-1 correlation across {expected_gpus} approved BDFs, DRM cards, render nodes, Level Zero UUIDs, and XPU ordinals",
+        correlated_gpus,
+        bijective_ok,
+        "blocking",
+        "Bijective correlation between PCI BDF, DRM card, render node, Level Zero device UUID, and XPU ordinal is required for compute acceptance."
+    ))
     rebar_targets = [item.get("rebar_enabled") for item in approved_pci]
     rebar_ok = len(approved_pci) == expected_gpus and all(value is True for value in rebar_targets)
     checks.append(_check("resizable_bar_enabled", True, rebar_targets,
@@ -163,7 +213,8 @@ def main():
     documents = {
         "hardware.json": evidence(profile, observed,
                                   {"machine_model", "cpu_model", "gpu_count", "gpu_model_match",
-                                   "gpu_memory", "level_zero_detected", "unexpected_gpu_devices"},
+                                   "gpu_memory", "level_zero_detected", "unexpected_gpu_devices",
+                                   "dual_bdf_correlation"},
                                   "Platform and accelerator comparison against the selected Git profile."),
         "pci.json": evidence(profile["pcie"], observed.get("pci", []),
                              {"pcie_link_health", "resizable_bar_enabled"},

@@ -113,4 +113,5 @@ severity_rules:
     - resizable_bar_enabled
     - above_4g_decoding_enabled
     - level_zero_detected
+    - dual_bdf_correlation
     - pcie_link_health

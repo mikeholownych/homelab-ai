@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 
-def validate(torch, expected_count):
+def validate(torch, expected_count, device_index=None):
     result = {
         "schema_version": "1.0.0", "status": "FAIL", "physical_acceptance": False,
         "torch_version": getattr(torch, "__version__", "unknown"), "devices": [],
@@ -16,12 +16,24 @@ def validate(torch, expected_count):
         return result
     count = torch.xpu.device_count()
     result["device_count"] = count
-    result["observed_count"] = count
-    if count != expected_count:
-        result["error"] = f"expected {expected_count} XPU devices, observed {count}"
-        return result
+    if device_index is not None:
+        result["observed_count"] = 1
+        result["target_device_index"] = device_index
+        if device_index >= count or device_index < 0:
+            result["error"] = f"device index {device_index} out of range (device count {count})"
+            return result
+        indices_to_test = [device_index]
+    else:
+        result["observed_count"] = count
+        if count != expected_count:
+            result["error"] = f"expected {expected_count} XPU devices, observed {count}"
+            return result
+        if expected_count == 2:
+            result["dual_visible_process"] = (count == 2)
+        indices_to_test = list(range(count))
+
     try:
-        for index in range(count):
+        for index in indices_to_test:
             props = torch.xpu.get_device_properties(index)
             left = torch.tensor(1.0, device=f"xpu:{index}")
             right = torch.tensor(2.0, device=f"xpu:{index}")
@@ -30,7 +42,7 @@ def validate(torch, expected_count):
             if value != 3.0:
                 raise RuntimeError(f"device {index} returned {value}, expected 3.0")
             result["devices"].append({
-                "index": index, "name": props.name,
+                "index": index, "xpu_ordinal": f"xpu:{index}", "name": props.name,
                 "memory_gib": round(props.total_memory / 1024**3, 3), "tensor_result": value,
             })
     except Exception as exc:  # runtime boundary must be represented as structured evidence
@@ -49,6 +61,8 @@ def write_result(path, result):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--expected-count", type=int, required=True)
+    parser.add_argument("--device-index", type=int, default=None,
+                        help="Validate specific XPU device index in isolation")
     parser.add_argument("--output", required=True)
     parser.add_argument("--validation-output", required=True)
     args = parser.parse_args()
@@ -61,7 +75,7 @@ def main():
             "devices": [], "error": "torch import failed", "detail": str(exc),
         }
     else:
-        result = validate(torch, args.expected_count)
+        result = validate(torch, args.expected_count, device_index=args.device_index)
     write_result(args.output, result)
     write_result(args.validation_output, result)
     print(json.dumps(result, sort_keys=True))

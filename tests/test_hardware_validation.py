@@ -36,6 +36,8 @@ def load_collector():
         ("pcie_degraded", "blocking", "pcie_link_health"),
         ("gpu_model", "blocking", "gpu_model_match"),
         ("vram_mismatch", "blocking", "gpu_memory"),
+        ("single_drm_node", "blocking", "dual_bdf_correlation"),
+        ("single_level_zero", "blocking", "dual_bdf_correlation"),
     ],
 )
 def test_fixture_classification(fixture, status, rule):
@@ -76,7 +78,7 @@ def test_unexpected_gpu_warns_but_approved_pair_still_passes():
     observed = json.loads((ROOT / "tests/fixtures/hardware/d5820_p4000.json").read_text())
     result = classifier.classify(profile, observed)
     for blocking_rule in ("gpu_count", "gpu_model_match", "gpu_memory", "level_zero_detected",
-                          "resizable_bar_enabled", "pcie_link_health"):
+                          "dual_bdf_correlation", "resizable_bar_enabled", "pcie_link_health"):
         check = next(item for item in result["checks"] if item["rule"] == blocking_rule)
         assert check["status"] == "pass", blocking_rule
     assert result["status"] == "warning"
@@ -263,3 +265,48 @@ def test_successful_live_observation_still_does_not_grant_commissioning_acceptan
     result = classifier.classify(profile, observed)
     assert result["status"] == "pass"
     assert result["physical_acceptance"] is False
+
+
+def test_bijective_correlation_accepts_healthy_two_device_mapping():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "pass"
+    corr_check = next(c for c in result["checks"] if c["rule"] == "dual_bdf_correlation")
+    assert corr_check["status"] == "pass"
+    assert len(corr_check["observed"]) == 2
+    for dev in corr_check["observed"]:
+        assert dev["pci_bdf"] in ("0000:41:00.0", "0000:61:00.0")
+        assert dev["drm_card"].startswith("/dev/dri/card")
+        assert dev["render_node"].startswith("/dev/dri/renderD")
+        assert dev["level_zero_uuid"] is not None
+        assert dev["xpu_ordinal"] in (0, 1, "xpu:0", "xpu:1")
+
+
+def test_bijective_correlation_rejects_duplicate_render_nodes():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
+    observed["gpus"][1]["render_node"] = observed["gpus"][0]["render_node"]
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "blocking"
+    corr_check = next(c for c in result["checks"] if c["rule"] == "dual_bdf_correlation")
+    assert corr_check["status"] == "fail"
+    assert corr_check["severity"] == "blocking"
+
+
+def test_collector_discovers_drm_and_correlates_level_zero(tmp_path, monkeypatch):
+    collector = load_collector()
+    bdf = "0000:41:00.0"
+    sysfs_bdf_drm = tmp_path / "sys/bus/pci/devices" / bdf / "drm"
+    sysfs_bdf_drm.mkdir(parents=True)
+    (sysfs_bdf_drm / "card0").mkdir()
+    (sysfs_bdf_drm / "renderD128").mkdir()
+
+    original_path = collector.Path
+    monkeypatch.setattr(collector, "Path", lambda *parts: tmp_path / original_path(*parts).relative_to("/") if str(parts[0]).startswith("/sys") else original_path(*parts))
+    card, render = collector.collect_drm_nodes(bdf)
+    assert card == "/dev/dri/card0"
+    assert render == "/dev/dri/renderD128"
+

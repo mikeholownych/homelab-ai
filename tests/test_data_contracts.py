@@ -100,6 +100,7 @@ class DataContractTests(unittest.TestCase):
                 self.assertIn("serial_number", profile["discovery_fields"]["asset_identifiers"])
                 self.assertIn("gpu_model_match", profile["severity_rules"]["blocking"])
                 self.assertIn("level_zero_detected", profile["severity_rules"]["blocking"])
+                self.assertIn("dual_bdf_correlation", profile["severity_rules"]["blocking"])
                 self.assertIn("unexpected_gpu_devices", profile["severity_rules"]["warning"])
 
     def test_patching_and_upgrade_policies_separate_routine_and_high_risk_lifecycles(self) -> None:

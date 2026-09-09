@@ -101,6 +101,27 @@
   when: pytorch_xpu_install_enabled | bool
   tags: [gpu, validation]
 
+- name: Validate each individual XPU device in isolation
+  ansible.builtin.command:
+    argv:
+      - "{{ pytorch_xpu_venv }}/bin/python"
+      - "{{ pytorch_xpu_validator }}"
+      - --expected-count
+      - "1"
+      - --device-index
+      - "{{ item | string }}"
+      - --output
+      - "{{ pytorch_xpu_evidence_dir }}/device_{{ item }}.json"
+      - --validation-output
+      - "{{ pytorch_xpu_evidence_dir }}/validation_device_{{ item }}.json"
+  loop: "{{ range(0, pytorch_xpu_expected_count | int) | list }}"
+  changed_when: false
+  when:
+    - pytorch_xpu_install_enabled | bool
+    - not ansible_check_mode
+  check_mode: false
+  tags: [gpu, runtime, validation]
+
 - name: Validate every XPU before promotion and write runtime.json
   ansible.builtin.command:
     argv:
