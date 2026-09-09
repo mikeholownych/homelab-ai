@@ -42,6 +42,31 @@
   tags:
     - base_os_platform_guard
 
+- name: Validate base OS managed path safety
+  ansible.builtin.assert:
+    that:
+      - >-
+        item | aihost_path_is_safe_descendant(
+          (base_os_root_dir | default('', true)) | ternary(base_os_root_dir, '/')
+        )
+    fail_msg: >-
+      base_os managed paths must stay canonically beneath the target filesystem root
+      without traversing unmanaged symlinks: {{ item }}
+  loop:
+    - "{{ base_os_sources_path }}"
+    - "{{ base_os_proxy_path }}"
+    - "{{ base_os_disable_periodic_path }}"
+    - "{{ base_os_journald_path }}"
+    - "{{ base_os_logrotate_path }}"
+    - "{{ base_os_locale_path }}"
+    - "{{ base_os_grub_dropin_path }}"
+    - "{{ base_os_package_holds_state_path }}"
+    - "{{ base_os_package_preferences_path }}"
+  tags:
+    - base_os_path_guard
+    - base_os_platform_guard
+
+
 - name: Validate base OS platform resolver prerequisites
   ansible.builtin.assert:
     that:

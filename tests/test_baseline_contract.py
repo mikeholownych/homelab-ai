@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import importlib.util
 import json
 import os
@@ -211,6 +212,60 @@ def run_base_os_guard_probe(role_vars: dict[str, object]) -> subprocess.Complete
         )
 
 
+def run_base_os_path_guard_probe(
+    role_vars: dict[str, object],
+    *,
+    setup: Callable[[Path], None] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory(
+        prefix="base-os-path-guard-",
+        dir=repo_test_sandbox_root(),
+    ) as tmpdir:
+        workspace = Path(tmpdir)
+        (workspace / "root").mkdir()
+        if setup is not None:
+            setup(workspace)
+        common_vars: dict[str, object] = {
+            "baseline_skip_platform_guard": True,
+            "baseline_localhost_safe_mode": True,
+            "base_os_root_dir": str(workspace / "root"),
+            "base_os_mutating_operations_enabled": False,
+            "base_os_manage_ubuntu_sources": False,
+            "base_os_proxy_enabled": False,
+            "base_os_manage_admin_packages": False,
+            "base_os_manage_journald_service": False,
+            "base_os_manage_locale_generation": False,
+            "base_os_manage_timezone": False,
+            "base_os_manage_package_policy": False,
+            "base_os_manage_unattended_upgrades_service": False,
+            "base_os_manage_boot_parameters": False,
+            "base_os_update_grub_manage_runtime": False,
+        }
+        common_vars.update(role_vars)
+        playbook = [
+            {
+                "name": "Base OS managed path validation probe",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": common_vars,
+                "tasks": [
+                    {
+                        "name": "Include base OS managed path guard",
+                        "ansible.builtin.include_role": {"name": "base_os"},
+                        "tags": ["base_os_path_guard"],
+                    }
+                ],
+            }
+        ]
+        return run_local_role_probe(
+            yaml.safe_dump(playbook, sort_keys=False),
+            workspace=workspace,
+            extra_args=["--tags", "base_os_path_guard"],
+        )
+
+
 def ssh_keygen_bin() -> str:
     discovered = shutil.which("ssh-keygen")
     if discovered:
@@ -341,6 +396,43 @@ class BaselineContractTests(unittest.TestCase):
                 )
             )
 
+    def test_managed_path_validator_rejects_parent_and_target_symlinks(self) -> None:
+        module = load_filter_module()
+        with tempfile.TemporaryDirectory(prefix="managed-path-symlink-") as tmpdir:
+            temp_root = Path(tmpdir)
+            sandbox_root = temp_root / "sandbox"
+            outside_root = temp_root / "outside"
+            sandbox_root.mkdir()
+            outside_root.mkdir()
+
+            (sandbox_root / "etc").symlink_to(outside_root, target_is_directory=True)
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    str(sandbox_root / "etc" / "apt" / "20auto-upgrades"),
+                    str(sandbox_root),
+                )
+            )
+
+            second_root = temp_root / "second-sandbox"
+            target_parent = second_root / "etc" / "apt" / "apt.conf.d"
+            target_parent.mkdir(parents=True)
+            outside_target = outside_root / "proxy.conf"
+            outside_target.write_text("sentinel\n", encoding="utf-8")
+            target_path = target_parent / "90-aihost-proxy"
+            target_path.symlink_to(outside_target)
+            self.assertFalse(
+                module.path_is_safe_descendant(
+                    str(target_path),
+                    str(second_root),
+                )
+            )
+            self.assertTrue(
+                module.path_is_safe_descendant(
+                    str(second_root / "etc" / "default" / "locale"),
+                    str(second_root),
+                )
+            )
+
     def test_base_os_selects_suites_from_validated_release(self) -> None:
         defaults = load_role_yaml("base_os", "defaults/main.yml")
         tasks = read_text(ROLE_ROOT / "base_os" / "tasks" / "main.yml")
@@ -411,6 +503,43 @@ class BaselineContractTests(unittest.TestCase):
 
                 self.assertNotEqual(0, result.returncode)
                 self.assertIn("all base_os mutation switches disabled", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_rejects_outside_proxy_override(self) -> None:
+        result = run_base_os_path_guard_probe(
+            {"base_os_proxy_path": "/tmp/aihost-outside-proxy"}
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("managed paths must stay canonically beneath", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_rejects_root_parent_symlink_escape(self) -> None:
+        def setup(workspace: Path) -> None:
+            outside_root = workspace / "outside"
+            outside_root.mkdir()
+            (workspace / "root" / "etc").symlink_to(outside_root, target_is_directory=True)
+
+        result = run_base_os_path_guard_probe({}, setup=setup)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("managed paths must stay canonically beneath", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_rejects_target_symlink(self) -> None:
+        def setup(workspace: Path) -> None:
+            proxy_parent = workspace / "root" / "etc" / "apt" / "apt.conf.d"
+            proxy_parent.mkdir(parents=True)
+            outside_target = workspace / "outside-proxy"
+            outside_target.write_text("sentinel\n", encoding="utf-8")
+            (proxy_parent / "90-aihost-proxy").symlink_to(outside_target)
+
+        result = run_base_os_path_guard_probe({}, setup=setup)
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("managed paths must stay canonically beneath", result.stdout + result.stderr)
+
+    def test_base_os_path_guard_accepts_valid_sandbox_paths(self) -> None:
+        result = run_base_os_path_guard_probe({})
+
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
 
     def test_base_os_rejects_malicious_newline_codename_in_safe_mode(self) -> None:
         result = run_base_os_validation_probe(
