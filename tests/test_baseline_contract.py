@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -95,6 +96,50 @@ def load_filter_module():
     return module
 
 
+def load_baseline_harness_module():
+    module_path = REPO_ROOT / "tests" / "integration" / "baseline_container_harness.py"
+    spec = importlib.util.spec_from_file_location("baseline_container_harness", module_path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("Unable to load baseline container harness")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def run_base_os_validation_probe(role_vars: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory(prefix="aihost-base-os-validation-") as tmpdir:
+        workspace = Path(tmpdir)
+        common_vars: dict[str, object] = {
+            "base_os_root_dir": str(workspace / "root"),
+            "base_os_logrotate_validate_command": "/usr/bin/env true %s",
+            "base_os_manage_admin_packages": False,
+            "base_os_manage_journald_service": False,
+            "base_os_manage_locale_generation": False,
+            "base_os_manage_timezone": False,
+            "base_os_manage_package_policy": False,
+            "base_os_manage_unattended_upgrades_service": False,
+            "base_os_update_grub_manage_runtime": False,
+        }
+        common_vars.update(role_vars)
+        playbook = [
+            {
+                "name": "Base OS platform validation probe",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": common_vars,
+                "tasks": [
+                    {
+                        "name": "Include base OS role",
+                        "ansible.builtin.include_role": {"name": "base_os"},
+                    }
+                ],
+            }
+        ]
+        return run_local_role_probe(yaml.safe_dump(playbook, sort_keys=False), workspace=workspace)
+
+
 def ssh_keygen_bin() -> str:
     discovered = shutil.which("ssh-keygen")
     if discovered:
@@ -170,6 +215,59 @@ class BaselineContractTests(unittest.TestCase):
 
         self.assertNotIn("noble-security", text)
         self.assertIn("base_os_security_suite", text)
+
+    def test_base_os_rejects_platform_guard_bypass_for_mutating_run(self) -> None:
+        result = run_base_os_validation_probe(
+            {
+                "baseline_skip_platform_guard": True,
+                "baseline_localhost_safe_mode": True,
+                "base_os_mutating_operations_enabled": True,
+                "ansible_facts": {},
+            }
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("platform guard bypass requires non-mutating localhost-safe mode", result.stdout + result.stderr)
+
+    def test_base_os_rejects_malicious_newline_codename_in_safe_mode(self) -> None:
+        result = run_base_os_validation_probe(
+            {
+                "baseline_skip_platform_guard": True,
+                "baseline_localhost_safe_mode": True,
+                "base_os_mutating_operations_enabled": False,
+                "ansible_facts": {
+                    "distribution": "Ubuntu",
+                    "distribution_version": "24.04",
+                    "distribution_release": "noble\nmalicious",
+                },
+            }
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("lowercase Ubuntu codename", result.stdout + result.stderr)
+
+    def test_base_os_rejects_incomplete_platform_suite_record(self) -> None:
+        result = run_base_os_validation_probe(
+            {
+                "baseline_skip_platform_guard": False,
+                "baseline_localhost_safe_mode": False,
+                "base_os_mutating_operations_enabled": False,
+                "ansible_facts": {
+                    "distribution": "Ubuntu",
+                    "distribution_version": "26.04",
+                    "distribution_release": "resolute",
+                },
+                "supported_platforms": {
+                    "26.04": {
+                        "codename": "resolute",
+                        "apt_suites": ["resolute", "resolute-updates", "resolute-security"],
+                    }
+                },
+            }
+        )
+
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("exact canonical suite order", result.stdout + result.stderr)
 
     def test_bootstrap_platform_gate_precedes_apt_mutation(self) -> None:
         text = read_text(PLAYBOOKS["bootstrap"])
@@ -612,6 +710,7 @@ class BaselineContractTests(unittest.TestCase):
               gather_facts: true
               become: false
               vars:
+                baseline_localhost_safe_mode: true
                 baseline_skip_platform_guard: true
                 base_os_root_dir: "{{ playbook_dir }}/root"
                 base_os_mutating_operations_enabled: false
@@ -657,6 +756,7 @@ class BaselineContractTests(unittest.TestCase):
                   gather_facts: true
                   become: false
                   vars:
+                    baseline_localhost_safe_mode: true
                     baseline_skip_platform_guard: true
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
@@ -716,6 +816,7 @@ class BaselineContractTests(unittest.TestCase):
                   gather_facts: true
                   become: false
                   vars:
+                    baseline_localhost_safe_mode: true
                     baseline_skip_platform_guard: true
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
@@ -1525,6 +1626,7 @@ class BaselineContractTests(unittest.TestCase):
                   gather_facts: true
                   become: false
                   vars:
+                    baseline_localhost_safe_mode: true
                     baseline_skip_platform_guard: true
                     base_os_root_dir: "{{ playbook_dir }}/root"
                     base_os_mutating_operations_enabled: false
@@ -1829,7 +1931,7 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("timeout -k 10s 600s", makefile)
         self.assertTrue(dockerfile_path.exists(), "Expected pinned Ubuntu Dockerfile for baseline harness to exist")
         dockerfile_text = read_text(dockerfile_path)
-        self.assertIn("FROM ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea", dockerfile_text)
+        self.assertIn("FROM ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467", dockerfile_text)
         self.assertNotIn("FROM ubuntu:24.04", dockerfile_text)
         self.assertNotIn("curl", dockerfile_text)
         self.assertRegex(dockerfile_text, r"ansible-core=\S+")
@@ -1843,11 +1945,16 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn("BUILD_TIMEOUT_SECONDS = 300", harness_text)
         self.assertIn("RUN_TIMEOUT_SECONDS = 300", harness_text)
         self.assertIn('choices=("noble", "resolute")', harness_text)
+        self.assertIn("assert_apt_sources", harness_text)
+        self.assertIn("Pin: release a=", harness_text)
         self.assertIn("--release noble", makefile)
         self.assertIn("--release resolute", makefile)
         self.assertTrue(resolute_dockerfile_path.exists(), "Expected pinned Ubuntu Resolute Dockerfile to exist")
         resolute_dockerfile_text = read_text(resolute_dockerfile_path)
-        self.assertRegex(resolute_dockerfile_text, r"FROM ubuntu@sha256:[0-9a-f]{64}")
+        self.assertIn(
+            "FROM ubuntu@sha256:889d056d5c6c0bfb55789ff3710681d68e50713cb562d2196dc07110599c7a6f",
+            resolute_dockerfile_text,
+        )
         self.assertNotIn("FROM ubuntu:26.04", resolute_dockerfile_text)
         self.assertRegex(resolute_dockerfile_text, r"ansible-core=\S+")
         self.assertRegex(resolute_dockerfile_text, r"openssh-server=\S+")
@@ -1870,6 +1977,48 @@ class BaselineContractTests(unittest.TestCase):
             },
             resolute_inventory["all"]["vars"]["supported_platforms"],
         )
+
+        harness_module = load_baseline_harness_module()
+        expected_digests = {
+            "noble": "ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467",
+            "resolute": "ubuntu@sha256:889d056d5c6c0bfb55789ff3710681d68e50713cb562d2196dc07110599c7a6f",
+        }
+        expected_suites = {
+            "noble": ["noble", "noble-updates", "noble-backports", "noble-security"],
+            "resolute": ["resolute", "resolute-updates", "resolute-backports", "resolute-security"],
+        }
+        required_pins = (
+            "ansible-core",
+            "auditd",
+            "ca-certificates",
+            "chrony",
+            "iproute2",
+            "iptables",
+            "jq",
+            "locales",
+            "logrotate",
+            "netplan.io",
+            "openssh-server",
+            "python3",
+            "python3-apt",
+            "rsync",
+            "sudo",
+            "ufw",
+        )
+        for release, config in harness_module.RELEASE_CONFIGS.items():
+            release_dockerfile = Path(config["dockerfile"])
+            release_dockerfile_text = read_text(release_dockerfile)
+            self.assertEqual(expected_digests[release], config["pinned_base_image"])
+            self.assertEqual(f"FROM {config['pinned_base_image']}", release_dockerfile_text.splitlines()[0])
+            self.assertEqual(expected_suites[release][:-1], config["archive_suites"])
+            self.assertEqual(expected_suites[release][-1], config["security_suite"])
+            for package in required_pins:
+                self.assertRegex(release_dockerfile_text, rf"(?m)^\s+{re.escape(package)}=\S+")
+
+        container_playbook = read_text(REPO_ROOT / "tests" / "integration" / "baseline_container.yml")
+        self.assertIn("base_os_manage_ubuntu_sources: true", container_playbook)
+        self.assertIn("baseline_harness_release", container_playbook)
+        self.assertNotIn("pin': 'release a=noble", container_playbook)
 
 
 if __name__ == "__main__":

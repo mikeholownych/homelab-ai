@@ -1,4 +1,4 @@
-FROM ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea
+FROM ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -14,9 +14,9 @@ RUN apt-get update \
         locales=2.39-0ubuntu8.8 \
         logrotate=3.21.0-2build1 \
         netplan.io=1.1.2-8ubuntu1~24.04.2 \
-        openssh-server=1:9.6p1-3ubuntu13.18 \
+        openssh-server=1:9.6p1-3ubuntu13.19 \
         python3=3.12.3-0ubuntu2.1 \
-        python3-apt=2.7.7ubuntu5.2 \
+        python3-apt=2.7.7ubuntu5.3 \
         rsync=3.2.7-1ubuntu1.5 \
         sudo=1.9.15p5-3ubuntu5.24.04.2 \
         ufw=0.36.2-6 \

@@ -21,13 +21,17 @@ HARNESS_INVENTORY = "tests/fixtures/inventory/resolute.yml"
 RELEASE_CONFIGS = {
     "noble": {
         "dockerfile": REPO_ROOT / "tests" / "integration" / "Dockerfile.baseline",
-        "pinned_base_image": "ubuntu@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea",
-        "harness_image": "aihost-baseline-harness:noble-sha561618e2",
+        "pinned_base_image": "ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467",
+        "harness_image": "aihost-baseline-harness:noble-sha019e8eb2",
+        "archive_suites": ["noble", "noble-updates", "noble-backports"],
+        "security_suite": "noble-security",
     },
     "resolute": {
         "dockerfile": REPO_ROOT / "tests" / "integration" / "Dockerfile.resolute",
-        "pinned_base_image": "ubuntu@sha256:2260313b31c8c011cd2eebe728008efac1b3982be73eb71348ea2648d2c0e09b",
-        "harness_image": "aihost-baseline-harness:resolute-sha2260313b",
+        "pinned_base_image": "ubuntu@sha256:889d056d5c6c0bfb55789ff3710681d68e50713cb562d2196dc07110599c7a6f",
+        "harness_image": "aihost-baseline-harness:resolute-sha889d056d",
+        "archive_suites": ["resolute", "resolute-updates", "resolute-backports"],
+        "security_suite": "resolute-security",
     },
 }
 BUILD_TIMEOUT_SECONDS = 300
@@ -177,6 +181,7 @@ class DockerBaselineHarness:
         sys.stderr.write(completed.stderr)
 
     def run_playbook(self, playbook: str, extra_vars: dict[str, object]) -> tuple[str, int]:
+        effective_extra_vars = {"baseline_harness_release": self.release, **extra_vars}
         completed = self.run(
             [
                 "docker",
@@ -191,7 +196,7 @@ class DockerBaselineHarness:
                 HARNESS_INVENTORY,
                 playbook,
                 "-e",
-                json.dumps(extra_vars),
+                json.dumps(effective_extra_vars),
             ],
             timeout_override=min(RUN_TIMEOUT_SECONDS, self.remaining_seconds()),
         )
@@ -253,6 +258,19 @@ def assert_json_state(harness: DockerBaselineHarness, path: str, expected: dict[
     require(observed == expected, f"{path} mismatch.\nExpected: {expected}\nObserved: {observed}")
 
 
+def assert_apt_sources(harness: DockerBaselineHarness) -> None:
+    content = harness.read_text("/etc/apt/sources.list.d/ubuntu.sources")
+    observed_suites = re.findall(r"^Suites: (.+)$", content, flags=re.MULTILINE)
+    expected_suites = [
+        " ".join(harness.release_config["archive_suites"]),
+        str(harness.release_config["security_suite"]),
+    ]
+    require(
+        observed_suites == expected_suites,
+        f"Rendered apt suites mismatch: expected {expected_suites}, observed {observed_suites}.",
+    )
+
+
 def assert_initial_full_state(harness: DockerBaselineHarness) -> None:
     assert_group_membership(harness, "ops", {"ops", "sudo"})
     assert_group_membership(harness, "local-ai", {"local-ai", "render", "video"})
@@ -283,6 +301,12 @@ def assert_initial_full_state(harness: DockerBaselineHarness) -> None:
         harness.path_exists("/etc/apt/preferences.d/90-aihost-managed.pref"),
         "Expected managed apt preferences file to exist after initial convergence.",
     )
+    preferences = harness.read_text("/etc/apt/preferences.d/90-aihost-managed.pref")
+    require(
+        f"Pin: release a={harness.release}" in preferences,
+        f"Expected package-policy pin to use release a={harness.release}.\n{preferences}",
+    )
+    assert_apt_sources(harness)
     assert_json_state(
         harness,
         "/var/lib/aihost/base-os-package-policy-state.json",
@@ -347,6 +371,7 @@ def assert_transition_full_state(harness: DockerBaselineHarness) -> None:
         not harness.path_exists("/etc/apt/preferences.d/90-aihost-managed.pref"),
         "Expected managed apt preferences file to be removed after transition.",
     )
+    assert_apt_sources(harness)
     assert_json_state(
         harness,
         "/var/lib/aihost/base-os-package-policy-state.json",
