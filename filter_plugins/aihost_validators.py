@@ -69,15 +69,24 @@ def path_is_strictly_within(value: object, allowed_root: object) -> bool:
         return False
 
     candidate = PurePosixPath(value)
+    root = PurePosixPath(allowed_root)
     if not candidate.is_absolute() or ".." in candidate.parts:
         return False
-    if value != posixpath.normpath(value):
+    if not root.is_absolute() or ".." in root.parts:
+        return False
+    if value != posixpath.normpath(value) or allowed_root != posixpath.normpath(allowed_root):
         return False
 
     try:
         resolved_candidate = Path(value).resolve(strict=False)
-        resolved_root = Path(allowed_root).resolve(strict=False)
+        allowed_root_path = Path(allowed_root)
+        if not allowed_root_path.is_dir() or allowed_root_path.is_symlink():
+            return False
+        resolved_root = allowed_root_path.resolve(strict=True)
     except (OSError, RuntimeError, ValueError):
+        return False
+
+    if resolved_root != allowed_root_path:
         return False
 
     return resolved_candidate != resolved_root and resolved_root in resolved_candidate.parents

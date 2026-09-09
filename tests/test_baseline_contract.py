@@ -84,8 +84,19 @@ def ansible_playbook_bin() -> str:
 
 
 def repo_test_sandbox_root() -> Path:
+    try:
+        resolved_repo_root = REPO_ROOT.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise RuntimeError("Repository test root must be a real directory, not a symlink") from exc
+    if resolved_repo_root != REPO_ROOT:
+        raise RuntimeError("Repository test root must be a real directory, not a symlink")
+
     sandbox_root = REPO_ROOT / ".ansible"
+    if sandbox_root.is_symlink():
+        raise RuntimeError("Repository .ansible test sandbox must be a real directory, not a symlink")
     sandbox_root.mkdir(parents=True, exist_ok=True)
+    if not sandbox_root.is_dir() or sandbox_root.resolve(strict=True) != sandbox_root:
+        raise RuntimeError("Repository .ansible test sandbox must be a real directory, not a symlink")
     return sandbox_root
 
 
@@ -281,6 +292,54 @@ class BaselineContractTests(unittest.TestCase):
 
             self.assertTrue((clean_checkout / ".ansible").is_dir())
             self.assertEqual(clean_checkout / ".ansible", workspace.parent)
+
+    def test_probe_workspace_rejects_symlinked_repo_sandbox_parent(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="symlinked-checkout-") as tmpdir:
+            clean_checkout = Path(tmpdir) / "repo"
+            external_root = Path(tmpdir) / "external"
+            clean_checkout.mkdir()
+            external_root.mkdir()
+            (clean_checkout / ".ansible").symlink_to(external_root, target_is_directory=True)
+
+            with mock.patch(f"{__name__}.REPO_ROOT", clean_checkout):
+                with self.assertRaisesRegex(RuntimeError, "must be a real directory, not a symlink"):
+                    repo_test_sandbox_root()
+
+    def test_path_validator_rejects_symlinked_allowed_root_components(self) -> None:
+        module = load_filter_module()
+        with tempfile.TemporaryDirectory(prefix="symlinked-sandbox-") as tmpdir:
+            temp_root = Path(tmpdir)
+            external_root = temp_root / "external"
+            external_root.mkdir()
+
+            repo_with_linked_sandbox = temp_root / "linked-sandbox-repo"
+            repo_with_linked_sandbox.mkdir()
+            linked_sandbox = repo_with_linked_sandbox / ".ansible"
+            linked_sandbox.symlink_to(external_root, target_is_directory=True)
+            self.assertFalse(
+                module.path_is_strictly_within(
+                    str(linked_sandbox / "probe"),
+                    str(linked_sandbox),
+                )
+            )
+
+            real_repo = temp_root / "real-repo"
+            real_sandbox = real_repo / ".ansible"
+            real_sandbox.mkdir(parents=True)
+            linked_repo = temp_root / "linked-repo"
+            linked_repo.symlink_to(real_repo, target_is_directory=True)
+            self.assertFalse(
+                module.path_is_strictly_within(
+                    str(linked_repo / ".ansible" / "probe"),
+                    str(linked_repo / ".ansible"),
+                )
+            )
+            self.assertTrue(
+                module.path_is_strictly_within(
+                    str(real_sandbox / "probe"),
+                    str(real_sandbox),
+                )
+            )
 
     def test_base_os_selects_suites_from_validated_release(self) -> None:
         defaults = load_role_yaml("base_os", "defaults/main.yml")
