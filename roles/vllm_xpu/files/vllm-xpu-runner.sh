@@ -43,6 +43,12 @@ fi
 
 log "starting $IMAGE_REF"
 
+# Export variables from ENV_FILE
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+
 export ONEAPI_DEVICE_SELECTOR="${ONEAPI_DEVICE_SELECTOR:-level_zero:0,1}"
 export ZE_AFFINITY_MASK="${ZE_AFFINITY_MASK:-0,1}"
 export CL_TARGET_OPENCL_DEVICE_ENTRY=1

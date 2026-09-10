@@ -76,11 +76,11 @@ vllm_xpu_container_tag: "v0.29.0"
 vllm_xpu_container_digest: "sha256:4bdfd5b928b4a6a95c92b1edc861f13587a797a32db8c1bc96ca4e2c0d58629d"
 vllm_xpu_host: "0.0.0.0"
 vllm_xpu_api_key_required: true
-vllm_xpu_tensor_parallel_size: 2
-vllm_xpu_active_profile: large
+vllm_xpu_tensor_parallel_size: 1
+vllm_xpu_active_profile: small
 vllm_xpu_enforce_eager: true
 vllm_xpu_gpu_memory_utilization: 0.35
-vllm_xpu_max_model_len: 32768
+vllm_xpu_max_model_len: 16384
 vllm_xpu_model_id: "Qwen/Qwen2.5-7B-Instruct-AWQ"
 
 cluster:

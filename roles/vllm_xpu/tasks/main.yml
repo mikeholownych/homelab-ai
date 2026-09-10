@@ -54,6 +54,7 @@
     - vllm_xpu_service_enabled | bool
     - vllm_xpu_install_enabled | bool
     - vllm_xpu_api_key_required | bool
+    - vault_integration_enabled | default(false) | bool
     - not ansible_check_mode
   no_log: true
   tags: [inference, runtime, vllm, vault]
@@ -66,7 +67,35 @@
     - vllm_xpu_service_enabled | bool
     - vllm_xpu_install_enabled | bool
     - vllm_xpu_api_key_required | bool
+    - vault_integration_secret is defined
+    - vault_integration_secret
     - not ansible_check_mode
+  tags: [inference, runtime, vllm]
+
+- name: Preserve or generate vLLM API key when Vault is disabled
+  block:
+    - name: Slurp existing vLLM configuration file
+      ansible.builtin.slurp:
+        src: "{{ vllm_xpu_config_file }}"
+      register: _existing_vllm_config
+      failed_when: false
+
+    - name: Set API key from existing configuration or generate fresh token
+      ansible.builtin.set_fact:
+        vllm_xpu_api_key: >-
+          {{
+            ((_existing_vllm_config.content | b64decode | from_yaml)['api-key'])
+            if (_existing_vllm_config is defined and _existing_vllm_config.content is defined and (_existing_vllm_config.content | length > 0) and ((_existing_vllm_config.content | b64decode | from_yaml)['api-key'] | default(none)))
+            else (lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43'))
+          }}
+  when:
+    - vllm_xpu_service_enabled | bool
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_api_key_required | bool
+    - vllm_xpu_api_key is none
+    - not (vault_integration_enabled | default(false) | bool)
+    - not ansible_check_mode
+  no_log: true
   tags: [inference, runtime, vllm]
 
 - name: Create vLLM service directories
