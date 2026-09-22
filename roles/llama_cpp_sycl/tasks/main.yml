@@ -242,7 +242,38 @@
     - not ansible_check_mode
   tags: [inference, runtime, llama_cpp]
 
-- name: Record llama.cpp fallback validation state during check mode or when uncommissioned
+- name: Install llama.cpp SYCL live validator
+  ansible.builtin.copy:
+    src: validate_llama.py
+    dest: "{{ llama_cpp_sycl_validator }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: llama_cpp_sycl_install_enabled | bool
+  tags: [inference, validation, llama_cpp]
+
+- name: Run llama.cpp SYCL live validator against the running fallback service
+  ansible.builtin.command:
+    argv: >-
+      {{ [llama_cpp_sycl_validator, '--host', '127.0.0.1', '--port',
+          llama_cpp_sycl_port | string, '--commit', llama_cpp_sycl_git_commit]
+          + (['--dual-gpu'] if (llama_cpp_sycl_split_mode != 'none') else [])
+          + ['--output', llama_cpp_sycl_validation_path] }}
+  environment:
+    LLAMA_API_KEY: "{{ llama_cpp_sycl_api_key | default('') }}"
+  register: llama_cpp_sycl_live_validation_run
+  until: llama_cpp_sycl_live_validation_run.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  no_log: true
+  when:
+    - llama_cpp_sycl_install_enabled | bool
+    - llama_cpp_sycl_service_enabled | bool
+    - not ansible_check_mode
+  tags: [inference, validation, llama_cpp]
+
+- name: Record llama.cpp fallback validation state during check mode or when the service is disabled
   ansible.builtin.copy:
     content: >-
       {{ {
@@ -256,7 +287,7 @@
         'dual_gpu_supported': false,
         'split_mode': llama_cpp_sycl_split_mode,
         'tensor_split': llama_cpp_sycl_tensor_split,
-        'reason': 'check mode or uncommissioned hardware skips live fallback service validation'
+        'reason': 'check mode or service disabled skips live fallback service validation'
       } | to_nice_json }}
     dest: "{{ llama_cpp_sycl_validation_path }}"
     owner: root

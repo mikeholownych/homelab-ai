@@ -38,6 +38,7 @@ llama_cpp_sycl_ld_library_path: >-
 
 llama_cpp_sycl_dual_gpu_support_certified: false
 llama_cpp_sycl_validation_path: "/var/lib/aihost/evidence/llama_validation.json"
+llama_cpp_sycl_validator: "/usr/local/libexec/local-ai-validate-llama"
 
 # Authenticated serving: key comes only from Vault at runtime; never Git.
 llama_cpp_sycl_api_key: null

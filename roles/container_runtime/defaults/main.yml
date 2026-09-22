@@ -8,3 +8,6 @@ container_runtime_render_nodes:
   - /dev/dri/renderD128
   - /dev/dri/renderD129
 container_runtime_cdi_path: /etc/cdi/local-ai-dri.yaml
+container_runtime_unprivileged_userns_sysctl: true
+container_runtime_run_roots:
+  - /run/user/999/libpod/tmp

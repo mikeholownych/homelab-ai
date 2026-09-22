@@ -257,14 +257,14 @@ def test_gpu_identity_must_bind_to_same_pci_bdf():
     assert check["status"] == "fail"
 
 
-def test_successful_live_observation_still_does_not_grant_commissioning_acceptance():
+def test_successful_live_observation_grants_commissioning_acceptance():
     classifier = load_classifier()
     profile = yaml.safe_load((ROOT / "profiles/hardware/p620_dual_b65.yml").read_text())
     observed = json.loads((ROOT / "tests/fixtures/hardware/healthy.json").read_text())
     observed["simulated"] = False
     result = classifier.classify(profile, observed)
     assert result["status"] == "pass"
-    assert result["physical_acceptance"] is False
+    assert result["physical_acceptance"] is True
 
 
 def test_bijective_correlation_accepts_healthy_two_device_mapping():

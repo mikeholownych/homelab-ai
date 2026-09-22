@@ -49,6 +49,7 @@ def validate(torch, expected_count, device_index=None):
         result["error"] = str(exc)
         return result
     result["status"] = "PASS"
+    result["physical_acceptance"] = True
     return result
 
 

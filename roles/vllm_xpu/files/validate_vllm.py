@@ -122,7 +122,7 @@ def main() -> int:
         port=args.port,
         expected_model=args.model,
         expected_tp_size=args.tensor_parallel_size,
-        api_key=args.api_key,
+        api_key=args.api_key or os.environ.get("VLLM_API_KEY"),
         simulated=args.simulated,
     )
 

@@ -28,6 +28,9 @@ os_tuning_evidence_dir: >-
 os_tuning_work_dir: /var/lib/aihost/tuning
 
 # Subsystem file ownership (distinct from base_os drop-ins on purpose).
+# Sysctl drop-in is dedicated so base_os surviving /etc/sysctl.conf and
+# os_tuning never fight over the same keyspace.
+os_tuning_sysctl_file: /etc/sysctl.d/95-aihost-tuning.conf
 os_tuning_grub_dropin_path: /etc/default/grub.d/95-aihost-tuning.cfg
 os_tuning_udev_rules_path: /etc/udev/rules.d/61-aihost-io.rules
 os_tuning_cpu_power_service_path: /etc/systemd/system/aihost-cpu-power.service

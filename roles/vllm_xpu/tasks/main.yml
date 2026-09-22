@@ -200,7 +200,40 @@
     - not ansible_check_mode
   tags: [inference, runtime, vllm]
 
-- name: Record vLLM validation state during check mode or when uncommissioned
+- name: Install vLLM live validator
+  ansible.builtin.copy:
+    src: validate_vllm.py
+    dest: "{{ vllm_xpu_validator }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, validation, vllm]
+
+- name: Run vLLM live validator against the running service
+  ansible.builtin.command:
+    argv: >-
+      {{ [vllm_xpu_validator, '--host', '127.0.0.1', '--port', vllm_xpu_port | string,
+          '--tensor-parallel-size',
+          (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size | string]
+          + (['--model', vllm_xpu_model_id]
+             if (vllm_xpu_model_id | default(none)) is not none else [])
+          + ['--output', vllm_xpu_validation_path] }}
+  environment:
+    VLLM_API_KEY: "{{ vllm_xpu_api_key | default('') }}"
+  register: vllm_xpu_live_validation_run
+  until: vllm_xpu_live_validation_run.rc == 0
+  retries: 60
+  delay: 10
+  changed_when: false
+  no_log: true
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_service_enabled | bool
+    - not ansible_check_mode
+  tags: [inference, validation, vllm]
+
+- name: Record vLLM validation state during check mode or when the service is disabled
   ansible.builtin.copy:
     content: >-
       {{ {
@@ -211,7 +244,7 @@
         'simulated': false,
         'endpoint': 'http://' ~ vllm_xpu_host ~ ':' ~ (vllm_xpu_port | string),
         'tensor_parallel_size': (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size,
-        'reason': 'check mode or uncommissioned hardware skips live service validation'
+        'reason': 'check mode or service disabled skips live service validation'
       } | to_nice_json }}
     dest: "{{ vllm_xpu_validation_path }}"
     owner: root

@@ -25,7 +25,7 @@
   loop: "{{ os_tuning_allowed_sysctl_keys }}"
   when:
     - os_tuning_apply_mutations | bool
-    - item not in (os_tuning_managed_sysctl | keys)
+    - item not in os_tuning_managed_sysctl.keys()
   loop_control:
     label: "{{ item }} (absent)"
   tags: [tuning]

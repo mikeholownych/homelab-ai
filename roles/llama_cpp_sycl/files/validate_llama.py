@@ -103,7 +103,7 @@ def main() -> int:
         port=args.port,
         git_commit=args.commit,
         dual_gpu=args.dual_gpu,
-    api_key=args.api_key,
+        api_key=args.api_key or os.environ.get("LLAMA_API_KEY"),
         simulated=args.simulated,
     )
 

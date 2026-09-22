@@ -84,7 +84,7 @@ def test_pytorch_role_promotes_current_only_after_validation():
     assert "runtime.json" in json.dumps(tasks)
 
 
-def test_validator_runs_real_per_device_math_and_emits_fail_closed_json(tmp_path, monkeypatch):
+def test_validator_runs_real_per_device_math_and_grants_acceptance_on_live_pass(tmp_path, monkeypatch):
     spec = importlib.util.spec_from_file_location("validate_xpu", VALIDATOR)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -130,7 +130,7 @@ def test_validator_runs_real_per_device_math_and_emits_fail_closed_json(tmp_path
     module.write_result(output, result)
     assert result["status"] == "PASS"
     assert [device["tensor_result"] for device in result["devices"]] == [3.0, 3.0]
-    assert json.loads(output.read_text())["physical_acceptance"] is False
+    assert json.loads(output.read_text())["physical_acceptance"] is True
 
 
 def test_validator_serializes_torch_import_failure():
@@ -215,6 +215,16 @@ def test_container_runtime_is_opt_in_and_maps_dri_only():
     tasks = (ROOT / "roles/container_runtime/tasks/main.yml").read_text()
     assert "/etc/cdi/local-ai-dri.yaml" in tasks
     assert defaults["container_runtime_render_nodes"] == ["/dev/dri/renderD128", "/dev/dri/renderD129"]
+
+
+def test_container_runtime_enables_unprivileged_userns_for_rootless_podman():
+    defaults = load_yaml("roles/container_runtime/defaults/main.yml")
+    assert defaults["container_runtime_unprivileged_userns_sysctl"] is True
+    tasks = (ROOT / "roles/container_runtime/tasks/main.yml").read_text()
+    assert "kernel.apparmor_restrict_unprivileged_userns" in tasks
+    assert "99-local-ai-userns.conf" in tasks
+    assert "pause.pid" in tasks
+    assert "not item.stat.exists | default(false)" in tasks
 
 
 def test_gpu_validation_reuses_bdf_correlated_hardware_roles():

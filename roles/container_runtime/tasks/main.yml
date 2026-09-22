@@ -1,10 +1,71 @@
 ---
+- name: Allow unprivileged user namespaces for rootless podman
+  ansible.posix.sysctl:
+    name: kernel.apparmor_restrict_unprivileged_userns
+    value: "0"
+    sysctl_file: /etc/sysctl.d/99-local-ai-userns.conf
+    state: present
+    reload: true
+  when:
+    - container_runtime_enabled | bool
+    - container_runtime_unprivileged_userns_sysctl | bool
+  tags: [runtime, gpu]
+
 - name: Install pinned rootless container runtime when enabled
   ansible.builtin.apt:
     name: "{{ container_runtime_package }}={{ container_runtime_package_version }}"
     state: present
     allow_downgrade: true
   when: container_runtime_enabled | bool
+  tags: [runtime, gpu]
+
+- name: Remove stale rootless podman runtime-dir state left by earlier service runs
+  ansible.builtin.find:
+    paths: "{{ container_runtime_run_roots }}"
+    patterns: "pause.pid"
+    file_type: file
+    hidden: true
+  register: container_runtime_stale_pause_files
+  when:
+    - container_runtime_enabled | bool
+    - not ansible_check_mode
+  tags: [runtime, gpu]
+
+- name: Read recorded rootless podman pause PIDs
+  ansible.builtin.slurp:
+    path: "{{ item.path }}"
+  loop: "{{ container_runtime_stale_pause_files.files }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: container_runtime_pause_content
+  when:
+    - container_runtime_enabled | bool
+    - not ansible_check_mode
+  tags: [runtime, gpu]
+
+- name: Check whether each recorded rootless podman pause PID is still alive
+  ansible.builtin.stat:
+    path: "/proc/{{ item.content | b64decode | trim }}/"
+  loop: "{{ container_runtime_pause_content.results }}"
+  loop_control:
+    label: "{{ item.item.path }} (pid={{ item.content | b64decode | trim }})"
+  register: container_runtime_pause_procs
+  when:
+    - container_runtime_enabled | bool
+    - not ansible_check_mode
+  tags: [runtime, gpu]
+
+- name: Expunge stale rootless podman pause state whose PID is no longer alive
+  ansible.builtin.file:
+    path: "{{ item.item.path }}"
+    state: absent
+  loop: "{{ container_runtime_pause_procs.results }}"
+  loop_control:
+    label: "{{ item.item.path }} (pid={{ item.item.content | b64decode | trim }})"
+  when:
+    - container_runtime_enabled | bool
+    - not ansible_check_mode
+    - not item.stat.exists | default(false)
   tags: [runtime, gpu]
 
 - name: Verify DRI device mapping source exists

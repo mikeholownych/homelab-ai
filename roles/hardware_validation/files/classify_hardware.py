@@ -183,9 +183,11 @@ def classify(profile, observed):
         and any(item["rule"] == "above_4g_decoding_enabled" and item["status"] == "not_tested"
                 for item in checks)
     )
-    return {"schema_version": "1.0.0", "simulated": simulated, "physical_acceptance": False,
-            "status": "blocking" if blocking else "not_tested" if required_incomplete else
-            "warning" if warning else "pass", "checks": checks}
+    status = ("blocking" if blocking else "not_tested" if required_incomplete else
+              "warning" if warning else "pass")
+    physical_acceptance = (not simulated) and status == "pass"
+    return {"schema_version": "1.0.0", "simulated": simulated,
+            "physical_acceptance": physical_acceptance, "status": status, "checks": checks}
 
 
 def main():

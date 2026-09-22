@@ -7,7 +7,7 @@
   "properties": {
     "schema_version": {"const": "1.0.0"},
     "status": {"enum": ["PASS", "FAIL", "NOT_TESTED"]},
-    "physical_acceptance": {"const": false},
+    "physical_acceptance": {"type": "boolean"},
     "expected_count": {"type": "integer", "minimum": 1},
     "observed_count": {"type": "integer", "minimum": 0},
     "devices": {"type": "array"},

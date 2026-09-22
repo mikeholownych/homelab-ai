@@ -57,18 +57,79 @@
         upgrade_registry_entry: "{{ upgrade_lifecycle_raw.runtime_profiles[upgrade_component] }}"
       tags: [upgrade, rollback]
 
-    # Commissioning gate: null registry entries mean no version has ever been
-    # validated on this host; transitions before commissioning are refused.
-    - name: Refuse transitions on uncommissioned components
+    # Commissioning gate: readiness derives from on-host commissioning evidence,
+    # never from hand-edited registry pins. Live validators auto-grant physical
+    # acceptance on a physical pass; commission.yml persists phase checkpoints
+    # on success. The Git-committed `candidate` / `previous_known_good` remain
+    # the version authorization below, while a null `current` no longer blocks.
+    - name: Resolve on-host commissioning evidence path for this component
+      ansible.builtin.set_fact:
+        upgrade_commission_evidence_path: >-
+          {{ {
+            'pytorch_xpu': '/var/lib/local-ai/evidence/xpu-validation.json',
+            'vllm': '/var/lib/aihost/evidence/vllm_validation.json',
+            'llama_cpp': '/var/lib/aihost/evidence/llama_validation.json',
+            'intel_gpu': '/var/lib/local-ai/evidence/checkpoints/gpu_validation.json',
+            'level_zero': '/var/lib/local-ai/evidence/checkpoints/gpu_validation.json',
+            'kernel': '/var/lib/local-ai/evidence/checkpoints/preflight.json',
+            'firmware_bios': '/var/lib/local-ai/evidence/checkpoints/omix.json'
+          }[upgrade_component] }}
+      tags: [upgrade, rollback]
+
+    - name: Stat the commissioning evidence for {{ upgrade_component }}
+      ansible.builtin.stat:
+        path: "{{ upgrade_commission_evidence_path }}"
+      register: upgrade_commission_stat
+      tags: [upgrade, rollback]
+
+    - name: Refuse transitions when commissioning evidence is absent
       ansible.builtin.fail:
         msg: >-
-          Component {{ upgrade_component }} has commissioning_state
-          {{ upgrade_registry_entry.commissioning_state }} with null pins. Complete physical
-          commissioning and commit real current/candidate/previous_known_good values first.
+          Component {{ upgrade_component }} has no commissioning evidence at
+          {{ upgrade_commission_evidence_path }}. Readiness is derived from live
+          observation, not registry pins: run playbooks/commission.yml (or the
+          validate.yml flow) so this host records a physical acceptance before
+          attempting a transition.
+      when: not upgrade_commission_stat.stat.exists
+      tags: [upgrade, rollback]
+
+    - name: Read commissioning evidence for {{ upgrade_component }}
+      ansible.builtin.slurp:
+        src: "{{ upgrade_commission_evidence_path }}"
+      register: upgrade_commission_slurp
+      tags: [upgrade, rollback]
+
+    - name: Decode commissioning evidence document
+      ansible.builtin.set_fact:
+        upgrade_commission_doc: "{{ upgrade_commission_slurp.content | b64decode | from_json }}"
+      tags: [upgrade, rollback]
+
+    - name: Require commissioning evidence to be a structured document
+      ansible.builtin.assert:
+        that:
+          - upgrade_commission_doc is mapping
+        fail_msg: >-
+          Commissioning evidence at {{ upgrade_commission_evidence_path }} is not
+          machine-readable. Re-run commissioning to regenerate it.
+      tags: [upgrade, rollback]
+
+    - name: Refuse transitions when commissioning evidence does not record a physical acceptance
+      ansible.builtin.fail:
+        msg: >-
+          Component {{ upgrade_component }} commissioning evidence at
+          {{ upgrade_commission_evidence_path }} recorded status
+          {{ upgrade_commission_doc.status | default('missing') }}
+          {{ 'without physical acceptance.'
+             if (upgrade_commission_doc.physical_acceptance is defined
+                 and not (upgrade_commission_doc.physical_acceptance | bool))
+             else 'on the host.' }} Re-run live commissioning so a physical pass
+          grants acceptance; evidence is never overridden by editing registry pins.
       when: >-
-        upgrade_registry_entry.current is none
-        or upgrade_registry_entry.candidate is none
-        or upgrade_registry_entry.previous_known_good is none
+        (upgrade_commission_doc.status | default('missing')) not in ['pass', 'PASS']
+        or (upgrade_commission_doc.physical_acceptance is defined
+            and not (upgrade_commission_doc.physical_acceptance | bool))
+        or (upgrade_commission_doc.simulated is defined
+            and (upgrade_commission_doc.simulated | bool))
       tags: [upgrade, rollback]
 
     - name: Resolve the transition target version
@@ -108,7 +169,7 @@
         content: "{{ {'schema_version': '1.0.0',
                        'component': upgrade_component,
                        'mode': upgrade_mode,
-                       'from_version': upgrade_registry_entry.current,
+                       'from_version': upgrade_registry_entry.current | default('unknown'),
                        'to_version': upgrade_target_version,
                        'authorized_by_commit': git_commit_sha | default('unknown'),
                        'completed_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')} | to_nice_json }}\n"

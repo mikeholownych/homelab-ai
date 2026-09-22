@@ -45,12 +45,19 @@ vllm_xpu_profiles:
     gpu_memory_utilization: 0.85
     max_model_len: 8192
     enforce_eager: false
+  coder_30b:
+    tensor_parallel_size: 2
+    gpu_memory_utilization: 0.90
+    max_model_len: 65536
+    enforce_eager: false
 
 vllm_xpu_model_id: null
+vllm_xpu_tool_call_parser: "hermes"
 vllm_xpu_model_revision: null
 vllm_xpu_model_path: null
 
 vllm_xpu_validation_path: "/var/lib/aihost/evidence/vllm_validation.json"
+vllm_xpu_validator: "/usr/local/libexec/local-ai-validate-vllm"
 vllm_xpu_api_key_secret_path: "secret/local-ai/services/vllm/api-key"
 
 # Authenticated serving: when the service binds a non-loopback address, an API

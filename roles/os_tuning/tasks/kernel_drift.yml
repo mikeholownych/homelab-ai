@@ -7,16 +7,16 @@
   ansible.builtin.assert:
     that:
       - >-
-        tuning.expected.os_tuning.kernel.expected_release is none
-        or os_tuning_observed.kernel.running_release == tuning.expected.os_tuning.kernel.expected_release
+        os_tuning_expected_kernel is none
+        or os_tuning_observed.kernel.running_release == os_tuning_expected_kernel
     fail_msg: >-
       Running kernel {{ os_tuning_observed.kernel.running_release }} does not match the pinned
       expectation. Resolve boot selection manually; automatic kernel rollback is not performed.
   vars:
-    tuning: "{{ os_tuning_config }}"
+    os_tuning_expected_kernel: "{{ os_tuning_config.os_tuning.kernel.expected_release }}"
   when:
     - os_tuning_apply_mutations | bool
-    - tuning.expected.os_tuning.kernel.expected_release is not none
+    - os_tuning_expected_kernel is not none
   tags: [tuning, upgrade]
 
 # Custom kernel deployment stays scaffolding: it requires the certified flag,
