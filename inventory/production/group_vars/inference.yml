@@ -17,15 +17,15 @@ model_profiles:
 
 model_selection_controls:
   serving_model:
-    enabled: false
+    enabled: true
     commissioning_state: commissioning_required
     selection_state: unselected
     execution_state: disabled
-    model_id: null
+    model_id: qwen3.8-27b-instruct
     revision: null
     model_path: null
     config_path: null
-    tensor_parallel_size: null
+    tensor_parallel_size: 2
   benchmark_model:
     enabled: false
     commissioning_state: commissioning_required

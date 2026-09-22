@@ -99,3 +99,21 @@ model_catalog_entries:
         note: >-
           Too large for one device at bf16 (34 GiB); spans both cards at TP=2
           with 14 + 6 = 20 GiB per B65.
+
+  - id: qwen3.8-27b-instruct
+    repo_id: Qwen/Qwen3.8-27B-Instruct
+    access: public
+    purpose_hint: strong reasoning mid-size model replacing the 32B tier
+    variants:
+      - quant: int8
+        size_gib: 27
+        recommended_tensor_parallel: 2
+        note: >-
+          Multi-device span: 27/2 + 6 = 19.5 GiB per B65 at TP=2, inside the
+          32 GiB pool.
+      - quant: int4
+        size_gib: 14
+        recommended_tensor_parallel: 1
+        note: >-
+          Fits a single B65 (14 + 6 = 20 GiB <= 32); keeps the second device
+          free or available for a second instance.

@@ -16,7 +16,7 @@ model_registry_evidence_dir: >-
 model_registry_http_timeout_sec: 600
 
 # Safety: refuse to fill the cache filesystem beyond this free-space floor.
-model_registry_min_free_disk_gib: 50
+model_registry_min_free_disk_gib: 80
 # GC policy: keep at most N revisions per declared model; never touch undeclared
 # repos unless explicit cleanup is enabled.
 model_registry_keep_revisions_per_model: 2

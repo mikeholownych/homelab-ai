@@ -40,6 +40,11 @@ vllm_xpu_profiles:
     gpu_memory_utilization: 0.90
     max_model_len: 8192
     enforce_eager: false
+  medium_27b:
+    tensor_parallel_size: 2
+    gpu_memory_utilization: 0.85
+    max_model_len: 8192
+    enforce_eager: false
 
 vllm_xpu_model_id: null
 vllm_xpu_model_revision: null
