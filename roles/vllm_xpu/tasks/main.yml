@@ -135,6 +135,17 @@
     - vllm_xpu_runtime_mode == 'container'
   tags: [inference, runtime, vllm]
 
+- name: Create vLLM recovery evidence record owned by the service account
+  ansible.builtin.copy:
+    content: |
+      {"service":"vllm_xpu","event":"initialized","class":"none","stage_reached":"","exit_code":0,"restart_count":"0","terminal":false,"started_at":"","boot_id":""}
+    dest: "{{ vllm_xpu_recovery_record }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_group }}"
+    mode: "0640"
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
 - name: Pin the exact container image reference by digest
   ansible.builtin.copy:
     content: "{{ vllm_xpu_container_image }}@{{ vllm_xpu_container_digest }}\n"

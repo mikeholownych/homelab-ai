@@ -13,6 +13,13 @@ EnvironmentFile={{ vllm_xpu_env_file }}
 ExecStart=/usr/local/bin/vllm-xpu-runner serve --config {{ vllm_xpu_config_file }}
 Restart=on-failure
 RestartSec=10s
+# Bounded recovery: at most StartLimitBurst on-failure restarts within
+# StartLimitIntervalSec, then the unit enters the failed (terminal) state
+# instead of looping forever. exit 78 (config/prerequisite) is never
+# auto-restarted, so persistent config errors fail closed.
+StartLimitIntervalSec=300s
+StartLimitBurst=3
+RestartPreventExitStatus=78
 TimeoutStartSec=600s
 TimeoutStopSec=60s
 LimitNOFILE=65536
@@ -23,7 +30,7 @@ StandardError=append:{{ vllm_xpu_log_dir }}/vllm-error.log
 # Security hardening
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }} {{ host_runtime_account.home }}
+ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }} {{ host_runtime_account.home }} {{ vllm_xpu_evidence_dir }}
 PrivateTmp=true
 ProtectControlGroups=true
 

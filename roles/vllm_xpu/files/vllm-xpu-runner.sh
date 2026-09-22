@@ -13,14 +13,45 @@ CONFIG_FILE="$VLLM_CONFIG_DIR/vllm-config.yaml"
 ENV_FILE="$VLLM_CONFIG_DIR/vllm.env"
 MODEL_CACHE="/var/lib/local-ai/models"
 CDI_DEVICE="${CDI_DEVICE:-local-ai.intel/gpu=all}"
+BOOT_ID_FILE="/proc/sys/kernel/random/boot_id"
+RECOVERY_RECORD="${RECOVERY_RECORD:-/var/lib/aihost/evidence/vllm_recovery.json}"
 
 log() {
     printf '%s vllm-xpu-runner: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
 }
 
+# Record a bounded recovery/startup event. Never overwrites without intent:
+# each call replaces the previous record with the newest lifecycle event.
+write_recovery_record() {
+    stage="$1"; class="$2"; exit_code="$3"; terminal="${4:-false}"
+    boot_id="unknown"
+    if [ -r "$BOOT_ID_FILE" ]; then
+        boot_id="$(cat "$BOOT_ID_FILE")"
+    fi
+    record_dir="$(dirname "$RECOVERY_RECORD")"
+    mkdir -p "$record_dir" 2>/dev/null || true
+    # The record file is pre-created by the role owned by the service account,
+    # so write-in-place works even though the evidence directory is not
+    # writable by the service user (atomic tmp+rename would need dir write).
+    {
+        printf '{\n'
+        printf '  "service": "vllm_xpu",\n'
+        printf '  "event": "start",\n'
+        printf '  "class": "%s",\n' "$class"
+        printf '  "stage_reached": "%s",\n' "$stage"
+        printf '  "exit_code": %s,\n' "$exit_code"
+        printf '  "restart_count": "0",\n'
+        printf '  "terminal": %s,\n' "$terminal"
+        printf '  "started_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        printf '  "boot_id": "%s"\n' "$boot_id"
+        printf '}\n'
+    } > "$RECOVERY_RECORD" 2>/dev/null || true
+}
+
 for file in "$IMAGE_REF_FILE" "$CONFIG_FILE" "$ENV_FILE"; do
     if [ ! -f "$file" ]; then
         log "required input missing: $file"
+        write_recovery_record "A:prerequisites_valid" "invalid_config" 78 true
         exit 78
     fi
 done
@@ -33,15 +64,18 @@ elif command -v podman >/dev/null 2>&1; then
     RUNTIME_BIN=podman
 else
     log "no container runtime found (docker or podman required)"
+    write_recovery_record "A:prerequisites_valid" "invalid_config" 78 true
     exit 78
 fi
 
 if ! echo "$IMAGE_REF" | grep -q '@sha256:[0-9a-f]\{64\}$'; then
     log "image ref is not digest-pinned: $IMAGE_REF"
+    write_recovery_record "A:prerequisites_valid" "invalid_config" 78 true
     exit 78
 fi
 
 log "starting $IMAGE_REF"
+write_recovery_record "A:prerequisites_valid" "normal_start" 0 false
 
 # Export variables from ENV_FILE
 set -a

@@ -1,0 +1,211 @@
+---
+# Service lifecycle & recovery policy for the vLLM XPU service.
+# Phase 3 deliverable: distinguishes readiness progression A->F and classifies
+# every recoverable and terminal failure mode with BOUNDED recovery. Recovery
+# is never unbounded: each auto-recover path has a max retry count, a backoff,
+# and a terminal (fail-closed) state with emitted evidence. Persistent config
+# and prerequisite failures must fail closed (exit 78 -> systemd
+# RestartPreventExitStatus) rather than loop.
+schema_version: 2.0.0
+
+service: vllm_xpu
+
+# Readiness progression. Each stage must be satisfied before the next counts as
+# achieved. Evidence for all stages is readable from the running service and
+# from the host (no manual inspection required).
+readiness_ladder:
+  A:
+    id: prerequisites_valid
+    meaning: >-
+      drop-in config/env/image-ref exist, image digest pinned, model cache
+      present, GPU devices present, CDI present, rootless runtime reachable
+    probe: preflight (vllm-xpu-runner) + role assertions
+  B:
+    id: container_started
+    meaning: >-
+      podman container is running (conmon attaches, container not exited)
+    probe: systemd is-active + container runtime state
+  C:
+    id: http_reachable
+    meaning: GET /health returns 200 from the host
+    probe: local-ai-validate-vllm --health
+  D:
+    id: model_loaded
+    meaning: /v1/models lists the expected pinned model id
+    probe: local-ai-validate-vllm --model
+  E:
+    id: inference_functional
+    meaning: a controlled chat completion returns 200 with content
+    probe: local-ai-validate-vllm inference test
+  F:
+    id: tp_topology_active
+    meaning: tensor-parallel size 2 active across both GPUs (2 workers)
+    probe: local-ai-validate-vllm --tensor-parallel-size 2 + ps worker count
+
+# Bounded recovery ceiling enforced by the service unit.
+bounded_recovery:
+  unit_directives:
+    Restart: "on-failure"
+    RestartSec: "10s"
+    StartLimitIntervalSec: "300s"
+    StartLimitBurst: "3"
+    RestartPreventExitStatus: "78"
+  semantics: >-
+    systemd allows at most StartLimitBurst on-failure restarts within
+    StartLimitIntervalSec; when the burst is exhausted the unit enters the
+    failed (terminal) state instead of looping forever. exit 78 is never
+    auto-restarted (fail-closed config/prereq).
+
+failure_classes:
+  vllm_crash:
+    class: runtime
+    detectable_signal: >-
+      container exits non-zero after having reached stage B+; /health no longer
+      reachable or becomes non-200; unit shows Restart=on-failure activation
+    safe_auto_recovery: true
+    recovery_action: systemd on-failure restart
+    max_retries: 3
+    backoff_seconds: 10
+    terminal_state: unit failed after StartLimitBurst exhausted
+    evidence_emitted: /var/lib/aihost/evidence/vllm_validation.json (FAIL) + journald
+  container_crash:
+    class: runtime
+    detectable_signal: >-
+      podman container enters exited/removed state; conmon gone; systemd unit
+      fails with container exit code
+    safe_auto_recovery: true
+    recovery_action: systemd on-failure restart
+    max_retries: 3
+    backoff_seconds: 10
+    terminal_state: unit failed after StartLimitBurst exhausted
+    evidence_emitted: journald + vllm_validation.json (FAIL or NOT_TESTED)
+  userns_bootstrap_failure:
+    class: prerequisite
+    detectable_signal: >-
+      podman error "cannot re-exec"/"permission denied" on user namespace
+      creation; apparmor DENIED userns_create in dmesg/journald; unit fails
+      before stage B
+    safe_auto_recovery: false
+    recovery_action: none (operator must fix restriction profile or purge state)
+    max_retries: 0
+    backoff_seconds: 0
+    terminal_state: fail-closed, no restart (exit 78 path / operator action)
+    evidence_emitted: journald apparmor+podman lines; recovery record
+  stale_pause_pid:
+    class: prerequisite
+    detectable_signal: >-
+      pause.pid references a dead pid; podman "cannot re-exec process to join
+      the existing user namespace"; unit fails before stage B
+    safe_auto_recovery: true
+    recovery_action: >-
+      stale pause.pid purge (container_runtime role, convergent) then retry
+    max_retries: 3
+    backoff_seconds: 10
+    terminal_state: unit failed after retries; operator must purge pause.pid
+    evidence_emitted: journald podman error + ansible convergence evidence
+  missing_model_cache:
+    class: prerequisite
+    detectable_signal: >-
+      /var/lib/local-ai/models/hub/models--<id> absent; vllm fails at load with
+      model-not-found; stage D unreachable
+    safe_auto_recovery: false
+    recovery_action: none (operator must stage model; role refuses download by default)
+    max_retries: 0
+    backoff_seconds: 0
+    terminal_state: fail-closed, no restart
+    evidence_emitted: validator FAIL + journald vllm error
+  model_identity_mismatch:
+    class: configuration
+    detectable_signal: >-
+      /v1/models returns a model id different from the pinned expected id;
+      validator --model mismatch even though health/model load ok
+    safe_auto_recovery: false
+    recovery_action: none (config error; reconcile vllm_xpu_model_id)
+    max_retries: 0
+    backoff_seconds: 0
+    terminal_state: fail-closed validation FAIL, service may run wrong model
+    evidence_emitted: vllm_validation.json FAIL with mismatch reason
+  unavailable_gpu:
+    class: prerequisite
+    detectable_signal: >-
+      /dev/dri/renderD* missing or level_zero device count below TP; vllm exits
+      with no-device error; validation gpu probes fail
+    safe_auto_recovery: false
+    recovery_action: none (hardware/driver fault; operator intervention)
+    max_retries: 0
+    backoff_seconds: 0
+    terminal_state: fail-closed, no restart
+    evidence_emitted: xpu-validation + vllm validation FAIL evidence
+  invalid_tp_topology:
+    class: configuration
+    detectable_signal: >-
+      tensor-parallel-size configured to N but fewer devices present or
+      ZE_AFFINITY_MASK mismatched; "not enough devices" at startup
+    safe_auto_recovery: false
+    recovery_action: none (config mismatch; reconcile profile)
+    max_retries: 0
+    backoff_seconds: 0
+    terminal_state: fail-closed, no restart
+    evidence_emitted: journald vllm startup error + validator FAIL
+  xpu_device_lost:
+    class: runtime
+    detectable_signal: >-
+      level-zero "device lost" (DEVICE_LOST) during inference; inference
+      returns errors or container dies after reaching stage F
+    safe_auto_recovery: true
+    recovery_action: systemd on-failure restart
+    max_retries: 3
+    backoff_seconds: 10
+    terminal_state: unit failed after StartLimitBurst exhausted; no fsck/reset yet
+    evidence_emitted: journald level-zero error + vllm_validation.json
+  startup_timeout:
+    class: runtime
+    detectable_signal: >-
+      no /health 200 within TimeoutStartSec; systemd kills start and re-activates
+    safe_auto_recovery: true
+    recovery_action: systemd on-failure restart (bounded)
+    max_retries: 3
+    backoff_seconds: 10
+    terminal_state: unit failed after StartLimitBurst exhausted (model load too slow)
+    evidence_emitted: journald + validator NOT_TESTED/FAIL after failure
+  inference_oom:
+    class: runtime
+    detectable_signal: >-
+      vllm "out of memory" / allocation failure during serving or load;
+      gpu-memory-utilization too high for workload
+    safe_auto_recovery: true
+    recovery_action: systemd on-failure restart (config review recommended)
+    max_retries: 3
+    backoff_seconds: 10
+    terminal_state: fail-closed after retries; operator must tune gpu-memory-utilization
+    evidence_emitted: journald vllm OOM + validator FAIL
+  invalid_config:
+    class: configuration
+    detectable_signal: >-
+      yaml parse error, unknown flag, or missing required key in
+      /etc/local-ai/vllm/vllm-config.yaml; vllm exits at arg/system parse time
+    safe_auto_recovery: false
+    recovery_action: none (config error; reconcile then redeploy)
+    max_retries: 0
+    backoff_seconds: 0
+    terminal_state: fail-closed exit 78, no restart
+    evidence_emitted: journald vllm parse error; recovery record
+  host_reboot:
+    class: operations
+    detectable_signal: >-
+      change in /proc/sys/kernel/random/boot_id; unit re-activated at boot via
+      WantedBy=multi-user.target
+    safe_auto_recovery: true
+    recovery_action: systemd start-on-boot; then readiness ladder re-probed
+    max_retries: 1
+    max_retries_note: "started once at boot; bounded by StartLimitBurst on failure"
+    backoff_seconds: 0
+    terminal_state: n/a if healthy; unit failed if subsequent startup fails
+    evidence_emitted: boot_id captured + fresh vllm_validation.json after boot
+
+recovery_records:
+  path: /var/lib/aihost/evidence/vllm_recovery.json
+  schema: evidence.schema.json
+  contents: >-
+    service, event, class, stage_reached, exit_code, restart_count, terminal,
+    started_at, boot_id, artifact sha256
