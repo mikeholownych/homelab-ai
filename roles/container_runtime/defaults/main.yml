@@ -8,6 +8,12 @@ container_runtime_render_nodes:
   - /dev/dri/renderD128
   - /dev/dri/renderD129
 container_runtime_cdi_path: /etc/cdi/local-ai-dri.yaml
-container_runtime_unprivileged_userns_sysctl: true
+# Keep kernel.apparmor_restrict_unprivileged_userns pinned to the stock default
+# (=1). Rootless podman is NOT globally unblocked: the shipped AppArmor
+# profiles (podman, crun, catatonit, conmon - each with the `userns,` rule)
+# are the narrow control that grants userns creation to the confined runtime
+# stack, while unconfined host processes remain restricted. Global relaxation
+# was experimentally shown to be unnecessary (see Phase 2 disposition).
+container_runtime_apparmor_userns_restriction: true
 container_runtime_run_roots:
   - /run/user/999/libpod/tmp

@@ -219,9 +219,10 @@ def test_container_runtime_is_opt_in_and_maps_dri_only():
 
 def test_container_runtime_enables_unprivileged_userns_for_rootless_podman():
     defaults = load_yaml("roles/container_runtime/defaults/main.yml")
-    assert defaults["container_runtime_unprivileged_userns_sysctl"] is True
+    assert defaults["container_runtime_apparmor_userns_restriction"] is True
     tasks = (ROOT / "roles/container_runtime/tasks/main.yml").read_text()
     assert "kernel.apparmor_restrict_unprivileged_userns" in tasks
+    assert "value: \"1\"" in tasks
     assert "99-local-ai-userns.conf" in tasks
     assert "pause.pid" in tasks
     assert "not item.stat.exists | default(false)" in tasks

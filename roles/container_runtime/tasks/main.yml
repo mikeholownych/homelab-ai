@@ -1,14 +1,14 @@
 ---
-- name: Allow unprivileged user namespaces for rootless podman
+- name: Enforce AppArmor unprivileged userns restriction with rootless podman exempt via its profile
   ansible.posix.sysctl:
     name: kernel.apparmor_restrict_unprivileged_userns
-    value: "0"
+    value: "1"
     sysctl_file: /etc/sysctl.d/99-local-ai-userns.conf
     state: present
     reload: true
   when:
     - container_runtime_enabled | bool
-    - container_runtime_unprivileged_userns_sysctl | bool
+    - container_runtime_apparmor_userns_restriction | bool
   tags: [runtime, gpu]
 
 - name: Install pinned rootless container runtime when enabled
