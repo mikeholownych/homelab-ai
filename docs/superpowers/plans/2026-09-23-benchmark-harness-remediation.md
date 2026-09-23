@@ -204,11 +204,12 @@ short/medium/large/very_large/max_near_window all converge to <=0.3% within 3-6
 iterations (convergent filler + exact-remainder padding).
 
 Live-platform findings folded into this remediation:
-- Default throughput floor 30 tok/s is unachievable per-request on this hardware
-  (~7-8 tok/s mean observed); floor set to 5.0 tok/s (2-sigma-ish degradation
-  margin while remaining fail-closed). Decision recorded with the operator;
-  remains overridable per profile/matrix point via
-  `benchmarking_min_generation_tokens_per_sec`.
+- The original throughput finding is preserved: 30 tok/s was unachievable
+  per-request on this hardware (~7-8 tok/s mean observed). The earlier 5.0
+  tok/s floor was itself a semantic defect because it made performance an
+  invalidity gate. The floor and its role/CLI wiring were removed; throughput
+  remains measured in the distributions and B0 uses
+  `performance_assessment: NOT_EVALUATED` while establishing reference data.
 - image_digest/image_ref are null at runtime because the deploy is a systemd
   runner (no podman container); B0 frozen image digest is carried as declared
   attribution on run cards via `--artifact-sha256`/`benchmarking_model_artifact_sha256`.
@@ -220,3 +221,15 @@ Live-platform findings folded into this remediation:
 
 All bundles from these runs validate against the five benchmark contracts via
 `scripts/validate_contract.py`.
+
+## 14. BF throughput-validity remediation (2026-09-23)
+
+The pre-B0 gate detected the floor defect before W01, so no B0 workload was
+executed. The matrix elimination rule now covers only the device-error budget;
+thermal, power, telemetry, identity, service, and correctness invalidation
+remain fail-closed. The blocked B0 campaign records and the original finding
+are preserved as immutable evidence. B0 will establish performance
+distributions first and bind a new matrix hash after this remediation.
+
+- Previous matrix SHA-256: `b7fed49879bae6611ac780cba07bade04e0fc1bc9b99d3760294dfff6b8959db`
+- Remediated matrix SHA-256: `09a631eb7f11b6842c19ff324a994f2f8484de13a5ec03740603014084c1107b`

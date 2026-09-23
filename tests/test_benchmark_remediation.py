@@ -67,7 +67,6 @@ def base_args(mod, **overrides) -> argparse.Namespace:
         "iterations": 1,
         "duration": 2.0,
         "request_timeout": 5.0,
-        "min_generation_tokens_per_sec": 30.0,
         "tensor_parallelism": 1,
         "context_window_tokens": 4096,
         "gpu_count": 1,
@@ -232,7 +231,36 @@ def test_b0_matrix_file_is_self_consistent():
     assert identity["tensor_parallel_size"] == 2
     assert identity["max_model_len"] == 65536
     assert matrix["matrix"]["global_stop_conditions"]
-    assert matrix["matrix"]["elimination_rule"]["code"] == "THROUGHPUT_DEGRADATION"
+    assert matrix["matrix"]["elimination_rule"]["code"] == "DEVICE_ERROR_BUDGET_EXCEEDED"
+    assert "throughput floor" not in matrix["matrix"]["elimination_rule"]["condition"]
+
+
+@pytest.mark.parametrize("throughput", [0.5, 1.0, 4.0, 8.0])
+def test_low_throughput_is_valid_and_not_evaluated(throughput):
+    mod = load_harness()
+    validity = mod.compute_validity("PASS", [])
+    doc = mod.build_benchmark_document(
+        status="PASS", mode="real", runtime="vllm", validity=validity,
+        benchmark_run_id=RUN_ID, identity=full_identity(mod),
+        workload={"workload_id": "b0-medium-short-c1"},
+        metrics={"generation_tokens_per_second": throughput},
+    )
+    assert doc["validity"]["state"] == "VALID"
+    assert doc["validity"]["performance_assessment"] == "NOT_EVALUATED"
+    assert doc["telemetry"]["generation_tokens_per_second"]["observed"]["value"] == throughput
+
+
+def test_validity_rejects_performance_failure_reason():
+    validate_contract = load_validate_contract()
+    payload = {
+        "status": "PASS", "simulated": False, "identity": {}, "workload": {},
+        "failure_criteria": [],
+        "validity": {"state": "VALID", "reasons": [
+            {"code": "LOW_THROUGHPUT", "detail": "below reference"}
+        ]},
+    }
+    errors = validate_contract.validate_benchmark_payload(payload)
+    assert any("performance observation" in error for error in errors)
 
 
 # --------------------------------------------------------------------------- C

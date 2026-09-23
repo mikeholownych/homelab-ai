@@ -908,6 +908,7 @@ def compute_validity(
     status: str,
     triggered_reasons: List[Dict[str, Any]],
     interrupted: bool = False,
+    performance_assessment: str = "NOT_EVALUATED",
 ) -> Dict[str, Any]:
     if interrupted:
         state = "INCOMPLETE"
@@ -918,7 +919,12 @@ def compute_validity(
     else:
         state = "INVALID"
         reasons = triggered_reasons or [{"code": "FAIL", "detail": "run did not pass"}]
-    return {"state": state, "reasons": reasons, "interrupted": interrupted}
+    return {
+        "state": state,
+        "reasons": reasons,
+        "interrupted": interrupted,
+        "performance_assessment": performance_assessment,
+    }
 
 
 def metric_support_classification(supported: bool) -> str:
@@ -1120,6 +1126,7 @@ def build_validity_document(
         "state": validity.get("state"),
         "reasons": validity.get("reasons", []),
         "interrupted": validity.get("interrupted", False),
+        "performance_assessment": validity.get("performance_assessment", "NOT_EVALUATED"),
         "fail_closed_identity": validity.get("fail_closed_identity", False),
     }
 
@@ -1224,7 +1231,7 @@ def build_benchmark_document(
 
     expected_values = {
         "prompt_tokens_per_second": 100.0,
-        "generation_tokens_per_second": 30.0,
+        "generation_tokens_per_second": None,
         "ttft_ms": 50.0,
         "vram_gib_per_gpu": 16.0,
         "system_ram_gib": 8.0,
@@ -1729,14 +1736,10 @@ def run_real_benchmark(args: argparse.Namespace) -> Tuple[Dict[str, Any], List[D
             "code": "CORRECTNESS_FAILURE",
             "detail": "every measured response failed the deterministic sentinel check",
         })
-    elif mean_gen >= args.min_generation_tokens_per_sec:
-        status = "PASS"
     else:
-        status = "FAIL"
-        triggered_reasons.append({
-            "code": "THROUGHPUT_DEGRADATION",
-            "detail": f"observed {mean_gen:.2f} tok/s below floor {args.min_generation_tokens_per_sec} tok/s",
-        })
+        # Throughput is an observed performance metric, not a validity gate.
+        # B0 establishes distributions before a reference is selected.
+        status = "PASS"
 
     if interrupted:
         final_validity = compute_validity("INCOMPLETE", triggered_reasons, interrupted=True)
@@ -1866,7 +1869,6 @@ def main() -> int:
     parser.add_argument("--iterations", type=int, default=5)
     parser.add_argument("--duration", type=float, default=30.0, help="Wall-clock budget seconds")
     parser.add_argument("--request-timeout", type=float, default=120.0)
-    parser.add_argument("--min-generation-tokens-per-sec", type=float, default=30.0)
     parser.add_argument("--tensor-parallelism", type=int, default=1)
     parser.add_argument("--context-window-tokens", type=int, default=4096)
     parser.add_argument("--gpu-count", type=int, default=1)

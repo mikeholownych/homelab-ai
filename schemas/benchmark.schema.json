@@ -1328,6 +1328,15 @@
         },
         "interrupted": {
           "type": "boolean"
+        },
+        "performance_assessment": {
+          "type": "string",
+          "enum": [
+            "BELOW_REFERENCE",
+            "WITHIN_REFERENCE",
+            "ABOVE_REFERENCE",
+            "NOT_EVALUATED"
+          ]
         }
       }
     },

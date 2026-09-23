@@ -46,9 +46,9 @@
       }
     ],
     "elimination_rule": {
-      "code": "THROUGHPUT_DEGRADATION",
-      "condition": "a load point fails its throughput floor (mean generation tokens/sec below 30) or exceeds its per-point device-error budget (device_lost + oom > 2.0% of measured requests)",
-      "action": "mark the load point FAIL with observations preserved and CONTINUE the matrix; the failed point is excluded from any later aggregate and flagged for capacity review"
+      "code": "DEVICE_ERROR_BUDGET_EXCEEDED",
+      "condition": "a load point exceeds its per-point device-error budget (device_lost + oom > 2.0% of measured requests); throughput remains an observation and never invalidates a run",
+      "action": "mark the load point INVALID with observations preserved and CONTINUE the matrix; the failed point is excluded from any later aggregate and flagged for capacity review"
     },
     "warmup": "first 5 requests at each load point are warmup and are excluded from distributions and aggregates",
     "power_model": {

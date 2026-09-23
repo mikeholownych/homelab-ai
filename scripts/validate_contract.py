@@ -320,8 +320,16 @@ BENCHMARK_REASON_CODES = (
     "HARNESS_ERROR",
     "REQUEST_CONNECTION_FAILED",
     "INCOMPLETE",
-    "THROUGHPUT_DEGRADATION",
+    "DEVICE_ERROR_BUDGET_EXCEEDED",
 )
+
+PERFORMANCE_REASON_CODES = {
+    "LOW_THROUGHPUT",
+    "HIGH_TTFT",
+    "HIGH_ITL",
+    "POOR_SCALING",
+    "THROUGHPUT_DEGRADATION",
+}
 
 
 def validate_benchmark_payload(payload: dict[str, object]) -> list[str]:
@@ -342,6 +350,18 @@ def validate_benchmark_payload(payload: dict[str, object]) -> list[str]:
         errors.append("validity.reasons must be a list")
     elif state == "INVALID" and not reasons:
         errors.append("validity INVALID requires at least one machine readable reason")
+    elif isinstance(reasons, list):
+        for reason in reasons:
+            if isinstance(reason, dict) and reason.get("code") in PERFORMANCE_REASON_CODES:
+                errors.append(
+                    f"validity reason {reason.get('code')} is a performance observation, not a validity failure"
+                )
+
+    performance_assessment = validity.get("performance_assessment", "NOT_EVALUATED")
+    if performance_assessment not in {
+        "BELOW_REFERENCE", "WITHIN_REFERENCE", "ABOVE_REFERENCE", "NOT_EVALUATED",
+    }:
+        errors.append("validity.performance_assessment is not a supported assessment")
 
     expected_state = {
         "PASS": "VALID",

@@ -19,7 +19,6 @@ benchmarking_prompt: "Write a short sentence about efficient inference."
 benchmarking_max_new_tokens: 128
 benchmarking_iterations: 5
 benchmarking_request_timeout_sec: 120
-benchmarking_min_generation_tokens_per_sec: 5.0
 
 # Scheduled benchmark profile split. When non-empty, a scheduled benchmark run
 # executes each listed profile once (one evidence file per profile) and emits a
