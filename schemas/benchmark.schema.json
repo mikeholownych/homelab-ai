@@ -1,13 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schemas/benchmark.schema.json",
-  "title": "Benchmark Result",
+  "title": "Benchmark Run Manifest (run card)",
+  "description": "Immutable, run-addressed benchmark run card. Keeps the legacy run-card shape and adds benchmark_run_id, basel identity binding and validity. Physical (simulated=false) runs require full identity bindings.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
+    "benchmark_run_id",
+    "baseline_id",
+    "config_id",
     "generated_at",
+    "started_at",
+    "completed_at",
     "git_sha",
+    "git_dirty",
     "simulated",
     "status",
     "system",
@@ -18,14 +25,37 @@
     "correctness",
     "failure_criteria",
     "os_tuning",
-    "safety"
+    "safety",
+    "validity"
   ],
   "properties": {
     "schema_version": {
       "type": "string",
       "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
     },
+    "benchmark_run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}$"
+    },
+    "baseline_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "config_id": {
+      "type": "string",
+      "minLength": 1
+    },
     "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+    },
+    "completed_at": {
       "type": "string",
       "format": "date-time",
       "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
@@ -33,6 +63,9 @@
     "git_sha": {
       "type": "string",
       "pattern": "^[0-9A-Fa-f]{40}$"
+    },
+    "git_dirty": {
+      "type": "boolean"
     },
     "simulated": {
       "type": "boolean"
@@ -43,8 +76,110 @@
         "PASS",
         "FAIL",
         "NOT_RUN",
-        "SIMULATED_PASS"
+        "SIMULATED_PASS",
+        "INCOMPLETE"
       ]
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/identity"
+        }
+      ]
+    },
+    "workload": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/workload"
+        }
+      ]
+    },
+    "harness": {
+      "$ref": "#/$defs/harness"
+    },
+    "raw_artifacts": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requests_jsonl",
+            "telemetry_jsonl"
+          ],
+          "properties": {
+            "requests_jsonl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "telemetry_jsonl": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "component_files": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "environment": {
+              "type": "string"
+            },
+            "workload": {
+              "type": "string"
+            },
+            "metrics": {
+              "type": "string"
+            },
+            "validity": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "metrics": {
+      "description": "Compact aggregate summary retained on the run card for consumers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests_per_second": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "decode_tokens_per_second_p50": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ttft_ms_p95": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
     },
     "system": {
       "type": "object",
@@ -202,7 +337,9 @@
         "vram_gib_per_gpu",
         "system_ram_gib",
         "gpu_temperature_c",
-        "gpu_power_watts"
+        "gpu_power_watts",
+        "gpu_utilization_percent",
+        "gpu_memory_percent"
       ],
       "properties": {
         "prompt_tokens_per_second": {
@@ -225,6 +362,12 @@
         },
         "gpu_power_watts": {
           "$ref": "#/$defs/telemetryMetric"
+        },
+        "gpu_utilization_percent": {
+          "$ref": "#/$defs/telemetryMetric"
+        },
+        "gpu_memory_percent": {
+          "$ref": "#/$defs/telemetryMetric"
         }
       }
     },
@@ -233,6 +376,7 @@
       "additionalProperties": false,
       "required": [
         "status",
+        "mode",
         "summary",
         "expected",
         "observed"
@@ -245,6 +389,14 @@
             "FAIL",
             "NOT_TESTED",
             "SIMULATED_PASS"
+          ]
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "sentinel",
+            "response_received",
+            "none"
           ]
         },
         "summary": {
@@ -274,6 +426,18 @@
             "summary": {
               "type": "string",
               "minLength": 1
+            },
+            "valid_responses": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "invalid_responses": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed_requests": {
+              "type": "integer",
+              "minimum": 0
             }
           }
         }
@@ -461,8 +625,10 @@
         "guardrails",
         "power_budget",
         "thermal_abort_triggered",
+        "telemetry_lost",
         "telemetry_source",
-        "peak_gpu_temperature_c"
+        "peak_gpu_temperature_c",
+        "per_gpu_telemetry"
       ],
       "properties": {
         "mode": {
@@ -486,7 +652,8 @@
             "gpu_tdp_watts_per_gpu",
             "system_base_power_watts",
             "power_headroom_pct",
-            "abort_temperature_c"
+            "abort_temperature_c",
+            "telemetry_required"
           ],
           "properties": {
             "psu_capacity_watts": {
@@ -510,6 +677,9 @@
               "type": "number",
               "minimum": 50,
               "maximum": 120
+            },
+            "telemetry_required": {
+              "type": "boolean"
             }
           }
         },
@@ -546,10 +716,14 @@
         "thermal_abort_triggered": {
           "type": "boolean"
         },
+        "telemetry_lost": {
+          "type": "boolean"
+        },
         "telemetry_source": {
           "enum": [
             "hwmon",
-            "unavailable"
+            "unavailable",
+            "no-required-sensors"
           ]
         },
         "peak_gpu_temperature_c": {
@@ -557,11 +731,77 @@
             "number",
             "null"
           ]
+        },
+        "per_gpu_telemetry": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "gpu_index",
+              "temperature_c"
+            ],
+            "properties": {
+              "gpu_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "temperature_c": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "power_watts": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
         }
       }
+    },
+    "validity": {
+      "$ref": "#/$defs/validity"
     }
   },
   "allOf": [
+    {
+      "if": {
+        "properties": {
+          "simulated": {
+            "const": false
+          },
+          "status": {
+            "const": "PASS"
+          }
+        },
+        "required": [
+          "simulated",
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "identity",
+          "workload"
+        ],
+        "properties": {
+          "identity": {
+            "not": {
+              "type": "null"
+            }
+          },
+          "workload": {
+            "not": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    },
     {
       "if": {
         "properties": {
@@ -590,29 +830,51 @@
           },
           "failure_criteria": {
             "maxItems": 0
-          },
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "PASS"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
           "telemetry": {
             "properties": {
-              "prompt_tokens_per_second": {
-                "$ref": "#/$defs/telemetryMetricMeasured"
-              },
               "generation_tokens_per_second": {
                 "$ref": "#/$defs/telemetryMetricMeasured"
               },
               "ttft_ms": {
                 "$ref": "#/$defs/telemetryMetricMeasured"
               },
-              "vram_gib_per_gpu": {
+              "gpu_temperature_c": {
                 "$ref": "#/$defs/telemetryMetricMeasured"
               },
               "system_ram_gib": {
                 "$ref": "#/$defs/telemetryMetricMeasured"
               },
-              "gpu_temperature_c": {
+              "prompt_tokens_per_second": {
                 "$ref": "#/$defs/telemetryMetric"
               },
+              "vram_gib_per_gpu": {
+                "$ref": "#/$defs/telemetryMetricObservedOrUnsupported"
+              },
               "gpu_power_watts": {
-                "$ref": "#/$defs/telemetryMetric"
+                "$ref": "#/$defs/telemetryMetricObservedOrUnsupported"
+              },
+              "gpu_utilization_percent": {
+                "$ref": "#/$defs/telemetryMetricObservedOrUnsupported"
+              },
+              "gpu_memory_percent": {
+                "$ref": "#/$defs/telemetryMetricObservedOrUnsupported"
               }
             }
           }
@@ -644,6 +906,36 @@
           },
           "failure_criteria": {
             "minItems": 1
+          },
+          "validity": {
+            "properties": {
+              "state": {
+                "const": "INVALID"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "INCOMPLETE"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "validity": {
+            "properties": {
+              "state": {
+                "const": "INCOMPLETE"
+              }
+            }
           }
         }
       }
@@ -671,28 +963,10 @@
           "failure_criteria": {
             "maxItems": 0
           },
-          "telemetry": {
+          "validity": {
             "properties": {
-              "prompt_tokens_per_second": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
-              },
-              "generation_tokens_per_second": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
-              },
-              "ttft_ms": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
-              },
-              "vram_gib_per_gpu": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
-              },
-              "system_ram_gib": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
-              },
-              "gpu_temperature_c": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
-              },
-              "gpu_power_watts": {
-                "$ref": "#/$defs/telemetryMetricUnavailable"
+              "state": {
+                "const": "INVALID"
               }
             }
           }
@@ -701,19 +975,384 @@
     }
   ],
   "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boot_id",
+        "systemd_invocation_id",
+        "container_id",
+        "image_ref",
+        "model_observed",
+        "model_expected",
+        "gpu_identity"
+      ],
+      "properties": {
+        "boot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "systemd_invocation_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "systemd_nrestarts": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "container_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "image_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "image_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(sha256:[0-9a-f]{64})?$"
+        },
+        "model_observed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "model_expected": {
+          "type": "string",
+          "minLength": 1
+        },
+        "systemd_active_state": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "service_unit": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "api_key_configured": {
+          "type": "boolean"
+        },
+        "gpu_identity": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "gpu_index",
+              "card",
+              "pci_address",
+              "driver",
+              "hwmon"
+            ],
+            "properties": {
+              "gpu_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "card": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pci_address": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "driver": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "vendor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "device": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "hwmon": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "versions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vllm": {
+              "type": "string"
+            },
+            "podman": {
+              "type": "string"
+            },
+            "kernel": {
+              "type": "string"
+            },
+            "level_zero": {
+              "type": "string"
+            },
+            "api_key_configured": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "benchmark_run_id",
+        "workload_id",
+        "prompt_class",
+        "output_class",
+        "concurrency",
+        "requests",
+        "warmup_requests",
+        "max_new_tokens",
+        "target_prompt_tokens",
+        "token_source",
+        "deterministic",
+        "model"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "benchmark_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workload_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "profile": {
+          "type": "string"
+        },
+        "prompt_class": {
+          "type": "string",
+          "enum": [
+            "short",
+            "medium",
+            "large",
+            "very_large",
+            "max_near_window",
+            "fixed_custom"
+          ]
+        },
+        "output_class": {
+          "type": "string",
+          "enum": [
+            "tiny",
+            "short",
+            "medium",
+            "large"
+          ]
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requests": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "warmup_requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "max_new_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "target_prompt_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "observed_prompt_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "deviation_tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "deviation_pct": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "max_deviation_pct": {
+          "type": "number",
+          "minimum": 0
+        },
+        "token_source": {
+          "type": "string",
+          "enum": [
+            "server_tokenize",
+            "estimated"
+          ]
+        },
+        "tokenize_endpoint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deterministic": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt_sample": {
+          "type": "string"
+        },
+        "workload_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^([0-9a-f]{64})?$"
+        },
+        "max_requests_deviation_pct": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source_sha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "reasons"
+      ],
+      "properties": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "VALID",
+            "INVALID",
+            "INCOMPLETE"
+          ]
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "detail"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "detail": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "interrupted": {
+          "type": "boolean"
+        }
+      }
+    },
     "telemetryMetric": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "classification",
         "expected",
         "observed"
       ],
       "properties": {
+        "classification": {
+          "enum": [
+            "MEASURED",
+            "DERIVED",
+            "UNAVAILABLE",
+            "UNSUPPORTED"
+          ]
+        },
         "expected": {
-          "$ref": "#/$defs/telemetryValue"
+          "$ref": "#/$defs/telemetryValueOrUnsupported"
         },
         "observed": {
-          "$ref": "#/$defs/telemetryValue"
+          "$ref": "#/$defs/observedValue"
         }
       }
     },
@@ -721,41 +1360,89 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "classification",
         "expected",
         "observed"
       ],
       "properties": {
+        "classification": {
+          "const": "MEASURED"
+        },
         "expected": {
-          "$ref": "#/$defs/telemetryValue"
+          "$ref": "#/$defs/telemetryValueOrUnsupported"
         },
         "observed": {
           "$ref": "#/$defs/measurementValue"
         }
       }
     },
-    "telemetryMetricUnavailable": {
+    "telemetryMetricObservedOrDerived": {
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "classification",
         "expected",
         "observed"
       ],
       "properties": {
+        "classification": {
+          "enum": [
+            "MEASURED",
+            "DERIVED"
+          ]
+        },
         "expected": {
-          "$ref": "#/$defs/telemetryValue"
+          "$ref": "#/$defs/telemetryValueOrUnsupported"
         },
         "observed": {
-          "$ref": "#/$defs/unavailableValue"
+          "$ref": "#/$defs/observedValue"
         }
       }
     },
-    "telemetryValue": {
+    "telemetryMetricObservedOrUnsupported": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "expected",
+        "observed"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "MEASURED",
+            "UNSUPPORTED",
+            "UNAVAILABLE"
+          ]
+        },
+        "expected": {
+          "$ref": "#/$defs/telemetryValueOrUnsupported"
+        },
+        "observed": {
+          "$ref": "#/$defs/observedValue"
+        }
+      }
+    },
+    "telemetryValueOrUnsupported": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/measurementValue"
+        },
+        {
+          "$ref": "#/$defs/unsupportedValue"
+        }
+      ]
+    },
+    "observedValue": {
       "oneOf": [
         {
           "$ref": "#/$defs/measurementValue"
         },
         {
           "$ref": "#/$defs/unavailableValue"
+        },
+        {
+          "$ref": "#/$defs/unsupportedValue"
         }
       ]
     },
@@ -787,6 +1474,24 @@
         "status": {
           "type": "string",
           "const": "unavailable"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "unsupportedValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "unsupported"
         },
         "reason": {
           "type": "string",

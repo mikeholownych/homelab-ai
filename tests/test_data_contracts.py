@@ -397,10 +397,12 @@ class DataContractTests(unittest.TestCase):
                         metric["observed"] = {"status": "unavailable", "reason": "not run"}
                     not_run_case["correctness"] = {
                         "status": "NOT_TESTED",
+                        "mode": "none",
                         "summary": "Benchmark not run.",
                         "expected": {"summary": "Correctness would be evaluated after execution."},
                         "observed": {"summary": "No execution results were produced."}
                     }
+                    not_run_case["validity"] = {"state": "INVALID", "reasons": [], "interrupted": False}
                     self.assertFalse(list(validator.iter_errors(not_run_case)))
                     pass_with_failed_correctness = copy.deepcopy(fixture)
                     pass_with_failed_correctness["correctness"]["status"] = "FAIL"
@@ -408,10 +410,12 @@ class DataContractTests(unittest.TestCase):
                     fail_without_criteria = copy.deepcopy(fixture)
                     fail_without_criteria["status"] = "FAIL"
                     fail_without_criteria["correctness"]["status"] = "PASS"
+                    fail_without_criteria["validity"] = {"state": "INVALID", "reasons": [{"code": "FAIL", "detail": "run did not pass"}], "interrupted": False}
                     self.assertTrue(list(validator.iter_errors(fail_without_criteria)))
                     fail_with_performance_criteria = copy.deepcopy(fixture)
                     fail_with_performance_criteria["status"] = "FAIL"
                     fail_with_performance_criteria["correctness"]["status"] = "PASS"
+                    fail_with_performance_criteria["validity"] = {"state": "INVALID", "reasons": [{"code": "THERMAL_LIMIT", "detail": "temperature exceeded guardrail"}], "interrupted": False}
                     fail_with_performance_criteria["failure_criteria"] = [
                         {
                             "criterion": "thermal_limit",
@@ -504,7 +508,7 @@ class DataContractTests(unittest.TestCase):
         self.assertIn("failure_criteria", schema["required"])
         self.assertIn("split_parameters", schema["properties"]["model"]["properties"])
         correctness_required = schema["properties"]["correctness"]["required"]
-        self.assertEqual(["status", "summary", "expected", "observed"], correctness_required)
+        self.assertEqual(["status", "mode", "summary", "expected", "observed"], correctness_required)
 
     def test_evidence_schema_allows_incomplete_status(self) -> None:
         schema = load_json(SCHEMA_DIR / "evidence.schema.json")

@@ -64,43 +64,47 @@
 
 - name: Run inference benchmark harness
   ansible.builtin.command:
-    argv:
-      - /usr/bin/python3
-      - "{{ benchmarking_harness_path }}"
-      - --profile
-      - "{{ item }}"
-      - --hostname
-      - "{{ inventory_hostname }}"
-      - --git-sha
-      - "{{ git_commit_sha | default('0000000000000000000000000000000000000000') }}"
-      - --mode
-      - "{{ benchmarking_mode }}"
-      - --runtime
-      - "{{ benchmarking_runtime }}"
-      - --base-url
-      - "{{ benchmarking_base_url }}"
-      - --auth-env-file
-      - "{{ benchmarking_auth_env_file }}"
-      - --api-key-env
-      - "{{ benchmarking_api_key_env }}"
-      - --iterations
-      - "{{ benchmarking_iterations | string }}"
-      - --duration
-      - "{{ benchmarking_profiles[item].duration_seconds | default(30) | string }}"
-      - --tensor-parallelism
-      - "{{ benchmarking_profiles[item].tensor_parallelism | string }}"
-      - --gpu-count
-      - "{{ benchmarking_profiles[item].gpu_count | string }}"
-      - --psu-capacity-watts
-      - "{{ benchmarking_psu_capacity_watts | string }}"
-      - --gpu-tdp-watts
-      - "{{ benchmarking_gpu_tdp_watts | string }}"
-      - --abort-temperature-c
-      - "{{ benchmarking_abort_temperature_c | string }}"
-      - --output
-      - >-
-        {{ benchmarking_evidence_dir ~ '/' ~ (benchmarking_scheduled_run |
-           ternary('benchmark-' ~ item ~ '.json', 'benchmark.json')) }}
+    argv: >-
+      {{ ['/usr/bin/python3', benchmarking_harness_path, '--profile', item, '--hostname',
+           inventory_hostname, '--git-sha',
+           (git_commit_sha | default('0000000000000000000000000000000000000000')),
+           '--mode', benchmarking_mode, '--runtime', benchmarking_runtime,
+           '--base-url', benchmarking_base_url,
+           '--auth-env-file', benchmarking_auth_env_file,
+           '--api-key-env', benchmarking_api_key_env,
+           '--iterations', (benchmarking_iterations | string),
+           '--duration', (benchmarking_profiles[item].duration_seconds | default(30) | string),
+           '--tensor-parallelism', (benchmarking_profiles[item].tensor_parallelism | string),
+           '--gpu-count', (benchmarking_profiles[item].gpu_count | string),
+           '--context-window-tokens', (benchmarking_profiles[item].context_window_tokens | default(4096) | string),
+           '--psu-capacity-watts', (benchmarking_psu_capacity_watts | string),
+           '--gpu-tdp-watts', (benchmarking_gpu_tdp_watts | string),
+           '--system-base-power-watts', (benchmarking_system_base_power_watts | string),
+           '--power-headroom-pct', (benchmarking_power_headroom_pct | string),
+           '--abort-temperature-c', (benchmarking_abort_temperature_c | string),
+           '--min-generation-tokens-per-sec', (benchmarking_min_generation_tokens_per_sec | string),
+           '--baseline-id', benchmarking_baseline_id,
+           '--config-id', benchmarking_config_id,
+           '--model', (benchmarking_profiles[item].model | default(benchmarking_model)),
+           '--revision', (benchmarking_profiles[item].revision | default(benchmarking_revision)),
+           '--artifact-sha256', (benchmarking_profiles[item].artifact_sha256 | default(benchmarking_model_artifact_sha256)),
+           '--quantization', (benchmarking_profiles[item].quantization | default(benchmarking_quantization)),
+           '--service-unit', (benchmarking_profiles[item].service_unit | default(benchmarking_service_unit)),
+           '--container-name', (benchmarking_profiles[item].container_name | default(benchmarking_container_name)),
+           '--prompt-class', (benchmarking_profiles[item].prompt_class | default(benchmarking_default_prompt_class)),
+           '--output-class', (benchmarking_profiles[item].output_class | default(benchmarking_default_output_class)),
+           '--concurrency', (benchmarking_profiles[item].concurrency | default(benchmarking_default_concurrency) | string),
+           '--requests', (benchmarking_profiles[item].requests | default(benchmarking_default_requests) | string),
+           '--warmup-requests', (benchmarking_profiles[item].warmup_requests | default(benchmarking_default_warmup_requests) | string),
+           '--max-new-tokens', (benchmarking_profiles[item].max_new_tokens | default(benchmarking_default_max_new_tokens) | string),
+           '--max-deviation-pct', (benchmarking_profiles[item].max_deviation_pct | default(benchmarking_default_max_deviation_pct) | string),
+           '--output',
+           ((benchmarking_evidence_dir ~ '/benchmarks/simulated/' ~
+              (benchmarking_scheduled_run | ternary('benchmark-' ~ item ~ '.json', 'benchmark.json')))
+              if benchmarking_mode == 'simulated'
+              else (benchmarking_evidence_dir ~ '/' ~
+              (benchmarking_scheduled_run | ternary('benchmark-' ~ item ~ '.json', 'benchmark.json'))))]
+           + ['--evidence-dir', benchmarking_evidence_dir] }}
   loop: "{{ benchmarking_run_profiles }}"
   loop_control:
     label: "{{ item }}"

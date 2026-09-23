@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/benchmark-workload.schema.json",
+  "title": "Benchmark Workload",
+  "description": "Deterministic workload definition for a physical benchmark run: prompt/output classes, concurrency, token targets vs observed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "benchmark_run_id",
+    "workload_id",
+    "prompt_class",
+    "output_class",
+    "concurrency",
+    "requests",
+    "warmup_requests",
+    "max_new_tokens",
+    "target_prompt_tokens",
+    "observed_prompt_tokens",
+    "token_source",
+    "model"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "benchmark_run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}$"
+    },
+    "workload_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile": {
+      "type": "string"
+    },
+    "prompt_class": {
+      "type": "string",
+      "enum": [
+        "short",
+        "medium",
+        "large",
+        "very_large",
+        "max_near_window",
+        "fixed_custom"
+      ]
+    },
+    "output_class": {
+      "type": "string",
+      "enum": [
+        "tiny",
+        "short",
+        "medium",
+        "large"
+      ]
+    },
+    "concurrency": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "requests": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warmup_requests": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "max_new_tokens": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target_prompt_tokens": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "observed_prompt_tokens": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "deviation_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "deviation_pct": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "max_deviation_pct": {
+      "type": "number",
+      "minimum": 0
+    },
+    "token_source": {
+      "type": "string",
+      "enum": [
+        "server_tokenize",
+        "estimated"
+      ]
+    },
+    "tokenize_endpoint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "deterministic": {
+      "type": "boolean"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_sample": {
+      "description": "Truncated deterministic prompt prefix retained for auditability (secret-free generated text only).",
+      "type": "string",
+      "maxLength": 500
+    },
+    "workload_sha256": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^([0-9a-f]{64})?$"
+    },
+    "max_requests_deviation_pct": {
+      "type": "number",
+      "minimum": 0
+    }
+  }
+}

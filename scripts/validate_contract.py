@@ -13,7 +13,18 @@ from jsonschema import Draft202012Validator, FormatChecker
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_DIR = REPO_ROOT / "schemas"
-CONTRACT_TYPES = ("validation", "evidence", "benchmark", "cmdb", "itsm", "manifest")
+CONTRACT_TYPES = (
+    "validation",
+    "evidence",
+    "benchmark",
+    "benchmark_environment",
+    "benchmark_workload",
+    "benchmark_metrics",
+    "benchmark_validity",
+    "cmdb",
+    "itsm",
+    "manifest",
+)
 RECAP_COUNTER_KEYS = ("ok", "changed", "unreachable", "failed", "skipped", "rescued", "ignored")
 
 
@@ -23,6 +34,10 @@ def get_schema_paths(schema_root: Path | None = None) -> dict[str, Path]:
         "validation": resolved_root / "validation.schema.json",
         "evidence": resolved_root / "evidence.schema.json",
         "benchmark": resolved_root / "benchmark.schema.json",
+        "benchmark_environment": resolved_root / "benchmark-environment.schema.json",
+        "benchmark_workload": resolved_root / "benchmark-workload.schema.json",
+        "benchmark_metrics": resolved_root / "benchmark-metrics.schema.json",
+        "benchmark_validity": resolved_root / "benchmark-validity.schema.json",
         "cmdb": resolved_root / "cmdb.schema.json",
         "itsm": resolved_root / "itsm.schema.json",
         "manifest": resolved_root / "manifest.schema.json",
@@ -290,6 +305,87 @@ def get_nested_status(payload: dict[str, object], key: str) -> Any:
     return observed.get("status")
 
 
+BENCHMARK_REASON_CODES = (
+    "POWER_BUDGET_EXCEEDED",
+    "THERMAL_ABORT",
+    "SAFETY_ABORT",
+    "TELEMETRY_LOST",
+    "SERVICE_UNREACHABLE",
+    "SERVICE_RESTART",
+    "SERVICE_INVOCATION_CHANGED",
+    "MODEL_IDENTITY_CHANGED",
+    "TP_TOPOLOGY_CHANGED",
+    "WORKLOAD_TOKEN_DEVIATION",
+    "CORRECTNESS_FAILURE",
+    "HARNESS_ERROR",
+    "REQUEST_CONNECTION_FAILED",
+    "INCOMPLETE",
+    "THROUGHPUT_DEGRADATION",
+)
+
+
+def validate_benchmark_payload(payload: dict[str, object]) -> list[str]:
+    errors: list[str] = []
+    status = payload.get("status")
+    simulated = payload.get("simulated")
+    validity = payload.get("validity")
+    failure_criteria = payload.get("failure_criteria")
+
+    if not isinstance(validity, dict):
+        return ["validity must be an object"]
+
+    state = validity.get("state")
+    reasons = validity.get("reasons")
+    if state not in {"VALID", "INVALID", "INCOMPLETE"}:
+        errors.append("validity.state must be VALID, INVALID, or INCOMPLETE")
+    if not isinstance(reasons, list):
+        errors.append("validity.reasons must be a list")
+    elif state == "INVALID" and not reasons:
+        errors.append("validity INVALID requires at least one machine readable reason")
+
+    expected_state = {
+        "PASS": "VALID",
+        "SIMULATED_PASS": "VALID",
+        "FAIL": "INVALID",
+        "NOT_RUN": "INVALID",
+        "INCOMPLETE": "INCOMPLETE",
+    }.get(status)
+    if expected_state is not None and state != expected_state:
+        errors.append(f"validity.state must be {expected_state} when status is {status}")
+
+    if not isinstance(failure_criteria, list):
+        errors.append("failure_criteria must be a list")
+    else:
+        for criterion in failure_criteria:
+            if not isinstance(criterion, dict):
+                continue
+            code = criterion.get("criterion")
+            if code is not None and str(code).upper() not in BENCHMARK_REASON_CODES:
+                errors.append(f"failure_criteria criterion {code} is not a supported failure code")
+
+    if simulated is True and status == "PASS":
+        if state != "VALID":
+            errors.append("simulated PASS requires validity VALID")
+
+    if simulated is False:
+        if payload.get("identity") is None:
+            errors.append("physical benchmark runs require identity binding")
+        if payload.get("workload") is None:
+            errors.append("physical benchmark runs require workload binding")
+
+    return errors
+
+
+def validate_benchmark_component_payload(payload: dict[str, object]) -> list[str]:
+    if "benchmark_run_id" not in payload:
+        return ["benchmark_run_id is required on benchmark component documents"]
+    if not isinstance(payload["benchmark_run_id"], str) or not payload["benchmark_run_id"]:
+        return ["benchmark_run_id must be a non-empty string"]
+    if "schema_version" not in payload:
+        return ["schema_version is required on benchmark component documents"]
+    return []
+
+
 def validate_itsm_payload(payload: dict[str, object]) -> list[str]:
     errors: list[str] = []
     selected_action = payload.get("selected_action")
@@ -371,7 +467,11 @@ def validate_itsm_payload(payload: dict[str, object]) -> list[str]:
 SEMANTIC_VALIDATORS: dict[str, Callable[[dict[str, object]], list[str]]] = {
     "validation": validate_validation_payload,
     "evidence": validate_evidence_payload,
-    "benchmark": lambda payload: [],
+    "benchmark": validate_benchmark_payload,
+    "benchmark_environment": validate_benchmark_component_payload,
+    "benchmark_workload": validate_benchmark_component_payload,
+    "benchmark_metrics": validate_benchmark_component_payload,
+    "benchmark_validity": validate_benchmark_component_payload,
     "cmdb": lambda payload: [],
     "itsm": validate_itsm_payload,
     "manifest": validate_manifest_payload,

@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/benchmark-metrics.schema.json",
+  "title": "Benchmark Metrics",
+  "description": "Raw-observation-derived statistics for a physical benchmark run: distributions with p50/p95/p99 and aggregate decode/prefill/req rates. Only measured (non-warmup) samples contribute.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "benchmark_run_id",
+    "counts",
+    "distributions",
+    "aggregates",
+    "prefill"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "benchmark_run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}$"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted",
+        "measured",
+        "warmup",
+        "failed",
+        "timed_out",
+        "invalid_response",
+        "oom",
+        "device_lost"
+      ],
+      "properties": {
+        "attempted": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "measured": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "warmup": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timed_out": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid_response": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "oom": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "device_lost": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "distributions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ttft_ms": {
+          "$ref": "#/$defs/distribution"
+        },
+        "inter_token_latency_ms": {
+          "$ref": "#/$defs/distribution"
+        },
+        "end_to_end_ms": {
+          "$ref": "#/$defs/distribution"
+        },
+        "decode_tokens_per_second": {
+          "$ref": "#/$defs/distribution"
+        },
+        "prompt_tokens": {
+          "$ref": "#/$defs/distribution"
+        },
+        "completion_tokens": {
+          "$ref": "#/$defs/distribution"
+        }
+      }
+    },
+    "aggregates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "decode_tokens_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "wall_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "group_wall_seconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "prefill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "tokens_per_second"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "DERIVED",
+            "UNAVAILABLE",
+            "UNSUPPORTED"
+          ]
+        },
+        "tokens_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "estimated_prompt_seconds": {
+          "description": "Proxy: observed TTFT is treated as the dominant prefill+queue bound and is reported only as an estimate basis, never twice.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "$defs": {
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "count",
+        "min",
+        "max",
+        "mean",
+        "p50",
+        "p95",
+        "p99"
+      ],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "max": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "mean": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p50": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p95": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "p99": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

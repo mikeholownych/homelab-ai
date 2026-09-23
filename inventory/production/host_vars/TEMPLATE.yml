@@ -83,6 +83,19 @@ network_endpoints:
 benchmarking_psu_capacity_watts: REPLACE_ME_PSU_WATTS
 benchmarking_gpu_tdp_watts: REPLACE_ME_GPU_TDP_WATTS
 
+# Baseline identity: carries the frozen runtime identity that every benchmark
+# evidence bundle is attributed to. Set the B0 values exactly as recorded in
+# roles/benchmarking/files/b0-matrix.json; keeping the defaults in
+# roles/benchmarking/defaults/main.yml is correct for a B0 benchmark host.
+# benchmarking_baseline_id: B0
+# benchmarking_config_id: b0
+# benchmarking_model: "REPLACE_ME_MODEL_ID"
+# benchmarking_revision: main
+# benchmarking_quantization: REPLACE_ME_QUANTIZATION
+# benchmarking_model_artifact_sha256: REPLACE_ME_64_HEX_ARTIFACT_SHA
+# benchmarking_service_unit: vllm.service
+# benchmarking_container_name: vllm-xpu
+
 cluster:
   # Standalone default. Enable only after reviewing docs/clustering.md.
   enabled: false

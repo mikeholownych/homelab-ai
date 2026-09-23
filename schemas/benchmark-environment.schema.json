@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/benchmark-environment.schema.json",
+  "title": "Benchmark Environment Identity",
+  "description": "Live identity bindings for a physical benchmark run: boot, systemd invocation, container/image, served model, GPU topology, versions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "benchmark_run_id",
+    "collected_at",
+    "identity"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "benchmark_run_id": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}$"
+    },
+    "collected_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-(0[1-9]|1[0-2])-([0-2]\\d|3[01])T([01]\\d|2[0-3]):[0-5]\\d:[0-5]\\dZ$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "boot_id",
+        "systemd_invocation_id",
+        "container_id",
+        "image_ref",
+        "model_observed",
+        "model_expected",
+        "gpu_identity"
+      ],
+      "properties": {
+        "boot_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "systemd_invocation_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "systemd_nrestarts": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "container_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "image_ref": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "image_digest": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(sha256:[0-9a-f]{64})?$"
+        },
+        "model_observed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "model_expected": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gpu_identity": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "gpu_index",
+              "card",
+              "pci_address",
+              "driver",
+              "hwmon"
+            ],
+            "properties": {
+              "gpu_index": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "card": {
+                "type": "string",
+                "minLength": 1
+              },
+              "pci_address": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "driver": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              },
+              "vendor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "device": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "hwmon": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "versions": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "vllm": {
+              "type": "string"
+            },
+            "podman": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kernel": {
+              "type": "string"
+            },
+            "level_zero": {
+              "type": "string"
+            },
+            "intel_runtime": {
+              "type": "string"
+            },
+            "pytorch": {
+              "type": "string"
+            },
+            "api_key_configured": {
+              "type": "boolean"
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "unit": {
+              "type": "string"
+            },
+            "active_state": {
+              "type": "string"
+            },
+            "nrestarts": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

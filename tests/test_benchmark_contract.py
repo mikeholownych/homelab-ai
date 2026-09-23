@@ -99,11 +99,10 @@ def test_benchmark_role_supports_scheduled_profile_split():
         task for task in tasks if task.get("name") == "Run inference benchmark harness"
     )
     assert run["loop"] == "{{ benchmarking_run_profiles }}"
-    argv = run["ansible.builtin.command"]["argv"]
+    argv = str(run["ansible.builtin.command"]["argv"])
     assert "--profile" in argv
-    output_expression = argv[argv.index("--output") + 1]
-    assert "'benchmark-' ~ item ~ '.json'" in output_expression
-    assert "'benchmark.json'" in output_expression
+    assert "'benchmark-' ~ item ~ '.json'" in argv
+    assert "'benchmark.json'" in argv
 
     index = next(
         task
@@ -113,6 +112,18 @@ def test_benchmark_role_supports_scheduled_profile_split():
     assert "benchmarking_scheduled_index_path" in str(
         index["ansible.builtin.copy"]["dest"]
     )
+
+
+def test_simulated_mode_writes_only_beneath_benchmarks_simulated():
+    tasks = load_yaml("roles/benchmarking/tasks/main.yml")
+    run = next(
+        task for task in tasks if task.get("name") == "Run inference benchmark harness"
+    )
+    argv = str(run["ansible.builtin.command"]["argv"])
+    assert "'/benchmarks/simulated/'" in argv
+    assert "~ item ~" in argv
+    assert "'--evidence-dir'" in argv
+    assert "benchmarking_evidence_dir" in argv
 
 
 def test_scheduled_split_falls_back_to_active_profile_and_validates_budget():
