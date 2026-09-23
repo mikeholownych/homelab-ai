@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -106,6 +107,43 @@ def validate_vllm(
     }
 
 
+def stamp_readiness_record(record_path: Path, result: Dict[str, Any]) -> None:
+    """Stamp validation_ready_at + status into the readiness evidence record.
+
+    Preserves every existing field (read-modify-write) so concurrent prober
+    writes and validator stamps do not clobber each other's data. Best effort:
+    a stamping failure must never invalidate the validator result itself.
+    """
+    try:
+        if not record_path.is_file():
+            return
+        st = record_path.stat()
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        record["validation_ready_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        record["validation_status"] = result.get("status", "NOT_TESTED")
+        record["model_identity"]["observed"] = (
+            result.get("models", [{}])[0].get("id", "")
+            if result.get("models") else ""
+        )
+        if result.get("tensor_parallel_size") is not None:
+            record["tensor_parallel_size"]["observed"] = result["tensor_parallel_size"]
+        tmp = record_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        tmp.replace(record_path)
+        if os.name == "posix":
+            # Best effort: keep the file owned/writable by its original owner so
+            # the service account can still do in-place prober writes on the
+            # next activation (the evidence dir itself is not service-writable).
+            try:
+                os.chown(record_path, st.st_uid, st.st_gid)
+                os.chmod(record_path, st.st_mode & 0o7777)
+            except (KeyError, PermissionError, OSError):
+                pass
+    except Exception:
+        # Evidence stamping is auxiliary; the validator keeps its own result.
+        pass
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate vLLM XPU service")
     parser.add_argument("--host", default="127.0.0.1", help="vLLM server host")
@@ -115,6 +153,7 @@ def main() -> int:
     parser.add_argument("--api-key", default=None, help="API key for authenticated endpoints")
     parser.add_argument("--simulated", action="store_true", help="Run simulated check")
     parser.add_argument("--output", default=None, help="Output JSON path")
+    parser.add_argument("--readiness-record", default=None, help="Stamp validation_ready_at into readiness evidence record")
     args = parser.parse_args()
 
     result = validate_vllm(
@@ -125,6 +164,9 @@ def main() -> int:
         api_key=args.api_key or os.environ.get("VLLM_API_KEY"),
         simulated=args.simulated,
     )
+
+    if args.readiness_record and not args.simulated:
+        stamp_readiness_record(Path(args.readiness_record), result)
 
     if args.output:
         out_path = Path(args.output)

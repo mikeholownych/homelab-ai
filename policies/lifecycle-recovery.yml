@@ -56,6 +56,47 @@ bounded_recovery:
     failed (terminal) state instead of looping forever. exit 78 is never
     auto-restarted (fail-closed config/prereq).
 
+# Restart-count provenance. The count recorded in evidence is the AUTHORITATIVE
+# systemd counter for the CURRENT service lifecycle (systemctl show NRestarts),
+# not a fabricated 0 and not a durable historical tally. Verified semantics:
+# NRestarts increments on each on-failure auto-restart (already incremented for
+# the running activation when its ExecStart runs); an INTENTIONAL stop/start or
+# a fresh manual start resets it to 0. Comparable per-activation identity is
+# carried by service_invocation_id (systemd $INVOCATION_ID) plus boot_id.
+restart_count:
+  source: systemctl show {unit} -p NRestarts --value
+  scope: current activation/lifecycle, not durable history
+  resets_on: "intentional stop/start (verified: stop resets to 0, start sees 0)"
+  increments_on: "each on-failure auto-restart (already incremented at ExecStart)"
+  failure_behavior: explicit "unavailable"/null markers, never a silent 0
+  related_identity: service_invocation_id ($INVOCATION_ID), boot_id
+
+# Readiness evidence contract (Finding 2). A process that is active but still
+# loading the model must NOT be represented as READY. Evidence distinguishes the
+# service "started" (systemd active, container spawning, model warming) from
+# "ready" (accepts production traffic: /health 200 AND expected model served).
+# Readiness observation is read-only and NOT in the systemd supervision path, so
+# a slow cold start can never cause a restart loop from a probe failure.
+readiness_evidence:
+  record: /var/lib/aihost/evidence/vllm_readiness.json
+  schema: evidence.schema.json
+  observer: >-
+    local-ai-vllm-readiness (forked by launcher before exec; dies with cgroup).
+    NOT in the systemd supervision path: readiness observation cannot cause or
+    couple to a restart loop.
+  states:
+    STARTING: written at activation; health/model may still be warming
+    READY: /health 200 AND expected model id served by /v1/models
+    STALLED: never reached READY within the time budget (terminal evidence)
+  fields: >-
+    readiness_state, process_started_at, health_ready_at, model_ready_at,
+    validation_ready_at, startup_duration, model_identity(expected/observed),
+    tensor_parallel_size(expected/observed), boot_id,
+    service_invocation_id, endpoint
+  validation_stamp: >-
+    local-ai-validate-vllm --readiness-record stamps validation_ready_at +
+    validation_status + observed model after a live physical validation run.
+
 failure_classes:
   vllm_crash:
     class: runtime
@@ -207,5 +248,6 @@ recovery_records:
   path: /var/lib/aihost/evidence/vllm_recovery.json
   schema: evidence.schema.json
   contents: >-
-    service, event, class, stage_reached, exit_code, restart_count, terminal,
-    started_at, boot_id, artifact sha256
+    service, event, class, stage_reached, exit_code, restart_count,
+    restart_count_source, restart_count_obtained_at, service_invocation_id,
+    terminal, started_at, boot_id, artifact sha256

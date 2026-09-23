@@ -61,6 +61,10 @@ def test_vllm_validator_script_contract():
     assert "PASS" in source
     assert "FAIL" in source
     assert "NOT_TESTED" in source
+    # Finding 2: validator stamps validation_ready_at into readiness evidence
+    assert "--readiness-record" in source
+    assert "stamp_readiness_record" in source
+    assert "validation_ready_at" in source
 
 
 def test_vllm_tasks_check_mode_aware_and_fail_closed():
@@ -100,6 +104,32 @@ def test_config_template_uses_cli_style_keys():
 def test_container_mode_requires_runtime_role():
     tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
     assert "container_runtime_enabled | bool" in tasks
+
+def test_vllm_runner_recovery_record_reflects_restart_provenance():
+    runner = (REPO_ROOT / "roles/vllm_xpu/files/vllm-xpu-runner.sh").read_text()
+    assert "restart_count_source" in runner
+    assert "service_invocation_id" in runner
+    assert "systemd:NRestarts" in runner
+    rec_tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
+    assert "restart_count_source" in rec_tasks
+
+
+def test_vllm_env_carries_readiness_and_expected_model():
+    env_tpl = (REPO_ROOT / "roles/vllm_xpu/templates/vllm.env.j2").read_text()
+    assert "READINESS_RECORD=" in env_tpl
+    assert "VLLM_XPU_EXPECTED_MODEL=" in env_tpl
+    assert "VLLM_READINESS_POLL_SECS=" in env_tpl
+    assert "VLLM_READINESS_TIMEOUT_SECS=" in env_tpl
+    defaults = load_yaml("roles/vllm_xpu/defaults/main.yml")
+    assert defaults["vllm_xpu_readiness_record"].endswith("/vllm_readiness.json")
+    assert defaults["vllm_xpu_readiness_probe"].endswith("/local-ai-vllm-readiness")
+
+
+def test_vllm_tasks_invoke_validator_with_readiness_record():
+    tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
+    assert "--readiness-record" in tasks
+    assert "vllm_xpu_readiness_record" in tasks
+
 
 def test_ai5820_vllm_is_lan_bound_and_authenticated():
     hostvars = load_yaml("inventory/production/host_vars/ai-5820-01.yml")

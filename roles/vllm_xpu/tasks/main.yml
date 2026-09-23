@@ -138,12 +138,38 @@
 - name: Create vLLM recovery evidence record owned by the service account
   ansible.builtin.copy:
     content: |
-      {"service":"vllm_xpu","event":"initialized","class":"none","stage_reached":"","exit_code":0,"restart_count":"0","terminal":false,"started_at":"","boot_id":""}
+      {"service":"vllm_xpu","event":"initialized","class":"none","stage_reached":"","exit_code":0,"restart_count":null,"restart_count_source":"uninitialized","restart_count_obtained_at":"","service_invocation_id":"","terminal":false,"started_at":"","boot_id":""}
     dest: "{{ vllm_xpu_recovery_record }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"
     mode: "0640"
+    force: false
   when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
+- name: Create vLLM readiness evidence record owned by the service account
+  ansible.builtin.copy:
+    content: |
+      {"schema_version":"1.0.0","service":"vllm_xpu","readiness_state":"initialized","process_started_at":"","health_ready_at":null,"model_ready_at":null,"validation_ready_at":null,"startup_duration":null,"model_identity":{"expected":"","observed":""},"tensor_parallel_size":{"expected":1,"observed":null},"boot_id":"","service_invocation_id":"","endpoint":"","probe_note":"record created by role; prober overwrites on next activation"}
+    dest: "{{ vllm_xpu_readiness_record }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_group }}"
+    mode: "0640"
+    force: false
+  when: vllm_xpu_install_enabled | bool
+  tags: [inference, runtime, vllm]
+
+- name: Install vLLM readiness prober
+  ansible.builtin.copy:
+    src: vllm-readiness-probe.sh
+    dest: "{{ vllm_xpu_readiness_probe }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart vLLM service
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_runtime_mode == 'container'
   tags: [inference, runtime, vllm]
 
 - name: Pin the exact container image reference by digest
@@ -229,7 +255,8 @@
           (vllm_xpu_profiles[vllm_xpu_active_profile]).tensor_parallel_size | string]
           + (['--model', vllm_xpu_model_id]
              if (vllm_xpu_model_id | default(none)) is not none else [])
-          + ['--output', vllm_xpu_validation_path] }}
+          + ['--output', vllm_xpu_validation_path]
+          + ['--readiness-record', vllm_xpu_readiness_record] }}
   environment:
     VLLM_API_KEY: "{{ vllm_xpu_api_key | default('') }}"
   register: vllm_xpu_live_validation_run

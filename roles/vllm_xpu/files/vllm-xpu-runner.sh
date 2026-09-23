@@ -15,6 +15,35 @@ MODEL_CACHE="/var/lib/local-ai/models"
 CDI_DEVICE="${CDI_DEVICE:-local-ai.intel/gpu=all}"
 BOOT_ID_FILE="/proc/sys/kernel/random/boot_id"
 RECOVERY_RECORD="${RECOVERY_RECORD:-/var/lib/aihost/evidence/vllm_recovery.json}"
+READINESS_RECORD="${READINESS_RECORD:-/var/lib/aihost/evidence/vllm_readiness.json}"
+READINESS_PROBE="${READINESS_PROBE:-/usr/local/libexec/local-ai-vllm-readiness}"
+# Captured at launch: readiness evidence anchors process_started_at here.
+PROCESS_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Authoritative restart source: systemd tracks on-failure auto-restarts for the
+# unit via its NRestarts property. This is the restart count for the CURRENT
+# service lifecycle; it resets on an intentional stop/start (verified
+# empirically). It is not a durable historical recovery-event counter.
+SYSTEMD_UNIT="${VLLM_SYSTEMD_UNIT:-vllm.service}"
+
+# Authoritative restart count for the current service lifecycle. Never returns a
+# fabricated 0: failures are surfaced as an explicit "unavailable" marker.
+read_restart_count() {
+    restart_count="null"
+    restart_count_source="unavailable"
+    restart_count_obtained_at="null"
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+    nr="$(systemctl show "$SYSTEMD_UNIT" -p NRestarts --value 2>/dev/null || true)"
+    case "$nr" in
+        ''|*[!0-9]*) : ;;
+        *)
+            restart_count="$nr"
+            restart_count_source="systemd:NRestarts"
+            restart_count_obtained_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            ;;
+    esac
+}
 
 log() {
     printf '%s vllm-xpu-runner: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
@@ -28,6 +57,8 @@ write_recovery_record() {
     if [ -r "$BOOT_ID_FILE" ]; then
         boot_id="$(cat "$BOOT_ID_FILE")"
     fi
+    read_restart_count
+    invocation_id="${INVOCATION_ID:-null}"
     record_dir="$(dirname "$RECOVERY_RECORD")"
     mkdir -p "$record_dir" 2>/dev/null || true
     # The record file is pre-created by the role owned by the service account,
@@ -40,7 +71,10 @@ write_recovery_record() {
         printf '  "class": "%s",\n' "$class"
         printf '  "stage_reached": "%s",\n' "$stage"
         printf '  "exit_code": %s,\n' "$exit_code"
-        printf '  "restart_count": "0",\n'
+        printf '  "restart_count": %s,\n' "$restart_count"
+        printf '  "restart_count_source": "%s",\n' "$restart_count_source"
+        printf '  "restart_count_obtained_at": "%s",\n' "$restart_count_obtained_at"
+        printf '  "service_invocation_id": "%s",\n' "$invocation_id"
         printf '  "terminal": %s,\n' "$terminal"
         printf '  "started_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         printf '  "boot_id": "%s"\n' "$boot_id"
@@ -91,6 +125,19 @@ export OMP_PROC_BIND=true
 export OMP_PLACES=cores
 
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-2}"
+
+# Spawn the readiness observer before exec: it survives the exec (separate
+# forked process), observes health/model readiness, and writes readiness
+# evidence. It shares the unit cgroup, so systemd kills it on stop/restart.
+# It is NOT in the systemd supervision path, so a slow/cold start can never
+# cause a restart loop from a probe failure.
+if [ -x "$READINESS_PROBE" ]; then
+    VLLM_XPU_EXPECTED_MODEL="${VLLM_XPU_EXPECTED_MODEL:-}"
+    VLLM_READINESS_POLL_SECS="${VLLM_READINESS_POLL_SECS:-10}"
+    VLLM_READINESS_TIMEOUT_SECS="${VLLM_READINESS_TIMEOUT_SECS:-1200}"
+    # shellcheck disable=SC2086
+    "$READINESS_PROBE" "$PROCESS_STARTED_AT" >/dev/null 2>&1 &
+fi
 
 # Strip redundant 'serve' or 'serve --config <path>' from $@ if passed from systemd ExecStart
 if [ "$#" -gt 0 ] && [ "$1" = "serve" ]; then

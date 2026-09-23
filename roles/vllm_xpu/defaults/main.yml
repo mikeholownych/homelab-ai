@@ -60,6 +60,8 @@ vllm_xpu_validation_path: "/var/lib/aihost/evidence/vllm_validation.json"
 vllm_xpu_validator: "/usr/local/libexec/local-ai-validate-vllm"
 vllm_xpu_evidence_dir: "/var/lib/aihost/evidence"
 vllm_xpu_recovery_record: "{{ vllm_xpu_evidence_dir }}/vllm_recovery.json"
+vllm_xpu_readiness_record: "{{ vllm_xpu_evidence_dir }}/vllm_readiness.json"
+vllm_xpu_readiness_probe: "/usr/local/libexec/local-ai-vllm-readiness"
 vllm_xpu_api_key_secret_path: "secret/local-ai/services/vllm/api-key"
 
 # Authenticated serving: when the service binds a non-loopback address, an API

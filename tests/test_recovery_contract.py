@@ -124,3 +124,65 @@ def test_vllm_env_pins_recovery_record_path():
     record = defaults["vllm_xpu_recovery_record"]
     assert "vllm_xpu_evidence_dir" in record
     assert record.endswith("/vllm_recovery.json")
+
+
+def test_restart_count_read_from_systemd_not_hardcoded():
+    launcher = (REPO_ROOT / "roles/vllm_xpu/files/vllm-xpu-runner.sh").read_text()
+    assert '"restart_count": "0"' not in launcher
+    assert "systemctl show" in launcher
+    assert "NRestarts" in launcher
+    assert "restart_count_source" in launcher
+    assert "restart_count_obtained_at" in launcher
+    # Failure to read the authoritative counter must surface, never fabricate 0
+    assert 'restart_count="null"' in launcher
+    assert 'restart_count_source="unavailable"' in launcher
+
+
+def test_recovery_policy_documents_restart_count_provenance():
+    policy = load_yaml("policies/lifecycle-recovery.yml")
+    rc = policy["restart_count"]
+    assert rc["source"] == "systemctl show {unit} -p NRestarts --value"
+    assert "current activation/lifecycle" in rc["scope"]
+    assert "never a silent 0" in rc["failure_behavior"]
+    assert "service_invocation_id" in rc["related_identity"]
+
+
+def test_readiness_evidence_contract_distinguishes_starting_from_ready():
+    policy = load_yaml("policies/lifecycle-recovery.yml")
+    ev = policy["readiness_evidence"]
+    assert ev["record"].endswith("/vllm_readiness.json")
+    assert set(ev["states"]) == {"STARTING", "READY", "STALLED"}
+    assert "health_ready_at" in ev["fields"]
+    assert "model_ready_at" in ev["fields"]
+    assert "validation_ready_at" in ev["fields"]
+    assert "startup_duration" in ev["fields"]
+    assert "model_identity" in ev["fields"]
+    assert "tensor_parallel_size" in ev["fields"]
+    assert "boot_id" in ev["fields"]
+    assert "service_invocation_id" in ev["fields"]
+
+
+def test_readiness_evidence_not_in_systemd_supervision_path():
+    ev = load_yaml("policies/lifecycle-recovery.yml")["readiness_evidence"]
+    assert "NOT in the systemd supervision path" in ev["observer"]
+    template = (REPO_ROOT / "roles/vllm_xpu/templates/vllm.service.j2").read_text()
+    # systemd must not invoke the readiness prober (would couple supervision to
+    # a probe and enable restart loops on slow cold starts).
+    probe = (REPO_ROOT / "roles/vllm_xpu/templates/vllm.service.j2").read_text()
+    assert "local-ai-vllm-readiness" not in probe
+    assert "ExecStartPre" not in template or "readiness" not in template
+
+
+def test_readiness_prober_written_by_launcher_and_precreated_for_writes():
+    launcher = (REPO_ROOT / "roles/vllm_xpu/files/vllm-xpu-runner.sh").read_text()
+    assert "local-ai-vllm-readiness" in launcher
+    assert "READINESS_RECORD" in launcher
+    prober = (REPO_ROOT / "roles/vllm_xpu/files/vllm-readiness-probe.sh").read_text()
+    assert "/health" in prober
+    assert "/v1/models" in prober
+    assert "READY" in prober
+    assert "STARTING" in prober
+    assert "STALLED" in prober
+    tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
+    assert "vllm_xpu_readiness_record" in tasks
+    assert "vllm-readiness-probe.sh" in tasks
