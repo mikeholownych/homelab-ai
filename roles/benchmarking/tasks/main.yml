@@ -21,7 +21,7 @@
     that:
       - benchmarking_harness_deployed.stat.exists
       - benchmarking_harness_deployed.stat.checksum ==
-        (lookup('ansible.builtin.file', role_path + '/files/run_benchmark.py') | hash('sha256'))
+        (lookup('ansible.builtin.file', role_path + '/files/run_benchmark.py', rstrip=false) | hash('sha256'))
     fail_msg: >-
       deployed benchmark harness does not match the repository source;
       refusing to continue toward benchmark execution.
