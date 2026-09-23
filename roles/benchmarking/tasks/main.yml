@@ -30,9 +30,9 @@
   ansible.builtin.file:
     path: "{{ benchmarking_evidence_dir }}"
     state: directory
-    owner: root
-    group: root
-    mode: "0750"
+  # Ownership/mode of the shared evidence root is owned by the evidence role;
+  # re-asserting root:root 0750 here would fight that role (and block the
+  # runtime account from traversing to its own pre-created recovery record).
   tags: [benchmark, operations]
 
 - name: Resolve scheduled benchmark profile split

@@ -26,8 +26,23 @@
   loop:
     - "{{ monitoring_log_dir }}"
     - "{{ monitoring_alert_log_dir }}"
-    - "{{ monitoring_config_dir }}"
     - "{{ monitoring_gpu_temp_state_dir }}"
+  when:
+    - monitoring_enabled | bool
+  tags: [monitoring, telemetry]
+
+- name: Create shared local-ai config root traversable by the runtime group
+  # /etc/local-ai is consumed by several roles (monitoring, vllm, llama.cpp,
+  # observability). The root-level runtime account (group render, e.g.
+  # aihost-runtime) must be able to traverse to its own per-role subdirectory,
+  # so the shared root is group-traversable; the per-role subdirectory and file
+  # modes still gate actual content.
+  ansible.builtin.file:
+    path: "{{ monitoring_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ host_runtime_account.group }}"
+    mode: "0750"
   when:
     - monitoring_enabled | bool
   tags: [monitoring, telemetry]

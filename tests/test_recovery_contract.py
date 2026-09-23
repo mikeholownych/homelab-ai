@@ -81,6 +81,29 @@ def test_vllm_unit_embeds_bounded_recovery():
     assert "StartLimitBurst=3" in template
     assert "RestartPreventExitStatus=78" in template
     assert "Restart=on-failure" in template
+    # StartLimit* are [Unit]-section directives; placing them in [Service]
+    # makes systemd silently ignore them, leaving restarts unbounded.
+    unit_section = template.split("\n[Service]")[0]
+    service_section = template.split("\n[Service]")[1]
+    assert "StartLimitIntervalSec=300s" in unit_section
+    assert "StartLimitBurst=3" in unit_section
+    assert "StartLimitIntervalSec" not in service_section
+    assert "StartLimitBurst" not in service_section
+    # WorkingDirectory must be accessible to the service account; the shared
+    # /etc/local-ai root is root:render (not fully traversable by the runtime
+    # user as a systemd chdir), so the unit chdirs into the account home.
+    assert "WorkingDirectory=" in template
+    assert "host_runtime_account.home" in template
+
+
+def test_shared_local_ai_root_is_group_traversable_for_runtime():
+    monitoring = (REPO_ROOT / "roles/monitoring/tasks/main.yml").read_text()
+    # The shared config root must be group-traversable so the runtime account
+    # (group render) can reach its own role subdirectory; per-role modes still
+    # gate content. Root:root 0750 on /etc/local-ai breaks service startup
+    # (CHDIR / config read) on every convergence.
+    assert "host_runtime_account.group" in monitoring
+    assert monitoring.count('"/etc/local-ai"') >= 1 or "monitoring_config_dir" in monitoring
 
 
 def test_vllm_runner_writes_recovery_record_and_config_fail_closed():

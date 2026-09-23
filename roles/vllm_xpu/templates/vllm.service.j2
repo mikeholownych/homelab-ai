@@ -2,23 +2,24 @@
 Description=vLLM Intel XPU OpenAI-Compatible Inference Server
 After=network.target
 Wants=network-online.target
+# Bounded recovery: at most StartLimitBurst start attempts within
+# StartLimitIntervalSec, then the unit enters the failed (terminal) state
+# instead of looping forever. exit 78 (config/prerequisite) is never
+# auto-restarted (RestartPreventExitStatus), so persistent config errors fail
+# closed. StartLimit* keys are [Unit] directives; Restart* are [Service].
+StartLimitIntervalSec=300s
+StartLimitBurst=3
 
 [Service]
 Type=simple
 User={{ vllm_xpu_user }}
 Group={{ vllm_xpu_user }}
 SupplementaryGroups={{ vllm_xpu_group }} video
-WorkingDirectory={{ vllm_xpu_config_dir }}
+WorkingDirectory={{ host_runtime_account.home }}
 EnvironmentFile={{ vllm_xpu_env_file }}
 ExecStart=/usr/local/bin/vllm-xpu-runner serve --config {{ vllm_xpu_config_file }}
 Restart=on-failure
 RestartSec=10s
-# Bounded recovery: at most StartLimitBurst on-failure restarts within
-# StartLimitIntervalSec, then the unit enters the failed (terminal) state
-# instead of looping forever. exit 78 (config/prerequisite) is never
-# auto-restarted, so persistent config errors fail closed.
-StartLimitIntervalSec=300s
-StartLimitBurst=3
 RestartPreventExitStatus=78
 TimeoutStartSec=600s
 TimeoutStopSec=60s
