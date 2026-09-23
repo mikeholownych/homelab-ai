@@ -18,6 +18,7 @@ HOST="${VLLM_HOST:-127.0.0.1}"
 [ "$HOST" = "0.0.0.0" ] && HOST="127.0.0.1"
 PORT="${VLLM_PORT:-8000}"
 ENDPOINT="http://$HOST:$PORT"
+SYSTEMD_UNIT="${VLLM_SYSTEMD_UNIT:-vllm.service}"
 EXPECTED_MODEL="${VLLM_XPU_EXPECTED_MODEL:-}"
 API_KEY="${VLLM_API_KEY:-}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
@@ -29,7 +30,19 @@ boot_id="unknown"
 if [ -r "$BOOT_ID_FILE" ]; then
     boot_id="$(cat "$BOOT_ID_FILE")"
 fi
-invocation_id="${INVOCATION_ID:-unknown}"
+invocation_id=""
+
+read_invocation_id() {
+    candidate=""
+    if command -v systemctl >/dev/null 2>&1; then
+        candidate="$(systemctl show "$SYSTEMD_UNIT" -p InvocationID --value 2>/dev/null || true)"
+    fi
+    case "$candidate" in
+        ''|*[!0123456789abcdefABCDEF]*) candidate="" ;;
+    esac
+    [ "${#candidate}" -eq 32 ] || candidate=""
+    invocation_id="$candidate"
+}
 
 log() {
     printf '%s vllm-readiness-probe: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1"
@@ -104,6 +117,12 @@ expected_model_present() {
 }
 
 log "observing readiness for $ENDPOINT (expected model '$EXPECTED_MODEL')"
+read_invocation_id
+if [ -z "$invocation_id" ]; then
+    log "stalled: authoritative InvocationID unavailable for $SYSTEMD_UNIT"
+    write_record "STALLED" "null" "null" "" "SERVICE_INVOCATION_ID_UNAVAILABLE"
+    exit 1
+fi
 write_record "STARTING" "null" "null" ""
 
 deadline=$(( $(date -u +%s) + TIMEOUT_SECS ))
