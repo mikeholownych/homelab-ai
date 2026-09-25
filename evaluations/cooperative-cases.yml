@@ -1,0 +1,50 @@
+schema_version: "1.0.0"
+experiment: t5820-cooperative-contracts
+network_access: false
+production_credentials: false
+active_b0_access: false
+cases:
+  - id: navigation-success
+    category: repository-navigation
+    expected: validated
+    validator: contract-identity-and-scope
+  - id: unsupported-capability
+    category: capability-routing
+    expected: unsupported
+    validator: no-worker-eligible
+  - id: stale-observation
+    category: stale-context
+    expected: blocked
+    validator: commit-mismatch
+  - id: malformed-handoff
+    category: cooperation-integrity
+    expected: rejected
+    validator: source-observations-required
+  - id: unavailable-validator
+    category: validator-failure
+    expected: blocked
+    validator: validator-health
+  - id: revoked-authority
+    category: authorization
+    expected: blocked
+    validator: authority-revocation
+  - id: worker-failure-recovery
+    category: worker-reliability
+    expected: validated
+    validator: healthy-worker-recovery
+  - id: timeout
+    category: resource-bounds
+    expected: blocked
+    validator: deadline
+  - id: cancellation
+    category: cancellation
+    expected: blocked
+    validator: cancellation-state
+  - id: retry-limit
+    category: retry-safety
+    expected: blocked
+    validator: retry-budget
+  - id: malicious-model-output
+    category: prompt-injection
+    expected: validated
+    validator: authority-scope-immutability
