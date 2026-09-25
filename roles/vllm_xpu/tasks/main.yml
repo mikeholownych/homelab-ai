@@ -135,6 +135,18 @@
     - vllm_xpu_runtime_mode == 'container'
   tags: [inference, runtime, vllm]
 
+- name: Install vLLM container cleanup hook
+  ansible.builtin.copy:
+    src: vllm-xpu-cleanup.sh
+    dest: /usr/local/bin/vllm-xpu-cleanup
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_runtime_mode == 'container'
+  tags: [inference, runtime, vllm]
+
 - name: Create vLLM recovery evidence record owned by the service account
   ansible.builtin.copy:
     content: |

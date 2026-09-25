@@ -87,6 +87,10 @@ def test_container_launcher_is_real_and_digest_pinned():
     assert "@sha256:" in source  # refuses mutable tags at runtime
     assert "eval " not in source
     assert "serve --config" in source
+    assert 'CONTAINER_NAME="${VLLM_CONTAINER_NAME:-vllm-xpu}"' in source
+    assert '"$CONTAINER_NAME"' in source
+    assert 'CONFIG_FILE="${VLLM_CONFIG_FILE:-$VLLM_CONFIG_DIR/vllm-config.yaml}"' in source
+    assert 'ENV_FILE="${VLLM_ENV_FILE:-$VLLM_CONFIG_DIR/vllm.env}"' in source
     tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
     assert "/usr/local/bin/vllm-xpu-runner" in tasks
     assert "image-ref" in tasks  # digest pin rendered to disk
@@ -129,7 +133,6 @@ def test_vllm_tasks_invoke_validator_with_readiness_record():
     tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
     assert "--readiness-record" in tasks
     assert "vllm_xpu_readiness_record" in tasks
-
 
 def test_ai5820_vllm_is_lan_bound_and_authenticated():
     hostvars = load_yaml("inventory/production/host_vars/ai-5820-01.yml")

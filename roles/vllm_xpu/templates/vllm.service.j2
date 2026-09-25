@@ -17,12 +17,16 @@ Group={{ vllm_xpu_user }}
 SupplementaryGroups={{ vllm_xpu_group }} video
 WorkingDirectory={{ host_runtime_account.home }}
 EnvironmentFile={{ vllm_xpu_env_file }}
+Environment=VLLM_RUNTIME_BIN=podman
 ExecStart=/usr/local/bin/vllm-xpu-runner serve --config {{ vllm_xpu_config_file }}
 Restart=on-failure
 RestartSec=10s
 RestartPreventExitStatus=78
 TimeoutStartSec=600s
 TimeoutStopSec=60s
+KillMode=control-group
+SendSIGKILL=yes
+ExecStopPost=/usr/local/bin/vllm-xpu-cleanup
 LimitNOFILE=65536
 LimitMEMLOCK=infinity
 StandardOutput=append:{{ vllm_xpu_log_dir }}/vllm.log

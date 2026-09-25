@@ -8,10 +8,10 @@
 set -eu
 
 VLLM_CONFIG_DIR="/etc/local-ai/vllm"
-IMAGE_REF_FILE="$VLLM_CONFIG_DIR/image-ref"
-CONFIG_FILE="$VLLM_CONFIG_DIR/vllm-config.yaml"
-ENV_FILE="$VLLM_CONFIG_DIR/vllm.env"
-MODEL_CACHE="/var/lib/local-ai/models"
+IMAGE_REF_FILE="${VLLM_IMAGE_REF_FILE:-$VLLM_CONFIG_DIR/image-ref}"
+CONFIG_FILE="${VLLM_CONFIG_FILE:-$VLLM_CONFIG_DIR/vllm-config.yaml}"
+ENV_FILE="${VLLM_ENV_FILE:-$VLLM_CONFIG_DIR/vllm.env}"
+MODEL_CACHE="${VLLM_MODEL_CACHE:-/var/lib/local-ai/models}"
 CDI_DEVICE="${CDI_DEVICE:-local-ai.intel/gpu=all}"
 BOOT_ID_FILE="/proc/sys/kernel/random/boot_id"
 RECOVERY_RECORD="${RECOVERY_RECORD:-/var/lib/aihost/evidence/vllm_recovery.json}"
@@ -92,7 +92,9 @@ done
 
 IMAGE_REF="$(cat "$IMAGE_REF_FILE")"
 
-if command -v docker >/dev/null 2>&1; then
+if [ -n "${VLLM_RUNTIME_BIN:-}" ]; then
+    RUNTIME_BIN="$VLLM_RUNTIME_BIN"
+elif command -v docker >/dev/null 2>&1; then
     RUNTIME_BIN=docker
 elif command -v podman >/dev/null 2>&1; then
     RUNTIME_BIN=podman
@@ -125,18 +127,50 @@ export OMP_PROC_BIND=true
 export OMP_PLACES=cores
 
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-2}"
+CONTAINER_NAME="${VLLM_CONTAINER_NAME:-vllm-xpu}"
 
-# Spawn the readiness observer before exec: it survives the exec (separate
-# forked process), observes health/model readiness, and writes readiness
-# evidence. It shares the unit cgroup, so systemd kills it on stop/restart.
-# It is NOT in the systemd supervision path, so a slow/cold start can never
-# cause a restart loop from a probe failure.
+# Spawn the readiness observer before starting the container. The launcher stays
+# as the systemd main process so it can reap the observer and stop it if the
+# container exits. It is NOT in the systemd supervision path, so a slow/cold
+# start can never cause a restart loop from a probe failure.
+READINESS_PID=""
+reap_readiness() {
+    if [ -z "$READINESS_PID" ]; then
+        return 0
+    fi
+    readiness_state="$(ps -o stat= -p "$READINESS_PID" 2>/dev/null | tr -d ' ')"
+    case "$readiness_state" in
+        ''|Z*)
+            wait "$READINESS_PID" 2>/dev/null || true
+            READINESS_PID=""
+            ;;
+    esac
+}
+trap reap_readiness CHLD
+
+CONTAINER_PID=""
+cleanup() {
+    status="$?"
+    trap - EXIT INT TERM CHLD
+    if [ -n "$CONTAINER_PID" ] && kill -0 "$CONTAINER_PID" 2>/dev/null; then
+        kill "$CONTAINER_PID" 2>/dev/null || true
+        wait "$CONTAINER_PID" 2>/dev/null || true
+    fi
+    if [ -n "$READINESS_PID" ]; then
+        kill "$READINESS_PID" 2>/dev/null || true
+        wait "$READINESS_PID" 2>/dev/null || true
+    fi
+    exit "$status"
+}
+trap cleanup EXIT INT TERM
+
 if [ -x "$READINESS_PROBE" ]; then
-    VLLM_XPU_EXPECTED_MODEL="${VLLM_XPU_EXPECTED_MODEL:-}"
-    VLLM_READINESS_POLL_SECS="${VLLM_READINESS_POLL_SECS:-10}"
-    VLLM_READINESS_TIMEOUT_SECS="${VLLM_READINESS_TIMEOUT_SECS:-1200}"
+    export VLLM_XPU_EXPECTED_MODEL="${VLLM_XPU_EXPECTED_MODEL:-}"
+    export VLLM_READINESS_POLL_SECS="${VLLM_READINESS_POLL_SECS:-10}"
+    export VLLM_READINESS_TIMEOUT_SECS="${VLLM_READINESS_TIMEOUT_SECS:-1200}"
     # shellcheck disable=SC2086
     "$READINESS_PROBE" "$PROCESS_STARTED_AT" >/dev/null 2>&1 &
+    READINESS_PID="$!"
 fi
 
 # Strip redundant 'serve' or 'serve --config <path>' from $@ if passed from systemd ExecStart
@@ -158,9 +192,9 @@ if [ "$RUNTIME_BIN" = "podman" ]; then
 fi
 
 # shellcheck disable=SC2086
-exec "$RUNTIME_BIN" run \
+"$RUNTIME_BIN" run \
     --rm \
-    --name vllm-xpu \
+    --name "$CONTAINER_NAME" \
     --network host \
     --ipc host \
     --security-opt no-new-privileges \
@@ -178,4 +212,11 @@ exec "$RUNTIME_BIN" run \
     -v "$MODEL_CACHE":/models:rw \
     --entrypoint vllm \
     "$IMAGE_REF" \
-    serve --config /cfg/vllm-config.yaml --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" "$@"
+    serve --config /cfg/vllm-config.yaml --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" "$@" &
+CONTAINER_PID="$!"
+if wait "$CONTAINER_PID"; then
+    CONTAINER_STATUS=0
+else
+    CONTAINER_STATUS="$?"
+fi
+exit "$CONTAINER_STATUS"
