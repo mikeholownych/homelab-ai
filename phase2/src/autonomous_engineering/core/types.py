@@ -1,0 +1,81 @@
+"""Core enums and typed invariants for the autonomous engineering system."""
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class WorkOrderState(StrEnum):
+    DRAFT = "DRAFT"
+    AMBIGUOUS = "AMBIGUOUS"
+    ADMITTED = "ADMITTED"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    PLANNING = "PLANNING"
+    EXECUTING = "EXECUTING"
+    VALIDATING = "VALIDATING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    SUPERSEDED = "SUPERSEDED"
+    FAILED_BUDGET_EXHAUSTED = "FAILED_BUDGET_EXHAUSTED"
+    FAILED_SECURITY_VIOLATION = "FAILED_SECURITY_VIOLATION"
+
+
+class TaskStepState(StrEnum):
+    PENDING = "PENDING"
+    READY = "READY"
+    DISPATCHED = "DISPATCHED"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    SUPERSEDED = "SUPERSEDED"
+    EXPIRED = "EXPIRED"
+
+
+class WorkerHealthStatus(StrEnum):
+    HEALTHY = "HEALTHY"
+    DEGRADED = "DEGRADED"
+    OFFLINE = "OFFLINE"
+
+
+class ValidationStatus(StrEnum):
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+
+
+class FailureClass(StrEnum):
+    ASSERTION_ERROR = "ASSERTION_ERROR"
+    TEST_COLLECTION_ERROR = "TEST_COLLECTION_ERROR"
+    SYNTAX_OR_COMPILATION_ERROR = "SYNTAX_OR_COMPILATION_ERROR"
+    SCOPE_VIOLATION = "SCOPE_VIOLATION"
+    CAPABILITY_EXPIRED_OR_REVOKED = "CAPABILITY_EXPIRED_OR_REVOKED"
+    STALE_FENCING_TOKEN = "STALE_FENCING_TOKEN"
+    MALFORMED_OUTPUT = "MALFORMED_OUTPUT"
+    TIMEOUT = "TIMEOUT"
+    ENVIRONMENT_ERROR = "ENVIRONMENT_ERROR"
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+    SUPERSEDED = "SUPERSEDED"
+    REVIEW_DEFECT_DETECTED = "REVIEW_DEFECT_DETECTED"
+
+
+class TaskRole(StrEnum):
+    INVESTIGATION = "investigation"
+    TEST_DEVELOPMENT = "test_development"
+    IMPLEMENTATION = "implementation"
+    DEFECT_PATCH = "defect_patch"
+    INDEPENDENT_REVIEW = "independent_review"
+    BOUNDED_REPAIR = "bounded_repair"
+    INDEPENDENT_VALIDATION = "independent_validation"
+
+
+class ArtifactType(StrEnum):
+    PATCH = "patch"
+    TEST_REPORT = "test_report"
+    REVIEW = "review"
+    REVIEW_REPORT = "review_report"
+    LOG = "log"
+    REPRODUCTION_SCRIPT = "reproduction_script"
+    VALIDATION_VERDICT = "validation_verdict"
+
+
+class AmbiguityStatus(StrEnum):
+    UNRESOLVED = "UNRESOLVED"
+    HUMAN_RESOLVED = "HUMAN_RESOLVED"
+    COMPILER_DEFAULTED = "COMPILER_DEFAULTED"
