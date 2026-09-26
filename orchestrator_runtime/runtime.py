@@ -177,12 +177,18 @@ class OpenAIProviderAdapter:
         )
         try:
             with urllib.request.urlopen(http_request, timeout=timeout) as response:
+                provider_status = response.status
                 body = json.loads(response.read().decode())
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as error:
             raise RuntimeError(f"provider request failed: {error}") from error
         choice = (body.get("choices") or [{}])[0]
         message = choice.get("message") or {}
-        return {"content": message.get("content", ""), "tool_calls": message.get("tool_calls", [])}
+        return {
+            "content": message.get("content", ""),
+            "tool_calls": message.get("tool_calls", []),
+            "provider_status": provider_status,
+            "provider_finish_reason": choice.get("finish_reason"),
+        }
 
 
 @dataclass
@@ -264,12 +270,13 @@ class GraphScheduler:
 
 
 class OrchestratorRuntime:
-    def __init__(self, registry: CapabilityRegistry, adapters: dict[str, ProviderAdapter], evidence: EvidenceStore, *, max_body_bytes: int = 1_000_000, validator: Any | None = None) -> None:
+    def __init__(self, registry: CapabilityRegistry, adapters: dict[str, ProviderAdapter], evidence: EvidenceStore, *, max_body_bytes: int = 1_000_000, validator: Any | None = None, diagnostic_lineage: bool = False) -> None:
         self.registry = registry
         self.adapters = adapters
         self.evidence = evidence
         self.max_body_bytes = max_body_bytes
         self.validator = validator
+        self.diagnostic_lineage = diagnostic_lineage
 
     def complete(self, request: dict[str, Any], *, capabilities: frozenset[str] = frozenset({"navigation"}), timeout: float = 60.0) -> dict[str, Any]:
         request_id = request.get("request_id") or str(uuid.uuid4())
@@ -300,13 +307,30 @@ class OrchestratorRuntime:
         if self.validator is not None and not self.validator(output):
             self.evidence.append("response_rejected", request_id=request_id, worker_id=worker.worker_id, failure_class="external_validation")
             return {"status": "blocked", "failure_class": "external_validation", "request_id": request_id}
+        tool_calls = output.get("tool_calls", [])
+        normalized_finish_reason = "tool_calls" if tool_calls else "stop"
         response = {
             "id": "chatcmpl-" + request_id.replace("-", "")[:24],
             "object": "chat.completion",
             "created": int(time.time()),
             "model": worker.public_model_id,
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": output.get("content", ""), "tool_calls": output.get("tool_calls", [])}, "finish_reason": "stop"}],
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": output.get("content", ""), "tool_calls": tool_calls}, "finish_reason": normalized_finish_reason}],
         }
+        if self.diagnostic_lineage:
+            self.evidence.append(
+                "response_lineage",
+                request_id=request_id,
+                worker_id=worker.worker_id,
+                model_id=worker.model_id,
+                provider_status=output.get("provider_status"),
+                provider_finish_reason=output.get("provider_finish_reason"),
+                tool_call_count=len(tool_calls),
+                tool_calls=[
+                    {"id": call.get("id"), "name": (call.get("function") or {}).get("name")}
+                    for call in tool_calls
+                ],
+                normalized_finish_reason=normalized_finish_reason,
+            )
         self.evidence.append("response_validated", request_id=request_id, worker_id=worker.worker_id, elapsed_ms=round((time.monotonic() - started) * 1000, 3), response_hash=_hash(response))
         return {"status": "ok", "request_id": request_id, "response": response}
 

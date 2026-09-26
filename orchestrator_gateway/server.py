@@ -68,9 +68,15 @@ def create_gateway(runtime: OrchestratorRuntime, client_token: str, *, max_body_
                 self.send_header("X-Request-ID", request_id)
                 self.end_headers()
                 choice = response["choices"][0]
-                delta = {"role": "assistant", "content": choice["message"].get("content", "")}
+                message = choice["message"]
+                delta = {"role": "assistant"}
+                for key in ("content", "reasoning_content", "tool_calls"):
+                    if message.get(key):
+                        delta[key] = message[key]
                 event = {"id": response["id"], "object": "chat.completion.chunk", "model": response["model"], "choices": [{"index": 0, "delta": delta, "finish_reason": None}]}
                 self.wfile.write(f"data: {json.dumps(event, separators=(',', ':'))}\n\n".encode())
+                finish = {"id": response["id"], "object": "chat.completion.chunk", "model": response["model"], "choices": [{"index": 0, "delta": {}, "finish_reason": choice.get("finish_reason", "stop")}]}
+                self.wfile.write(f"data: {json.dumps(finish, separators=(',', ':'))}\n\n".encode())
                 self.wfile.write(b"data: [DONE]\n\n")
                 return
             self._send(HTTPStatus.OK, result["response"], request_id)

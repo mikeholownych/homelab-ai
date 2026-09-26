@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -10,6 +11,7 @@ from orchestrator_runtime import (
     EvidenceStore,
     GraphScheduler,
     InMemoryAdapter,
+    OpenAIProviderAdapter,
     OrchestratorRuntime,
     TaskGraph,
     WorkerRecord,
@@ -91,8 +93,137 @@ def test_runtime_returns_openai_shape_for_one_worker(tmp_path):
     )
 
     assert result["status"] == "ok"
-    assert result["response"]["choices"][0]["message"]["content"] == "hello"
+    choice = result["response"]["choices"][0]
+    assert choice["message"]["content"] == "hello"
+    assert choice["finish_reason"] == "stop"
     assert result["response"]["model"] == "engineering/ready"
+
+
+def test_runtime_reports_tool_call_finish_reason(tmp_path):
+    class ToolCallAdapter:
+        def complete(self, request, timeout):
+            return {
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read", "arguments": "{}"},
+                    }
+                ],
+            }
+
+    registry = CapabilityRegistry([worker("ready")])
+    runtime = OrchestratorRuntime(
+        registry,
+        {"ready": ToolCallAdapter()},
+        EvidenceStore(tmp_path / "evidence.jsonl"),
+    )
+
+    result = runtime.complete(
+        {"model": "engineering/ready", "messages": [{"role": "user", "content": "hi"}]}
+    )
+
+    choice = result["response"]["choices"][0]
+    assert choice["message"]["tool_calls"] == [
+        {
+            "id": "call-1",
+            "type": "function",
+            "function": {"name": "read", "arguments": "{}"},
+        }
+    ]
+    assert choice["finish_reason"] == "tool_calls"
+
+
+def test_runtime_records_opt_in_response_lineage_without_arguments(tmp_path):
+    class ToolCallAdapter:
+        def complete(self, request, timeout):
+            return {
+                "content": "",
+                "provider_status": 200,
+                "provider_finish_reason": "tool_calls",
+                "tool_calls": [
+                    {
+                        "id": "call-1",
+                        "type": "function",
+                        "function": {"name": "read", "arguments": '{"path":"private"}'},
+                    }
+                ],
+            }
+
+    evidence = EvidenceStore(tmp_path / "evidence.jsonl")
+    runtime = OrchestratorRuntime(
+        CapabilityRegistry([worker("ready")]),
+        {"ready": ToolCallAdapter()},
+        evidence,
+        diagnostic_lineage=True,
+    )
+
+    runtime.complete(
+        {
+            "request_id": "request-1",
+            "model": "engineering/ready",
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+    )
+
+    lineage = next(record for record in evidence.records() if record["event"] == "response_lineage")
+    assert lineage == {
+        **{key: lineage[key] for key in ("evidence_id", "recorded_at", "previous_hash", "record_hash")},
+        "event": "response_lineage",
+        "request_id": "request-1",
+        "worker_id": "ready",
+        "model_id": "model/ready",
+        "provider_status": 200,
+        "provider_finish_reason": "tool_calls",
+        "tool_call_count": 1,
+        "tool_calls": [{"id": "call-1", "name": "read"}],
+        "normalized_finish_reason": "tool_calls",
+    }
+    assert "private" not in json.dumps(lineage)
+
+
+def test_provider_adapter_captures_safe_response_metadata(monkeypatch):
+    tool_call = {
+        "id": "provider-call-1",
+        "type": "function",
+        "function": {"name": "read", "arguments": "{}"},
+    }
+
+    class Response:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "finish_reason": "tool_calls",
+                            "message": {"content": "", "tool_calls": [tool_call]},
+                        }
+                    ]
+                }
+            ).encode()
+
+    monkeypatch.setattr("orchestrator_runtime.runtime.urllib.request.urlopen", lambda *args, **kwargs: Response())
+
+    output = OpenAIProviderAdapter("http://provider", "token").complete(
+        {"messages": [{"role": "user", "content": "hi"}]},
+        timeout=1,
+    )
+
+    assert output == {
+        "content": "",
+        "tool_calls": [tool_call],
+        "provider_status": 200,
+        "provider_finish_reason": "tool_calls",
+    }
 
 
 def test_scheduler_runs_dependency_gated_graph_in_order():

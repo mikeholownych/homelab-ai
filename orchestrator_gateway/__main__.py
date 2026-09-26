@@ -38,6 +38,7 @@ def main() -> None:
         registry,
         {worker_id: OpenAIProviderAdapter(worker_endpoint, worker_token)},
         EvidenceStore(os.environ.get("ORCHESTRATOR_EVIDENCE_PATH", "orchestrator-evidence.jsonl")),
+        diagnostic_lineage=os.environ.get("ORCHESTRATOR_DIAGNOSTIC_LINEAGE") == "true",
     )
     host = os.environ.get("ORCHESTRATOR_HOST", "127.0.0.1")
     port = int(os.environ.get("ORCHESTRATOR_PORT", "8010"))
