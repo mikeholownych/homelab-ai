@@ -1,0 +1,68 @@
+================================================================================
+AUTONOMOUS ENGINEERING SYSTEM: PHASE 6 DEMONSTRATION
+Real-Repository Adoption, Sustained Operations & Controlled Delivery
+================================================================================
+
+[Step 1] Auditing protected T5820 autonomous-readiness campaign processes...
+  PID     986: ACTIVE & UNDISTURBED (/home/mike/Projects/hermes-agent/.venv/bin/python -m hermes_)
+  PID 3130937: ACTIVE & UNDISTURBED (opencode --auto )
+  PID 2093382: ACTIVE & UNDISTURBED (/usr/bin/ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=)
+  Isolation Audit: VERIFIED PASSED
+
+[Step 2] Auditing live serving topology & hardware resource feasibility...
+  Physical Endpoint: http://127.0.0.1:18010/v1
+  Physical Model:    engineering/b0 (Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit)
+  Physical VRAM:     2 x 15.94 GiB = 31.89 GiB total across two Arc B65 GPUs
+  Phi-4 FP8 Audit:   Absence verified. VRAM requirement (24.5 + 15.2 = 39.7 GiB > 31.89 GiB)
+  Operating Mode:    Live Physical Author (Qwen3-Coder AWQ) + Calibrated Review Adapter
+
+[Step 3] Performing Repository AST Investigation on target codebase...
+  Files Investigated: 2
+    - orchestrator_gateway/server.py: 5 LOC, funcs: ['format_headers', 'validate_request'], classes: []
+    - orchestrator_contract/core.py: 2 LOC, funcs: ['parse_contract_spec'], classes: []
+  Related Tests:      ['tests/test_orchestrator_gateway.py', 'tests/test_contract_validation.py']
+  Investigation Hash: 96b37c87a9dfde8a9f19...
+
+[Step 4] Starting Persistent Engineering Service & Queue...
+  Service Daemon:     ACTIVE (Background Worker Thread)
+
+[Step 5] Enqueueing & Executing 4-Task Real-Repository Cohort...
+  Enqueued & Admitted: real-repo-dr-01  | Paths: ['orchestrator_gateway/server.py']
+  Enqueued & Admitted: real-repo-mf-02  | Paths: ['orchestrator_gateway/server.py', 'orchestrator_contract/core.py']
+  Enqueued & Admitted: real-repo-td-03  | Paths: ['tests/test_orchestrator_gateway.py']
+  Enqueued & Admitted: real-repo-mt-04  | Paths: ['orchestrator_contract/core.py']
+
+  Cohort Processing Completed. Authoritative Dispositions:
+    real-repo-dr-01  -> State: ACCEPTED     | Disposition: VALIDATION_ACCEPTED
+    real-repo-mf-02  -> State: ACCEPTED     | Disposition: VALIDATION_ACCEPTED
+    real-repo-td-03  -> State: ACCEPTED     | Disposition: VALIDATION_ACCEPTED
+    real-repo-mt-04  -> State: ACCEPTED     | Disposition: VALIDATION_ACCEPTED
+  Persistent Service Daemon gracefully stopped.
+
+[Step 6] Exporting CAS Deliverable Bundles & Integration Guides...
+  Bundle for real-repo-dr-01:
+    CAS Hash:       c6f9849bd98de02d7fff...
+    Export Path:    /tmp/tmpgqlhz6sb/exports/real-repo-dr-01
+    Guide Header:   # Human Integration & Verification Guide | **Work Order**: `real-repo-dr-01` (Version 1)
+  Bundle for real-repo-mf-02:
+    CAS Hash:       17dd6a20886c9e7a3b00...
+    Export Path:    /tmp/tmpgqlhz6sb/exports/real-repo-mf-02
+    Guide Header:   # Human Integration & Verification Guide | **Work Order**: `real-repo-mf-02` (Version 1)
+  Bundle for real-repo-td-03:
+    CAS Hash:       5e3807f13dd299a0101e...
+    Export Path:    /tmp/tmpgqlhz6sb/exports/real-repo-td-03
+    Guide Header:   # Human Integration & Verification Guide | **Work Order**: `real-repo-td-03` (Version 1)
+  Bundle for real-repo-mt-04:
+    CAS Hash:       62b0665c5ac9e2c8defb...
+    Export Path:    /tmp/tmpgqlhz6sb/exports/real-repo-mt-04
+    Guide Header:   # Human Integration & Verification Guide | **Work Order**: `real-repo-mt-04` (Version 1)
+
+[Step 7] Testing Dynamic Work-Order Scope Restriction & Fencing Protection...
+  Work Order v1 superseded by v2 (scope restricted to orchestrator_gateway/server.py).
+  Active v1 leases invalidated via supervisor authority.
+  Fencing Protection Confirmed: Stale commit rejected -> Cannot commit result: assignment asgn-wo-rev-demo-v1-step-initial was superseded
+
+================================================================================
+PHASE 6 REAL-REPOSITORY DEMONSTRATION COMPLETE: ALL SYSTEMS PROVEN
+Terminal Disposition: PHASE_6_REAL_REPOSITORY_ENGINEERING: PROVEN
+================================================================================
