@@ -1,0 +1,85 @@
+================================================================================
+  PHASE 8: CONTROLLED AUTONOMOUS ENGINEERING OPERATIONALIZATION DEMO
+================================================================================
+
+================================================================================
+  1. Protected Process Isolation Audit
+================================================================================
+  [PASS] PID     986 (Hermes Gateway      ): ACTIVE -> /home/mike/Projects/hermes-agent/.venv/bin/python -m hermes_...
+  [PASS] PID 3130937 (OpenCode Runner     ): ACTIVE -> opencode --auto...
+  [PASS] PID 2093382 (SSH Tunnel to T5820 ): ACTIVE -> /usr/bin/ssh -N -T -o BatchMode=yes -o ExitOnForwardFailure=...
+  -> Result: Protected processes verified untouched and operational.
+
+================================================================================
+  2. Dual-TP=1 Serving Topology Audit
+================================================================================
+  Auditing host configuration and gateway routing:
+  - Target Host: 10.0.8.5 (Dell Precision 5820 Tower)
+  - Physical GPUs: 2x Intel Arc Pro B65 (16 GB VRAM each)
+  - Worker 1: Container vllm-xpu-tp1-worker1 (ZE_AFFINITY_MASK=0, port 8000, TP=1)
+  - Worker 2: Container vllm-xpu-tp1-worker2 (ZE_AFFINITY_MASK=1, port 8001, TP=1)
+  - Gateway:  orchestrator_gateway (PID 742882 on 10.0.8.5:8010)
+  - Model ID: engineering/b0 (Qwen3-Coder 30B AWQ)
+  - Local Forwarding: Port 18010 via SSH tunnel PID 2093382
+  - Health Probe: HTTP 200 -> {"object":"list","data":[{"id":"engineering/b0","object":"model",...
+  -> Result: Dual-TP=1 serving topology confirmed healthy and authenticated.
+
+================================================================================
+  3. Repository Onboarding, Contracts & Scope Authority
+================================================================================
+  - Successfully onboarded repository 'aihost-core' (Baseline: 512543a).
+  Testing scope enforcement:
+  - [PASS] Path 'orchestrator_gateway/server.py' permitted.
+  - [PASS] ScopeBoundaryError caught as expected: Path 'other/unauthorized.py' is outside authorized mutation paths: ('orchestrator_gateway', 'orchestrator_runtime')
+  - [PASS] ProtectedPathViolationError caught as expected: Proposed mutation path 'github/workflows/deploy.yml' violates protected repository path rule '.github'.
+  - [PASS] Path traversal caught as expected: Path 'orchestrator_gateway/../../etc/shadow' contains prohibited path traversal, root, or home reference.
+
+================================================================================
+  4. Multi-Repository Orchestration, Dependency DAG & Cycle Detection
+================================================================================
+  Testing dependency graph cycle detection:
+  - Registered task-1 -> task-2 successfully.
+  - [PASS] DependencyCycleError caught as expected: Registering task 'B' with dependencies {'A'} creates a cyclic dependency.
+  Testing multi-repository path conflict isolation:
+  - Repo A path lock conflict check: can_acquire=False, conflicts=['server.py']
+  - Repo B independent check on 'server.py': can_acquire=True, conflicts=[]
+  -> Result: Multi-repo path isolation and dependency DAG verified.
+
+================================================================================
+  5. Independent Engineering Acceptance & Anti-Tampering
+================================================================================
+  Testing validator anti-tampering defense:
+  - [PASS] ValidatorTamperingError caught: Patch attempts to modify protected validator definition 'validators/acceptance.py'.
+  Executing independent validation against clean proposed tree:
+  - Verdict ID: verdict-wo-demo-01-v1
+  - Validation Status: ACCEPTED
+  - Tree Hash: 2dea7aa01804db1a...
+  - CAS Artifact: 569fc768182589c94be1a98772aa85b5fef3f21699c809b4b74040dd39b18ea5
+  -> Result: Independent acceptance separation and verification proven.
+
+================================================================================
+  6. Controlled Pull Request Delivery & Staged Authority Gate
+================================================================================
+[main (root-commit) 6466613] initial baseline
+ 1 file changed, 1 insertion(+)
+ create mode 100644 server.py
+branch 'main' set up to track 'origin/main'.
+  - Prepared deliverable: Stage = AUTHORIZATION_PENDING
+  Testing unauthorized delivery block:
+  - [PASS] UnauthorizedDeliveryError caught: Cannot publish PR for work order 'wo-pr-demo': delivery not authorized (current stage: DeliveryStage.AUTHORIZATION_PENDING).
+  Authorizing delivery with human authorization record:
+  - Recorded Authorization auth-demo-ok. Stage = DELIVERY_AUTHORIZED
+  Publishing real Pull Request to test upstream bare repository:
+  - Created Delivery Branch: delivery/wo-wo-pr-demo
+  - Published Commit Hash:  49e665c97a28b2dc618d846bc4b379a091160fe0
+  - Target Branch:           main
+  - Stage:                   HUMAN_REVIEW_PENDING
+  - PR URL / Identifier:     /tmp/tmptxh2_dyx/upstream_demo.git/pull/pr-wo-pr-demo
+  Testing autonomous merge prohibition barrier:
+  - [PASS] ProtectedMergeProhibitedError caught: Autonomous merging is strictly PROHIBITED. All pull requests require independent human review and merge.
+  -> Result: Staged delivery lifecycle, human authorization, and merge barrier strictly enforced.
+
+================================================================================
+  DEMONSTRATION COMPLETED SUCCESSFULLY IN 3.15s
+  PHASE_8_CONTROLLED_AUTONOMOUS_ENGINEERING: PROVEN
+================================================================================
