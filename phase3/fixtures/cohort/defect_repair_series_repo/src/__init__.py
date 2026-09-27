@@ -1,0 +1,1 @@
+"""Math series package."""
