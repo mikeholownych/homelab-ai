@@ -1,0 +1,19 @@
+{
+  "pipeline_elapsed_sec": 34.741,
+  "workers": {
+    "worker2_candidate": {
+      "elapsed_sec": 19.122,
+      "completion_tokens": 512,
+      "tps": 26.78,
+      "content_length": 2473,
+      "model": "Qwen/Qwen2.5-7B-Instruct-AWQ"
+    },
+    "worker1_control": {
+      "elapsed_sec": 34.741,
+      "completion_tokens": 512,
+      "tps": 14.74,
+      "content_length": 2610,
+      "model": "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit"
+    }
+  }
+}
