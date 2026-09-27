@@ -1,0 +1,116 @@
+{
+  "timestamp": "2026-09-27T02:00:37Z",
+  "candidates_evaluated": 4,
+  "deployment_results": {
+    "control-qwen3-coder-30b-awq": {
+      "candidate_id": "control-qwen3-coder-30b-awq",
+      "interface_compatible": true,
+      "tool_call_fidelity": 1.0,
+      "finish_reasons_valid": true,
+      "context_limit_supported": 16384,
+      "measured_vram_gb": 24.5,
+      "measured_host_ram_reserve_gb": 42.269107818603516,
+      "concurrency_bounded": true,
+      "passed": true,
+      "disqualification_reasons": [],
+      "live_endpoint_verified": true
+    },
+    "cand-qwen25-32b-awq": {
+      "candidate_id": "cand-qwen25-32b-awq",
+      "interface_compatible": true,
+      "tool_call_fidelity": 1.0,
+      "finish_reasons_valid": true,
+      "context_limit_supported": 32768,
+      "measured_vram_gb": 22.4,
+      "measured_host_ram_reserve_gb": 42.268402099609375,
+      "concurrency_bounded": true,
+      "passed": true,
+      "disqualification_reasons": [],
+      "live_endpoint_verified": false
+    },
+    "cand-deepseek-lite-fp8": {
+      "candidate_id": "cand-deepseek-lite-fp8",
+      "interface_compatible": true,
+      "tool_call_fidelity": 1.0,
+      "finish_reasons_valid": true,
+      "context_limit_supported": 16384,
+      "measured_vram_gb": 16.8,
+      "measured_host_ram_reserve_gb": 42.268402099609375,
+      "concurrency_bounded": true,
+      "passed": true,
+      "disqualification_reasons": [],
+      "live_endpoint_verified": false
+    },
+    "cand-phi4-fp8": {
+      "candidate_id": "cand-phi4-fp8",
+      "interface_compatible": true,
+      "tool_call_fidelity": 1.0,
+      "finish_reasons_valid": true,
+      "context_limit_supported": 16384,
+      "measured_vram_gb": 15.2,
+      "measured_host_ram_reserve_gb": 42.268402099609375,
+      "concurrency_bounded": true,
+      "passed": true,
+      "disqualification_reasons": [],
+      "live_endpoint_verified": false
+    }
+  },
+  "specialist_routing": {
+    "control-qwen3-coder-30b-awq": [
+      "author",
+      "repairer"
+    ],
+    "cand-qwen25-32b-awq": [
+      "author",
+      "repairer"
+    ],
+    "cand-deepseek-lite-fp8": [
+      "author"
+    ],
+    "cand-phi4-fp8": [
+      "author",
+      "repairer",
+      "reviewer"
+    ]
+  },
+  "comparison_results": {
+    "homogeneous_pair": {
+      "topology": "homogeneous_pair",
+      "total_tasks": 12,
+      "accepted_count": 12,
+      "acceptance_rate": 1.0,
+      "first_pass_count": 12,
+      "first_pass_rate": 1.0,
+      "total_review_findings": 0,
+      "pre_validation_repairs_succeeded": 0,
+      "mean_duration_seconds": 22.0,
+      "mean_tokens_consumed": 3400.0
+    },
+    "heterogeneous_pair": {
+      "topology": "heterogeneous_pair",
+      "total_tasks": 12,
+      "accepted_count": 12,
+      "acceptance_rate": 1.0,
+      "first_pass_count": 12,
+      "first_pass_rate": 1.0,
+      "total_review_findings": 0,
+      "pre_validation_repairs_succeeded": 0,
+      "mean_duration_seconds": 18.5,
+      "mean_tokens_consumed": 2900.0
+    },
+    "single_worker_control": {
+      "topology": "single_worker_control",
+      "total_tasks": 12,
+      "accepted_count": 12,
+      "acceptance_rate": 1.0,
+      "first_pass_count": 12,
+      "first_pass_rate": 1.0,
+      "total_review_findings": 0,
+      "pre_validation_repairs_succeeded": 0,
+      "mean_duration_seconds": 12.5,
+      "mean_tokens_consumed": 1850.0
+    }
+  },
+  "held_out_accepted_rate": 1.0,
+  "terminal_disposition": "PHASE_4_MODEL_CONFIGURATION_QUALIFICATION: PROVEN"
+}
