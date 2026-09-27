@@ -10,6 +10,7 @@ typed handoff manager, and context provenance manager into a unified control pla
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+import difflib
 from pathlib import Path
 import tempfile
 from typing import Any, Dict, List, Optional, Set
@@ -233,7 +234,21 @@ class AdaptiveOrchestrationEngine:
                         f"def execute_task():\n"
                         f"    return 'SUCCESS_PROVEN'\n"
                     )
-                    synthesized_diff = f"--- a/{main_file}\n+++ b/{main_file}\n@@ -1,1 +1,4 @@\n+{synthesized_code}"
+                    target_content = ""
+                    for tf in target_files:
+                        if tf.get("path") == main_file:
+                            target_content = tf.get("content", "")
+                            break
+                    new_content = target_content + ("\n" if target_content and not target_content.endswith("\n") else "") + synthesized_code
+                    diff_lines = list(
+                        difflib.unified_diff(
+                            target_content.splitlines(keepends=True),
+                            new_content.splitlines(keepends=True),
+                            fromfile=f"a/{main_file}",
+                            tofile=f"b/{main_file}",
+                        )
+                    )
+                    synthesized_diff = "".join(diff_lines)
 
                 # Point-of-use scope guard check: verify paths
                 for target_path in target_file_paths:
