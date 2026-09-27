@@ -119,15 +119,21 @@ def test_gate_g05_comparative_qualification():
 
 
 def test_gate_g06_hardware_constraints_and_maintenance():
-    evaluator = ModelHardwareCompatibilityEvaluator(vram_per_card_mb=16384)
+    evaluator = ModelHardwareCompatibilityEvaluator()
+    assert evaluator.vram_per_card_mb == 32656
     # Resident model does not require swap
     res_ctrl = evaluator.evaluate_hardware_fit("engineering/b0", "AWQ-4bit", weights_gb=10.5)
     assert res_ctrl.fit_status == HardwareFitStatus.COMPATIBLE_RESIDENT
+    assert res_ctrl.device_vram_limit_mb == 32656.0
 
     # Other model requires swap proposal
     res_other = evaluator.evaluate_hardware_fit("Qwen2.5-Coder-14B", "FP8", weights_gb=8.5)
     assert res_other.fit_status == HardwareFitStatus.COMPATIBLE_REQUIRES_SWAP
     assert res_other.maintenance_proposal is not None
+
+    # Oversized model exceeds physical limit
+    res_oversized = evaluator.evaluate_hardware_fit("Llama-3-70B-Instruct", "FP16", weights_gb=140.0)
+    assert res_oversized.fit_status == HardwareFitStatus.INCOMPATIBLE_EXCEEDS_VRAM
 
 
 def test_gate_g07_profile_optimization_authority_preservation():
@@ -195,16 +201,52 @@ def test_gate_g13_protected_services_non_interference():
 
 
 def test_gate_g14_real_inference_comparative_campaign(tmp_path):
-    # Verify live endpoint reaches physical engineering/b0
+    # 1. Verify live endpoint reaches physical engineering/b0
     token_path = Path("/home/mike/.config/opencode/t5820-client-token")
     assert token_path.exists()
+    import json
     import urllib.request
-    req = urllib.request.Request(
+    token = token_path.read_text().strip()
+
+    # 2. Verify model endpoint enumeration
+    req_models = urllib.request.Request(
         "http://127.0.0.1:18010/v1/models",
-        headers={"Authorization": f"Bearer {token_path.read_text().strip()}"},
+        headers={"Authorization": f"Bearer {token}"},
     )
-    with urllib.request.urlopen(req, timeout=5) as response:
+    with urllib.request.urlopen(req_models, timeout=5) as response:
         assert response.status == 200
+        models_data = json.loads(response.read().decode("utf-8"))
+        model_ids = [m["id"] for m in models_data.get("data", [])]
+        assert "engineering/b0" in model_ids
+
+    # 3. Execute paired physical inference completion comparing control (full context) vs candidate (targeted context)
+    control_msgs = [
+        {"role": "system", "content": "You are a software engineer."},
+        {"role": "user", "content": "class Storage:\n    def __init__(self):\n        self.data = {}\n    def get(self, k):\n        return self.data.get(k)\n\nImplement safe_get(self, k, default=None). Output only Python code."},
+    ]
+    candidate_msgs = [
+        {"role": "system", "content": "You are an optimized software engineer specializing in minimal context."},
+        {"role": "user", "content": "class Storage: data: dict\nImplement safe_get(self, k, default=None). Output only Python code."},
+    ]
+
+    def _call(msgs):
+        payload = json.dumps({"model": "engineering/b0", "messages": msgs, "max_tokens": 100, "temperature": 0.0}).encode("utf-8")
+        req = urllib.request.Request(
+            "http://127.0.0.1:18010/v1/chat/completions",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            data=payload,
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            assert resp.status == 200
+            res = json.loads(resp.read().decode("utf-8"))
+            return res["choices"][0]["message"]["content"]
+
+    ctrl_res = _call(control_msgs)
+    cand_res = _call(candidate_msgs)
+
+    assert "def safe_get" in ctrl_res
+    assert "def safe_get" in cand_res
+    assert len(candidate_msgs[1]["content"]) < len(control_msgs[1]["content"])
 
 
 def test_gate_g15_cryptographic_deliverable_custody_and_rollback():

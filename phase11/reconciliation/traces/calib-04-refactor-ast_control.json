@@ -1,0 +1,12 @@
+{
+  "task": "calib-04-refactor-ast",
+  "config": "control",
+  "duration_s": 2.6344387531280518,
+  "input_tokens": 170,
+  "output_tokens": 59,
+  "total_tokens": 229,
+  "response_id": "chatcmpl-51c17247269644a7afceefbf",
+  "content": "```python\nimport ast\nclass SymbolExtractor:\n    def iter_function_names(self, tree: ast.AST):\n        for node in ast.walk(tree):\n            if isinstance(node, ast.FunctionDef):\n                yield node.name\n```",
+  "model": "engineering/b0",
+  "trace_hash": "c2499ccff8ff9cb1912ce936eaaa563046a2d8cde8ca73ff09aefbf3d49afa16"
+}

@@ -155,12 +155,12 @@ def run_demonstration():
         # Stage 3: Hardware Compatibility & Resident Model Protection
         # ----------------------------------------------------------------------
         print("\n[Stage 3] Hardware Constraint Evaluation & Maintenance Proposal Gating")
-        hw_evaluator = ModelHardwareCompatibilityEvaluator(vram_per_card_mb=16384)
+        hw_evaluator = ModelHardwareCompatibilityEvaluator()
 
         # Check control model on B65
         ctrl_fit = hw_evaluator.evaluate_hardware_fit("engineering/b0", "AWQ-4bit", weights_gb=10.5)
         print(f"  - Control Fit Status: {ctrl_fit.fit_status.value}")
-        print(f"    * Total VRAM Needed: {ctrl_fit.total_vram_required_mb / 1024:.2f} GB / 16.00 GB limit")
+        print(f"    * Total VRAM Needed: {ctrl_fit.total_vram_required_mb / 1024:.2f} GiB / 31.89 GiB limit")
 
         # Check alternative model requiring maintenance swap
         other_fit = hw_evaluator.evaluate_hardware_fit("microsoft/phi-4-mini-instruct", "FP8", weights_gb=6.2)

@@ -1,0 +1,12 @@
+{
+  "task": "calib-01-defect-repair",
+  "config": "candidate",
+  "duration_s": 5.518425941467285,
+  "input_tokens": 127,
+  "output_tokens": 131,
+  "total_tokens": 258,
+  "response_id": "chatcmpl-26783cdb35234055bc0c00e1",
+  "content": "```python\ndef clear_expired(self) -> int:\n    with self.lock:\n        expired_count = 0\n        current_time = time.time()\n        keys_to_remove = []\n        \n        for key, (value, expiry_time) in self.store.items():\n            if expiry_time and current_time > expiry_time:\n                keys_to_remove.append(key)\n        \n        for key in keys_to_remove:\n            del self.store[key]\n            expired_count += 1\n            \n        return expired_count\n```",
+  "model": "engineering/b0",
+  "trace_hash": "15d14184d1b58dffe319e6c6de1c4244ca39828f4528878d71f622e3a3aa1f2e"
+}

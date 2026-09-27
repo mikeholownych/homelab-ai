@@ -1,0 +1,12 @@
+{
+  "task": "calib-03-feature-hmac",
+  "config": "control",
+  "duration_s": 2.924894332885742,
+  "input_tokens": 144,
+  "output_tokens": 65,
+  "total_tokens": 209,
+  "response_id": "chatcmpl-b0e0db538f294646bb471edf",
+  "content": "```python\ndef verify_signature(self, payload: bytes, signature_hex: str) -> bool:\n    expected_signature = hmac.new(self.secret, payload, hashlib.sha256).hexdigest()\n    return hmac.compare_digest(expected_signature, signature_hex)\n```",
+  "model": "engineering/b0",
+  "trace_hash": "057e0b733e9aa995f5f6f2d69fbde859e372daac186b4c5fccd886302f4b6d84"
+}

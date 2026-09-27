@@ -198,9 +198,9 @@ def test_adversarial_09_resource_budget_exhaustion_prevented():
 
 
 def test_adversarial_10_oversized_model_exceeds_vram_caught():
-    """Attack: Deploying 140GB model onto 16GB Arc Pro B65 GPU."""
-    evaluator = ModelHardwareCompatibilityEvaluator(vram_per_card_mb=16384)
-    res = evaluator.evaluate_hardware_fit("Llama-3-70B", "FP16", weights_gb=70.0)
+    """Attack: Deploying 140GB model onto physical Arc Pro B65 GPU (32,656 MiB limit)."""
+    evaluator = ModelHardwareCompatibilityEvaluator()
+    res = evaluator.evaluate_hardware_fit("Llama-3-70B", "FP16", weights_gb=140.0)
     assert res.fit_status == HardwareFitStatus.INCOMPATIBLE_EXCEEDS_VRAM
 
 
