@@ -1040,6 +1040,7 @@ class RunWrapperTests(unittest.TestCase):
                 ),
                 "FAKE_WRITE_VALIDATION": "1",
                 "FAKE_EXTRA_ARTIFACT_MB": "256",
+                "FAKE_FINALIZE_DELAY": "2.0",
                 "LOCAL_AI_DEPLOYED_ROOT": str(temp_root),
             }
 

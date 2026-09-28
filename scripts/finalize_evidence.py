@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -529,6 +530,9 @@ def finalize_run(run_dir: Path, repo_root: Path, schema_root: Path) -> tuple[int
         }
 
     atomic_write_json(manifest_path, manifest)
+    finalize_delay = float(os.environ.get("FAKE_FINALIZE_DELAY", "0"))
+    if finalize_delay > 0:
+        time.sleep(finalize_delay)
     try:
         checksum_issues = write_checksums(run_dir)
     except Exception:

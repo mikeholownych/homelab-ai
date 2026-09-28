@@ -3,6 +3,7 @@ from __future__ import annotations
 import configparser
 import json
 import os
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
@@ -289,7 +290,7 @@ class InventoryContractTests(unittest.TestCase):
         self.assertIn("ansible_host", readme)
 
     def test_change_me_occurs_only_for_ansible_host(self) -> None:
-        command = ["rg", "-n", "CHANGE_ME", "inventory"]
+        command = ["rg", "-n", "CHANGE_ME", "inventory"] if shutil.which("rg") else ["grep", "-rn", "CHANGE_ME", "inventory"]
         result = subprocess.run(
             command,
             cwd=REPO_ROOT,
