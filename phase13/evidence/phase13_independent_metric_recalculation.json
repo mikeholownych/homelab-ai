@@ -1,0 +1,127 @@
+{
+  "audit_metadata": {
+    "generator": "phase13_independent_metric_recalculation",
+    "timestamp_iso": "2026-09-28T08:33:00Z",
+    "raw_control_trace": "phase13/traces/phase13_expanded_control_results.json",
+    "raw_heterogeneous_trace": "phase13/traces/phase13_expanded_heterogeneous_results.json"
+  },
+  "homogeneous_control_recalculated": {
+    "total_elapsed_seconds": 1271.63,
+    "project_count": 6,
+    "accepted_projects": 6,
+    "project_acceptance_rate": 1.0,
+    "first_pass_acceptance_rate": 1.0,
+    "primary_metric_projects_per_hour": {
+      "exact_value": 16.986072992930332,
+      "reported_value": 16.99,
+      "delta_from_reported": -0.003927
+    },
+    "project_wall_clock_seconds": {
+      "mean": 211.93833333333333,
+      "median": 212.145,
+      "stdev": 0.644217872048473,
+      "min": 211.11,
+      "max": 212.72
+    },
+    "stage1_lead_planning_seconds": {
+      "mean": 98.5895,
+      "median": 98.578,
+      "stdev": 0.29300836165542976
+    },
+    "stage2_concurrent_offload_seconds": {
+      "mean": 57.053333333333335,
+      "median": 57.019999999999996,
+      "stdev": 0.33986271738257345,
+      "min": 56.55,
+      "max": 57.58,
+      "reported_mean": 57.05
+    },
+    "stage3_lead_integration_seconds": {
+      "mean": 56.2915,
+      "median": 56.3325,
+      "stdev": 0.31217286877625827
+    },
+    "decode_tps": {
+      "mean_lead_tps": 18.172333333333334,
+      "mean_specialist_tps": 14.928333333333333
+    },
+    "task_acceptance": {
+      "total_items": 48,
+      "accepted_items": 48,
+      "item_acceptance_rate": 1.0,
+      "test_and_schema_tasks_count": 12,
+      "test_and_schema_tasks_per_hour": 33.972145985860664,
+      "nominal_specialist_tasks_count": 18,
+      "nominal_specialist_tasks_per_hour": 50.958218978790995
+    },
+    "tokens": {
+      "total": 29145,
+      "lead": 18747,
+      "specialist": 10398
+    }
+  },
+  "heterogeneous_candidate_recalculated": {
+    "total_elapsed_seconds": 1137.87,
+    "project_count": 6,
+    "accepted_projects": 6,
+    "project_acceptance_rate": 1.0,
+    "first_pass_acceptance_rate": 1.0,
+    "primary_metric_projects_per_hour": {
+      "exact_value": 18.982836352131617,
+      "reported_value": 18.98,
+      "delta_from_reported": 0.002836
+    },
+    "project_wall_clock_seconds": {
+      "mean": 189.645,
+      "median": 189.64,
+      "stdev": 0.4612483062299623,
+      "min": 189.17,
+      "max": 190.33
+    },
+    "stage1_lead_planning_seconds": {
+      "mean": 98.52416666666667,
+      "median": 98.5955,
+      "stdev": 0.3134635013309605
+    },
+    "stage2_concurrent_offload_seconds": {
+      "mean": 34.885,
+      "median": 34.915,
+      "stdev": 0.12012493496356218,
+      "min": 34.73,
+      "max": 35.05,
+      "reported_mean": 34.88
+    },
+    "stage3_lead_integration_seconds": {
+      "mean": 56.23416666666667,
+      "median": 56.207499999999996,
+      "stdev": 0.22531171000786315
+    },
+    "decode_tps": {
+      "mean_lead_tps": 17.605833333333333,
+      "mean_specialist_tps": 26.638333333333332
+    },
+    "task_acceptance": {
+      "total_items": 48,
+      "accepted_items": 48,
+      "item_acceptance_rate": 1.0,
+      "test_and_schema_tasks_count": 12,
+      "test_and_schema_tasks_per_hour": 37.965672704263234,
+      "nominal_specialist_tasks_count": 12,
+      "nominal_specialist_tasks_per_hour": 37.965672704263234
+    },
+    "tokens": {
+      "total": 29246,
+      "lead": 22278,
+      "specialist": 6968
+    }
+  },
+  "comparative_differences": {
+    "throughput_gain_projects_per_hour": 1.9967633592012852,
+    "throughput_gain_relative_pct": 11.755297178060786,
+    "stage2_latency_reduction_seconds": 22.168333333333337,
+    "stage2_latency_reduction_pct": 38.855456882449175,
+    "project_duration_reduction_seconds": 22.293333333333322,
+    "project_duration_reduction_pct": 10.518782979325742,
+    "matched_test_schema_tasks_per_hour_gain": 3.9935267184025705
+  }
+}
