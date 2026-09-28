@@ -1,5 +1,6 @@
 VENV_DIR ?= .venv
 PYTHON_BIN ?= python3
+export PATH := $(CURDIR)/$(VENV_DIR)/bin:$(PATH)
 VENV_PYTHON := $(VENV_DIR)/bin/python
 PIP := $(VENV_PYTHON) -m pip
 ANSIBLE_PLAYBOOK := $(VENV_DIR)/bin/ansible-playbook

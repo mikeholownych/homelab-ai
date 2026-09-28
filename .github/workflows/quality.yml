@@ -30,6 +30,9 @@ jobs:
       - name: Create virtual environment
         run: python -m venv .venv
 
+      - name: Add virtual environment to PATH
+        run: echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
+
       - name: Install Python dependencies
         run: .venv/bin/python -m pip install --require-hashes -r requirements.txt
 

@@ -162,6 +162,14 @@ def run_wrapper(
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
+    py_bin_dir = str(Path(sys.executable).parent)
+    current_path = merged_env.get("PATH", "")
+    parts = [p for p in current_path.split(os.pathsep) if p] if current_path else []
+    if py_bin_dir in parts:
+        parts.remove(py_bin_dir)
+    insert_idx = 1 if parts and (Path(parts[0]) / "ansible-playbook").exists() else 0
+    parts.insert(insert_idx, py_bin_dir)
+    merged_env["PATH"] = os.pathsep.join(parts)
     return subprocess.run(
         command,
         cwd=cwd if cwd is not None else REPO_ROOT,
@@ -210,6 +218,14 @@ def start_wrapper(
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
+    py_bin_dir = str(Path(sys.executable).parent)
+    current_path = merged_env.get("PATH", "")
+    parts = [p for p in current_path.split(os.pathsep) if p] if current_path else []
+    if py_bin_dir in parts:
+        parts.remove(py_bin_dir)
+    insert_idx = 1 if parts and (Path(parts[0]) / "ansible-playbook").exists() else 0
+    parts.insert(insert_idx, py_bin_dir)
+    merged_env["PATH"] = os.pathsep.join(parts)
     return subprocess.Popen(
         command,
         cwd=cwd if cwd is not None else REPO_ROOT,
