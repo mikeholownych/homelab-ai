@@ -24,6 +24,17 @@ class WorkerStatus(str, Enum):
     UNHEALTHY = "UNHEALTHY"
 
 
+class SchedulingMode(str, Enum):
+    CONFIGURATION_A = "CONFIGURATION_A"  # Dual-30B, all Stage 2 (04, 05, 06) on Worker 2 serially
+    CONFIGURATION_B = "CONFIGURATION_B"  # Dual-30B, Stage 2 (04, 05) on Worker 2, (06) on Worker 1 [PRODUCTION DEFAULT]
+    CONFIGURATION_C = "CONFIGURATION_C"  # Heterogeneous 30B/7B, Stage 2 (04, 05) on Worker 2 7B, (06) on Worker 1 30B
+
+
+class AuthorityEscalationError(Exception):
+    """Raised when a non-authoritative worker attempts to execute an unauthorized task."""
+    pass
+
+
 @dataclass
 class WorkerState:
     worker_id: str
@@ -50,11 +61,40 @@ class TaskDispatchResult:
 
 
 class CapabilityAwareScheduler:
-    def __init__(self, worker1: WorkerState, worker2: WorkerState):
+    def __init__(
+        self,
+        worker1: WorkerState,
+        worker2: WorkerState,
+        scheduling_mode: Optional[SchedulingMode] = None,
+    ):
         self.worker1 = worker1  # Lead Engineering Worker (30B)
-        self.worker2 = worker2  # Specialist Worker (7B in heterogeneous mode, or 30B in baseline)
+        self.worker2 = worker2  # Specialist / Secondary Worker
         self.specialist_registry = SPECIALIST_REGISTRY
         self.dispatched_history: List[TaskDispatchResult] = []
+
+        # Determine scheduling mode: default to CONFIGURATION_B for dual-30B production baseline
+        if scheduling_mode is not None:
+            self.scheduling_mode = scheduling_mode
+        elif self.worker1.model_name == self.worker2.model_name:
+            self.scheduling_mode = SchedulingMode.CONFIGURATION_B
+        else:
+            self.scheduling_mode = SchedulingMode.CONFIGURATION_C
+
+    def validate_worker_authority(self, worker_id: str, task_class: TaskClass) -> bool:
+        """Validates that a worker is authorized for the given task class."""
+        if worker_id == self.worker2.worker_id:
+            # Under Configuration B, Worker 2 may only execute TEST_GENERATION and STRUCTURED_OUTPUT
+            if self.scheduling_mode == SchedulingMode.CONFIGURATION_B:
+                if task_class not in {TaskClass.TEST_GENERATION, TaskClass.STRUCTURED_OUTPUT}:
+                    raise AuthorityEscalationError(
+                        f"Worker 2 ({worker_id}) is unauthorized for {task_class.value} under Configuration B authority contract"
+                    )
+            elif self.scheduling_mode == SchedulingMode.CONFIGURATION_C:
+                if task_class not in {TaskClass.TEST_GENERATION, TaskClass.STRUCTURED_OUTPUT}:
+                    raise AuthorityEscalationError(
+                        f"Worker 2 ({worker_id}) is unauthorized for {task_class.value} under specialist contract"
+                    )
+        return True
 
     def route_task(
         self,
@@ -67,7 +107,103 @@ class CapabilityAwareScheduler:
         """Determines the optimal worker and model profile for a given engineering task."""
         provenance = [f"INCOMING_TASK:{task_id}:{task_class.value}:tokens={context_token_count}"]
 
-        # 1. Check if a specialist profile is eligible
+        # 0. Check Configuration B (Production Default)
+        if self.scheduling_mode == SchedulingMode.CONFIGURATION_B:
+            # Validate authority contract
+            self.validate_worker_authority(self.worker2.worker_id, task_class) if task_class in {TaskClass.TEST_GENERATION, TaskClass.STRUCTURED_OUTPUT} else None
+
+            if task_class in {TaskClass.TEST_GENERATION, TaskClass.STRUCTURED_OUTPUT}:
+                if self.worker2.status != WorkerStatus.HEALTHY:
+                    provenance.append(f"FALLBACK:Worker 2 status is {self.worker2.status.value}")
+                    return self._fallback_to_lead(task_id, f"Worker 2 unhealthy ({self.worker2.status.value})", provenance)
+
+                # Context limit check for specialist task placement
+                if context_token_count > 32768:
+                    provenance.append(f"FALLBACK:Context length {context_token_count} exceeds threshold")
+                    return self._fallback_to_lead(task_id, "Context threshold exceeded", provenance)
+
+                provenance.append(f"CONFIG_B_WORKER2_DISPATCH:{self.worker2.worker_id}")
+                self.worker2.active_requests += 1
+                res = TaskDispatchResult(
+                    task_id=task_id,
+                    assigned_worker=self.worker2.worker_id,
+                    assigned_model=self.worker2.model_name,
+                    routed_as_specialist=False,
+                    fallback_triggered=False,
+                    fallback_reason=None,
+                    provenance_chain=provenance,
+                )
+                self.dispatched_history.append(res)
+                return res
+
+            elif task_class in {TaskClass.SECURITY_REVIEW, TaskClass.ADVERSARIAL_SCOPE_CHECK}:
+                # In Configuration B, security review is assigned to Worker 1 to run concurrently with Worker 2
+                provenance.append(f"CONFIG_B_WORKER1_SECURITY_DISPATCH:{self.worker1.worker_id}")
+                self.worker1.active_requests += 1
+                res = TaskDispatchResult(
+                    task_id=task_id,
+                    assigned_worker=self.worker1.worker_id,
+                    assigned_model=self.worker1.model_name,
+                    routed_as_specialist=False,
+                    fallback_triggered=False,
+                    fallback_reason=None,
+                    provenance_chain=provenance,
+                )
+                self.dispatched_history.append(res)
+                return res
+
+            else:
+                # Lead architectural, implementation, integration, or repair task
+                provenance.append(f"CONFIG_B_LEAD_DISPATCH:{self.worker1.worker_id}")
+                self.worker1.active_requests += 1
+                res = TaskDispatchResult(
+                    task_id=task_id,
+                    assigned_worker=self.worker1.worker_id,
+                    assigned_model=self.worker1.model_name,
+                    routed_as_specialist=False,
+                    fallback_triggered=False,
+                    fallback_reason=None,
+                    provenance_chain=provenance,
+                )
+                self.dispatched_history.append(res)
+                return res
+
+        # 0b. Check Configuration A (Historical Homogeneous Baseline)
+        elif self.scheduling_mode == SchedulingMode.CONFIGURATION_A:
+            if task_class in {TaskClass.TEST_GENERATION, TaskClass.STRUCTURED_OUTPUT, TaskClass.SECURITY_REVIEW, TaskClass.ADVERSARIAL_SCOPE_CHECK}:
+                if self.worker2.status != WorkerStatus.HEALTHY:
+                    provenance.append(f"FALLBACK:Worker 2 status is {self.worker2.status.value}")
+                    return self._fallback_to_lead(task_id, f"Worker 2 unhealthy ({self.worker2.status.value})", provenance)
+
+                provenance.append(f"CONFIG_A_WORKER2_SERIAL_DISPATCH:{self.worker2.worker_id}")
+                self.worker2.active_requests += 1
+                res = TaskDispatchResult(
+                    task_id=task_id,
+                    assigned_worker=self.worker2.worker_id,
+                    assigned_model=self.worker2.model_name,
+                    routed_as_specialist=False,
+                    fallback_triggered=False,
+                    fallback_reason=None,
+                    provenance_chain=provenance,
+                )
+                self.dispatched_history.append(res)
+                return res
+            else:
+                provenance.append(f"CONFIG_A_LEAD_DISPATCH:{self.worker1.worker_id}")
+                self.worker1.active_requests += 1
+                res = TaskDispatchResult(
+                    task_id=task_id,
+                    assigned_worker=self.worker1.worker_id,
+                    assigned_model=self.worker1.model_name,
+                    routed_as_specialist=False,
+                    fallback_triggered=False,
+                    fallback_reason=None,
+                    provenance_chain=provenance,
+                )
+                self.dispatched_history.append(res)
+                return res
+
+        # 1. Check if a specialist profile is eligible (Configuration C / Heterogeneous Candidate)
         admissible_specialist: Optional[SpecialistRoutingContract] = None
         if specialist_profile_id and specialist_profile_id in self.specialist_registry:
             candidate = self.specialist_registry[specialist_profile_id]

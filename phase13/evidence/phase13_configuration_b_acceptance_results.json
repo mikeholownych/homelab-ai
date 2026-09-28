@@ -1,0 +1,119 @@
+{
+  "timestamp_utc": "2026-09-28T09:45:03Z",
+  "preflight_probes": {
+    "worker1": {
+      "status": "HEALTHY",
+      "model": "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit",
+      "revision_matched": true
+    },
+    "worker2": {
+      "status": "HEALTHY",
+      "model": "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit",
+      "revision_matched": true
+    }
+  },
+  "gateway_probe": {
+    "status": "HEALTHY",
+    "model": "engineering/b0",
+    "chat_status": 200,
+    "latency_sec": 0.4312
+  },
+  "representative_project": {
+    "project_id": "PROJ-PROD-01",
+    "name": "FastAPI Telemetry Streamer",
+    "status": "ACCEPTED",
+    "total_latency_sec": 190.56,
+    "subtasks_passed": "8/8",
+    "gates": {
+      "gate1_syntax": true,
+      "gate2_tests": true,
+      "gate3_security": true,
+      "gate4_integration": true
+    },
+    "item_results": {
+      "PROJ-PROD-01-01": {
+        "work_id": "PROJ-PROD-01-01",
+        "assigned_worker": "worker1",
+        "latency_sec": 28.287,
+        "tokens": 531,
+        "tps": 18.1,
+        "accepted": true
+      },
+      "PROJ-PROD-01-02": {
+        "work_id": "PROJ-PROD-01-02",
+        "assigned_worker": "worker1",
+        "latency_sec": 28.038,
+        "tokens": 530,
+        "tps": 18.26,
+        "accepted": true
+      },
+      "PROJ-PROD-01-03": {
+        "work_id": "PROJ-PROD-01-03",
+        "assigned_worker": "worker1",
+        "latency_sec": 42.355,
+        "tokens": 786,
+        "tps": 18.13,
+        "accepted": true
+      },
+      "PROJ-PROD-01-04": {
+        "work_id": "PROJ-PROD-01-04",
+        "assigned_worker": "worker2",
+        "endpoint": "http://10.0.8.5:8001",
+        "latency_sec": 41.046,
+        "tokens": 532,
+        "tps": 12.47,
+        "accepted": true,
+        "quarantined": false
+      },
+      "PROJ-PROD-01-05": {
+        "work_id": "PROJ-PROD-01-05",
+        "assigned_worker": "worker2",
+        "endpoint": "http://10.0.8.5:8001",
+        "latency_sec": 41.132,
+        "tokens": 540,
+        "tps": 12.45,
+        "accepted": true,
+        "quarantined": false
+      },
+      "PROJ-PROD-01-06": {
+        "work_id": "PROJ-PROD-01-06",
+        "assigned_worker": "worker1",
+        "endpoint": "http://127.0.0.1:18000",
+        "latency_sec": 41.801,
+        "tokens": 537,
+        "tps": 12.25,
+        "accepted": true,
+        "quarantined": false
+      },
+      "PROJ-PROD-01-07": {
+        "work_id": "PROJ-PROD-01-07",
+        "assigned_worker": "worker1",
+        "latency_sec": 29.055,
+        "tokens": 538,
+        "tps": 17.62,
+        "accepted": true
+      },
+      "PROJ-PROD-01-08": {
+        "work_id": "PROJ-PROD-01-08",
+        "assigned_worker": "worker1",
+        "latency_sec": 21.023,
+        "tokens": 406,
+        "tps": 18.08,
+        "accepted": true
+      }
+    }
+  },
+  "negative_path_tests": {
+    "adversarial_injection_quarantine": {
+      "passed": true,
+      "status": "REJECTED"
+    },
+    "authority_escalation_prevention": {
+      "passed": true
+    },
+    "worker2_unhealthy_fallback": {
+      "passed": true
+    }
+  },
+  "disposition": "COMPLETE_PROVEN"
+}
