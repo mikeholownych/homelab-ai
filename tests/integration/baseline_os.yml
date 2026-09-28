@@ -7,7 +7,7 @@
   vars:
     baseline_localhost_safe_mode: true
     baseline_skip_platform_guard: true
-    localhost_safe_root: "{{ playbook_dir }}/../../.ansible/localhost-safe"
+    localhost_safe_root: "{{ (playbook_dir ~ '/../../.ansible/localhost-safe') | realpath }}"
     localhost_safe_rootfs: "{{ localhost_safe_root }}/root"
     base_os_root_dir: "{{ localhost_safe_rootfs }}"
     base_os_manage_ubuntu_sources: false

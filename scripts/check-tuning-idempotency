@@ -4,6 +4,7 @@
 # enforcement/evidence code paths scheduled reconciliation uses.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+mkdir -p /tmp/opencode
 
 ANSIBLE_CONFIG=ansible.cfg \
   .venv/bin/ansible-playbook -i tests/fixtures/inventory/healthy.yml \

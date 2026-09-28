@@ -138,6 +138,9 @@ class GpuThermalGuardContractTests(unittest.TestCase):
         for task in tasks:
             if not isinstance(task, dict) or task.get("ansible.builtin.file") is None:
                 continue
+            path = task.get("path") or (task.get("ansible.builtin.file", {}).get("path") if isinstance(task.get("ansible.builtin.file"), dict) else None)
+            if path:
+                dirs.append(str(path))
             loop = task.get("loop")
             if isinstance(loop, list):
                 dirs.extend(str(e) for e in loop)

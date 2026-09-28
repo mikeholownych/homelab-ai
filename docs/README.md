@@ -25,6 +25,7 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 - [`operations.md`](operations.md) — Day-2 operator runbook (bootstrap, convergence, drift, benchmarking, patching).
 - [`patching.md`](patching.md) — Host and platform patching guide.
 - [`rollback.md`](rollback.md) — Component rollback runbook.
+- [`t5820-orchestrator-implementation-2026-09-25.md`](t5820-orchestrator-implementation-2026-09-25.md) — T5820 orchestrator implementation record.
 - [`upgrades.md`](upgrades.md) — Runtime and component upgrade workflow.
 
 ## Reference and integration

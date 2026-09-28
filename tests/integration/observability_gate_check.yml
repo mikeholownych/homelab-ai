@@ -11,7 +11,7 @@
   gather_facts: true
   become: false
   vars:
-    observability_gate_root: "{{ playbook_dir }}/../../.ansible/observability-gate-check"
+    observability_gate_root: "{{ (playbook_dir ~ '/../../.ansible/observability-gate-check') | realpath }}"
     observability_install_enabled: true
     observability_stack_status: commissioned
     observability_grafana_admin_password: >-
