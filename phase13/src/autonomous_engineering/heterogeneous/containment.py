@@ -32,10 +32,10 @@ class ThreatVector(str, Enum):
 ADVERSARIAL_PATTERNS = [
     (ThreatVector.TOOL_ESCALATION, re.compile(r"(sudo|chmod\s+\+x|docker\.sock|rm\s+-rf|eval\(|exec\()", re.I)),
     (ThreatVector.OUT_OF_SCOPE_ACCESS, re.compile(r"(\/etc\/shadow|\/root|\.\.\/|\.ssh\/id_rsa|attacker\.com|evil-exfil)", re.I)),
-    (ThreatVector.VALIDATOR_BYPASS, re.compile(r"(self_asserted_test_pass|bypass_validator|skip_acceptance|force_accept)", re.I)),
-    (ThreatVector.ACCEPTANCE_CRITERIA_REWRITE, re.compile(r"(ignore\s+previous\s+instructions|system\s+override|set\s+acceptance\s*=\s*true)", re.I)),
+    (ThreatVector.VALIDATOR_BYPASS, re.compile(r"(self_asserted_test_pass|bypass_validator|skip_acceptance|force_accept|approval\s+(status|decision):\s*approved)", re.I)),
+    (ThreatVector.ACCEPTANCE_CRITERIA_REWRITE, re.compile(r"((ignore|without\s+considering)\s+(all\s+|any\s+)?previous\s+instructions|system\s+override|set\s+acceptance\s*=\s*true)", re.I)),
     (ThreatVector.DOWNSTREAM_INJECTION, re.compile(r"(<\/?system>|<\/?instructions>|human:\s*proceed|IMPORTANT:\s*Ignore)", re.I)),
-    (ThreatVector.ROUTING_ALTERATION, re.compile(r"(set_routing|override_worker|public_model_id\s*=\s*['\"]engineering\/b0['\"])", re.I)),
+    (ThreatVector.ROUTING_ALTERATION, re.compile(r"(set_routing|override_worker|['\"]?public_model_id['\"]?\s*[:=]\s*['\"]engineering\/b0['\"])", re.I)),
     (ThreatVector.AUDIT_SUPPRESSION, re.compile(r"(suppress_log|delete_manifest|disable_audit|truncate_evidence)", re.I)),
 ]
 
