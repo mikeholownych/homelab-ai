@@ -254,7 +254,7 @@
 - name: Assert the linger marker file status for the runtime identity
   ansible.builtin.stat:
     path: "/var/lib/systemd/linger/{{ users_local_ai_service_account.name }}"
-  register: linger_identity_stat
+  register: users_linger_identity_stat
   when:
     - users_local_ai_service_account.enabled | default(true) | bool
     - users_runtime_rootless_enabled | bool
@@ -270,7 +270,7 @@
   when:
     - users_local_ai_service_account.enabled | default(true) | bool
     - users_runtime_rootless_enabled | bool
-    - not (linger_identity_stat.stat.exists | default(false))
+    - not (users_linger_identity_stat.stat.exists | default(false))
     - users_manage_runtime | bool
     - not ansible_check_mode
   tags: [users, baseline]

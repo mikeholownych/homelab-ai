@@ -177,6 +177,7 @@
   ansible.builtin.file:
     path: "{{ item }}"
     state: directory
+    mode: "{{ omit }}"
   loop:
     - "{{ storage_lvm.mount_path }}/models"
     - "{{ storage_lvm.mount_path }}/cache"

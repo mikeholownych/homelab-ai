@@ -49,6 +49,7 @@
   ansible.builtin.file:
     path: "{{ benchmarking_evidence_dir }}"
     state: directory
+    mode: "0750"
   # Ownership/mode of the shared evidence root is owned by the evidence role;
   # re-asserting root:root 0750 here would fight that role (and block the
   # runtime account from traversing to its own pre-created recovery record).
@@ -105,17 +106,22 @@
            '--config-id', benchmarking_config_id,
            '--model', (benchmarking_profiles[item].model | default(benchmarking_model)),
            '--revision', (benchmarking_profiles[item].revision | default(benchmarking_revision)),
-           '--artifact-sha256', (benchmarking_profiles[item].artifact_sha256 | default(benchmarking_model_artifact_sha256)),
+           '--artifact-sha256',
+           (benchmarking_profiles[item].artifact_sha256 | default(benchmarking_model_artifact_sha256)),
            '--quantization', (benchmarking_profiles[item].quantization | default(benchmarking_quantization)),
            '--service-unit', (benchmarking_profiles[item].service_unit | default(benchmarking_service_unit)),
            '--container-name', (benchmarking_profiles[item].container_name | default(benchmarking_container_name)),
            '--prompt-class', (benchmarking_profiles[item].prompt_class | default(benchmarking_default_prompt_class)),
            '--output-class', (benchmarking_profiles[item].output_class | default(benchmarking_default_output_class)),
-           '--concurrency', (benchmarking_profiles[item].concurrency | default(benchmarking_default_concurrency) | string),
+           '--concurrency',
+           (benchmarking_profiles[item].concurrency | default(benchmarking_default_concurrency) | string),
            '--requests', (benchmarking_profiles[item].requests | default(benchmarking_default_requests) | string),
-           '--warmup-requests', (benchmarking_profiles[item].warmup_requests | default(benchmarking_default_warmup_requests) | string),
-           '--max-new-tokens', (benchmarking_profiles[item].max_new_tokens | default(benchmarking_default_max_new_tokens) | string),
-           '--max-deviation-pct', (benchmarking_profiles[item].max_deviation_pct | default(benchmarking_default_max_deviation_pct) | string),
+           '--warmup-requests',
+           (benchmarking_profiles[item].warmup_requests | default(benchmarking_default_warmup_requests) | string),
+           '--max-new-tokens',
+           (benchmarking_profiles[item].max_new_tokens | default(benchmarking_default_max_new_tokens) | string),
+           '--max-deviation-pct',
+           (benchmarking_profiles[item].max_deviation_pct | default(benchmarking_default_max_deviation_pct) | string),
            '--output',
            ((benchmarking_evidence_dir ~ '/benchmarks/simulated/' ~
               (benchmarking_scheduled_run | ternary('benchmark-' ~ item ~ '.json', 'benchmark.json')))
