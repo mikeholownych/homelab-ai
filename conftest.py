@@ -31,6 +31,8 @@ TOKEN_DEPENDENT_TEST_NAMES = {
 
 
 def _has_protected_processes() -> bool:
+    if os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI") == "true":
+        return False
     try:
         res = subprocess.run(
             ["ps", "-p", "986,3130937,2093382", "-o", "pid="],
@@ -38,7 +40,8 @@ def _has_protected_processes() -> bool:
             text=True,
             check=False,
         )
-        return bool(res.stdout.strip())
+        pids = set(res.stdout.strip().split())
+        return {"986", "3130937", "2093382"}.issubset(pids)
     except Exception:
         return False
 
