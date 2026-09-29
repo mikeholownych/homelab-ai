@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 import time
 import urllib.error
@@ -348,6 +349,7 @@ class OrchestratorRuntime:
         diagnostic_lineage: bool = False,
         metrics: MetricsRegistry | None = None,
         health: HealthManager | None = None,
+        scheduling_mode: str | None = None,
     ) -> None:
         self.registry = registry
         self.adapters = adapters
@@ -356,7 +358,8 @@ class OrchestratorRuntime:
         self.validator = validator
         self.diagnostic_lineage = diagnostic_lineage
         self.metrics = metrics or MetricsRegistry()
-        self.health = health or HealthManager(self.registry, self.adapters, self.metrics)
+        self.scheduling_mode = scheduling_mode or os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
+        self.health = health or HealthManager(self.registry, self.adapters, self.metrics, scheduling_mode=self.scheduling_mode)
 
     def complete(
         self,

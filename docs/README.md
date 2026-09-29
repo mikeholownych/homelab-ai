@@ -26,6 +26,7 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 - [`patching.md`](patching.md) — Host and platform patching guide.
 - [`rollback.md`](rollback.md) — Component rollback runbook.
 - [`t5820-orchestrator-implementation-2026-09-25.md`](t5820-orchestrator-implementation-2026-09-25.md) — T5820 orchestrator implementation record.
+- [`t5820-orchestrator-observability.md`](t5820-orchestrator-observability.md) — T5820 orchestrator observability release and monitoring runbook.
 - [`upgrades.md`](upgrades.md) — Runtime and component upgrade workflow.
 
 ## Reference and integration

@@ -48,6 +48,7 @@ class HealthManager:
         probe_interval_seconds: float = 10.0,
         start_time: float | None = None,
         auto_start: bool = False,
+        scheduling_mode: str | None = None,
     ) -> None:
         self.registry = registry
         self.adapters = adapters or {}
@@ -55,6 +56,7 @@ class HealthManager:
         self.max_freshness_seconds = max_freshness_seconds
         self.probe_interval_seconds = probe_interval_seconds
         self.start_time = start_time or time.time()
+        self.scheduling_mode = scheduling_mode or os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
         self._states: dict[str, WorkerHealthState] = {}
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
@@ -234,6 +236,7 @@ class HealthManager:
             "scheduler": {
                 "ready": can_route,
                 "status": "ready" if can_route else "blocked",
+                "scheduling_mode": self.scheduling_mode,
                 "queued_work": queued_work,
                 "active_work": active_work,
                 "available_workers": healthy_count,

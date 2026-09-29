@@ -95,12 +95,14 @@ def main() -> None:
         worker.worker_id: OpenAIProviderAdapter(worker.endpoint or "", worker.auth_token or "", worker.model_id)
         for worker in workers
     }
+    scheduling_mode = os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
     health = HealthManager(
         registry,
         adapters,
         metrics,
         probe_interval_seconds=10.0,
         auto_start=True,
+        scheduling_mode=scheduling_mode,
     )
     runtime = OrchestratorRuntime(
         registry,
@@ -109,6 +111,7 @@ def main() -> None:
         diagnostic_lineage=os.environ.get("ORCHESTRATOR_DIAGNOSTIC_LINEAGE") == "true",
         metrics=metrics,
         health=health,
+        scheduling_mode=scheduling_mode,
     )
     client_tokens = [read_secret("ORCHESTRATOR_CLIENT_TOKEN", "ORCHESTRATOR_CLIENT_TOKEN_FILE")]
     extra_client_token_file = os.environ.get("ORCHESTRATOR_CLIENT_TOKEN_EXTRA_FILE")

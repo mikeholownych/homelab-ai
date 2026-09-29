@@ -287,6 +287,7 @@ def test_gateway_health_and_metrics_endpoints(tmp_path):
         assert body["can_route"] is True
         assert body["gateway"]["status"] == "alive"
         assert "uptime_seconds" in body["gateway"]
+        assert body["scheduler"]["scheduling_mode"] == "CONFIGURATION_B_PLUS"
         conn.close()
 
         # 2. Strict GET /health?strict=true
