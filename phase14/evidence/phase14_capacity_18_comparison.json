@@ -1,0 +1,43 @@
+{
+  "experiment": "PHASE_14_CONFIGURATION_B_PLUS_SUSTAINED_CAPACITY",
+  "candidate_18_proj_hr": {
+    "queue_stability_status": "STABLE",
+    "backlog_growth_slope_sec_per_proj": 0.0,
+    "step_to_step_mean_slope": 0.0,
+    "turnaround_ratio_late_to_early": 1.0043,
+    "queue_depth_max": 1,
+    "queue_depth_mean": 0.0
+  },
+  "operating_points": {
+    "config_b_control_19_5_proj_hr": {
+      "arrival_rate": 19.5,
+      "project_count": 6,
+      "throughput": 16.1484,
+      "mean_queue_wait_sec": 93.68,
+      "p95_queue_wait_sec": 179.85,
+      "w1_mean_demand_sec": 194.42,
+      "queue_stability": "ACCUMULATING"
+    },
+    "config_b_plus_requal_19_5_proj_hr": {
+      "arrival_rate": 19.5,
+      "project_count": 10,
+      "throughput": 17.7375,
+      "mean_queue_wait_sec": 35.75,
+      "p95_queue_wait_sec": 100.02,
+      "w1_mean_demand_sec": 171.16,
+      "queue_stability": "ACCUMULATING",
+      "growth_slope_sec_per_proj": 12.62
+    },
+    "config_b_plus_qualified_18_0_proj_hr": {
+      "arrival_rate": 18.0,
+      "project_count": 10,
+      "throughput": 17.6044,
+      "mean_queue_wait_sec": 0.0,
+      "p95_queue_wait_sec": 0.0,
+      "w1_mean_demand_sec": 171.13,
+      "w1_utilization_rho": 0.8557,
+      "queue_stability": "STABLE",
+      "growth_slope_sec_per_proj": 0.0
+    }
+  }
+}

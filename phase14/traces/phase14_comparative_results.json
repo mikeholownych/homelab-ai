@@ -1,0 +1,104 @@
+{
+  "experiment_id": "PHASE_14_EXPERIMENT_01",
+  "timestamp_utc": 1790656111.0313106,
+  "canonical_repo_sha": "a8c3b6a1a4c27f391f28ebdf5a74c1bfd1d148ce",
+  "control_configuration": "config_b",
+  "candidate_configuration": "config_b_plus",
+  "sample_size_pairs": 6,
+  "config_b_metrics": {
+    "accepted_projects_per_hour": 18.2472,
+    "mean_project_turnaround_sec": 197.2902,
+    "mean_worker1_demand_sec": 197.2848,
+    "mean_worker2_idle_sec": 115.5911,
+    "acceptance_rate": 1.0
+  },
+  "config_b_plus_metrics": {
+    "accepted_projects_per_hour": 18.2887,
+    "mean_project_turnaround_sec": 196.8428,
+    "mean_worker1_demand_sec": 168.5573,
+    "mean_worker2_idle_sec": 86.8215,
+    "acceptance_rate": 1.0
+  },
+  "comparative_deltas": {
+    "mean_w1_demand_reduction_sec": 28.7275,
+    "mean_w1_demand_reduction_pct": 14.56,
+    "mean_turnaround_reduction_sec": 0.4474,
+    "mean_turnaround_reduction_pct": 0.23,
+    "throughput_increase_projects_per_hour": 0.0415,
+    "throughput_increase_pct": 0.23
+  },
+  "paired_project_deltas": [
+    {
+      "project_id": "proj-api-01",
+      "archetype": "API Refactoring",
+      "config_b_w1_demand": 196.889,
+      "config_b_plus_w1_demand": 169.592,
+      "w1_demand_reduction_sec": 27.297,
+      "w1_demand_reduction_pct": 13.86,
+      "config_b_turnaround": 196.8927,
+      "config_b_plus_turnaround": 198.0882,
+      "turnaround_reduction_sec": -1.1955,
+      "turnaround_reduction_pct": -0.61
+    },
+    {
+      "project_id": "proj-sec-02",
+      "archetype": "Security Remediation",
+      "config_b_w1_demand": 196.467,
+      "config_b_plus_w1_demand": 168.781,
+      "w1_demand_reduction_sec": 27.686,
+      "w1_demand_reduction_pct": 14.09,
+      "config_b_turnaround": 196.4723,
+      "config_b_plus_turnaround": 196.9529,
+      "turnaround_reduction_sec": -0.4806,
+      "turnaround_reduction_pct": -0.24
+    },
+    {
+      "project_id": "proj-schema-03",
+      "archetype": "Schema Contract",
+      "config_b_w1_demand": 196.206,
+      "config_b_plus_w1_demand": 168.341,
+      "w1_demand_reduction_sec": 27.865,
+      "w1_demand_reduction_pct": 14.2,
+      "config_b_turnaround": 196.2115,
+      "config_b_plus_turnaround": 196.6462,
+      "turnaround_reduction_sec": -0.4347,
+      "turnaround_reduction_pct": -0.22
+    },
+    {
+      "project_id": "proj-worker-04",
+      "archetype": "Async Worker",
+      "config_b_w1_demand": 196.112,
+      "config_b_plus_w1_demand": 168.263,
+      "w1_demand_reduction_sec": 27.849,
+      "w1_demand_reduction_pct": 14.2,
+      "config_b_turnaround": 196.1159,
+      "config_b_plus_turnaround": 196.5872,
+      "turnaround_reduction_sec": -0.4713,
+      "turnaround_reduction_pct": -0.24
+    },
+    {
+      "project_id": "proj-db-05",
+      "archetype": "Database Migration",
+      "config_b_w1_demand": 197.276,
+      "config_b_plus_w1_demand": 168.518,
+      "w1_demand_reduction_sec": 28.758,
+      "w1_demand_reduction_pct": 14.58,
+      "config_b_turnaround": 197.2805,
+      "config_b_plus_turnaround": 196.7596,
+      "turnaround_reduction_sec": 0.5209,
+      "turnaround_reduction_pct": 0.26
+    },
+    {
+      "project_id": "proj-obs-06",
+      "archetype": "Observability Gateway",
+      "config_b_w1_demand": 200.759,
+      "config_b_plus_w1_demand": 167.849,
+      "w1_demand_reduction_sec": 32.91,
+      "w1_demand_reduction_pct": 16.39,
+      "config_b_turnaround": 200.7685,
+      "config_b_plus_turnaround": 196.0227,
+      "turnaround_reduction_sec": 4.7458,
+      "turnaround_reduction_pct": 2.36
+    }
+  ]
+}
