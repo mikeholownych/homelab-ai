@@ -60,6 +60,25 @@ def test_gateway_auth_models_and_chat(tmp_path):
         assert response.status == 200
         assert response.getheader("Content-Type") == "text/event-stream"
         assert "[DONE]" in stream
+        connection.close()
+
+        connection = HTTPConnection(host, port)
+        connection.request("GET", "/health")
+        health_resp = connection.getresponse()
+        assert health_resp.status == 200
+        health_payload = json.loads(health_resp.read().decode())
+        assert health_payload["status"] == "healthy"
+        assert health_payload["ready"] is True
+        connection.close()
+
+        connection = HTTPConnection(host, port)
+        connection.request("GET", "/metrics")
+        metrics_resp = connection.getresponse()
+        assert metrics_resp.status == 200
+        assert "text/plain" in metrics_resp.getheader("Content-Type")
+        metrics_text = metrics_resp.read().decode()
+        assert "aihost_http_requests_total" in metrics_text
+        connection.close()
     finally:
         server.shutdown()
         thread.join(timeout=2)

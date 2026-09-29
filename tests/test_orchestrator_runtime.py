@@ -253,9 +253,11 @@ def test_external_validation_and_tool_authority_are_separate(tmp_path):
     result = runtime.complete({"messages": [{"role": "user", "content": "hi"}]})
     assert result["status"] == "blocked"
     assert result["failure_class"] == "external_validation"
+    assert runtime.metrics.authority_validations_total.get(outcome="rejected") == 1.0
 
     task = Task("task-1", "repo", "a" * 40, frozenset(), frozenset({"read"}), 1)
     authority = Authority(task.task_id, task.state_hash, frozenset({"read"}), datetime.now(timezone.utc) + timedelta(minutes=1))
     denied = runtime.execute_tool(task, authority, "read_file", {"path": "README.md"}, lambda name, args: "ok")
     assert denied["status"] == "blocked"
     assert denied["failure_class"] == "authority"
+    assert runtime.metrics.authority_rejections_total.get(reason="unauthorized_action") == 1.0
