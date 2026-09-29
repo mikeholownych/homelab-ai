@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 import threading
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
@@ -43,18 +45,26 @@ class HealthManager:
         metrics: MetricsRegistry | None = None,
         *,
         max_freshness_seconds: float = 30.0,
+        probe_interval_seconds: float = 10.0,
         start_time: float | None = None,
+        auto_start: bool = False,
     ) -> None:
         self.registry = registry
         self.adapters = adapters or {}
         self.metrics = metrics
         self.max_freshness_seconds = max_freshness_seconds
+        self.probe_interval_seconds = probe_interval_seconds
         self.start_time = start_time or time.time()
         self._states: dict[str, WorkerHealthState] = {}
         self._lock = threading.RLock()
+        self._stop_event = threading.Event()
+        self._poll_thread: threading.Thread | None = None
 
         # Initialize health states for all workers currently registered
         self._sync_registered_workers()
+
+        if auto_start:
+            self.start()
 
     def _sync_registered_workers(self) -> None:
         """Ensure all workers in the registry have an initial observation state."""
@@ -238,3 +248,79 @@ class HealthManager:
         }
 
         return int(http_status), payload
+
+    def probe_worker(self, worker_id: str) -> bool:
+        """Probe a single worker via lightweight non-inference /v1/models call or adapter check."""
+        worker_record = None
+        for w in self.registry.snapshot():
+            if w["worker_id"] == worker_id:
+                worker_record = w
+                break
+        if worker_record is None:
+            return False
+
+        endpoint = worker_record.get("endpoint")
+        auth_token = worker_record.get("auth_token")
+
+        if endpoint and (endpoint.startswith("http://") or endpoint.startswith("https://")):
+            url = endpoint.rstrip("/") + "/v1/models"
+            headers = {}
+            if auth_token:
+                headers["Authorization"] = f"Bearer {auth_token}"
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            t0 = time.monotonic()
+            try:
+                with urllib.request.urlopen(req, timeout=2.0) as resp:
+                    elapsed = time.monotonic() - t0
+                    if 200 <= resp.status < 300:
+                        self.record_worker_observation(worker_id, healthy=True, duration=elapsed)
+                        return True
+                    else:
+                        self.record_worker_observation(worker_id, healthy=False, duration=elapsed, error=f"http_{resp.status}")
+                        return False
+            except Exception as exc:
+                elapsed = time.monotonic() - t0
+                self.record_worker_observation(worker_id, healthy=False, duration=elapsed, error=str(exc))
+                return False
+        else:
+            is_healthy = bool(worker_record.get("healthy", True))
+            self.record_worker_observation(worker_id, healthy=is_healthy, duration=0.0)
+            return is_healthy
+
+    def probe_all(self) -> None:
+        """Probe all currently registered workers."""
+        for w in self.registry.snapshot():
+            self.probe_worker(w["worker_id"])
+
+    def _poll_loop(self) -> None:
+        """Periodic background polling loop that refreshes worker health."""
+        # Initial probe
+        try:
+            self.probe_all()
+        except Exception:
+            pass
+
+        while not self._stop_event.is_set():
+            if self._stop_event.wait(self.probe_interval_seconds):
+                break
+            try:
+                self.probe_all()
+            except Exception:
+                pass
+
+    def start(self) -> None:
+        """Start background polling thread."""
+        with self._lock:
+            if self._poll_thread is not None and self._poll_thread.is_alive():
+                return
+            self._stop_event.clear()
+            self._poll_thread = threading.Thread(
+                target=self._poll_loop, daemon=True, name="HealthManagerPoller"
+            )
+            self._poll_thread.start()
+
+    def stop(self) -> None:
+        """Stop background polling thread."""
+        self._stop_event.set()
+        if self._poll_thread is not None:
+            self._poll_thread.join(timeout=2.0)

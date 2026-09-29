@@ -232,6 +232,27 @@ def test_health_manager_empty_registry():
     assert payload["ready"] is False
 
 
+def test_health_manager_background_polling():
+    """Verify that background polling continuously refreshes worker health preventing staleness."""
+    w1 = make_worker("w1")
+    cap_registry = CapabilityRegistry([w1])
+    # Freshness window 0.2s, poll interval 0.05s
+    health = HealthManager(cap_registry, {}, max_freshness_seconds=0.2, probe_interval_seconds=0.05, auto_start=True)
+    try:
+        # Sleep for longer than max_freshness_seconds (0.25s)
+        time.sleep(0.25)
+        status_code, payload = health.check(strict=False)
+        # Background polling kept worker fresh!
+        assert status_code == HTTPStatus.OK
+        assert payload["status"] == "healthy"
+        assert payload["workers"]["w1"]["status"] == "healthy"
+        assert payload["workers"]["w1"]["healthy"] is True
+        assert payload["dependency_freshness"]["is_stale"] is False
+        assert payload["dependency_freshness"]["freshness_seconds"] < 0.2
+    finally:
+        health.stop()
+
+
 # =============================================================================
 # 3. Gateway HTTP Contract: /health & /metrics
 # =============================================================================

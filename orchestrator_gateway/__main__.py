@@ -95,7 +95,13 @@ def main() -> None:
         worker.worker_id: OpenAIProviderAdapter(worker.endpoint or "", worker.auth_token or "", worker.model_id)
         for worker in workers
     }
-    health = HealthManager(registry, adapters, metrics)
+    health = HealthManager(
+        registry,
+        adapters,
+        metrics,
+        probe_interval_seconds=10.0,
+        auto_start=True,
+    )
     runtime = OrchestratorRuntime(
         registry,
         adapters,
