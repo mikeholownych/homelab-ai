@@ -6,6 +6,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ansible-core=2.20.1-1 \
         auditd=1:4.1.2-1ubuntu0.1 \
+        libaudit1=1:4.1.2-1ubuntu0.1 \
         ca-certificates=20260601~26.04.1 \
         chrony=4.8-2ubuntu1 \
         iproute2=6.19.0-1ubuntu1.1 \
@@ -13,7 +14,8 @@ RUN apt-get update \
         jq=1.8.1-4ubuntu2 \
         locales=2.43-2ubuntu2.4 \
         logrotate=3.22.0-1build1 \
-        netplan.io=1.2-1ubuntu5 \
+        netplan.io=1.2-1ubuntu5.1 \
+        libnetplan1=1.2-1ubuntu5.1 \
         openssh-server=1:10.2p1-2ubuntu3.6 \
         python3=3.14.3-0ubuntu2 \
         python3-apt=3.1.0ubuntu1.1 \
