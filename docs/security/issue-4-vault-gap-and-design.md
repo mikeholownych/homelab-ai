@@ -1,10 +1,11 @@
 # Issue #4: Vault deployment gap and production design
 
 Status: operator authorization for production installation and integration was
-provided on 2026-09-30. Deployment and authority migration are not yet evidenced;
-this document does not establish that Vault issued any current gateway or
-worker credential. Current connectivity and validation results are recorded in
-the [infrastructure preflight](issue-4-infrastructure-preflight-20260930.md).
+provided on 2026-09-30. Vault 2.1.1 is installed and running, but its store is
+initialized and sealed without a retained unseal share or root token after a
+bootstrap parsing failure. It has not issued workload credentials. Current
+execution evidence and the required destructive recovery decision are in the
+[infrastructure preflight](issue-4-infrastructure-preflight-20260930.md).
 
 ## Requirements to implementation reconciliation
 

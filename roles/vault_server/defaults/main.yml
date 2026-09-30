@@ -15,10 +15,17 @@ vault_server_tls_dir: /etc/vault.d/tls
 vault_server_listener_address: ""
 vault_server_api_addr: ""
 vault_server_cluster_addr: ""
+vault_server_tls_certificate_source: ""
+vault_server_tls_private_key_source: ""
+vault_server_tls_ca_source: ""
 vault_server_tls_cert_file: ""
 vault_server_tls_key_file: ""
 vault_server_tls_ca_file: ""
 vault_server_tls_server_name: ""
 vault_server_tls_min_validity_seconds: 2592000
+vault_server_ssh_allowed_sources: []
+vault_server_api_allowed_sources: []
+vault_server_audit_log_dir: /var/log/vault
+vault_server_audit_log_file: /var/log/vault/audit.log
 vault_server_service_enabled: false
 vault_server_service_started: false

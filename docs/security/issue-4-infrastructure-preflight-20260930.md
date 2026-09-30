@@ -97,8 +97,39 @@ restriction observation for this session only; it does not establish VM access.
   host CA key, or execution host already configured to trust the guest is still
   required before production inspection or configuration.
 
-Therefore the guest OS/state, Vault installation or initialization, TLS and
-network configuration, NAS export, credential migration/revocation, service
-health, OpenCode behavior, and Configuration B+ health remain unverified. The
-Ansible server role is a committed local implementation foundation only until
-those live checks can be performed.
+## Live execution result (2026-09-30)
+
+The operator accepted the VM's presented host key. The task-specific known-hosts
+entry fingerprint is `SHA256:jOVqARHOUrsGwBBRDAH2Tz2b7MwjF/XDksarJXHzt5A`; SSH
+then verified the guest as `vault`, Ubuntu 24.04, 2 vCPU, 7.8 GiB RAM and a
+100 GiB `/dev/vda1` ext4 root filesystem with more than 100 GB free. Before
+deployment, the guest had no Vault package/binary, service, configuration or
+data directory. This resolves the earlier read-only preflight.
+
+Ansible then applied the repository role to that single host: 51 tasks succeeded,
+18 changed resources and none failed. Vault 2.1.1 is installed and the systemd
+service is enabled and running. It uses local Raft storage at `/var/lib/vault`,
+the dedicated `vault` account, IP-SAN TLS verified by the operator host, and a
+host firewall allowing SSH and the Vault API only from `10.0.8.95` and T5820
+`10.0.8.5`. Port 8201 is not allowed inbound. The configured local free-space
+reserve is 20 GiB. The Vault audit log directory/file exist, but the Vault audit
+device was not enabled.
+
+Vault initialization **did occur**, but the one-time initializer expected the
+wrong JSON field for the unseal share and stopped before writing the share or
+initial root token into the protected handoff. The successful CLI output was
+consumed by that helper and not retained or printed. Live TLS `/sys/seal-status`
+confirms `initialized=true`, `sealed=true`. `/var/lib/vault` now contains the
+new Raft state; this store was created in this execution and has no workload KV
+records or configured policies/authentication because the helper stopped
+before its first API configuration request. The handoff directory currently
+contains TLS CA material only, **not** a Vault unseal key or administrative
+token. Vault cannot be unsealed or used in this state.
+
+Do not run initialization again against this store. Recovery requires the
+operator to explicitly authorize the specific destructive action of stopping
+`vault.service` and deleting the contents of `/var/lib/vault` on VM 109, then
+rerunning initialization with a helper that recognizes the actual JSON schema.
+That action is not performed here. NAS access and export remain unverified;
+no backup was configured. T5820 credentials/services were not changed and no
+credential invalidation or live application acceptance is claimed.
