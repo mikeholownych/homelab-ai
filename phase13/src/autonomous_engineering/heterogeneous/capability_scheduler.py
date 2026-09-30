@@ -28,6 +28,7 @@ class SchedulingMode(str, Enum):
     CONFIGURATION_A = "CONFIGURATION_A"  # Dual-30B, all Stage 2 (04, 05, 06) on Worker 2 serially
     CONFIGURATION_B = "CONFIGURATION_B"  # Dual-30B, Stage 2 (04, 05) on Worker 2, (06) on Worker 1 [PRODUCTION DEFAULT]
     CONFIGURATION_C = "CONFIGURATION_C"  # Heterogeneous 30B/7B, Stage 2 (04, 05) on Worker 2 7B, (06) on Worker 1 30B
+    CONFIGURATION_B_PLUS = "CONFIGURATION_B_PLUS"  # Dual-30B Rebalanced: Item 01 on W2, Stage 2 (04, 05) on W2, (06) on W1 [PRODUCTION PROMOTED]
 
 
 class AuthorityEscalationError(Exception):

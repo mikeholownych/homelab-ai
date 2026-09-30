@@ -1,0 +1,10 @@
+---
+vault_snapshot_backup_enabled: false
+vault_snapshot_backup_vault_addr: https://10.0.8.254:8200
+vault_snapshot_backup_ca_source: ""
+vault_snapshot_backup_role_id_source: ""
+vault_snapshot_backup_secret_id_source: ""
+vault_snapshot_backup_passphrase_source: ""
+vault_snapshot_backup_runtime_dir: /etc/aihost-vault-backup
+vault_snapshot_backup_vault_share: //192.168.1.124/public
+vault_snapshot_backup_share_directory: homelab-ai-vault-issue4

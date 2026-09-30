@@ -1,0 +1,123 @@
+---
+- name: Create protected ephemeral Vault bootstrap staging directory
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    vault_post_init_enabled: false
+    vault_post_init_seed_stage_dir: /dev/shm/aihost-vault-post-init
+  tasks:
+    - name: Require explicit Vault post-initialization convergence
+      ansible.builtin.assert:
+        that:
+          - vault_post_init_enabled | default(false) | bool
+          - vault_post_init_seed_stage_dir | default('/dev/shm/aihost-vault-post-init') is match('^/dev/shm/')
+        fail_msg: Set vault_post_init_enabled=true and use /dev/shm for secret staging.
+
+    - name: Create private in-memory staging directory
+      ansible.builtin.tempfile:
+        state: directory
+        path: /dev/shm
+        prefix: aihost-vault-post-init-
+      register: vault_post_init_stage
+      changed_when: false
+
+- name: Capture active T5820 service credentials privately for missing KV records
+  hosts: ai-5820-01
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Fetch active service credentials for any missing Vault KV records
+      block:
+        - name: Fetch each protected service credential into controller tmpfs
+          ansible.builtin.fetch:
+            src: "{{ item.source }}"
+            dest: "{{ hostvars['localhost']['vault_post_init_stage']['path'] }}/{{ item.name }}"
+            flat: true
+            validate_checksum: true
+          loop:
+            - { name: gateway_client, source: /etc/local-ai/orchestrator/client-token }
+            - { name: opencode_client, source: /etc/local-ai/orchestrator/opencode-client-token }
+            - { name: vllm_compat, source: /etc/local-ai/vllm/vllm-api-key }
+            - { name: worker1, source: /etc/local-ai/vllm/worker1/worker-api-key }
+            - { name: worker2, source: /etc/local-ai/vllm/worker2/worker-api-key }
+          changed_when: false
+          no_log: true
+        - name: Tighten in-memory staged service credential permissions
+          ansible.builtin.file:
+            path: "{{ hostvars['localhost']['vault_post_init_stage']['path'] }}/{{ item }}"
+            state: file
+            mode: "0400"
+          loop: [gateway_client, opencode_client, vllm_compat, worker1, worker2]
+          delegate_to: localhost
+          become: false
+          changed_when: false
+          no_log: true
+      rescue:
+        - name: Remove partial credential staging after a fetch failure
+          ansible.builtin.file:
+            path: "{{ hostvars['localhost']['vault_post_init_stage']['path'] }}"
+            state: absent
+          delegate_to: localhost
+          become: false
+          changed_when: false
+          no_log: true
+        - name: Stop before Vault configuration when source credentials were unavailable
+          ansible.builtin.fail:
+            msg: T5820 credential staging failed; Vault state was not changed.
+
+- name: Converge Vault configuration and bootstrap AppRole handoff files
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  any_errors_fatal: true
+  tasks:
+    - name: Converge Vault configuration and bootstrap AppRole handoff files
+      block:
+        - name: Run Vault post-initialization role
+          ansible.builtin.include_role:
+            name: vault_post_init
+          vars:
+            vault_post_init_seed_stage_dir: "{{ hostvars['localhost']['vault_post_init_stage']['path'] }}"
+      always:
+        - name: Remove ephemeral credential staging directory
+          ansible.builtin.file:
+            path: "{{ hostvars['localhost']['vault_post_init_stage']['path'] }}"
+            state: absent
+          changed_when: false
+          no_log: true
+
+- name: Converge T5820 protected AppRole files and workload credentials
+  hosts: ai-5820-01
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: vault_platform_credentials
+      vars:
+        vault_platform_credentials_enabled: true
+        vault_platform_credentials_vault_addr: "{{ vault_post_init_vault_addr }}"
+        vault_platform_credentials_ca_source: "{{ vault_post_init_ca_source }}"
+        vault_platform_credentials_role_id_source: "{{ vault_post_init_handoff_dir }}/approle/role-id"
+        vault_platform_credentials_secret_id_source: "{{ vault_post_init_handoff_dir }}/approle/secret-id"
+        vault_platform_credentials_opencode_env_path: /home/mike/.config/opencode/t5820-vault.env
+
+- name: Install backup AppRole handoff only when post-init created a new one
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  roles:
+    - role: vault_snapshot_backup
+      vars:
+        vault_snapshot_backup_enabled: true
+        vault_snapshot_backup_vault_addr: "{{ vault_post_init_vault_addr }}"
+        vault_snapshot_backup_ca_source: "{{ vault_post_init_ca_source }}"
+        vault_snapshot_backup_role_id_source: "{{ vault_post_init_handoff_dir }}/snapshot-approle/role-id"
+        vault_snapshot_backup_secret_id_source: "{{ vault_post_init_handoff_dir }}/snapshot-approle/secret-id"
+        vault_snapshot_backup_passphrase_source: "{{ vault_post_init_handoff_dir }}/vault-backup-passphrase"
+      when: >-
+        (hostvars['localhost']['vault_post_init_result']['stdout'] | from_json).snapshot_handoff_changed

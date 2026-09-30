@@ -1,0 +1,124 @@
+{
+  "reconciliation_metadata": {
+    "timestamp_utc": "2026-09-29T07:16:00Z",
+    "forensic_investigation_id": "PHASE_14_EXP02_FORENSIC_RECONCILIATION",
+    "campaign_window_utc": {
+      "start": "2026-09-29T05:48:38Z",
+      "end": "2026-09-29T06:48:39Z"
+    },
+    "clock_synchronization": {
+      "host_local": "aihost (10.0.8.95)",
+      "host_remote": "ai-5820-01 (10.0.8.5)",
+      "measured_offset_seconds": 0.12,
+      "clock_aligned": true
+    },
+    "production_invariants": {
+      "default_scheduling_mode": "SchedulingMode.CONFIGURATION_B",
+      "candidate_mode": "SchedulingMode.CONFIGURATION_B_PLUS",
+      "candidate_production_promoted": false,
+      "worker_1_model": "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit",
+      "worker_2_model": "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit"
+    }
+  },
+  "opencode_workload_inventory": {
+    "total_requests": 14,
+    "worker1_requests": 12,
+    "worker2_requests": 2,
+    "total_prompt_tokens": 39966,
+    "total_completion_tokens": 1887,
+    "total_tokens": 41853,
+    "bursts": [
+      {
+        "burst_id": "burst_1",
+        "start_utc": "2026-09-29T06:19:19.834Z",
+        "end_utc": "2026-09-29T06:20:28.194Z",
+        "request_count": 6,
+        "target_worker": "b0-live-tp1-worker1",
+        "prompt_tokens": 17224,
+        "completion_tokens": 788,
+        "total_tokens": 18012,
+        "overlapping_cohort": "regime2_config_b_plus",
+        "overlapping_project": "sust-config_b_plus-proj-db-05"
+      },
+      {
+        "burst_id": "burst_2",
+        "start_utc": "2026-09-29T06:24:29.000Z",
+        "end_utc": "2026-09-29T06:26:17.084Z",
+        "request_count": 8,
+        "worker1_requests": 6,
+        "worker2_requests": 2,
+        "prompt_tokens": 22742,
+        "completion_tokens": 1099,
+        "total_tokens": 23841,
+        "overlapping_cohort": "regime2_config_b_plus",
+        "overlapping_project": "sust-config_b_plus-proj-obs-06"
+      }
+    ],
+    "requests": [
+      {"request_id": "528b26fb-986c-45bf-81a6-bfa7ab69de56", "timestamp_utc": "2026-09-29T06:19:22.996Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2582, "completion_tokens": 54, "total_tokens": 2636, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 3161.8},
+      {"request_id": "6fbe0c4e-7d06-4803-bf48-04961359aff0", "timestamp_utc": "2026-09-29T06:19:38.771Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2876, "completion_tokens": 259, "total_tokens": 3135, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 15775.3},
+      {"request_id": "80324082-8408-4fa4-85e0-d5899d811a33", "timestamp_utc": "2026-09-29T06:19:44.865Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 3154, "completion_tokens": 85, "total_tokens": 3239, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 6093.3},
+      {"request_id": "556513be-9def-4ee8-9bca-a8d3cd167dab", "timestamp_utc": "2026-09-29T06:20:01.495Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2582, "completion_tokens": 54, "total_tokens": 2636, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 16630.6},
+      {"request_id": "5da67116-49c5-46bb-a695-8a21031428aa", "timestamp_utc": "2026-09-29T06:20:21.035Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2876, "completion_tokens": 264, "total_tokens": 3140, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 19539.4},
+      {"request_id": "7d9eeb06-dab9-46f1-b42f-e6decb257b9f", "timestamp_utc": "2026-09-29T06:20:28.194Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 3159, "completion_tokens": 72, "total_tokens": 3231, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 7159.0},
+      {"request_id": "2643ce87-4b65-4bc1-ab98-39c268cce173", "timestamp_utc": "2026-09-29T06:24:32.679Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2582, "completion_tokens": 54, "total_tokens": 2636, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 3679.8},
+      {"request_id": "c4d402d4-96c8-41b3-929c-85cc9a7e7832", "timestamp_utc": "2026-09-29T06:24:51.597Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2876, "completion_tokens": 213, "total_tokens": 3089, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 18918.0},
+      {"request_id": "e020a71c-3984-4102-86ac-d00fdb850315", "timestamp_utc": "2026-09-29T06:25:05.414Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 3108, "completion_tokens": 153, "total_tokens": 3261, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 13816.6},
+      {"request_id": "97629065-934d-4869-8ef8-c8fbf4313298", "timestamp_utc": "2026-09-29T06:25:22.118Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2582, "completion_tokens": 59, "total_tokens": 2641, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 16704.0},
+      {"request_id": "92b3cfd8-cef7-4d5b-ae7d-5db2dc6f0097", "timestamp_utc": "2026-09-29T06:25:37.902Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 2881, "completion_tokens": 265, "total_tokens": 3146, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 15783.7},
+      {"request_id": "b6c81930-2129-4d18-ba4c-1087d0846d66", "timestamp_utc": "2026-09-29T06:25:48.989Z", "worker_id": "b0-live-tp1-worker1", "prompt_tokens": 3165, "completion_tokens": 181, "total_tokens": 3346, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 11087.7},
+      {"request_id": "bd105ad4-f8ac-4e84-8e3d-69a9c6945299", "timestamp_utc": "2026-09-29T06:26:04.981Z", "worker_id": "b0-live-tp1-worker2", "prompt_tokens": 2489, "completion_tokens": 38, "total_tokens": 2527, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 3981.7},
+      {"request_id": "ee9222e7-6d2d-4e4e-91e9-84d4e53139e2", "timestamp_utc": "2026-09-29T06:26:17.084Z", "worker_id": "b0-live-tp1-worker2", "prompt_tokens": 3054, "completion_tokens": 136, "total_tokens": 3190, "tool": "t5820repo_read_role_artifact", "elapsed_ms": 12103.0}
+    ]
+  },
+  "cohort_overlap_summary": {
+    "regime1_config_b": {
+      "window_utc": "2026-09-29T05:48:39.54Z to 2026-09-29T05:57:23.42Z",
+      "opencode_requests": 0,
+      "contention": "NONE",
+      "status": "UNCONTENDED"
+    },
+    "regime1_config_b_plus": {
+      "window_utc": "2026-09-29T05:57:23.42Z to 2026-09-29T06:06:07.59Z",
+      "opencode_requests": 0,
+      "contention": "NONE",
+      "status": "UNCONTENDED"
+    },
+    "regime2_config_b_plus": {
+      "window_utc": "2026-09-29T06:06:07.59Z to 2026-09-29T06:26:21.69Z",
+      "opencode_requests": 14,
+      "contention": "ASYMMETRIC_CONCURRENT_LOAD",
+      "status": "CONTENDED_PROJECTS_5_6"
+    },
+    "regime2_config_b": {
+      "window_utc": "2026-09-29T06:26:21.69Z to 2026-09-29T06:48:39.28Z",
+      "opencode_requests": 0,
+      "contention": "NONE",
+      "status": "UNCONTENDED"
+    }
+  },
+  "recalculated_metrics": {
+    "regime_1_nominal": {
+      "target_rate_proj_hr": 12.0,
+      "config_b_throughput": 12.0,
+      "config_b_plus_throughput": 12.0,
+      "config_b_w1_demand_sec": 196.5,
+      "config_b_plus_w1_demand_sec": 168.2,
+      "w1_demand_reduction_pct": 14.4,
+      "queue_stability": "STABLE"
+    },
+    "regime_2_capacity_stress": {
+      "target_rate_proj_hr": 19.5,
+      "config_b_throughput": 16.15,
+      "config_b_plus_throughput": 17.79,
+      "config_b_p95_latency_sec": 404.45,
+      "config_b_plus_p95_latency_sec": 284.83,
+      "config_b_queue_wait_trend": "DIVERGENT (+39.3s/project)",
+      "config_b_plus_queue_wait_trend": "TRANSIENT_PERTURBATION (0s on p1-4, 12.2s on p5, 25.5s on p6 due to OpenCode)",
+      "queue_stability_reassessment": {
+        "config_b": "UNSTABLE (service demand 194.9s > inter-arrival 184.6s)",
+        "config_b_plus": "STABLE_SUB_SATURATED for lambda <= 18.0 proj/hr; FINITE_COHORT_THROUGHPUT_IMPROVED at 19.5 proj/hr with transient accumulation"
+      }
+    }
+  }
+}

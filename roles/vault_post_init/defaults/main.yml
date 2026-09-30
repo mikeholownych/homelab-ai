@@ -1,0 +1,8 @@
+---
+vault_post_init_enabled: false
+vault_post_init_vault_addr: "https://10.0.8.254:8200"
+vault_post_init_ca_source: ""
+vault_post_init_root_token_source: ""
+vault_post_init_unseal_key_source: ""
+vault_post_init_handoff_dir: /home/mike/.local/share/vault-issue4
+vault_post_init_seed_stage_dir: ""

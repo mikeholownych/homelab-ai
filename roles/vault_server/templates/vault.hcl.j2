@@ -1,0 +1,18 @@
+ui = false
+disable_mlock = true
+api_addr = "{{ vault_server_api_addr }}"
+cluster_addr = "{{ vault_server_cluster_addr }}"
+
+storage "raft" {
+  path = "{{ vault_server_data_dir }}"
+  node_id = "{{ inventory_hostname }}"
+}
+
+listener "tcp" {
+  address = "{{ vault_server_listener_address }}"
+  cluster_address = "{{ vault_server_listener_address | regex_replace(':8200$', ':8201') }}"
+  tls_cert_file = "{{ vault_server_tls_cert_file }}"
+  tls_key_file = "{{ vault_server_tls_key_file }}"
+  tls_disable = false
+  tls_min_version = "tls12"
+}

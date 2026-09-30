@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
-from concurrent.futures import ThreadPoolExecutor
 
 from orchestrator_contract import Authority, Task
+
+from .health import HealthManager
+from .metrics import MetricsRegistry
 
 
 def _canonical(value: Any) -> str:
@@ -82,6 +86,7 @@ class WorkerRecord:
 class CapabilityRegistry:
     def __init__(self, workers: list[WorkerRecord] | None = None) -> None:
         self._workers: dict[str, WorkerRecord] = {}
+        self._selection_cursors: dict[str | None, int] = {}
         self._lock = threading.RLock()
         for worker in workers or []:
             self.register(worker)
@@ -92,8 +97,9 @@ class CapabilityRegistry:
 
     def update_health(self, worker_id: str, healthy: bool) -> None:
         with self._lock:
-            worker = self._workers[worker_id]
-            self._workers[worker_id] = WorkerRecord(**{**worker.__dict__, "healthy": healthy})
+            if worker_id in self._workers:
+                worker = self._workers[worker_id]
+                self._workers[worker_id] = WorkerRecord(**{**worker.__dict__, "healthy": healthy})
 
     def select(
         self, required: frozenset[str], *, context_tokens: int = 0, concurrency: int = 1,
@@ -107,7 +113,25 @@ class CapabilityRegistry:
             ]
         if not candidates:
             raise LookupError("no worker proves the requested capability")
-        return sorted(candidates, key=lambda worker: worker.worker_id)[0]
+        candidates = sorted(candidates, key=lambda worker: worker.worker_id)
+        cursor = self._selection_cursors.get(public_model_id, 0)
+        selected = candidates[cursor % len(candidates)]
+        self._selection_cursors[public_model_id] = cursor + 1
+        return selected
+
+    def get(
+        self, worker_id: str, required: frozenset[str], *, context_tokens: int = 0, concurrency: int = 1,
+        public_model_id: str | None = None,
+    ) -> WorkerRecord:
+        with self._lock:
+            worker = self._workers.get(worker_id)
+        if (
+            worker is None
+            or (public_model_id is not None and worker.public_model_id != public_model_id)
+            or not worker.eligible(required, context_tokens, concurrency)
+        ):
+            raise LookupError("requested worker is unavailable or lacks the requested capability")
+        return worker
 
     def public_models(self) -> list[str]:
         with self._lock:
@@ -154,6 +178,10 @@ class ProviderAdapter(Protocol):
     def complete(self, request: dict[str, Any], timeout: float) -> dict[str, Any]: ...
 
 
+class ProviderError(RuntimeError):
+    pass
+
+
 @dataclass
 class InMemoryAdapter:
     content: str
@@ -168,9 +196,16 @@ class InMemoryAdapter:
 class OpenAIProviderAdapter:
     endpoint: str
     auth_token: str
+    model_id: str | None = None
 
     def complete(self, request: dict[str, Any], timeout: float) -> dict[str, Any]:
-        payload = json.dumps(request).encode()
+        provider_request = dict(request)
+        if self.model_id is not None:
+            provider_request["model"] = self.model_id
+        # The runtime normalizes the provider response before the gateway emits SSE.
+        provider_request["stream"] = False
+        provider_request.pop("stream_options", None)
+        payload = json.dumps(provider_request).encode()
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.auth_token}"}
         http_request = urllib.request.Request(
             self.endpoint.rstrip("/") + "/v1/chat/completions", payload, headers=headers, method="POST"
@@ -179,16 +214,22 @@ class OpenAIProviderAdapter:
             with urllib.request.urlopen(http_request, timeout=timeout) as response:
                 provider_status = response.status
                 body = json.loads(response.read().decode())
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, json.JSONDecodeError) as error:
-            raise RuntimeError(f"provider request failed: {error}") from error
+        except urllib.error.HTTPError as error:
+            body = error.read().decode(errors="replace")[:512]
+            raise ProviderError(f"provider HTTP {error.code}: {body}") from error
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+            raise ProviderError(f"provider request failed: {error}") from error
         choice = (body.get("choices") or [{}])[0]
         message = choice.get("message") or {}
-        return {
+        output = {
             "content": message.get("content", ""),
             "tool_calls": message.get("tool_calls", []),
             "provider_status": provider_status,
             "provider_finish_reason": choice.get("finish_reason"),
         }
+        if message.get("reasoning_content"):
+            output["reasoning_content"] = message["reasoning_content"]
+        return output
 
 
 @dataclass
@@ -249,72 +290,175 @@ class TaskGraph:
 class GraphScheduler:
     """Small dependency-gated scheduler; handlers run only after predecessors accept."""
 
-    def run(self, graph: TaskGraph, handlers: dict[str, Any], *, mode: str = "dependency-gated", max_workers: int = 4) -> None:
+    def __init__(self, metrics: MetricsRegistry | None = None) -> None:
+        self.metrics = metrics
+
+    def run(
+        self,
+        graph: TaskGraph,
+        handlers: dict[str, Any],
+        *,
+        mode: str = "dependency-gated",
+        max_workers: int = 4,
+        metrics: MetricsRegistry | None = None,
+    ) -> None:
+        active_metrics = metrics or self.metrics
         if mode not in {"serial", "parallel", "dependency-gated"}:
             raise ValueError("unsupported scheduling mode")
         while pending := graph.ready():
+            if active_metrics:
+                active_metrics.scheduler_queued_work.set(len(pending))
+                blocked = sum(1 for n in graph.nodes() if n.state == "pending" and n not in pending)
+                active_metrics.scheduler_dependency_blocked_work.set(blocked)
             if mode == "serial" or len(pending) == 1:
                 selected = pending[:1]
             else:
                 selected = pending
             for node in selected:
                 graph.start(node.node_id)
-            if len(selected) == 1:
-                results = [(selected[0], handlers[selected[0].node_id]())]
-            else:
-                with ThreadPoolExecutor(max_workers=min(max_workers, len(selected))) as pool:
-                    futures = [(node, pool.submit(handlers[node.node_id])) for node in selected]
-                    results = [(node, future.result()) for node, future in futures]
+            if active_metrics:
+                active_metrics.scheduler_active_work.inc(len(selected))
+                active_metrics.scheduler_queued_work.set(max(0, len(pending) - len(selected)))
+            try:
+                if len(selected) == 1:
+                    results = [(selected[0], handlers[selected[0].node_id]())]
+                else:
+                    with ThreadPoolExecutor(max_workers=min(max_workers, len(selected))) as pool:
+                        futures = [(node, pool.submit(handlers[node.node_id])) for node in selected]
+                        results = [(node, future.result()) for node, future in futures]
+            finally:
+                if active_metrics:
+                    active_metrics.scheduler_active_work.dec(len(selected))
             for node, result in results:
                 graph.complete(node.node_id, artifact_content=str(result), accepted=True)
+        if active_metrics:
+            active_metrics.scheduler_queued_work.set(0)
+            blocked = sum(1 for n in graph.nodes() if n.state == "pending")
+            active_metrics.scheduler_dependency_blocked_work.set(blocked)
 
 
 class OrchestratorRuntime:
-    def __init__(self, registry: CapabilityRegistry, adapters: dict[str, ProviderAdapter], evidence: EvidenceStore, *, max_body_bytes: int = 1_000_000, validator: Any | None = None, diagnostic_lineage: bool = False) -> None:
+    def __init__(
+        self,
+        registry: CapabilityRegistry,
+        adapters: dict[str, ProviderAdapter],
+        evidence: EvidenceStore,
+        *,
+        max_body_bytes: int = 1_000_000,
+        validator: Any | None = None,
+        diagnostic_lineage: bool = False,
+        metrics: MetricsRegistry | None = None,
+        health: HealthManager | None = None,
+        scheduling_mode: str | None = None,
+    ) -> None:
         self.registry = registry
         self.adapters = adapters
         self.evidence = evidence
         self.max_body_bytes = max_body_bytes
         self.validator = validator
         self.diagnostic_lineage = diagnostic_lineage
+        self.metrics = metrics or MetricsRegistry()
+        self.scheduling_mode = scheduling_mode or os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
+        self.health = health or HealthManager(self.registry, self.adapters, self.metrics, scheduling_mode=self.scheduling_mode)
 
-    def complete(self, request: dict[str, Any], *, capabilities: frozenset[str] = frozenset({"navigation"}), timeout: float = 60.0) -> dict[str, Any]:
+    def complete(
+        self,
+        request: dict[str, Any],
+        *,
+        capabilities: frozenset[str] = frozenset({"navigation"}),
+        timeout: float = 60.0,
+        worker_id: str | None = None,
+    ) -> dict[str, Any]:
         request_id = request.get("request_id") or str(uuid.uuid4())
+        self.metrics.inference_requests_total.inc(status="received")
         messages = request.get("messages")
         if not isinstance(messages, list) or not messages:
+            self.metrics.inference_requests_total.inc(status="rejected")
+            self.metrics.scheduler_admission_backpressure_total.inc(reason="request_shape")
             return {"status": "rejected", "failure_class": "request_shape", "request_id": request_id}
         context_tokens = sum(len(str(message.get("content", ""))) for message in messages) // 4
         public_model = request.get("model")
         try:
-            worker = self.registry.select(capabilities, context_tokens=context_tokens, public_model_id=public_model)
+            if worker_id:
+                worker = self.registry.get(worker_id, capabilities, context_tokens=context_tokens, public_model_id=public_model)
+            else:
+                worker = self.registry.select(capabilities, context_tokens=context_tokens, public_model_id=public_model)
         except LookupError:
+            self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_capability")
+            self.metrics.inference_completions_total.inc(worker_id="none", outcome="failed")
             self.evidence.append("routing_rejected", request_id=request_id, failure_class="capability")
             return {"status": "unsupported", "failure_class": "capability", "request_id": request_id}
+
         adapter = self.adapters.get(worker.worker_id)
         if adapter is None:
+            self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="rejected_unhealthy")
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+            self.health.record_worker_observation(worker.worker_id, healthy=False, error="adapter_unavailable")
             self.evidence.append("routing_rejected", request_id=request_id, failure_class="adapter_unavailable", worker_id=worker.worker_id)
             return {"status": "blocked", "failure_class": "adapter_unavailable", "request_id": request_id}
+
+        self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="dispatched")
+        self.metrics.inference_dispatches_total.inc(worker_id=worker.worker_id, model=worker.public_model_id)
         self.evidence.append("worker_selected", request_id=request_id, worker_id=worker.worker_id, worker_identity=worker.identity_hash)
+
         started = time.monotonic()
+        self.metrics.scheduler_active_work.inc()
         try:
             output = adapter.complete(request, timeout)
+            call_duration = time.monotonic() - started
+            self.health.record_worker_observation(worker.worker_id, healthy=True, duration=call_duration)
         except TimeoutError:
+            call_duration = time.monotonic() - started
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="timed_out")
+            self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error="timeout")
             self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="timeout")
             return {"status": "blocked", "failure_class": "timeout", "request_id": request_id}
+        except ProviderError as error:
+            call_duration = time.monotonic() - started
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+            self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
+            self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="provider", error=type(error).__name__, detail=str(error)[:512])
+            return {"status": "blocked", "failure_class": "provider", "request_id": request_id}
         except Exception as error:
+            call_duration = time.monotonic() - started
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+            self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
             self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="worker", error=type(error).__name__)
             return {"status": "blocked", "failure_class": "worker", "request_id": request_id}
-        if self.validator is not None and not self.validator(output):
-            self.evidence.append("response_rejected", request_id=request_id, worker_id=worker.worker_id, failure_class="external_validation")
-            return {"status": "blocked", "failure_class": "external_validation", "request_id": request_id}
+        finally:
+            self.metrics.scheduler_active_work.dec()
+
+        if self.validator is not None:
+            is_valid = bool(self.validator(output))
+            self.metrics.authority_validations_total.inc(outcome="accepted" if is_valid else "rejected")
+            if not is_valid:
+                self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+                self.evidence.append("response_rejected", request_id=request_id, worker_id=worker.worker_id, failure_class="external_validation")
+                return {"status": "blocked", "failure_class": "external_validation", "request_id": request_id}
+        else:
+            self.metrics.authority_validations_total.inc(outcome="accepted")
+
+        total_duration = time.monotonic() - started
+        self.metrics.inference_duration_seconds.observe(total_duration, worker_id=worker.worker_id, model=worker.public_model_id)
+        self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="completed")
+
+        prompt_tokens = context_tokens
+        completion_content = str(output.get("content", ""))
+        completion_tokens = max(1, len(completion_content) // 4) if completion_content else 0
+        self.metrics.inference_prompt_tokens_total.inc(prompt_tokens, worker_id=worker.worker_id, model=worker.public_model_id)
+        self.metrics.inference_completion_tokens_total.inc(completion_tokens, worker_id=worker.worker_id, model=worker.public_model_id)
+
         tool_calls = output.get("tool_calls", [])
         normalized_finish_reason = "tool_calls" if tool_calls else "stop"
+        message = {"role": "assistant", "content": output.get("content", ""), "tool_calls": tool_calls}
+        if output.get("reasoning_content"):
+            message["reasoning_content"] = output["reasoning_content"]
         response = {
             "id": "chatcmpl-" + request_id.replace("-", "")[:24],
             "object": "chat.completion",
             "created": int(time.time()),
             "model": worker.public_model_id,
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": output.get("content", ""), "tool_calls": tool_calls}, "finish_reason": normalized_finish_reason}],
+            "choices": [{"index": 0, "message": message, "finish_reason": normalized_finish_reason}],
         }
         if self.diagnostic_lineage:
             self.evidence.append(
@@ -336,8 +480,10 @@ class OrchestratorRuntime:
 
     def execute_tool(self, task: Task, authority: Authority, tool_name: str, arguments: dict[str, Any], executor: Any) -> dict[str, Any]:
         if not tool_name or not isinstance(arguments, dict) or not authority.allows(task, "execute"):
+            self.metrics.authority_rejections_total.inc(reason="unauthorized_action")
             self.evidence.append("execution_rejected", task_id=task.task_id, tool_name=tool_name, failure_class="authority")
             return {"status": "blocked", "failure_class": "authority"}
+        self.metrics.authority_validations_total.inc(outcome="accepted")
         self.evidence.append("execution_authorized", task_id=task.task_id, tool_name=tool_name, arguments_hash=_hash(arguments))
         try:
             result = executor(tool_name, arguments)

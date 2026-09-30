@@ -175,6 +175,167 @@ allowed only when cluster membership is configured for the current host.
 Logical refs must be exact ASCII paths with no whitespace, control characters,
 backslashes, `%`, `?`, `#`, empty segments, `.`, `..`, or double slashes.
 
+## Reproducible post-initialization configuration
+
+`playbooks/vault-post-init.yml` is the idempotent post-init entrypoint for the
+live homelab topology. Its policy, mount, audit and AppRole settings match the
+currently deployed Vault 2.1.1 state:
+
+- file audit device `file/` writing to `/var/log/vault/audit.log`;
+- KVv2 at `secret/` and AppRole auth at `approle/`;
+- `t5820-platform` can read only the five gateway, OpenCode, compatibility and
+  worker KV records listed below, with a 10 minute token TTL and 60 minute
+  maximum;
+- `vault-snapshot-export` has only `read` and `sudo` on
+  `sys/storage/raft/snapshot`, with a 5 minute token TTL and 10 minute maximum.
+
+The root token and unseal share are read from protected files. They are never
+Ansible variables or command arguments. The helper accepts Vault's HTTP 503
+health response only when its body confirms an initialized, sealed Vault. It
+submits the share to the verified TLS API, then requires HTTP 200 health with
+Vault unsealed before continuing. It never initializes or resets Vault.
+Existing mounts with conflicting types,
+audit destinations, or KV versions fail closed. Existing workload KV records
+are preserved; only missing records are seeded from the currently active,
+protected T5820 credential files fetched over SSH into controller tmpfs. The
+source files are removed from tmpfs after the run. Existing valid AppRole
+handoff IDs remain unchanged; if a freshly initialized Vault has new AppRole
+identities, fresh RoleID/SecretID values are written directly to the protected
+handoff files without printing them.
+
+### One-time initialization on a genuinely fresh Vault
+
+Create or use a private handoff directory with mode `0700`, install the
+Vault server and TLS material, then run the guarded initialization helper once:
+
+```sh
+python3 roles/vault_post_init/files/vault-init-handoff.py \
+  --vault-addr https://10.0.8.254:8200 \
+  --ca-cert /home/mike/.local/share/vault-issue4/vault-root-ca.crt \
+  --handoff-dir /home/mike/.local/share/vault-issue4
+```
+
+It verifies Vault is not initialized and that the handoff directory is a
+mode-`0700` directory owned by the executing operator. Before invoking the
+pinned Vault CLI, it writes, fsyncs, atomically renames and removes a protected
+preflight file on that filesystem. It then initializes with one Shamir share
+and threshold one, captures the CLI response without printing it, and saves
+the response, root token and unseal share as mode `0400` files. It refuses an
+already-initialized Vault or existing recovery material. If file
+extraction is interrupted after the response is saved, rerun with
+`--resume-record` and the same address/CA/handoff arguments; this reads the
+protected saved response and does not contact or reinitialize Vault.
+
+After initialization, unseal and converge the observed post-init state while
+converging T5820 credentials in the same run:
+
+```sh
+ansible-playbook \
+  -i inventory/production/hosts.yml \
+  --limit 'localhost,ai-5820-01' \
+  playbooks/vault-post-init.yml \
+  -e vault_post_init_enabled=true \
+  -e vault_post_init_vault_addr=https://10.0.8.254:8200 \
+  -e vault_post_init_ca_source=/home/mike/.local/share/vault-issue4/vault-root-ca.crt \
+  -e vault_post_init_root_token_source=/home/mike/.local/share/vault-issue4/vault-root-token \
+  -e vault_post_init_unseal_key_source=/home/mike/.local/share/vault-issue4/vault-unseal.key \
+  -e vault_post_init_handoff_dir=/home/mike/.local/share/vault-issue4
+```
+
+Only paths and non-secret settings appear in the command. If the Vault server
+was freshly initialized but the T5820 is still running, the five active API
+credentials seed the empty KV records before the workload AppRole is used. The
+playbook then installs the protected AppRole pair and runs the normal live
+boundary checks. A newly issued snapshot AppRole pair also refreshes the
+controller backup timer and verifies an encrypted snapshot.
+
+## T5820 workload credential convergence
+
+The dedicated `playbooks/vault-platform-credentials.yml` entrypoint converges
+the authenticated gateway client, OpenCode client, shared compatibility key,
+and separate worker 1 and worker 2 API keys from the `t5820-platform` AppRole.
+It is scoped to `ai-5820-01`; use `--limit ai-5820-01` and explicitly set
+`vault_platform_credentials_enabled=true`. Provide the CA certificate and
+protected RoleID/SecretID file paths as extra-vars. These inputs are paths only;
+never pass secret values on the command line or in inventory.
+
+Set `vault_platform_credentials_opencode_env_path` to the operator's protected
+OpenCode environment file (for this controller,
+`/home/mike/.config/opencode/t5820-vault.env`). The controller-side helper
+retrieves that one KV record directly from Vault without storing it in Ansible
+facts. OpenCode's provider config uses `{env:T5820_CLIENT_TOKEN}` and the
+operator's local zsh setup sources this file. The file is mode `0600` and should
+remain outside Git.
+
+The role copies the AppRole files to root-only `/etc/aihost/credentials/` as a
+recoverable pair, then runs a root-owned helper on the T5820. The helper reads Vault directly over
+verified TLS, keeps its short-lived token and returned values in process memory,
+and writes each service credential atomically to its protected consumer file.
+It does not publish secrets as Ansible facts or print them. The gateway worker
+roster points worker 1 and worker 2 at distinct credential files, and each
+worker's API config and environment use that same worker-specific key. Changed
+worker credentials restart their worker before the gateway; unchanged runs
+perform live authenticated checks without restarting services.
+
+Before restarting any service, the helper verifies that the deployed previous
+client and worker keys are accepted before any active file changes. The helper
+stages and checks every replacement file, then promotes the set and restarts
+changed workers before the gateway. It validates the Vault replacements at the
+actual boundaries, health and Configuration B+. If any promotion, restart or
+check fails, it restores the exact pre-run consumer files, reconciles affected
+services, and confirms the previously working credentials still pass. The
+rollback values come only from the current T5820 consumer files that passed the
+pre-change boundary check; the helper does not consult historical or retired
+credential backups. OpenCode's local environment file is backed up in tmpfs and
+restored if the T5820 transaction cannot be reconciled. Every run verifies the
+current Vault keys, all three health endpoints, and Configuration B+.
+
+The Vault policy grants read access only to these five KVv2 records:
+
+- `secret/local-ai/services/orchestrator-gateway/client-token`
+- `secret/local-ai/hosts/ai-5820-01/opencode-client-token`
+- `secret/local-ai/services/vllm/api-key`
+- `secret/local-ai/services/vllm/worker1-api-key`
+- `secret/local-ai/services/vllm/worker2-api-key`
+
+## Encrypted Raft snapshot backup
+
+The controller backup role uses a separate `vault-snapshot-export` AppRole. Its
+five-minute token has only `read` and `sudo` on
+`sys/storage/raft/snapshot`; it cannot read workload secrets. A daily systemd
+timer on the Ansible controller fetches the Raft snapshot over verified TLS,
+encrypts it with GPG AES-256, uploads it to the dedicated TerraMaster SMB folder,
+downloads it again, and verifies decryption against the source snapshot hash.
+Only ciphertext is written to the NAS. The share is guest accessible, so the
+backup passphrase must remain protected and snapshots must not be exported
+unencrypted.
+
+Configure or reproduce the controller timer with:
+
+```sh
+ansible-playbook -i localhost, -c local playbooks/vault-backup-controller.yml \
+  -e vault_snapshot_backup_enabled=true \
+  -e vault_snapshot_backup_ca_source=/home/mike/.local/share/vault-issue4/vault-root-ca.crt \
+  -e vault_snapshot_backup_role_id_source=/home/mike/.local/share/vault-issue4/snapshot-approle/role-id \
+  -e vault_snapshot_backup_secret_id_source=/home/mike/.local/share/vault-issue4/snapshot-approle/secret-id \
+  -e vault_snapshot_backup_passphrase_source=/home/mike/.local/share/vault-issue4/vault-backup-passphrase
+```
+
+The AppRole and GPG passphrase source files live only in the protected operator
+handoff directory. The playbook copies them to root-only controller files; it
+does not use the Vault root token. Keep the `vault-backup-passphrase` file with
+the operator recovery material. Decrypt a downloaded snapshot with
+`gpg --batch --pinentry-mode loopback --passphrase-file
+/home/mike/.local/share/vault-issue4/vault-backup-passphrase --decrypt
+vault-raft-YYYYMMDD.snap.gpg > vault-raft-YYYYMMDD.snap`.
+
+Vault uses one Shamir share with a threshold of one. After a Vault service
+restart, use the protected `vault-unseal.key` from the operator handoff to
+unseal through the verified HTTPS API or the Vault CLI. Keep the protected root
+token for manual administration and recovery only. The Vault instance remains
+single node; the NAS export is a convenience for rebuilding and does not claim
+automatic failover or immutable storage.
+
 ## systemd scheduled runner example
 
 ```ini
