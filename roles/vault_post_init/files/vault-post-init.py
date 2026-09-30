@@ -83,6 +83,14 @@ class VaultAPI:
         except urllib.error.HTTPError as error:
             if allow_missing and error.code == 404:
                 return 404, {}
+            if method == "GET" and path == "sys/health" and error.code == 503:
+                try:
+                    health = json.loads(error.read())
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    raise VaultError("Vault health returned an invalid sealed-state response") from None
+                if not isinstance(health, dict) or health.get("initialized") is not True or health.get("sealed") is not True:
+                    raise VaultError("Vault health returned an unexpected HTTP 503 state") from None
+                return 503, health
             raise VaultError(f"Vault API operation failed with HTTP {error.code}") from None
         except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
             raise VaultError(f"Vault API operation failed ({type(error).__name__})") from None
@@ -249,8 +257,12 @@ def unseal_if_needed(api: VaultAPI, health: dict, unseal_file: Path) -> dict:
     share = unseal_file.read_text(encoding="utf-8").strip()
     if not share:
         raise VaultError("Unseal source is empty")
-    _, result = api.request("POST", "sys/unseal", {"key": share})
-    health = result
+    api.request("POST", "sys/unseal", {"key": share})
+    status, health = api.request("GET", "sys/health")
+    if status != 200:
+        raise VaultError("Vault health did not return HTTP 200 after unseal")
+    if health.get("initialized") is not True:
+        raise VaultError("Vault is not initialized after unseal")
     if health.get("sealed"):
         raise VaultError("Vault remains sealed after the supplied recovery share")
     return health
@@ -258,7 +270,12 @@ def unseal_if_needed(api: VaultAPI, health: dict, unseal_file: Path) -> dict:
 
 def converge(address: str, ca_file: Path, token_file: Path, handoff: Path, seed_dir: Path, unseal_file: Path | None = None) -> dict:
     api = VaultAPI(address, ca_file, token_file)
-    _, health = api.request("GET", "sys/health")
+    health_status, health = api.request("GET", "sys/health")
+    if health_status == 503:
+        if health.get("initialized") is not True or health.get("sealed") is not True:
+            raise VaultError("Vault health returned an unexpected HTTP 503 state")
+    elif health_status != 200:
+        raise VaultError(f"Vault health returned unexpected HTTP {health_status}")
     if unseal_file is not None:
         health = unseal_if_needed(api, health, unseal_file)
     if not health.get("initialized") or health.get("sealed"):

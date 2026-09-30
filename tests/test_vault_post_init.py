@@ -1,8 +1,10 @@
 """Contract tests for repeatable Vault post-initialization convergence."""
 import importlib.machinery
 import importlib.util
+import json
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 
@@ -206,7 +208,96 @@ class VaultPostInitTests(unittest.TestCase):
             key_file.chmod(0o400)
             result = helper.unseal_if_needed(fake, {"initialized": True, "sealed": True}, key_file)
             self.assertFalse(result["sealed"])
-            self.assertEqual(fake.calls, [("POST", "sys/unseal")])
+            self.assertEqual(fake.calls, [("POST", "sys/unseal"), ("GET", "sys/health")])
+
+    def test_converge_unseals_realistic_http_503_then_continues(self):
+        helper = load_helper()
+
+        class SealedFreshVault(FreshVault):
+            def __init__(self, loaded_helper):
+                super().__init__(loaded_helper)
+                self.sealed = True
+                self.health_statuses = []
+
+            def request(self, method, path, payload=None, allow_missing=False):
+                if method == "GET" and path == "sys/health":
+                    status = 503 if self.sealed else 200
+                    self.health_statuses.append(status)
+                    return status, {"initialized": True, "sealed": self.sealed}
+                if method == "POST" and path == "sys/unseal":
+                    self.sealed = False
+                    return 200, {"sealed": False}
+                return super().request(method, path, payload, allow_missing)
+
+        fake = SealedFreshVault(helper)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            handoff = root / "handoff"
+            seed = root / "seed"
+            handoff.mkdir(mode=0o700)
+            seed.mkdir(mode=0o700)
+            key_file = root / "unseal-share"
+            key_file.write_text("fixture-unseal-share\n")
+            key_file.chmod(0o400)
+            for name in helper.SEEDS:
+                source = seed / name
+                source.write_text(f"synthetic-{name}-credential\n")
+                source.chmod(0o400)
+            with patch.object(helper, "VaultAPI", return_value=fake):
+                result = helper.converge(
+                    "https://vault.invalid:8200", Path("ca"), Path("token"), handoff, seed, key_file
+                )
+            self.assertTrue(result["changed"])
+            self.assertEqual(fake.health_statuses, [503, 200])
+            self.assertTrue(fake.mounts)
+            self.assertIn("file/", fake.audit)
+
+    def test_unexpected_health_503_fails_closed(self):
+        helper = load_helper()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ca = root / "ca.crt"
+            ca.write_text("test ca fixture")
+            token = root / "token"
+            token.write_text("fixture-token\n")
+            token.chmod(0o400)
+            with patch.object(helper.ssl, "create_default_context", return_value=object()):
+                api = helper.VaultAPI("https://vault.invalid:8200", ca, token)
+            error = urllib.error.HTTPError(
+                "https://vault.invalid:8200/v1/sys/health", 503, "unavailable", {}, None
+            )
+            error.read = lambda: json.dumps({"initialized": True, "sealed": False}).encode()
+            with patch.object(helper.urllib.request, "urlopen", side_effect=error):
+                with self.assertRaisesRegex(helper.VaultError, "HTTP 503"):
+                    api.request("GET", "sys/health")
+
+            unrelated_error = urllib.error.HTTPError(
+                "https://vault.invalid:8200/v1/sys/mounts", 503, "unavailable", {}, None
+            )
+            unrelated_error.read = lambda: b'{"initialized":true,"sealed":true}'
+            with patch.object(helper.urllib.request, "urlopen", side_effect=unrelated_error):
+                with self.assertRaisesRegex(helper.VaultError, "HTTP 503"):
+                    api.request("GET", "sys/mounts")
+
+    def test_health_api_accepts_only_documented_initialized_sealed_503(self):
+        helper = load_helper()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ca = root / "ca.crt"
+            ca.write_text("test ca fixture")
+            token = root / "token"
+            token.write_text("fixture-token\n")
+            token.chmod(0o400)
+            with patch.object(helper.ssl, "create_default_context", return_value=object()):
+                api = helper.VaultAPI("https://vault.invalid:8200", ca, token)
+            error = urllib.error.HTTPError(
+                "https://vault.invalid:8200/v1/sys/health", 503, "sealed", {}, None
+            )
+            error.read = lambda: b'{"initialized":true,"sealed":true}'
+            with patch.object(helper.urllib.request, "urlopen", side_effect=error):
+                status, health = api.request("GET", "sys/health")
+            self.assertEqual(status, 503)
+            self.assertEqual(health, {"initialized": True, "sealed": True})
 
 
 class VaultInitHandoffTests(unittest.TestCase):
@@ -232,6 +323,10 @@ class VaultInitHandoffTests(unittest.TestCase):
             self.assertEqual((handoff / "vault-unseal.key").read_text(), "fixture-share\n")
             self.assertEqual((handoff / "vault-root-token").read_text(), "fixture-root\n")
             self.assertEqual((handoff / "vault-init-record.json").stat().st_mode & 0o777, 0o400)
+            self.assertEqual(
+                {entry.name for entry in handoff.iterdir()},
+                {"vault-init-record.json", "vault-unseal.key", "vault-root-token"},
+            )
 
     def test_init_refuses_an_already_initialized_vault_before_running_cli(self):
         path = ROOT / "roles/vault_post_init/files/vault-init-handoff.py"
@@ -267,6 +362,53 @@ class VaultInitHandoffTests(unittest.TestCase):
                 with self.assertRaisesRegex(helper.VaultError, "must already be initialized and unsealed"):
                     helper.converge("https://vault.invalid:8200", Path("ca"), Path("token"), handoff, seed)
             self.assertEqual(fake.writes, [])
+
+    def test_init_never_runs_with_unsafe_mode_0755_handoff_directory(self):
+        path = ROOT / "roles/vault_post_init/files/vault-init-handoff.py"
+        loader = importlib.machinery.SourceFileLoader("vault_init_unsafe_handoff", str(path))
+        spec = importlib.util.spec_from_loader("vault_init_unsafe_handoff", loader)
+        helper = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(helper)
+        with tempfile.TemporaryDirectory() as directory:
+            handoff = Path(directory) / "handoff"
+            handoff.mkdir(mode=0o700)
+            handoff.chmod(0o755)
+            calls = []
+
+            def run(*_args, **_kwargs):
+                calls.append(True)
+                return type("Result", (), {"stdout": '{"unseal_keys_b64":["fixture-share"],"root_token":"fixture-root"}'})()
+
+            with patch.object(helper, "read_health", return_value={"initialized": False, "sealed": True}):
+                with self.assertRaisesRegex(helper.InitError, "mode 0700"):
+                    helper.initialize("https://vault.invalid:8200", Path("ca"), "vault", handoff, run=run)
+            self.assertEqual(calls, [])
+            self.assertEqual(list(handoff.iterdir()), [])
+
+    def test_init_never_runs_when_atomic_persistence_preflight_fails(self):
+        path = ROOT / "roles/vault_post_init/files/vault-init-handoff.py"
+        loader = importlib.machinery.SourceFileLoader("vault_init_unwritable_handoff", str(path))
+        spec = importlib.util.spec_from_loader("vault_init_unwritable_handoff", loader)
+        helper = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(helper)
+        with tempfile.TemporaryDirectory() as directory:
+            handoff = Path(directory) / "handoff"
+            handoff.mkdir(mode=0o700)
+            calls = []
+
+            def run(*_args, **_kwargs):
+                calls.append(True)
+                return type("Result", (), {"stdout": '{"unseal_keys_b64":["fixture-share"],"root_token":"fixture-root"}'})()
+
+            with patch.object(helper, "read_health", return_value={"initialized": False, "sealed": True}), patch.object(
+                helper.os, "replace", side_effect=OSError("injected atomic rename failure")
+            ):
+                with self.assertRaisesRegex(helper.InitError, "persistence preflight"):
+                    helper.initialize("https://vault.invalid:8200", Path("ca"), "vault", handoff, run=run)
+            self.assertEqual(calls, [])
+            self.assertEqual(list(handoff.iterdir()), [])
 
 
 if __name__ == "__main__":

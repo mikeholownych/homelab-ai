@@ -175,6 +175,57 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
             self.assertEqual(second.read_text(), "previous-worker2\n")
             self.assertEqual(restarted, ["worker1", "gateway"])
 
+    def test_staging_failure_leaves_active_files_untouched_without_reconciliation(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_transaction_stage_failure")
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "worker1-key"
+            second = Path(directory) / "worker2-key"
+            first.write_text("previous-worker1\n")
+            second.write_text("previous-worker2\n")
+            first.chmod(0o400)
+            second.chmod(0o400)
+            restarts = []
+            with patch.object(helper, "_stage_file", side_effect=OSError("injected staging failure")):
+                with self.assertRaisesRegex(RuntimeError, "before promotion"):
+                    helper.apply_transaction(
+                        [(first, "replacement-worker1\n", None, None), (second, "replacement-worker2\n", None, None)],
+                        ["worker1", "worker2", "gateway"],
+                        restarts.append,
+                        lambda: None,
+                        lambda: None,
+                    )
+            self.assertEqual((first.read_text(), second.read_text()), ("previous-worker1\n", "previous-worker2\n"))
+            self.assertEqual(restarts, [])
+
+    def test_replacement_validation_failure_restores_and_reconciles_previous_state(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_transaction_validation_failure")
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "gateway-key"
+            target.write_text("previous-gateway-key\n")
+            target.chmod(0o400)
+            restarts = []
+            old_verified = []
+
+            def verify_new():
+                self.assertEqual(target.read_text(), "replacement-gateway-key\n")
+                raise RuntimeError("injected replacement authentication/health validation failure")
+
+            def verify_old():
+                self.assertEqual(target.read_text(), "previous-gateway-key\n")
+                old_verified.append(True)
+
+            with self.assertRaisesRegex(RuntimeError, "previous state restored"):
+                helper.apply_transaction(
+                    [(target, "replacement-gateway-key\n", None, None)],
+                    ["gateway"],
+                    restarts.append,
+                    verify_new,
+                    verify_old,
+                )
+            self.assertEqual(target.read_text(), "previous-gateway-key\n")
+            self.assertEqual(restarts, ["gateway", "gateway"])
+            self.assertEqual(old_verified, [True])
+
     def test_opencode_local_credential_can_be_restored_without_emitting_value(self):
         helper = load_script("update-opencode-vault-credential.py", "vault_opencode_backup")
         with tempfile.TemporaryDirectory() as directory:

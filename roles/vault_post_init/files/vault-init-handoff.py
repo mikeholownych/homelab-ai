@@ -79,6 +79,55 @@ def persist_record(record: dict, handoff: Path) -> dict:
     return {"changed": changed, "recovery_material_saved": True}
 
 
+def preflight_init_handoff(handoff: Path) -> None:
+    """Prove private recovery files can be atomically persisted before init."""
+    try:
+        info = handoff.lstat()
+        if not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode):
+            raise InitError("Recovery handoff path must be a directory, not a symlink")
+        if info.st_uid != os.geteuid():
+            raise InitError("Recovery handoff directory must be owned by the executing operator")
+        if stat.S_IMODE(info.st_mode) != 0o700:
+            raise InitError("Recovery handoff directory must have mode 0700")
+
+        for name in ("vault-init-record.json", "vault-unseal.key", "vault-root-token"):
+            target = handoff / name
+            if target.exists() or target.is_symlink():
+                raise InitError("Existing recovery material is present; refusing to overwrite it")
+
+        fd, temporary_name = tempfile.mkstemp(prefix=".vault-init-preflight-", dir=handoff)
+        temporary = Path(temporary_name)
+        promoted = temporary.with_name(temporary.name + ".renamed")
+        directory_fd = None
+        try:
+            with os.fdopen(fd, "wb") as stream:
+                os.fchmod(stream.fileno(), 0o400)
+                stream.write(b"vault recovery persistence preflight\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            if promoted.exists() or promoted.is_symlink():
+                raise InitError("Recovery preflight path unexpectedly exists")
+            directory_fd = os.open(handoff, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            os.fsync(directory_fd)
+            os.replace(temporary, promoted)
+            os.fsync(directory_fd)
+            promoted.unlink()
+            os.fsync(directory_fd)
+        finally:
+            if temporary.exists():
+                temporary.unlink()
+            if promoted.exists():
+                promoted.unlink()
+            if directory_fd is not None:
+                os.close(directory_fd)
+    except InitError:
+        raise
+    except Exception as error:
+        raise InitError(
+            f"Recovery handoff persistence preflight failed ({type(error).__name__})"
+        ) from None
+
+
 def initialize(address: str, ca_file: Path, vault_binary: str, handoff: Path, run=subprocess.run) -> dict:
     health = read_health(address, ca_file)
     if health.get("initialized"):
@@ -87,6 +136,7 @@ def initialize(address: str, ca_file: Path, vault_binary: str, handoff: Path, ru
         raise InitError("Vault uninitialized seal state is ambiguous; refusing initialization")
     if (handoff / "vault-init-record.json").exists() or (handoff / "vault-root-token").exists() or (handoff / "vault-unseal.key").exists():
         raise InitError("Existing recovery material is present; refusing to overwrite it")
+    preflight_init_handoff(handoff)
     environment = os.environ.copy()
     environment.pop("VAULT_TOKEN", None)
     environment.pop("VAULT_NAMESPACE", None)

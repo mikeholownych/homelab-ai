@@ -190,9 +190,11 @@ currently deployed Vault 2.1.1 state:
   `sys/storage/raft/snapshot`, with a 5 minute token TTL and 10 minute maximum.
 
 The root token and unseal share are read from protected files. They are never
-Ansible variables or command arguments. If Vault is sealed, the helper submits
-the share to the verified TLS API and confirms the unsealed health state. It
-never initializes or resets Vault. Existing mounts with conflicting types,
+Ansible variables or command arguments. The helper accepts Vault's HTTP 503
+health response only when its body confirms an initialized, sealed Vault. It
+submits the share to the verified TLS API, then requires HTTP 200 health with
+Vault unsealed before continuing. It never initializes or resets Vault.
+Existing mounts with conflicting types,
 audit destinations, or KV versions fail closed. Existing workload KV records
 are preserved; only missing records are seeded from the currently active,
 protected T5820 credential files fetched over SSH into controller tmpfs. The
@@ -213,10 +215,13 @@ python3 roles/vault_post_init/files/vault-init-handoff.py \
   --handoff-dir /home/mike/.local/share/vault-issue4
 ```
 
-It verifies Vault is not initialized, invokes the pinned Vault CLI with one
-Shamir share and threshold one, captures the CLI response without printing it,
-and saves the response, root token and unseal share as mode `0400` files. It
-refuses an already-initialized Vault or existing recovery material. If file
+It verifies Vault is not initialized and that the handoff directory is a
+mode-`0700` directory owned by the executing operator. Before invoking the
+pinned Vault CLI, it writes, fsyncs, atomically renames and removes a protected
+preflight file on that filesystem. It then initializes with one Shamir share
+and threshold one, captures the CLI response without printing it, and saves
+the response, root token and unseal share as mode `0400` files. It refuses an
+already-initialized Vault or existing recovery material. If file
 extraction is interrupted after the response is saved, rerun with
 `--resume-record` and the same address/CA/handoff arguments; this reads the
 protected saved response and does not contact or reinitialize Vault.
