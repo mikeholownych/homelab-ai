@@ -33,25 +33,135 @@
     mode: "0644"
   tags: [vault, credentials]
 
-- name: Install the protected AppRole RoleID on the T5820
-  ansible.builtin.copy:
-    src: "{{ vault_platform_credentials_role_id_source }}"
-    dest: "{{ vault_platform_credentials_role_id_path }}"
-    owner: root
-    group: root
-    mode: "0400"
+- name: Inspect the current protected AppRole file pair
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ vault_platform_credentials_role_id_path }}"
+    - "{{ vault_platform_credentials_secret_id_path }}"
+  register: vault_platform_credentials_approle_stats
   no_log: true
   tags: [vault, credentials]
 
-- name: Install the protected AppRole SecretID on the T5820
-  ansible.builtin.copy:
-    src: "{{ vault_platform_credentials_secret_id_source }}"
-    dest: "{{ vault_platform_credentials_secret_id_path }}"
-    owner: root
-    group: root
-    mode: "0400"
+- name: Refuse unsafe existing AppRole credential paths
+  ansible.builtin.assert:
+    that:
+      - >-
+        not item.stat.exists
+        or (item.stat.isreg and not item.stat.islnk | default(false))
+    fail_msg: Existing AppRole credential paths must be regular files, not links.
+  loop: "{{ vault_platform_credentials_approle_stats.results }}"
   no_log: true
   tags: [vault, credentials]
+
+- name: Create private tmpfs snapshot for AppRole file-pair rollback
+  ansible.builtin.tempfile:
+    state: directory
+    path: /run
+    prefix: aihost-vault-approle-
+  register: vault_platform_credentials_approle_stage
+  changed_when: false
+  tags: [vault, credentials]
+
+- name: Promote AppRole credential files as a recoverable pair
+  tags: [vault, credentials]
+  block:
+    - name: Preserve existing AppRole files in tmpfs
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ vault_platform_credentials_approle_stage.path }}/{{ item.name }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0400"
+      loop:
+        - { name: role-id, path: "{{ vault_platform_credentials_role_id_path }}" }
+        - { name: secret-id, path: "{{ vault_platform_credentials_secret_id_path }}" }
+      when: vault_platform_credentials_approle_stats.results[index].stat.exists
+      loop_control:
+        index_var: index
+      no_log: true
+      changed_when: false
+
+    - name: Install the protected AppRole RoleID on the T5820
+      ansible.builtin.copy:
+        src: "{{ vault_platform_credentials_role_id_source }}"
+        dest: "{{ vault_platform_credentials_role_id_path }}"
+        owner: root
+        group: root
+        mode: "0400"
+      no_log: true
+
+    - name: Install the protected AppRole SecretID on the T5820
+      ansible.builtin.copy:
+        src: "{{ vault_platform_credentials_secret_id_source }}"
+        dest: "{{ vault_platform_credentials_secret_id_path }}"
+        owner: root
+        group: root
+        mode: "0400"
+      no_log: true
+    - name: Mark AppRole pair promotion complete
+      ansible.builtin.set_fact:
+        vault_platform_credentials_approle_pair_complete: true
+  rescue:
+    - name: Inspect which AppRole backups completed before a failed promotion
+      ansible.builtin.stat:
+        path: "{{ vault_platform_credentials_approle_stage.path }}/{{ item }}"
+        follow: false
+      loop: [role-id, secret-id]
+      register: vault_platform_credentials_approle_backup_stats
+      no_log: true
+    - name: Restore an existing RoleID from the protected tmpfs snapshot
+      ansible.builtin.copy:
+        src: "{{ vault_platform_credentials_approle_stage.path }}/role-id"
+        dest: "{{ vault_platform_credentials_role_id_path }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0400"
+      when:
+        - vault_platform_credentials_approle_stats.results[0].stat.exists
+        - vault_platform_credentials_approle_backup_stats.results[0].stat.exists
+      no_log: true
+    - name: Remove a newly created RoleID when none existed before
+      ansible.builtin.file:
+        path: "{{ vault_platform_credentials_role_id_path }}"
+        state: absent
+      when: not vault_platform_credentials_approle_stats.results[0].stat.exists
+      no_log: true
+    - name: Restore an existing SecretID from the protected tmpfs snapshot
+      ansible.builtin.copy:
+        src: "{{ vault_platform_credentials_approle_stage.path }}/secret-id"
+        dest: "{{ vault_platform_credentials_secret_id_path }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0400"
+      when:
+        - vault_platform_credentials_approle_stats.results[1].stat.exists
+        - vault_platform_credentials_approle_backup_stats.results[1].stat.exists
+      no_log: true
+    - name: Remove a newly created SecretID when none existed before
+      ansible.builtin.file:
+        path: "{{ vault_platform_credentials_secret_id_path }}"
+        state: absent
+      when: not vault_platform_credentials_approle_stats.results[1].stat.exists
+      no_log: true
+    - name: Mark completed AppRole pair rollback
+      ansible.builtin.set_fact:
+        vault_platform_credentials_approle_pair_complete: true
+    - name: Fail clearly after AppRole pair rollback
+      ansible.builtin.fail:
+        msg: AppRole file pair installation failed; previous pair restored where possible.
+  always:
+    - name: Remove AppRole file-pair tmpfs staging after a known outcome
+      ansible.builtin.file:
+        path: "{{ vault_platform_credentials_approle_stage.path }}"
+        state: absent
+      when: vault_platform_credentials_approle_pair_complete | default(false) | bool
+      no_log: true
+      changed_when: false
 
 - name: Install the Vault credential convergence helper
   ansible.builtin.copy:
@@ -80,35 +190,182 @@
     mode: "0600"
   tags: [vault, credentials]
 
-- name: Authenticate to Vault and converge T5820 service credentials
-  ansible.builtin.command:
-    argv:
-      - "{{ vault_platform_credentials_script_path }}"
-      - "--config"
-      - "{{ vault_platform_credentials_config_path }}"
-  register: vault_platform_credentials_result
-  changed_when: (vault_platform_credentials_result.stdout | from_json).changed | bool
-  no_log: true
-  tags: [vault, credentials]
-
-- name: Refresh the operator OpenCode credential directly from Vault
-  ansible.builtin.command:
-    argv:
-      - "{{ role_path }}/files/update-opencode-vault-credential.py"
-      - --vault-addr
-      - "{{ vault_platform_credentials_vault_addr }}"
-      - --ca-cert
-      - "{{ vault_platform_credentials_ca_source }}"
-      - --role-id-file
-      - "{{ vault_platform_credentials_role_id_source }}"
-      - --secret-id-file
-      - "{{ vault_platform_credentials_secret_id_source }}"
-      - --output
-      - "{{ vault_platform_credentials_opencode_env_path }}"
+- name: Create private in-memory OpenCode rollback staging directory
+  ansible.builtin.tempfile:
+    state: directory
+    path: /dev/shm
+    prefix: aihost-opencode-credential-
   delegate_to: localhost
   become: false
-  register: vault_platform_credentials_opencode_result
-  changed_when: (vault_platform_credentials_opencode_result.stdout | from_json).changed | bool
-  no_log: true
+  register: vault_platform_credentials_opencode_stage
+  changed_when: false
   when: vault_platform_credentials_opencode_env_path | length > 0
   tags: [vault, credentials]
+
+- name: Coordinate operator and T5820 credential convergence with rollback
+  tags: [vault, credentials]
+  block:
+    - name: Preserve the current OpenCode credential file in tmpfs
+      ansible.builtin.command:
+        argv:
+          - "{{ role_path }}/files/update-opencode-vault-credential.py"
+          - --vault-addr
+          - "{{ vault_platform_credentials_vault_addr }}"
+          - --ca-cert
+          - "{{ vault_platform_credentials_ca_source }}"
+          - --role-id-file
+          - "{{ vault_platform_credentials_role_id_source }}"
+          - --secret-id-file
+          - "{{ vault_platform_credentials_secret_id_source }}"
+          - --output
+          - "{{ vault_platform_credentials_opencode_env_path }}"
+          - --backup-file
+          - "{{ vault_platform_credentials_opencode_stage.path }}/previous"
+          - --backup-only
+      delegate_to: localhost
+      become: false
+      register: vault_platform_credentials_opencode_backup
+      changed_when: false
+      no_log: true
+      when: vault_platform_credentials_opencode_env_path | length > 0
+
+    - name: Stage the Vault-issued OpenCode credential before T5820 changes
+      ansible.builtin.command:
+        argv:
+          - "{{ role_path }}/files/update-opencode-vault-credential.py"
+          - --vault-addr
+          - "{{ vault_platform_credentials_vault_addr }}"
+          - --ca-cert
+          - "{{ vault_platform_credentials_ca_source }}"
+          - --role-id-file
+          - "{{ vault_platform_credentials_role_id_source }}"
+          - --secret-id-file
+          - "{{ vault_platform_credentials_secret_id_source }}"
+          - --output
+          - "{{ vault_platform_credentials_opencode_env_path }}"
+      delegate_to: localhost
+      become: false
+      register: vault_platform_credentials_opencode_result
+      changed_when: (vault_platform_credentials_opencode_result.stdout | from_json).changed | bool
+      no_log: true
+      when: vault_platform_credentials_opencode_env_path | length > 0
+
+    - name: Mark the T5820 transaction as attempted
+      ansible.builtin.set_fact:
+        vault_platform_credentials_remote_attempted: true
+
+    - name: Authenticate to Vault and transactionally converge T5820 credentials
+      ansible.builtin.command:
+        argv:
+          - "{{ vault_platform_credentials_script_path }}"
+          - "--config"
+          - "{{ vault_platform_credentials_config_path }}"
+      register: vault_platform_credentials_result
+      changed_when: >-
+        vault_platform_credentials_result.rc == 0 and
+        (vault_platform_credentials_result.stdout | from_json).changed | bool
+      no_log: false
+  rescue:
+    - name: Retry idempotent T5820 convergence after a lost or failed result
+      when: vault_platform_credentials_remote_attempted | default(false) | bool
+      block:
+        - name: Retry idempotent T5820 convergence after a lost or failed result
+          ansible.builtin.command:
+            argv:
+              - "{{ vault_platform_credentials_script_path }}"
+              - "--config"
+              - "{{ vault_platform_credentials_config_path }}"
+          register: vault_platform_credentials_retry
+          changed_when: >-
+            vault_platform_credentials_retry.rc == 0 and
+            (vault_platform_credentials_retry.stdout | from_json).changed | bool
+          no_log: false
+      rescue:
+        - name: Restore the previous OpenCode file when T5820 reconciliation fails
+          ansible.builtin.command:
+            argv:
+              - "{{ role_path }}/files/update-opencode-vault-credential.py"
+              - --vault-addr
+              - "{{ vault_platform_credentials_vault_addr }}"
+              - --ca-cert
+              - "{{ vault_platform_credentials_ca_source }}"
+              - --role-id-file
+              - "{{ vault_platform_credentials_role_id_source }}"
+              - --secret-id-file
+              - "{{ vault_platform_credentials_secret_id_source }}"
+              - --output
+              - "{{ vault_platform_credentials_opencode_env_path }}"
+              - --restore-from
+              - "{{ vault_platform_credentials_opencode_stage.path }}/previous"
+          delegate_to: localhost
+          become: false
+          register: vault_platform_credentials_opencode_rollback
+          changed_when: false
+          no_log: true
+          failed_when: false
+          when:
+            - vault_platform_credentials_opencode_env_path | length > 0
+            - vault_platform_credentials_opencode_backup is defined
+            - not (vault_platform_credentials_opencode_backup.failed | default(false))
+        - name: Report failed credential reconciliation after rollback
+          ansible.builtin.fail:
+            msg: >-
+              T5820 credential convergence did not complete; the remote helper
+              {{ 'reported that rollback could not restore the previous working state.'
+                 if 'rollback could not restore' in (vault_platform_credentials_retry.stderr | default(''))
+                 else 'reported a successful previous-state rollback.'
+                 if 'previous state restored' in (vault_platform_credentials_retry.stderr | default(''))
+                 else 'did not confirm its previous-state rollback.' }}
+              {{ 'OpenCode was restored.'
+                 if vault_platform_credentials_opencode_rollback is defined
+                 and vault_platform_credentials_opencode_rollback.rc | default(1) == 0
+                 else 'OpenCode rollback also failed or was unavailable.' }}
+              Verify all three service boundaries before another promotion.
+
+    - name: Restore OpenCode if local preparation failed before remote promotion
+      ansible.builtin.command:
+        argv:
+          - "{{ role_path }}/files/update-opencode-vault-credential.py"
+          - --vault-addr
+          - "{{ vault_platform_credentials_vault_addr }}"
+          - --ca-cert
+          - "{{ vault_platform_credentials_ca_source }}"
+          - --role-id-file
+          - "{{ vault_platform_credentials_role_id_source }}"
+          - --secret-id-file
+          - "{{ vault_platform_credentials_secret_id_source }}"
+          - --output
+          - "{{ vault_platform_credentials_opencode_env_path }}"
+          - --restore-from
+          - "{{ vault_platform_credentials_opencode_stage.path }}/previous"
+      delegate_to: localhost
+      become: false
+      register: vault_platform_credentials_opencode_local_rollback
+      changed_when: false
+      no_log: true
+      failed_when: false
+      when:
+        - not (vault_platform_credentials_remote_attempted | default(false) | bool)
+        - vault_platform_credentials_opencode_env_path | length > 0
+        - vault_platform_credentials_opencode_backup is defined
+        - not (vault_platform_credentials_opencode_backup.failed | default(false))
+
+    - name: Stop after restoring OpenCode before any T5820 promotion
+      ansible.builtin.fail:
+        msg: >-
+          OpenCode preparation failed before the T5820 credential transaction began;
+          {{ 'the previous OpenCode file was restored.'
+             if vault_platform_credentials_opencode_local_rollback is defined
+             and vault_platform_credentials_opencode_local_rollback.rc | default(1) == 0
+             else 'restoring the previous OpenCode file failed or was unavailable.' }}
+      when: not (vault_platform_credentials_remote_attempted | default(false) | bool)
+  always:
+    - name: Remove the private OpenCode rollback staging directory
+      ansible.builtin.file:
+        path: "{{ vault_platform_credentials_opencode_stage.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      when: vault_platform_credentials_opencode_stage is defined

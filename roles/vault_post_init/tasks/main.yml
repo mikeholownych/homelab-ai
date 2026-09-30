@@ -1,0 +1,46 @@
+---
+- name: Require explicit post-initialization convergence inputs
+  ansible.builtin.assert:
+    that:
+      - vault_post_init_enabled | bool
+      - vault_post_init_vault_addr is match('^https://')
+      - vault_post_init_ca_source | length > 0
+      - vault_post_init_root_token_source | length > 0
+      - vault_post_init_unseal_key_source | length > 0
+      - vault_post_init_handoff_dir is match('^/')
+      - vault_post_init_seed_stage_dir is match('^/dev/shm/')
+    fail_msg: >-
+      Enable post-initialization convergence and provide protected root-token,
+      TLS trust, handoff, and in-memory seed staging paths.
+  tags: [vault, post_init]
+
+- name: Install Vault post-initialization convergence helper
+  ansible.builtin.copy:
+    src: vault-post-init.py
+    dest: /usr/local/sbin/vault-post-init.py
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+  tags: [vault, post_init]
+
+- name: Converge observed Vault post-initialization state without initialization
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/vault-post-init.py
+      - --vault-addr
+      - "{{ vault_post_init_vault_addr }}"
+      - --ca-cert
+      - "{{ vault_post_init_ca_source }}"
+      - --root-token-file
+      - "{{ vault_post_init_root_token_source }}"
+      - --unseal-key-file
+      - "{{ vault_post_init_unseal_key_source }}"
+      - --handoff-dir
+      - "{{ vault_post_init_handoff_dir }}"
+      - --seed-dir
+      - "{{ vault_post_init_seed_stage_dir }}"
+  register: vault_post_init_result
+  changed_when: vault_post_init_result.rc == 0 and (vault_post_init_result.stdout | from_json).changed | bool
+  no_log: true
+  tags: [vault, post_init]

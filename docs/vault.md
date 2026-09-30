@@ -175,6 +175,75 @@ allowed only when cluster membership is configured for the current host.
 Logical refs must be exact ASCII paths with no whitespace, control characters,
 backslashes, `%`, `?`, `#`, empty segments, `.`, `..`, or double slashes.
 
+## Reproducible post-initialization configuration
+
+`playbooks/vault-post-init.yml` is the idempotent post-init entrypoint for the
+live homelab topology. Its policy, mount, audit and AppRole settings match the
+currently deployed Vault 2.1.1 state:
+
+- file audit device `file/` writing to `/var/log/vault/audit.log`;
+- KVv2 at `secret/` and AppRole auth at `approle/`;
+- `t5820-platform` can read only the five gateway, OpenCode, compatibility and
+  worker KV records listed below, with a 10 minute token TTL and 60 minute
+  maximum;
+- `vault-snapshot-export` has only `read` and `sudo` on
+  `sys/storage/raft/snapshot`, with a 5 minute token TTL and 10 minute maximum.
+
+The root token and unseal share are read from protected files. They are never
+Ansible variables or command arguments. If Vault is sealed, the helper submits
+the share to the verified TLS API and confirms the unsealed health state. It
+never initializes or resets Vault. Existing mounts with conflicting types,
+audit destinations, or KV versions fail closed. Existing workload KV records
+are preserved; only missing records are seeded from the currently active,
+protected T5820 credential files fetched over SSH into controller tmpfs. The
+source files are removed from tmpfs after the run. Existing valid AppRole
+handoff IDs remain unchanged; if a freshly initialized Vault has new AppRole
+identities, fresh RoleID/SecretID values are written directly to the protected
+handoff files without printing them.
+
+### One-time initialization on a genuinely fresh Vault
+
+Create or use a private handoff directory with mode `0700`, install the
+Vault server and TLS material, then run the guarded initialization helper once:
+
+```sh
+python3 roles/vault_post_init/files/vault-init-handoff.py \
+  --vault-addr https://10.0.8.254:8200 \
+  --ca-cert /home/mike/.local/share/vault-issue4/vault-root-ca.crt \
+  --handoff-dir /home/mike/.local/share/vault-issue4
+```
+
+It verifies Vault is not initialized, invokes the pinned Vault CLI with one
+Shamir share and threshold one, captures the CLI response without printing it,
+and saves the response, root token and unseal share as mode `0400` files. It
+refuses an already-initialized Vault or existing recovery material. If file
+extraction is interrupted after the response is saved, rerun with
+`--resume-record` and the same address/CA/handoff arguments; this reads the
+protected saved response and does not contact or reinitialize Vault.
+
+After initialization, unseal and converge the observed post-init state while
+converging T5820 credentials in the same run:
+
+```sh
+ansible-playbook \
+  -i inventory/production/hosts.yml \
+  --limit 'localhost,ai-5820-01' \
+  playbooks/vault-post-init.yml \
+  -e vault_post_init_enabled=true \
+  -e vault_post_init_vault_addr=https://10.0.8.254:8200 \
+  -e vault_post_init_ca_source=/home/mike/.local/share/vault-issue4/vault-root-ca.crt \
+  -e vault_post_init_root_token_source=/home/mike/.local/share/vault-issue4/vault-root-token \
+  -e vault_post_init_unseal_key_source=/home/mike/.local/share/vault-issue4/vault-unseal.key \
+  -e vault_post_init_handoff_dir=/home/mike/.local/share/vault-issue4
+```
+
+Only paths and non-secret settings appear in the command. If the Vault server
+was freshly initialized but the T5820 is still running, the five active API
+credentials seed the empty KV records before the workload AppRole is used. The
+playbook then installs the protected AppRole pair and runs the normal live
+boundary checks. A newly issued snapshot AppRole pair also refreshes the
+controller backup timer and verifies an encrypted snapshot.
+
 ## T5820 workload credential convergence
 
 The dedicated `playbooks/vault-platform-credentials.yml` entrypoint converges
@@ -193,8 +262,8 @@ facts. OpenCode's provider config uses `{env:T5820_CLIENT_TOKEN}` and the
 operator's local zsh setup sources this file. The file is mode `0600` and should
 remain outside Git.
 
-The role copies the AppRole files to root-only `/etc/aihost/credentials/`, then
-runs a root-owned helper on the T5820. The helper reads Vault directly over
+The role copies the AppRole files to root-only `/etc/aihost/credentials/` as a
+recoverable pair, then runs a root-owned helper on the T5820. The helper reads Vault directly over
 verified TLS, keeps its short-lived token and returned values in process memory,
 and writes each service credential atomically to its protected consumer file.
 It does not publish secrets as Ansible facts or print them. The gateway worker
@@ -204,11 +273,17 @@ worker credentials restart their worker before the gateway; unchanged runs
 perform live authenticated checks without restarting services.
 
 Before restarting any service, the helper verifies that the deployed previous
-client and worker keys are accepted. After the coordinated restart it verifies
-that the exact prior keys are rejected and the Vault-issued replacements are
-accepted at the gateway and both vLLM worker APIs. This check applies only when
-files change; every run verifies the current Vault keys, all three health
-endpoints, and Configuration B+.
+client and worker keys are accepted before any active file changes. The helper
+stages and checks every replacement file, then promotes the set and restarts
+changed workers before the gateway. It validates the Vault replacements at the
+actual boundaries, health and Configuration B+. If any promotion, restart or
+check fails, it restores the exact pre-run consumer files, reconciles affected
+services, and confirms the previously working credentials still pass. The
+rollback values come only from the current T5820 consumer files that passed the
+pre-change boundary check; the helper does not consult historical or retired
+credential backups. OpenCode's local environment file is backed up in tmpfs and
+restored if the T5820 transaction cannot be reconciled. Every run verifies the
+current Vault keys, all three health endpoints, and Configuration B+.
 
 The Vault policy grants read access only to these five KVv2 records:
 

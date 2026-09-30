@@ -54,10 +54,17 @@ def http_status(url: str, key: str | None = None) -> int | str:
 
 
 def read_worker_key(config_path: Path) -> str:
-    match = re.search(r"^api-key:\s*[\"']?(.*?)[\"']?\s*$", config_path.read_text(), re.M)
+    match = re.search(r"^api-key:\s*[\"']?(.*?)[\"']?\s*$", read_regular_file(config_path, "worker config"), re.M)
     if not match:
         raise RuntimeError(f"Worker config has no API key field: {config_path}")
     return match.group(1)
+
+
+def read_regular_file(path: Path, label: str) -> str:
+    info = Path(path).lstat()
+    if not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode):
+        raise RuntimeError(f"Refusing non-regular {label} path: {path}")
+    return Path(path).read_text()
 
 
 def atomic_write(path: Path, content: str, owner: str | None = None, group: str | None = None) -> bool:
@@ -99,10 +106,106 @@ def require(condition: bool, message: str) -> None:
         raise RuntimeError(message)
 
 
+def _desired_owner(owner: str | None, group: str | None, info):
+    uid = pwd.getpwnam(owner).pw_uid if owner else (info.st_uid if info else 0)
+    gid = grp.getgrnam(group).gr_gid if group else (info.st_gid if info else 0)
+    mode = stat.S_IMODE(info.st_mode) if info else 0o400
+    return uid, gid, mode
+
+
+def _stage_file(path: Path, content: bytes, metadata: tuple[int, int, int]) -> str:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchown(fd, metadata[0], metadata[1])
+        os.fchmod(fd, metadata[2])
+        with os.fdopen(fd, "wb") as output:
+            output.write(content)
+            output.flush()
+            os.fsync(output.fileno())
+    except Exception:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        raise
+    return temporary
+
+
+def apply_transaction(targets, restart_units, restart, verify_new, verify_old) -> None:
+    """Stage a credential set, promote it, and restore the last working set on failure."""
+    prepared = []
+    snapshots = {}
+    promoted = []
+    try:
+        for path, text, owner, group in targets:
+            path = Path(path)
+            info = path.lstat() if path.exists() or path.is_symlink() else None
+            if info and (not stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)):
+                raise RuntimeError(f"Refusing to replace a non-regular credential target: {path}")
+            metadata = _desired_owner(owner, group, info)
+            previous = path.read_bytes() if info else None
+            snapshots[path] = (previous, metadata)
+            content = text.encode("utf-8")
+            if previous == content and info and (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == metadata:
+                continue
+            temporary = _stage_file(path, content, metadata)
+            prepared.append((path, temporary))
+            if Path(temporary).read_bytes() != content:
+                raise RuntimeError(f"Staged credential validation failed: {path.name}")
+
+        if not prepared:
+            return
+
+        for path, temporary in prepared:
+            os.replace(temporary, path)
+            promoted.append(path)
+        for unit in restart_units:
+            restart(unit)
+        verify_new()
+        return
+    except BaseException as failure:
+        if not promoted:
+            raise RuntimeError("Credential migration failed before promotion; active files remain unchanged") from None
+
+        rollback_errors = []
+        for path in reversed(promoted):
+            previous, metadata = snapshots[path]
+            try:
+                if previous is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    temporary = _stage_file(path, previous, metadata)
+                    os.replace(temporary, path)
+            except Exception:
+                rollback_errors.append("file restoration")
+
+        for unit in restart_units:
+            try:
+                restart(unit)
+            except Exception:
+                rollback_errors.append("service reconciliation")
+        try:
+            verify_old()
+        except Exception:
+            rollback_errors.append("previous credential boundary validation")
+        if rollback_errors:
+            raise RuntimeError(
+                "Credential migration failed and rollback could not restore the previous working state"
+            ) from None
+        raise RuntimeError("Credential migration failed; previous state restored") from None
+    finally:
+        for _path, temporary in prepared:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
-    config = json.loads(Path(parser.parse_args().config).read_text())
+    config = json.loads(read_regular_file(Path(parser.parse_args().config), "runtime config"))
     context = ssl.create_default_context(cafile=config["ca_cert"])
     api = config["vault_addr"].rstrip("/") + "/v1/"
     role_id = Path(config["role_id_file"]).read_text().strip()
@@ -122,33 +225,50 @@ def main() -> None:
     worker_cfg = [Path(paths[f"worker{i}_dir"]) / "vllm-config.yaml" for i in (1, 2)]
     worker_env = [Path(paths[f"worker{i}_dir"]) / "vllm.env" for i in (1, 2)]
     previous = {
-        "gateway_client": Path(paths["gateway_client"]).read_text().strip(),
-        "opencode_client": Path(paths["opencode_client"]).read_text().strip(),
+        "gateway_client": read_regular_file(Path(paths["gateway_client"]), "gateway credential").strip(),
+        "opencode_client": read_regular_file(Path(paths["opencode_client"]), "OpenCode credential").strip(),
         "worker1": read_worker_key(worker_cfg[0]),
         "worker2": read_worker_key(worker_cfg[1]),
-        "vllm_compat": Path(paths["vllm_compat"]).read_text().strip(),
+        "vllm_compat": read_regular_file(Path(paths["vllm_compat"]), "vLLM compatibility credential").strip(),
     }
+
+    targets = []
+
+    def add_target(path: Path, content: str, name: str, owner=None, group=None):
+        path = Path(path)
+        if not path.exists() or path.read_text() != content:
+            targets.append((path, content, owner, group))
+            files_changed.append(name)
 
     files_changed = []
     for name, key in (("gateway_client", values["gateway_client"]), ("opencode_client", values["opencode_client"]), ("vllm_compat", values["vllm_compat"])):
-        if atomic_write(Path(paths[name]), key + "\n"):
-            files_changed.append(name)
+        add_target(Path(paths[name]), key + "\n", name)
     worker_auth_changed = False
     for index in (1, 2):
         directory = Path(paths[f"worker{index}_dir"])
         key = values[f"worker{index}"]
         token_path = directory / "worker-api-key"
-        if atomic_write(token_path, key + "\n", "aihost-runtime", "aihost-runtime"):
+        if not token_path.exists() or read_regular_file(token_path, f"worker{index} token file") != key + "\n":
+            targets.append((token_path, key + "\n", "aihost-runtime", "aihost-runtime"))
             files_changed.append(f"worker{index}_token_file")
             worker_auth_changed = True
-        if replace_one(worker_cfg[index - 1], r"^api-key:.*$", "api-key: " + json.dumps(key), f"worker{index} YAML API key"):
-            files_changed.append(f"worker{index}_config")
+        config_text = read_regular_file(worker_cfg[index - 1], f"worker{index} config")
+        updated_config, config_count = re.subn(r"^api-key:.*$", "api-key: " + json.dumps(key), config_text, count=1, flags=re.M)
+        if config_count != 1:
+            raise RuntimeError(f"Expected one worker{index} YAML API key field")
+        if updated_config != config_text:
+            add_target(worker_cfg[index - 1], updated_config, f"worker{index}_config")
             worker_auth_changed = True
-        if replace_one(worker_env[index - 1], r"^VLLM_API_KEY=.*$", "VLLM_API_KEY=" + key, f"worker{index} environment API key"):
-            files_changed.append(f"worker{index}_environment")
+        env_text = read_regular_file(worker_env[index - 1], f"worker{index} environment")
+        updated_env, env_count = re.subn(r"^VLLM_API_KEY=.*$", "VLLM_API_KEY=" + key, env_text, count=1, flags=re.M)
+        if env_count != 1:
+            raise RuntimeError(f"Expected one worker{index} environment API key field")
+        if updated_env != env_text:
+            add_target(worker_env[index - 1], updated_env, f"worker{index}_environment")
             worker_auth_changed = True
 
-    env_lines = gateway_env.read_text().splitlines()
+    original_gateway_env = read_regular_file(gateway_env, "gateway environment")
+    env_lines = original_gateway_env.splitlines()
     specs_found = False
     for index, line in enumerate(env_lines):
         if line.startswith("ORCHESTRATOR_WORKER_SPECS="):
@@ -165,8 +285,9 @@ def main() -> None:
             env_lines[index] = "ORCHESTRATOR_WORKER_SPECS=" + json.dumps(specs, separators=(",", ":"))
             specs_found = True
     require(specs_found, "Gateway worker specs are not configured")
-    if atomic_write(gateway_env, "\n".join(env_lines) + "\n"):
-        files_changed.append("gateway_worker_token_references")
+    updated_gateway_env = "\n".join(env_lines) + "\n"
+    if updated_gateway_env != original_gateway_env:
+        add_target(gateway_env, updated_gateway_env, "gateway_worker_token_references")
 
     restarted = []
     if files_changed:
@@ -175,48 +296,51 @@ def main() -> None:
             "opencode_client": http_status("http://127.0.0.1:8010/v1/models", previous["opencode_client"]),
             "worker1": http_status("http://127.0.0.1:8000/v1/models", previous["worker1"]),
             "worker2": http_status("http://127.0.0.1:8001/v1/models", previous["worker2"]),
-            "shared1": http_status("http://127.0.0.1:8000/v1/models", previous["vllm_compat"]),
-            "shared2": http_status("http://127.0.0.1:8001/v1/models", previous["vllm_compat"]),
         }
         require(all(status == 200 for status in before.values()), "A pre-rotation credential acceptance check failed")
+        gateway_changed = any(name in files_changed for name in ("gateway_client", "opencode_client", "vllm_compat", "gateway_worker_token_references")) or worker_auth_changed
+        restart_units = []
         for index in (1, 2):
             if any(item.startswith(f"worker{index}_") for item in files_changed):
-                unit = f"aihost-vllm-worker{index}.service"
-                subprocess.run(["systemctl", "restart", unit], check=True, timeout=1200, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                restarted.append(unit)
-                port = 7999 + index
-                for _ in range(240):
-                    if http_status(f"http://127.0.0.1:{port}/health") == 200 and http_status(f"http://127.0.0.1:{port}/v1/models", values[f"worker{index}"]) == 200:
-                        break
-                    time.sleep(5)
-                else:
-                    raise RuntimeError(f"Worker {index} failed health or replacement-key validation after restart")
-        gateway_changed = any(name in files_changed for name in ("gateway_client", "opencode_client", "vllm_compat", "gateway_worker_token_references")) or worker_auth_changed
+                restart_units.append(f"aihost-vllm-worker{index}.service")
         if gateway_changed:
-            unit = "aihost-orchestrator-gateway.service"
-            subprocess.run(["systemctl", "restart", unit], check=True, timeout=60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            restarted.append(unit)
-            for _ in range(60):
-                if http_status("http://127.0.0.1:8010/health") == 200:
-                    break
-                time.sleep(2)
+            restart_units.append("aihost-orchestrator-gateway.service")
+
+        def restart(unit):
+            subprocess.run(["systemctl", "restart", unit], check=True, timeout=1200 if "worker" in unit else 60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if unit not in restarted:
+                restarted.append(unit)
+
+        def validate_boundary(credentials: dict, expect_new: bool) -> dict:
+            label = "new" if expect_new else "old"
+            results = {
+                f"gateway_{label}": http_status("http://127.0.0.1:8010/v1/models", credentials["gateway_client"]),
+                f"opencode_{label}": http_status("http://127.0.0.1:8010/v1/models", credentials["opencode_client"]),
+                f"worker1_{label}": http_status("http://127.0.0.1:8000/v1/models", credentials["worker1"]),
+                f"worker2_{label}": http_status("http://127.0.0.1:8001/v1/models", credentials["worker2"]),
+            }
+            if expect_new:
+                require(all(status == 200 for status in results.values()), "A Vault replacement credential was rejected")
             else:
-                raise RuntimeError("Gateway failed health validation after restart")
-        after = {
-            "gateway_new": http_status("http://127.0.0.1:8010/v1/models", values["gateway_client"]),
-            "opencode_new": http_status("http://127.0.0.1:8010/v1/models", values["opencode_client"]),
-            "gateway_old": http_status("http://127.0.0.1:8010/v1/models", previous["gateway_client"]),
-            "opencode_old": http_status("http://127.0.0.1:8010/v1/models", previous["opencode_client"]),
-            "worker1_new": http_status("http://127.0.0.1:8000/v1/models", values["worker1"]),
-            "worker2_new": http_status("http://127.0.0.1:8001/v1/models", values["worker2"]),
-            "worker1_old": http_status("http://127.0.0.1:8000/v1/models", previous["worker1"]),
-            "worker2_old": http_status("http://127.0.0.1:8001/v1/models", previous["worker2"]),
-            "shared_old1": http_status("http://127.0.0.1:8000/v1/models", previous["vllm_compat"]),
-            "shared_old2": http_status("http://127.0.0.1:8001/v1/models", previous["vllm_compat"]),
-        }
-        require(all(after[name] == 200 for name in ("gateway_new", "opencode_new", "worker1_new", "worker2_new")), "A replacement credential was rejected")
-        require(all(after[name] in (401, 403) for name in ("gateway_old", "opencode_old", "worker1_old", "worker2_old", "shared_old1", "shared_old2")), "A specific previous credential remains accepted")
-        evidence = {"before": before, "after": after}
+                require(all(status == 200 for status in results.values()), "The previously working credential set is no longer accepted")
+            for port in (8000, 8001):
+                require(http_status(f"http://127.0.0.1:{port}/health") == 200, "A vLLM worker health check failed")
+            require(http_status("http://127.0.0.1:8010/health") == 200, "Gateway health check failed")
+            states = {unit: subprocess.check_output(["systemctl", "is-active", unit], text=True).strip() for unit in ("aihost-orchestrator-gateway.service", "aihost-vllm-worker1.service", "aihost-vllm-worker2.service")}
+            require(all(state == "active" for state in states.values()), "A platform service is not active")
+            require("ORCHESTRATOR_SCHEDULING_MODE=CONFIGURATION_B_PLUS" in read_regular_file(gateway_env, "gateway environment"), "Configuration B+ is not active")
+            return results
+
+        before_state = validate_boundary(previous, expect_new=False)
+        evidence = {}
+        apply_transaction(
+            targets,
+            restart_units,
+            restart,
+            lambda: evidence.update(validate_boundary(values, expect_new=True)),
+            lambda: validate_boundary(previous, expect_new=False),
+        )
+        evidence = {"before": before, "before_state": before_state, "after": evidence}
     else:
         checks = {
             "gateway": http_status("http://127.0.0.1:8010/v1/models", values["gateway_client"]),
@@ -224,7 +348,8 @@ def main() -> None:
             "worker1": http_status("http://127.0.0.1:8000/v1/models", values["worker1"]),
             "worker2": http_status("http://127.0.0.1:8001/v1/models", values["worker2"]),
         }
-        require(all(status == 200 for status in checks.values()), "A Vault replacement credential failed its live boundary check")
+        failed = sorted(name for name, status in checks.items() if status != 200)
+        require(not failed, "Vault credentials failed live boundary checks: " + ", ".join(failed))
         require(all(http_status(f"http://127.0.0.1:{port}/health") == 200 for port in (8000, 8001)), "A vLLM worker health check failed")
         require(http_status("http://127.0.0.1:8010/health") == 200, "Gateway health check failed")
         evidence = {"live_acceptance": checks}

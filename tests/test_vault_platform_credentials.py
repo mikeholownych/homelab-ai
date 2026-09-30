@@ -89,6 +89,113 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
         self.assertIn("downloaded.gpg", source)
         self.assertNotIn("VAULT_BACKUP_ROOT_TOKEN", source)
 
+    def test_partial_restart_failure_restores_files_and_reconciles_all_services(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_transaction")
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "worker1-key"
+            second = Path(directory) / "worker2-key"
+            first.write_text("previous-worker1\n")
+            second.write_text("previous-worker2\n")
+            first.chmod(0o400)
+            second.chmod(0o400)
+            restarts = []
+            failure_once = {"done": False}
+
+            def restart(unit):
+                restarts.append(unit)
+                if unit == "worker2" and not failure_once["done"]:
+                    failure_once["done"] = True
+                    raise RuntimeError("injected restart failure")
+
+            with self.assertRaisesRegex(RuntimeError, "previous state restored"):
+                helper.apply_transaction(
+                    [(first, "replacement-worker1\n", None, None), (second, "replacement-worker2\n", None, None)],
+                    ["worker1", "worker2", "gateway"],
+                    restart,
+                    lambda: None,
+                    lambda: self.assertEqual((first.read_text(), second.read_text()), ("previous-worker1\n", "previous-worker2\n")),
+                )
+            self.assertEqual(first.read_text(), "previous-worker1\n")
+            self.assertEqual(second.read_text(), "previous-worker2\n")
+            self.assertEqual(restarts, ["worker1", "worker2", "worker1", "worker2", "gateway"])
+            self.assertEqual(first.stat().st_mode & 0o777, 0o400)
+            self.assertEqual(second.stat().st_mode & 0o777, 0o400)
+
+    def test_rollback_verification_failure_is_reported_explicitly(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_transaction_failure")
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "credential"
+            target.write_text("previous-private-value\n")
+            target.chmod(0o400)
+
+            def fail_restart(_unit):
+                raise RuntimeError("injected restart failure")
+
+            with self.assertRaisesRegex(RuntimeError, "rollback could not restore") as error:
+                helper.apply_transaction(
+                    [(target, "replacement-private-value\n", None, None)],
+                    ["gateway"],
+                    fail_restart,
+                    lambda: None,
+                    lambda: (_ for _ in ()).throw(RuntimeError("injected boundary failure")),
+                )
+            self.assertNotIn("previous-private-value", str(error.exception))
+            self.assertNotIn("replacement-private-value", str(error.exception))
+            self.assertEqual(target.read_text(), "previous-private-value\n")
+
+    def test_partial_file_promotion_restores_every_promoted_target(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_transaction_promotion")
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / "worker1-key"
+            second = Path(directory) / "worker2-key"
+            first.write_text("previous-worker1\n")
+            second.write_text("previous-worker2\n")
+            first.chmod(0o400)
+            second.chmod(0o400)
+            real_replace = helper.os.replace
+            fail_once = {"done": False}
+
+            def failing_replace(source, destination):
+                if Path(destination) == second and not fail_once["done"]:
+                    fail_once["done"] = True
+                    raise OSError("injected promotion failure")
+                return real_replace(source, destination)
+
+            restarted = []
+            with patch.object(helper.os, "replace", side_effect=failing_replace):
+                with self.assertRaisesRegex(RuntimeError, "previous state restored"):
+                    helper.apply_transaction(
+                        [(first, "replacement-worker1\n", None, None), (second, "replacement-worker2\n", None, None)],
+                        ["worker1", "gateway"],
+                        restarted.append,
+                        lambda: None,
+                        lambda: self.assertEqual((first.read_text(), second.read_text()), ("previous-worker1\n", "previous-worker2\n")),
+                    )
+            self.assertEqual(first.read_text(), "previous-worker1\n")
+            self.assertEqual(second.read_text(), "previous-worker2\n")
+            self.assertEqual(restarted, ["worker1", "gateway"])
+
+    def test_opencode_local_credential_can_be_restored_without_emitting_value(self):
+        helper = load_script("update-opencode-vault-credential.py", "vault_opencode_backup")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "opencode.env"
+            backup = root / "tmpfs" / "previous"
+            target.write_text("export T5820_CLIENT_TOKEN='prior-fixture'\n")
+            target.chmod(0o600)
+            helper.backup_output(target, backup)
+            target.write_text("export T5820_CLIENT_TOKEN='new-fixture'\n")
+            helper.restore_output(target, backup)
+            self.assertEqual(target.read_text(), "export T5820_CLIENT_TOKEN='prior-fixture'\n")
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
+            missing = root / "missing.env"
+            missing_backup = root / "tmpfs" / "missing"
+            helper.backup_output(missing, missing_backup)
+            missing.write_text("temporary\n")
+            helper.restore_output(missing, missing_backup)
+            self.assertFalse(missing.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
