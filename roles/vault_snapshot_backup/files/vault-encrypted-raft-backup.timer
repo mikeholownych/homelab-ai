@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily encrypted HashiCorp Vault Raft snapshot export
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=vault-encrypted-raft-backup.service
+
+[Install]
+WantedBy=timers.target

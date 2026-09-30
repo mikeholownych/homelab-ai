@@ -1,0 +1,122 @@
+---
+- name: Require explicit encrypted Vault snapshot backup configuration
+  ansible.builtin.assert:
+    that:
+      - vault_snapshot_backup_enabled | bool
+      - vault_snapshot_backup_vault_addr is match('^https://')
+      - vault_snapshot_backup_ca_source | length > 0
+      - vault_snapshot_backup_role_id_source | length > 0
+      - vault_snapshot_backup_secret_id_source | length > 0
+      - vault_snapshot_backup_passphrase_source | length > 0
+      - vault_snapshot_backup_vault_share == '//192.168.1.124/public'
+      - vault_snapshot_backup_share_directory == 'homelab-ai-vault-issue4'
+    fail_msg: >-
+      Enable the encrypted snapshot backup explicitly and provide protected
+      TLS, root-token, and backup-passphrase source paths.
+  tags: [vault, backup]
+
+- name: Create protected controller backup credential directory
+  ansible.builtin.file:
+    path: "{{ vault_snapshot_backup_runtime_dir }}/credentials"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [vault, backup]
+
+- name: Install the encrypted snapshot exporter
+  ansible.builtin.copy:
+    src: vault-encrypted-raft-backup.py
+    dest: /usr/local/sbin/vault-encrypted-raft-backup.py
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [vault, backup]
+
+- name: Install Vault issuing CA for controller backup verification
+  ansible.builtin.copy:
+    src: "{{ vault_snapshot_backup_ca_source }}"
+    dest: "{{ vault_snapshot_backup_runtime_dir }}/credentials/vault-ca.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [vault, backup]
+
+- name: Install the protected snapshot AppRole RoleID
+  ansible.builtin.copy:
+    src: "{{ vault_snapshot_backup_role_id_source }}"
+    dest: "{{ vault_snapshot_backup_runtime_dir }}/credentials/snapshot-role-id"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  tags: [vault, backup]
+
+- name: Install the protected snapshot AppRole SecretID
+  ansible.builtin.copy:
+    src: "{{ vault_snapshot_backup_secret_id_source }}"
+    dest: "{{ vault_snapshot_backup_runtime_dir }}/credentials/snapshot-secret-id"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  tags: [vault, backup]
+
+- name: Install the protected backup encryption passphrase
+  ansible.builtin.copy:
+    src: "{{ vault_snapshot_backup_passphrase_source }}"
+    dest: "{{ vault_snapshot_backup_runtime_dir }}/credentials/backup-passphrase"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  tags: [vault, backup]
+
+- name: Install non-secret encrypted backup settings
+  ansible.builtin.template:
+    src: vault-backup.env.j2
+    dest: "{{ vault_snapshot_backup_runtime_dir }}/backup.env"
+    owner: root
+    group: root
+    mode: "0600"
+  tags: [vault, backup]
+
+- name: Install systemd snapshot backup service
+  ansible.builtin.template:
+    src: vault-encrypted-raft-backup.service.j2
+    dest: /etc/systemd/system/vault-encrypted-raft-backup.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd for Vault snapshot backup
+  tags: [vault, backup]
+
+- name: Install daily systemd snapshot backup timer
+  ansible.builtin.copy:
+    src: vault-encrypted-raft-backup.timer
+    dest: /etc/systemd/system/vault-encrypted-raft-backup.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd for Vault snapshot backup
+  tags: [vault, backup]
+
+- name: Apply systemd unit updates before enabling the backup timer
+  ansible.builtin.meta: flush_handlers
+  tags: [vault, backup]
+
+- name: Enable daily encrypted snapshot backup timer
+  ansible.builtin.systemd_service:
+    name: vault-encrypted-raft-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [vault, backup]
+
+- name: Run and verify an encrypted snapshot export now
+  ansible.builtin.systemd_service:
+    name: vault-encrypted-raft-backup.service
+    state: started
+  register: vault_snapshot_backup_run
+  no_log: true
+  tags: [vault, backup]

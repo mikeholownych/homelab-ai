@@ -133,3 +133,72 @@ rerunning initialization with a helper that recognizes the actual JSON schema.
 That action is not performed here. NAS access and export remain unverified;
 no backup was configured. T5820 credentials/services were not changed and no
 credential invalidation or live application acceptance is claimed.
+
+## Final deployed result (2026-09-30)
+
+The operator subsequently authorized resetting `/var/lib/vault`. Before the
+reset, the sealed Raft directory was archived on the Vault VM at
+`/root/vault-reset-backup-20260930.tar`; the archive compared successfully,
+contained seven entries, and was mode `0600` root-owned. Only
+`/var/lib/vault` was removed and recreated as `vault:vault` mode `0700`. The
+Vault Ansible role then reran successfully.
+
+Vault 2.1.1 is initialized on local Raft storage, enabled and active under the
+dedicated `vault` service identity. Its TLS certificate is verified against the
+operator-held CA, the firewall permits only the operator controller and T5820
+to the API, and the file audit device, KVv2 mount and AppRole auth mount are
+enabled. Initialization uses one Shamir share and threshold one. A service
+restart sealed Vault as expected; the protected handoff share unsealed it, and
+AppRole authentication succeeded after restart. The verified handoff is in
+`/home/mike/.local/share/vault-issue4`; it contains the unseal key, manual
+administrative token, CA custody, workload AppRole files, backup AppRole files,
+and the snapshot encryption passphrase. Secret contents are not recorded here.
+
+The T5820 now has separate Vault-issued gateway, OpenCode, worker 1 and worker 2
+credentials. The worker roster points at separate protected key files; worker
+configuration and environment values were converged from KVv2. The controller
+Ansible role authenticates from protected AppRole files, fetches secrets on the
+T5820 without publishing Ansible facts, writes them atomically, and verifies
+live authentication. A repeat Ansible run completed with zero changes.
+
+Authentication boundary evidence: before migration, the currently deployed
+gateway/OpenCode client credentials and both worker credentials returned HTTP
+200. After migration, a historical T5820 client credential from the
+pre-migration provider configuration returned HTTP 401 at the gateway. Prior
+worker keys recovered from the worker configuration/environment backups
+returned HTTP 401 at both worker APIs; those backup values were then scrubbed
+to prevent reuse. The historical client config was scrubbed after its boundary
+check. The Vault replacement gateway and OpenCode client credentials and both
+worker keys returned HTTP 200. No token
+values or hashes are included in this record.
+
+A fresh OpenCode CLI run on 2026-09-30 returned the requested marker with exit
+status zero. In the same 26-second window, gateway evidence records matched
+request `c71f3af7-bc2e-4154-876a-a7a9784f1b52`: `worker_selected` for
+`b0-live-tp1-worker2` at 02:53:05 UTC and `response_validated` at 02:53:19 UTC.
+The gateway and both workers are active, all three health endpoints return
+HTTP 200, and `ORCHESTRATOR_SCHEDULING_MODE=CONFIGURATION_B_PLUS` remains set.
+
+The TerraMaster `public` SMB share accepted creation of the dedicated
+`homelab-ai-vault-issue4` folder. A separate snapshot-only AppRole has a
+five-minute token with only `read` and `sudo` on `sys/storage/raft/snapshot`;
+it cannot read workload secrets. A root-run daily controller timer fetches a
+snapshot over verified TLS, encrypts it with GPG AES-256, uploads it, downloads
+it, decrypts it in `/run`, and confirms its hash matches the source. The first
+verified ciphertext was `vault-raft-20260930.snap.gpg` (41,993 bytes). The
+timer is active and the one-shot service completed successfully. The NAS share
+is guest accessible, so only client-side encrypted snapshots are stored there.
+
+Checks completed for the final implementation:
+
+- Both Vault and credential playbooks pass Ansible syntax checks.
+- Ansible lint passed with zero failures or warnings; yamllint passed.
+- The Vault contract and platform credential tests passed: 18 passed, 11
+  skipped, 65 subtests passed.
+- The Vault server deployment role and T5820 credential role both ran against
+  their real hosts; the credential role reran idempotently.
+
+The recovery handoff and reproducible commands are documented in
+[`docs/vault.md`](../vault.md). This section supersedes the earlier failed
+initialization and unverified-NAS statements above; those statements remain as
+the accurate history of the first attempt.

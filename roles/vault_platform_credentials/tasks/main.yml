@@ -1,0 +1,114 @@
+---
+- name: Validate explicit Vault workload credential deployment inputs
+  ansible.builtin.assert:
+    that:
+      - vault_platform_credentials_enabled | bool
+      - vault_platform_credentials_vault_addr is match('^https://')
+      - vault_platform_credentials_ca_source | length > 0
+      - vault_platform_credentials_role_id_source | length > 0
+      - vault_platform_credentials_secret_id_source | length > 0
+    fail_msg: >-
+      Enable the Vault credential deployment explicitly and provide protected
+      AppRole source paths plus the issuing CA certificate.
+  tags: [vault, credentials]
+
+- name: Create protected Vault runtime and AppRole directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ vault_platform_credentials_runtime_dir }}"
+    - "{{ vault_platform_credentials_credential_dir }}"
+  tags: [vault, credentials]
+
+- name: Install the Vault issuing CA on the T5820
+  ansible.builtin.copy:
+    src: "{{ vault_platform_credentials_ca_source }}"
+    dest: "{{ vault_platform_credentials_ca_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [vault, credentials]
+
+- name: Install the protected AppRole RoleID on the T5820
+  ansible.builtin.copy:
+    src: "{{ vault_platform_credentials_role_id_source }}"
+    dest: "{{ vault_platform_credentials_role_id_path }}"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  tags: [vault, credentials]
+
+- name: Install the protected AppRole SecretID on the T5820
+  ansible.builtin.copy:
+    src: "{{ vault_platform_credentials_secret_id_source }}"
+    dest: "{{ vault_platform_credentials_secret_id_path }}"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  tags: [vault, credentials]
+
+- name: Install the Vault credential convergence helper
+  ansible.builtin.copy:
+    src: aihost-vault-apply-credentials.py
+    dest: "{{ vault_platform_credentials_script_path }}"
+    owner: root
+    group: root
+    mode: "0750"
+  tags: [vault, credentials]
+
+- name: Install gateway readiness check with per-worker Vault credentials
+  ansible.builtin.copy:
+    src: aihost-gateway-readiness
+    dest: /usr/local/libexec/aihost-gateway-readiness
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [vault, credentials]
+
+- name: Install non-secret Vault credential runtime settings
+  ansible.builtin.template:
+    src: platform-credentials.json.j2
+    dest: "{{ vault_platform_credentials_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  tags: [vault, credentials]
+
+- name: Authenticate to Vault and converge T5820 service credentials
+  ansible.builtin.command:
+    argv:
+      - "{{ vault_platform_credentials_script_path }}"
+      - "--config"
+      - "{{ vault_platform_credentials_config_path }}"
+  register: vault_platform_credentials_result
+  changed_when: (vault_platform_credentials_result.stdout | from_json).changed | bool
+  no_log: true
+  tags: [vault, credentials]
+
+- name: Refresh the operator OpenCode credential directly from Vault
+  ansible.builtin.command:
+    argv:
+      - "{{ role_path }}/files/update-opencode-vault-credential.py"
+      - --vault-addr
+      - "{{ vault_platform_credentials_vault_addr }}"
+      - --ca-cert
+      - "{{ vault_platform_credentials_ca_source }}"
+      - --role-id-file
+      - "{{ vault_platform_credentials_role_id_source }}"
+      - --secret-id-file
+      - "{{ vault_platform_credentials_secret_id_source }}"
+      - --output
+      - "{{ vault_platform_credentials_opencode_env_path }}"
+  delegate_to: localhost
+  become: false
+  register: vault_platform_credentials_opencode_result
+  changed_when: (vault_platform_credentials_opencode_result.stdout | from_json).changed | bool
+  no_log: true
+  when: vault_platform_credentials_opencode_env_path | length > 0
+  tags: [vault, credentials]

@@ -1,0 +1,21 @@
+---
+vault_platform_credentials_enabled: false
+vault_platform_credentials_vault_addr: "https://10.0.8.254:8200"
+vault_platform_credentials_ca_source: ""
+vault_platform_credentials_role_id_source: ""
+vault_platform_credentials_secret_id_source: ""
+vault_platform_credentials_runtime_dir: /etc/aihost/vault
+vault_platform_credentials_credential_dir: /etc/aihost/credentials
+vault_platform_credentials_config_path: /etc/aihost/vault/platform-credentials.json
+vault_platform_credentials_script_path: /usr/local/sbin/aihost-vault-apply-credentials.py
+vault_platform_credentials_role_id_path: /etc/aihost/credentials/vault-role-id
+vault_platform_credentials_secret_id_path: /etc/aihost/credentials/vault-secret-id
+vault_platform_credentials_ca_path: /etc/aihost/vault/vault-ca.crt
+vault_platform_credentials_role_name: t5820-platform
+vault_platform_credentials_worker_specs_path: /etc/local-ai/orchestrator/gateway.env
+vault_platform_credentials_gateway_client_path: /etc/local-ai/orchestrator/client-token
+vault_platform_credentials_opencode_client_path: /etc/local-ai/orchestrator/opencode-client-token
+vault_platform_credentials_vllm_compat_path: /etc/local-ai/vllm/vllm-api-key
+vault_platform_credentials_worker1_dir: /etc/local-ai/vllm/worker1
+vault_platform_credentials_worker2_dir: /etc/local-ai/vllm/worker2
+vault_platform_credentials_opencode_env_path: ""
