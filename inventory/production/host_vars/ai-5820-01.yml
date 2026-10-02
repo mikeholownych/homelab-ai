@@ -141,8 +141,8 @@ vllm_top_console_enabled: true
 
 orchestrator_gateway_enabled: true
 orchestrator_gateway_port: 8010
-orchestrator_gateway_release_id: t5820-gateway-b48cf75
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-b48cf75
+orchestrator_gateway_release_id: t5820-gateway-af6aa94
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-af6aa94
 orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
 # Model routing: one pool today (both workers serve the lead model). Add an aux pool and rules such as
 # {id: subagent-aux, match: {task_class: [subagent, summarize, compact]}, pool: aux, fallback: [lead]}
