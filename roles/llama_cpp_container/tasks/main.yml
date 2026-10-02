@@ -32,6 +32,8 @@
     XDG_RUNTIME_DIR: "/run/user/{{ llama_cpp_container_uid }}"
   become: true
   become_user: "{{ llama_cpp_container_user }}"
+  vars:
+    ansible_pipelining: true  # becoming an unprivileged user without setfacl needs no temp files
   register: _llama_image_present
   changed_when: false
   failed_when: false
@@ -45,6 +47,8 @@
     XDG_RUNTIME_DIR: "/run/user/{{ llama_cpp_container_uid }}"
   become: true
   become_user: "{{ llama_cpp_container_user }}"
+  vars:
+    ansible_pipelining: true  # becoming an unprivileged user without setfacl needs no temp files
   async: 3600
   poll: 30
   when:

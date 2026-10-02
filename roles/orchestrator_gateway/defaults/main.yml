@@ -4,8 +4,8 @@ orchestrator_gateway_user: "{{ host_runtime_account.name }}"
 orchestrator_gateway_group: "{{ host_runtime_account.group }}"
 orchestrator_gateway_port: 8010
 orchestrator_gateway_host: 127.0.0.1
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-d3bf4a8
-orchestrator_gateway_release_id: t5820-gateway-d3bf4a8
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-aa35ffa
+orchestrator_gateway_release_id: t5820-gateway-aa35ffa
 orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
 orchestrator_gateway_client_token_file: /etc/local-ai/orchestrator/client-token
 orchestrator_gateway_client_token_extra_file: /etc/local-ai/orchestrator/opencode-client-token
