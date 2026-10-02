@@ -29,6 +29,8 @@
   ansible.builtin.command:
     argv: [runuser, -u, "{{ llama_cpp_container_user }}", --, env, "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_container_uid }}",
            podman, image, exists, "{{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }}"]
+  args:
+    chdir: "{{ llama_cpp_container_home }}"
   register: _llama_image_present
   changed_when: false
   failed_when: false
@@ -39,6 +41,8 @@
   ansible.builtin.command:
     argv: [runuser, -u, "{{ llama_cpp_container_user }}", --, env, "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_container_uid }}",
            podman, pull, "{{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }}"]
+  args:
+    chdir: "{{ llama_cpp_container_home }}"
   async: 3600
   poll: 30
   when:
