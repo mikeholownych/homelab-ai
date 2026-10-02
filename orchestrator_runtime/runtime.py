@@ -232,6 +232,8 @@ class OpenAIProviderAdapter:
         }
         if message.get("reasoning_content"):
             output["reasoning_content"] = message["reasoning_content"]
+        if isinstance(body.get("usage"), dict):
+            output["usage"] = body["usage"]
         return output
 
 
@@ -507,6 +509,8 @@ class OrchestratorRuntime:
             "model": worker.public_model_id,
             "choices": [{"index": 0, "message": message, "finish_reason": normalized_finish_reason}],
         }
+        if isinstance(output.get("usage"), dict):
+            response["usage"] = output["usage"]
         if self.diagnostic_lineage:
             self.evidence.append(
                 "response_lineage",

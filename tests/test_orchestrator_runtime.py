@@ -327,3 +327,14 @@ def test_prompt_larger_than_any_worker_window_is_rejected_as_context_overflow(tm
     assert result["status"] == "rejected"
     assert result["failure_class"] == "context_length_exceeded"
     assert "context limit is 16384" in result["message"]
+
+
+def test_provider_usage_is_passed_through_to_the_response(tmp_path):
+    class WithUsage:
+        def complete(self, request, timeout):
+            return {"content": "ok", "tool_calls": [], "usage": {"prompt_tokens": 5, "completion_tokens": 2}}
+
+    runtime = _runtime_with(WithUsage(), tmp_path)
+    result = runtime.complete({"model": "engineering/w1", "messages": [{"role": "user", "content": "hi"}]})
+
+    assert result["response"]["usage"] == {"prompt_tokens": 5, "completion_tokens": 2}

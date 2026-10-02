@@ -14,3 +14,6 @@ tool-call-parser: {{ vllm_xpu_tool_call_parser }}
 max-num-seqs: {{ vllm_xpu_worker.max_num_seqs | default(vllm_xpu_max_num_seqs) }}
 max-num-batched-tokens: {{ vllm_xpu_worker.max_num_batched_tokens | default(vllm_xpu_max_num_batched_tokens) }}
 served-model-name: {{ vllm_xpu_model_id }}
+{% for _key, _value in (vllm_xpu_worker.extra_config | default({})).items() %}
+{{ _key }}: {{ _value | to_json }}
+{% endfor %}
