@@ -1,0 +1,12 @@
+---
+- name: Reload gateway systemd unit
+  ansible.builtin.systemd_service:
+    name: aihost-orchestrator-gateway.service
+    daemon_reload: true
+
+- name: Restart gateway service
+  ansible.builtin.systemd_service:
+    name: aihost-orchestrator-gateway.service
+    daemon_reload: true
+    state: restarted
+  when: not ansible_check_mode

@@ -1,0 +1,22 @@
+---
+orchestrator_gateway_enabled: false
+orchestrator_gateway_user: "{{ host_runtime_account.name }}"
+orchestrator_gateway_group: "{{ host_runtime_account.group }}"
+orchestrator_gateway_port: 8010
+orchestrator_gateway_host: 127.0.0.1
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-44e31e6
+orchestrator_gateway_release_id: t5820-gateway-44e31e6
+orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
+orchestrator_gateway_client_token_file: /etc/local-ai/orchestrator/client-token
+orchestrator_gateway_client_token_extra_file: /etc/local-ai/orchestrator/opencode-client-token
+orchestrator_gateway_worker_token_file: /etc/local-ai/vllm/vllm-api-key
+orchestrator_gateway_service_path: /etc/systemd/system/aihost-orchestrator-gateway.service
+orchestrator_gateway_readiness_path: /usr/local/libexec/aihost-gateway-readiness
+orchestrator_gateway_env_file: /etc/local-ai/orchestrator/gateway.env
+orchestrator_gateway_workers: []
+orchestrator_gateway_allow_worker_pinning: true
+orchestrator_gateway_scheduling_mode: CONFIGURATION_B_PLUS
+# Stale manual systemd drop-ins that the role now supersedes; removed if present.
+orchestrator_gateway_obsolete_dropins:
+  - /etc/systemd/system/aihost-orchestrator-gateway.service.d/10-t5820-opencode-client.conf
+  - /etc/systemd/system/aihost-orchestrator-gateway.service.d/15-release.conf

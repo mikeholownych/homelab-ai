@@ -1,0 +1,138 @@
+---
+- name: Validate T5820 gateway inputs
+  ansible.builtin.assert:
+    that:
+      - orchestrator_gateway_workers | length == 2
+      - orchestrator_gateway_port == 8010
+      - orchestrator_gateway_release_id is string
+      - orchestrator_gateway_release_dir is string
+    fail_msg: >-
+      The T5820 gateway requires exactly two declared TP=1 workers and a pinned
+      release directory.
+  when: orchestrator_gateway_enabled | bool
+
+- name: Create gateway directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ orchestrator_gateway_user }}"
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0750"
+  loop:
+    - "{{ orchestrator_gateway_release_dir }}"
+    - /etc/local-ai/orchestrator
+  when: orchestrator_gateway_enabled | bool
+
+- name: Preserve or generate gateway client credential
+  block:
+    - name: Read existing gateway client credential
+      ansible.builtin.slurp:
+        src: "{{ orchestrator_gateway_client_token_file }}"
+      register: _existing_gateway_client_token
+      failed_when: false
+      no_log: true
+
+    - name: Set gateway client credential from protected file or generate one
+      ansible.builtin.set_fact:
+        orchestrator_gateway_client_token: >-
+          {{ (_existing_gateway_client_token.content | b64decode | trim)
+             if (_existing_gateway_client_token.content is defined and _existing_gateway_client_token.content | length > 0)
+             else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=64') }}
+      no_log: true
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+
+- name: Install gateway client credential
+  ansible.builtin.copy:
+    content: "{{ orchestrator_gateway_client_token }}\n"
+    dest: "{{ orchestrator_gateway_client_token_file }}"
+    owner: "{{ orchestrator_gateway_user }}"
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0400"
+  no_log: true
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+
+- name: Remove obsolete manual gateway drop-ins
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ orchestrator_gateway_obsolete_dropins }}"
+  when: orchestrator_gateway_enabled | bool
+  notify: Restart gateway service
+
+- name: Install gateway source release
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../{{ item }}/"
+    dest: "{{ orchestrator_gateway_release_dir }}/{{ item }}/"
+    owner: "{{ orchestrator_gateway_user }}"
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0750"
+  loop:
+    - orchestrator_gateway
+    - orchestrator_runtime
+    - orchestrator_contract
+  when: orchestrator_gateway_enabled | bool
+  notify: Restart gateway service
+
+- name: Record gateway release identity
+  ansible.builtin.copy:
+    content: "{{ orchestrator_gateway_release_id }}\n"
+    dest: "{{ orchestrator_gateway_release_dir }}/RELEASE_ID"
+    owner: root
+    group: root
+    mode: "0644"
+  when: orchestrator_gateway_enabled | bool
+
+- name: Create gateway evidence chain owned by the service account
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_evidence_path }}"
+    state: touch
+    access_time: preserve
+    modification_time: preserve
+    owner: "{{ orchestrator_gateway_user }}"
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0640"
+  when: orchestrator_gateway_enabled | bool
+
+- name: Render gateway non-secret environment
+  ansible.builtin.template:
+    src: gateway.env.j2
+    dest: "{{ orchestrator_gateway_env_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: orchestrator_gateway_enabled | bool
+  notify: Restart gateway service
+
+- name: Install gateway readiness probe
+  ansible.builtin.copy:
+    src: gateway-readiness.py
+    dest: "{{ orchestrator_gateway_readiness_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: orchestrator_gateway_enabled | bool
+  notify: Restart gateway service
+
+- name: Install gateway systemd unit
+  ansible.builtin.template:
+    src: orchestrator-gateway.service.j2
+    dest: "{{ orchestrator_gateway_service_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: orchestrator_gateway_enabled | bool
+  notify: Restart gateway service
+
+- name: Establish persistent gateway state
+  ansible.builtin.systemd_service:
+    name: aihost-orchestrator-gateway.service
+    daemon_reload: true
+    enabled: true
+    state: started
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode

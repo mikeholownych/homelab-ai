@@ -11,3 +11,13 @@
     - vllm_xpu_service_enabled | default(false) | bool
     - vllm_xpu_install_enabled | default(false) | bool
     - not ansible_check_mode
+
+- name: Restart T5820 worker services
+  ansible.builtin.systemd_service:
+    name: "{{ item.value.service_name }}"
+    state: restarted
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  when:
+    - vllm_xpu_deployment_mode | default('single') == 'dual_tp1'
+    - vllm_xpu_install_enabled | default(false) | bool
+    - not ansible_check_mode

@@ -1,0 +1,124 @@
+---
+- name: Create T5820 dual-worker configuration directories
+  ansible.builtin.file:
+    path: "{{ item.value.config_dir }}"
+    state: directory
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_user }}"
+    mode: "0750"
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+
+- name: Create T5820 worker evidence records
+  ansible.builtin.copy:
+    content: "{{ item.value.initial_recovery_record }}"
+    dest: "{{ item.value.recovery_record }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_user }}"
+    mode: "0640"
+    force: false
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+
+- name: Create T5820 worker readiness records
+  ansible.builtin.copy:
+    content: "{{ item.value.initial_readiness_record }}"
+    dest: "{{ item.value.readiness_record }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_user }}"
+    mode: "0640"
+    force: false
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+
+- name: Read existing per-worker API credentials
+  ansible.builtin.slurp:
+    src: "{{ item.value.config_dir }}/worker-api-key"
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _vllm_worker_keys_existing
+  failed_when: false
+  no_log: true
+
+- name: Set per-worker API credentials (preserve existing, otherwise generate)
+  ansible.builtin.set_fact:
+    vllm_xpu_worker_keys: >-
+      {{ (vllm_xpu_worker_keys | default({}))
+         | combine({ item.item.key:
+             ((item.content | b64decode | trim)
+              if (item.content is defined and item.content | length > 0)
+              else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43')) }) }}
+  loop: "{{ _vllm_worker_keys_existing.results }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  no_log: true
+
+- name: Install per-worker API credential files
+  ansible.builtin.copy:
+    content: "{{ vllm_xpu_worker_keys[item.key] }}\n"
+    dest: "{{ item.value.config_dir }}/worker-api-key"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_user }}"
+    mode: "0400"
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+
+- name: Render T5820 worker environment
+  ansible.builtin.template:
+    src: vllm-worker.env.j2
+    dest: "{{ item.value.env_file }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_user }}"
+    mode: "0600"
+  vars:
+    vllm_xpu_worker: "{{ item.value }}"
+    vllm_xpu_worker_api_key: "{{ vllm_xpu_worker_keys[item.key] }}"
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  notify: Restart T5820 worker services
+
+- name: Render T5820 worker configuration
+  ansible.builtin.template:
+    src: vllm-worker-config.yaml.j2
+    dest: "{{ item.value.config_file }}"
+    owner: "{{ vllm_xpu_user }}"
+    group: "{{ vllm_xpu_user }}"
+    mode: "0600"
+  vars:
+    vllm_xpu_worker: "{{ item.value }}"
+    vllm_xpu_worker_api_key: "{{ vllm_xpu_worker_keys[item.key] }}"
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  notify: Restart T5820 worker services
+
+- name: Install T5820 worker service units
+  ansible.builtin.template:
+    src: vllm-worker.service.j2
+    dest: "/etc/systemd/system/{{ item.value.service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    vllm_xpu_worker: "{{ item.value }}"
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  notify: Reload systemd daemon
+
+- name: Stop legacy single vLLM unit for T5820 dual-worker mode
+  ansible.builtin.systemd_service:
+    name: vllm.service
+    enabled: false
+    state: stopped
+  when: not ansible_check_mode
+
+- name: Establish T5820 worker service state
+  ansible.builtin.systemd_service:
+    name: "{{ item.value.service_name }}"
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  when: not ansible_check_mode

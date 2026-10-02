@@ -1,0 +1,42 @@
+[Unit]
+Description=T5820 vLLM TP=1 worker {{ vllm_xpu_worker.worker_id }}
+After=network-online.target user-runtime-dir@{{ host_runtime_uid }}.service
+Wants=network-online.target
+StartLimitIntervalSec=300s
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User={{ vllm_xpu_user }}
+Group={{ vllm_xpu_user }}
+SupplementaryGroups={{ vllm_xpu_group }} video
+WorkingDirectory={{ host_runtime_account.home }}
+EnvironmentFile={{ vllm_xpu_worker.env_file }}
+Environment=VLLM_RUNTIME_BIN=podman
+Environment=VLLM_SYSTEMD_UNIT={{ vllm_xpu_worker.service_name }}
+Environment=VLLM_CONFIG_FILE={{ vllm_xpu_worker.config_file }}
+Environment=VLLM_ENV_FILE={{ vllm_xpu_worker.env_file }}
+Environment=VLLM_CONTAINER_NAME={{ vllm_xpu_worker.container_name }}
+Environment=CDI_DEVICE=local-ai.intel/gpu={{ vllm_xpu_worker.cdi_device | default("all") }}
+ExecStart=/usr/local/bin/vllm-xpu-runner serve --config {{ vllm_xpu_worker.config_file }}
+Restart=on-failure
+RestartSec=10s
+RestartPreventExitStatus=78
+TimeoutStartSec=1200s
+TimeoutStopSec=60s
+KillMode=control-group
+SendSIGKILL=yes
+ExecStopPost=/usr/local/bin/vllm-xpu-cleanup
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+Delegate=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }} {{ host_runtime_account.home }} {{ vllm_xpu_evidence_dir }} /run/user/{{ host_runtime_uid }}
+PrivateTmp=true
+ProtectControlGroups=no
+StandardOutput=append:{{ vllm_xpu_log_dir }}/{{ vllm_xpu_worker.worker_id }}.log
+StandardError=append:{{ vllm_xpu_log_dir }}/{{ vllm_xpu_worker.worker_id }}-error.log
+
+[Install]
+WantedBy=multi-user.target

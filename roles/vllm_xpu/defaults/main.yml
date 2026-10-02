@@ -5,6 +5,7 @@ host_runtime_account:  # noqa var-naming[no-role-prefix]
   name: "aihost-runtime"
   group: "render"
   home: "/var/lib/aihost-runtime"
+host_runtime_uid: 999
 vllm_xpu_install_enabled: false
 vllm_xpu_service_enabled: false
 vllm_xpu_version: "0.7.3"
@@ -69,3 +70,7 @@ vllm_xpu_api_key_secret_path: "secret/local-ai/services/vllm/api-key"
 vllm_xpu_api_key: null
 vllm_xpu_api_key_required: true
 vllm_xpu_api_key_secret_file_key: "key"
+
+# Worker scheduling defaults (dual_tp1 mode); override per worker in vllm_xpu_workers.
+vllm_xpu_max_num_seqs: 2
+vllm_xpu_max_num_batched_tokens: 4096

@@ -134,17 +134,26 @@ CONTAINER_NAME="${VLLM_CONTAINER_NAME:-vllm-xpu}"
 # container exits. It is NOT in the systemd supervision path, so a slow/cold
 # start can never cause a restart loop from a probe failure.
 READINESS_PID=""
+REAPING_READINESS=false
 reap_readiness() {
+    if [ "$REAPING_READINESS" = true ]; then
+        return 0
+    fi
     if [ -z "$READINESS_PID" ]; then
         return 0
     fi
-    readiness_state="$(ps -o stat= -p "$READINESS_PID" 2>/dev/null | tr -d ' ')"
+    REAPING_READINESS=true
+    trap - CHLD
+    readiness_state="$(ps -o stat= -p "$READINESS_PID" 2>/dev/null | tr -d ' ' || true)"
     case "$readiness_state" in
         ''|Z*)
             wait "$READINESS_PID" 2>/dev/null || true
             READINESS_PID=""
             ;;
     esac
+    REAPING_READINESS=false
+    trap reap_readiness CHLD
+    return 0
 }
 trap reap_readiness CHLD
 
@@ -214,9 +223,23 @@ fi
     "$IMAGE_REF" \
     serve --config /cfg/vllm-config.yaml --tensor-parallel-size "$TENSOR_PARALLEL_SIZE" "$@" &
 CONTAINER_PID="$!"
-if wait "$CONTAINER_PID"; then
-    CONTAINER_STATUS=0
-else
+CONTAINER_STATUS=0
+while :; do
+    if wait "$CONTAINER_PID"; then
+        CONTAINER_STATUS=0
+        # A SIGCHLD trap may make wait return the readiness child's status.
+        # Only finish when the container process itself has disappeared.
+        if kill -0 "$CONTAINER_PID" 2>/dev/null; then
+            continue
+        fi
+        break
+    fi
     CONTAINER_STATUS="$?"
-fi
+    # SIGCHLD from the readiness observer can interrupt wait(2). Retry while
+    # the container is still alive so observer completion cannot stop serving.
+    if kill -0 "$CONTAINER_PID" 2>/dev/null; then
+        continue
+    fi
+    break
+done
 exit "$CONTAINER_STATUS"

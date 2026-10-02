@@ -14,9 +14,9 @@ set -eu
 
 READINESS_RECORD="${READINESS_RECORD:-/var/lib/aihost/evidence/vllm_readiness.json}"
 BOOT_ID_FILE="/proc/sys/kernel/random/boot_id"
-HOST="${VLLM_HOST:-127.0.0.1}"
+HOST="${VLLM_PROBE_HOST:-${VLLM_HOST:-127.0.0.1}}"
 [ "$HOST" = "0.0.0.0" ] && HOST="127.0.0.1"
-PORT="${VLLM_PORT:-8000}"
+PORT="${VLLM_PROBE_PORT:-${VLLM_PORT:-8000}}"
 ENDPOINT="http://$HOST:$PORT"
 SYSTEMD_UNIT="${VLLM_SYSTEMD_UNIT:-vllm.service}"
 EXPECTED_MODEL="${VLLM_XPU_EXPECTED_MODEL:-}"

@@ -73,33 +73,30 @@
   tags: [inference, runtime, vllm]
 
 - name: Preserve or generate vLLM API key when Vault is disabled
-  when:
-    - vllm_xpu_service_enabled | bool
-    - vllm_xpu_install_enabled | bool
-    - vllm_xpu_api_key_required | bool
-    - vllm_xpu_api_key is none
-    - not (vault_integration_enabled | default(false) | bool)
-    - not ansible_check_mode
-  no_log: true
-  tags: [inference, runtime, vllm]
   block:
     - name: Slurp existing vLLM configuration file
       ansible.builtin.slurp:
         src: "{{ vllm_xpu_config_file }}"
-      register: vllm_xpu_existing_config
+      register: _existing_vllm_config
       failed_when: false
 
     - name: Set API key from existing configuration or generate fresh token
       ansible.builtin.set_fact:
         vllm_xpu_api_key: >-
           {{
-            ((vllm_xpu_existing_config.content | b64decode | from_yaml)['api-key'])
-            if (vllm_xpu_existing_config is defined
-                and vllm_xpu_existing_config.content is defined
-                and (vllm_xpu_existing_config.content | length > 0)
-                and ((vllm_xpu_existing_config.content | b64decode | from_yaml)['api-key'] | default(none)))
+            ((_existing_vllm_config.content | b64decode | from_yaml)['api-key'])
+            if (_existing_vllm_config is defined and _existing_vllm_config.content is defined and (_existing_vllm_config.content | length > 0) and ((_existing_vllm_config.content | b64decode | from_yaml)['api-key'] | default(none)))
             else (lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43'))
           }}
+  when:
+    - vllm_xpu_service_enabled | bool
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_api_key_required | bool
+    - vllm_xpu_api_key is none
+    - not (vault_integration_enabled | default(false) | bool)
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
+  no_log: true
+  tags: [inference, runtime, vllm]
 
 - name: Create vLLM service directories
   ansible.builtin.file:
@@ -112,7 +109,8 @@
     - "{{ vllm_xpu_config_dir }}"
     - "{{ vllm_xpu_log_dir }}"
     - "{{ vllm_xpu_model_cache_dir }}"
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
 - name: Require container runtime for container-mode vLLM
@@ -153,59 +151,29 @@
 - name: Create vLLM recovery evidence record owned by the service account
   ansible.builtin.copy:
     content: |
-      {
-        "service": "vllm_xpu",
-        "event": "initialized",
-        "class": "none",
-        "stage_reached": "",
-        "exit_code": 0,
-        "restart_count": null,
-        "restart_count_source": "uninitialized",
-        "restart_count_obtained_at": "",
-        "service_invocation_id": "",
-        "terminal": false,
-        "started_at": "",
-        "boot_id": ""
-      }
+      {"service":"vllm_xpu","event":"initialized","class":"none","stage_reached":"","exit_code":0,"restart_count":null,"restart_count_source":"uninitialized","restart_count_obtained_at":"","service_invocation_id":"","terminal":false,"started_at":"","boot_id":""}
     dest: "{{ vllm_xpu_recovery_record }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"
     mode: "0640"
     force: false
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   tags: [inference, runtime, vllm]
 
 - name: Create vLLM readiness evidence record owned by the service account
   ansible.builtin.copy:
     content: |
-      {
-        "schema_version": "1.0.0",
-        "service": "vllm_xpu",
-        "readiness_state": "initialized",
-        "process_started_at": "",
-        "health_ready_at": null,
-        "model_ready_at": null,
-        "validation_ready_at": null,
-        "startup_duration": null,
-        "model_identity": {
-          "expected": "",
-          "observed": ""
-        },
-        "tensor_parallel_size": {
-          "expected": 1,
-          "observed": null
-        },
-        "boot_id": "",
-        "service_invocation_id": "",
-        "endpoint": "",
-        "probe_note": "record created by role; prober overwrites on next activation"
-      }
+      {"schema_version":"1.0.0","service":"vllm_xpu","readiness_state":"initialized","process_started_at":"","health_ready_at":null,"model_ready_at":null,"validation_ready_at":null,"startup_duration":null,"model_identity":{"expected":"","observed":""},"tensor_parallel_size":{"expected":1,"observed":null},"boot_id":"","service_invocation_id":"","endpoint":"","probe_note":"record created by role; prober overwrites on next activation"}
     dest: "{{ vllm_xpu_readiness_record }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"
     mode: "0640"
     force: false
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   tags: [inference, runtime, vllm]
 
 - name: Install vLLM readiness prober
@@ -229,7 +197,8 @@
     group: root
     mode: "0644"
   notify: Restart vLLM service
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
 - name: Record deployed vLLM version stamp for evidence provenance
@@ -239,7 +208,8 @@
     owner: root
     group: root
     mode: "0644"
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
   tags: [inference, runtime, vllm]
 
 - name: Render vLLM configuration file
@@ -250,7 +220,9 @@
     group: "{{ vllm_xpu_group }}"
     mode: "0600"
   notify: Restart vLLM service
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   tags: [inference, runtime, vllm]
 
 - name: Render vLLM runtime environment file
@@ -261,7 +233,9 @@
     group: "{{ vllm_xpu_group }}"
     mode: "0600"
   notify: Restart vLLM service
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   tags: [inference, runtime, vllm]
 
 - name: Install vLLM systemd service unit
@@ -271,7 +245,9 @@
     owner: root
     group: root
     mode: "0644"
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   notify: Reload systemd daemon
   tags: [inference, runtime, vllm]
 
@@ -283,6 +259,7 @@
     state: "{{ 'started' if (vllm_xpu_service_enabled | bool) else 'stopped' }}"
   when:
     - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
     - not ansible_check_mode
   tags: [inference, runtime, vllm]
 
@@ -293,7 +270,9 @@
     owner: root
     group: root
     mode: "0755"
-  when: vllm_xpu_install_enabled | bool
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   tags: [inference, validation, vllm]
 
 - name: Run vLLM live validator against the running service
@@ -317,6 +296,7 @@
   when:
     - vllm_xpu_install_enabled | bool
     - vllm_xpu_service_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
     - not ansible_check_mode
   tags: [inference, validation, vllm]
 
@@ -340,3 +320,10 @@
   when:
     - ansible_check_mode or not (vllm_xpu_service_enabled | bool)
   tags: [inference, validation, vllm]
+
+- name: Install T5820 persistent dual TP=1 workers
+  ansible.builtin.include_tasks: dual_tp1.yml
+  when:
+    - vllm_xpu_install_enabled | bool
+    - vllm_xpu_deployment_mode | default('single') == 'dual_tp1'
+  tags: [inference, runtime, vllm, t5820]

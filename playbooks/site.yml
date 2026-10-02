@@ -86,6 +86,14 @@
         - capabilities.inference | default(false) | bool
       tags: [site, gpu, runtime, inference, vllm]
 
+    - name: Include authenticated orchestrator gateway for declared platforms
+      ansible.builtin.include_role:
+        name: orchestrator_gateway
+      when:
+        - capabilities.inference | default(false) | bool
+        - orchestrator_gateway_enabled | default(false) | bool
+      tags: [site, runtime, inference, orchestrator]
+
     - name: Include llama.cpp SYCL role for fallback inference nodes
       ansible.builtin.include_role:
         name: llama_cpp_sycl

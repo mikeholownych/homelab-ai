@@ -1,0 +1,16 @@
+{% set _model = (vllm_xpu_model_path | default(vllm_xpu_model_id, true) | string) %}
+model: {{ (_model | regex_replace('^' ~ (vllm_xpu_model_cache_dir | regex_escape) ~ '/?', '/models/')) if vllm_xpu_runtime_mode == 'container' else _model }}
+revision: {{ vllm_xpu_model_revision }}
+host: {{ vllm_xpu_host }}
+port: {{ vllm_xpu_worker.port }}
+tensor-parallel-size: 1
+gpu-memory-utilization: {{ vllm_xpu_gpu_memory_utilization }}
+max-model-len: {{ vllm_xpu_worker.max_model_len | default(vllm_xpu_max_model_len) }}
+enforce-eager: {{ vllm_xpu_enforce_eager | lower }}
+disable-log-stats: false
+api-key: "{{ vllm_xpu_worker_api_key }}"
+enable-auto-tool-choice: true
+tool-call-parser: {{ vllm_xpu_tool_call_parser }}
+max-num-seqs: {{ vllm_xpu_worker.max_num_seqs | default(vllm_xpu_max_num_seqs) }}
+max-num-batched-tokens: {{ vllm_xpu_worker.max_num_batched_tokens | default(vllm_xpu_max_num_batched_tokens) }}
+served-model-name: {{ vllm_xpu_model_id }}
