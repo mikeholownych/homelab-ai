@@ -27,3 +27,6 @@
         - capabilities.inference | default(false) | bool
         - orchestrator_gateway_enabled | default(false) | bool
       tags: [inference, runtime, orchestrator]
+    - role: vllm_top_console
+      when: capabilities.gpu | default(false) | bool
+      tags: [inference, monitoring, console]

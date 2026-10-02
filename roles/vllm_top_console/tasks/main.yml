@@ -1,0 +1,45 @@
+---
+- name: Check the locally built vllm-top binary reports an acceptable version
+  ansible.builtin.command:
+    argv: ["{{ vllm_top_console_binary_src }}", --version]
+  register: _vllm_top_version
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+  when: vllm_top_console_enabled | bool
+
+- name: Require the minimum version
+  ansible.builtin.assert:
+    that: (_vllm_top_version.stdout | regex_search('[0-9]+\.[0-9]+\.[0-9]+')) is version(vllm_top_console_min_version, '>=')
+    fail_msg: "vllm-top {{ vllm_top_console_min_version }} or newer is required; found: {{ _vllm_top_version.stdout | default('unknown') }}"
+  when: vllm_top_console_enabled | bool
+
+- name: Install the vllm-top binary (root-owned)
+  ansible.builtin.copy:
+    src: "{{ vllm_top_console_binary_src }}"
+    dest: "{{ vllm_top_console_binary_dest }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: vllm_top_console_enabled | bool
+  notify: Restart vllm-top console
+
+- name: Install the console service unit
+  ansible.builtin.template:
+    src: vllm-top-console.service.j2
+    dest: "/etc/systemd/system/{{ vllm_top_console_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: vllm_top_console_enabled | bool
+  notify: Restart vllm-top console
+
+- name: Enable the console service
+  ansible.builtin.systemd_service:
+    name: "{{ vllm_top_console_service }}"
+    enabled: true
+    daemon_reload: true
+  when:
+    - vllm_top_console_enabled | bool
+    - not ansible_check_mode

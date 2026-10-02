@@ -14,7 +14,7 @@ llama_cpp_container_model_dir: /var/lib/local-ai/models/gguf
 llama_cpp_container_host: 0.0.0.0
 # Default server arguments (measured on ai-5820-01: flash attention and large batches
 # raise cold prefill; one slot per GPU keeps the full context window per conversation).
-llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048"]
+llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]
 llama_cpp_container_workers: {}
 # Services that this role supersedes (stopped and disabled if present), e.g. a vLLM worker.
 llama_cpp_container_retired_services: []

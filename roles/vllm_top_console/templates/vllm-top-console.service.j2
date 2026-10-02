@@ -1,0 +1,33 @@
+[Unit]
+Description=vllm-top monitoring console on {{ vllm_top_console_tty }}
+After=multi-user.target network-online.target aihost-orchestrator-gateway.service getty@{{ vllm_top_console_tty }}.service
+Wants=network-online.target
+Conflicts=getty@{{ vllm_top_console_tty }}.service
+StartLimitIntervalSec=300s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User={{ vllm_top_console_user }}
+Group={{ vllm_top_console_user }}
+WorkingDirectory=/home/{{ vllm_top_console_user }}
+ExecStart={{ vllm_top_console_binary_dest }}
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+TTYPath=/dev/{{ vllm_top_console_tty }}
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+UtmpIdentifier={{ vllm_top_console_tty }}
+UtmpMode=user
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
