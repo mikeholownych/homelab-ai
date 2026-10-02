@@ -57,6 +57,7 @@ def worker_records() -> list[WorkerRecord]:
                     endpoint=spec["endpoint"],
                     auth_token=token_path.read_text(encoding="utf-8").strip(),
                     pool=spec.get("pool", "lead"),
+                    engine=spec.get("engine", "unknown"),
                 )
             )
         return records

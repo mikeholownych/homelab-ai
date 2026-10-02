@@ -64,6 +64,7 @@ class WorkerRecord:
     endpoint: str | None = None
     auth_token: str | None = None
     pool: str = "lead"
+    engine: str = "unknown"
 
     def __post_init__(self) -> None:
         if self.revision in {"", "main", "latest"}:
@@ -486,6 +487,7 @@ class OrchestratorRuntime:
 
         self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="dispatched")
         self.metrics.inference_dispatches_total.inc(worker_id=worker.worker_id, model=worker.public_model_id)
+        self.metrics.route_decisions_total.inc(rule=str(route["rule_id"]), pool=str(route["pool"]))
         self.evidence.append("worker_selected", request_id=request_id, worker_id=worker.worker_id, worker_identity=worker.identity_hash,
                              route_rule=route["rule_id"], route_pool=route["pool"], route_fallback=route["fallback_used"])
 

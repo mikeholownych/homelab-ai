@@ -1,0 +1,94 @@
+from __future__ import annotations
+
+import json
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from orchestrator_runtime import CapabilityRegistry, HealthManager, MetricsRegistry
+from orchestrator_runtime.engine_stats import extract, parse_prometheus
+from tests.test_orchestrator_runtime import worker
+
+VLLM = """# HELP vllm:num_requests_running running
+# TYPE vllm:num_requests_running gauge
+vllm:num_requests_running{engine="0",model_name="m"} 1.0
+vllm:num_requests_waiting{engine="0",model_name="m"} 0.0
+vllm:kv_cache_usage_perc{engine="0",model_name="m"} 0.25
+vllm:prompt_tokens_total{engine="0",model_name="m"} 1000.0
+vllm:generation_tokens_total{engine="0",model_name="m"} 250.0
+vllm:prefix_cache_queries_total{engine="0",model_name="m"} 800.0
+vllm:prefix_cache_hits_total{engine="0",model_name="m"} 600.0
+vllm:time_to_first_token_seconds_bucket{engine="0",le="0.1"} 5.0
+"""
+LLAMA = """# TYPE llamacpp:prompt_tokens_total counter
+llamacpp:prompt_tokens_total 4096
+llamacpp:tokens_predicted_total 512
+llamacpp:requests_processing 1
+llamacpp:requests_deferred 2
+llamacpp:kv_cache_usage_ratio 0.5
+"""
+
+
+def test_vllm_series_are_mapped_to_neutral_names():
+    stats = extract("vllm", VLLM)
+    assert stats["requests_running"] == 1.0 and stats["requests_waiting"] == 0.0
+    assert stats["kv_cache_usage"] == 0.25
+    assert (stats["prompt_tokens_total"], stats["generation_tokens_total"]) == (1000.0, 250.0)
+    assert stats["prefix_cache_hit_ratio"] == 0.75
+
+
+def test_llama_series_are_mapped_and_missing_ones_are_unknown_not_zero():
+    stats = extract("llama.cpp", LLAMA)
+    assert (stats["requests_running"], stats["requests_waiting"], stats["kv_cache_usage"]) == (1, 2, 0.5)
+    assert stats["generation_tokens_total"] == 512 and stats["prefix_cache_hit_ratio"] is None
+    partial = extract("llama.cpp", "llamacpp:prompt_tokens_total 7\n")
+    assert partial["requests_running"] is None and partial["kv_cache_usage"] is None
+
+
+def test_unknown_engine_or_empty_metrics_yield_nothing():
+    assert extract("unknown", VLLM) is None
+    assert extract("vllm", "# nothing here\n") is None
+    assert extract("llama.cpp", "garbage line\nnot_a_metric{x=\"y\"} NaN\n") is None
+
+
+def test_parser_sums_labelled_samples_and_ignores_comments():
+    assert parse_prometheus('a{x="1"} 2\na{x="2"} 3\n# c\nb 4\n') == {"a": 5.0, "b": 4.0}
+
+
+class _Engine(BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        if self.headers.get("Authorization") != "Bearer sekret-worker-token-123":
+            self.send_response(401); self.end_headers(); return
+        body = (json.dumps({"data": []}) if self.path == "/v1/models" else LLAMA).encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+
+    def log_message(self, *a):
+        return
+
+
+def test_health_publishes_pool_engine_and_stats_without_exposing_credentials():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Engine)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        w = worker("w1")
+        object.__setattr__(w, "endpoint", f"http://127.0.0.1:{server.server_address[1]}")
+        object.__setattr__(w, "auth_token", "sekret-worker-token-123")
+        object.__setattr__(w, "engine", "llama.cpp")
+        object.__setattr__(w, "pool", "aux")
+        health = HealthManager(CapabilityRegistry([w]), {}, MetricsRegistry())
+        assert health.probe_worker("w1") is True
+        _, payload = health.check()
+        summary = payload["workers"]["w1"]
+        assert summary["pool"] == "aux" and summary["engine"] == "llama.cpp"
+        assert summary["engine_stats"]["kv_cache_usage"] == 0.5
+        assert abs(summary["engine_stats"]["observed_at"] - time.time()) < 5
+        assert "sekret-worker-token-123" not in json.dumps(payload)  # credentials are never published
+    finally:
+        server.shutdown(); server.server_close()
+
+
+def test_stats_collection_failure_never_changes_health():
+    w = worker("w2"); object.__setattr__(w, "engine", "vllm")
+    health = HealthManager(CapabilityRegistry([w]), {}, MetricsRegistry())
+    _, payload = health.check()
+    assert payload["workers"]["w2"]["engine_stats"] is None

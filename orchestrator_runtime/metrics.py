@@ -315,6 +315,11 @@ class MetricsRegistry:
             "Total number of dispatch decisions made by the scheduler.",
             ("worker_id", "decision"),
         )
+        self.route_decisions_total = self._register_counter(
+            "aihost_route_decisions_total",
+            "Routing decisions by matched rule and the pool that served the request.",
+            ("rule", "pool"),
+        )
         self.scheduler_worker_available = self._register_gauge(
             "aihost_scheduler_worker_available",
             "Current worker availability status (1 = available, 0 = unavailable).",

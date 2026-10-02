@@ -16,6 +16,11 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
+from . import engine_stats
+
+# Engine stats older than this are not published (they would look current but be stale).
+ENGINE_STATS_MAX_AGE_SECONDS = 60.0
+
 if TYPE_CHECKING:
     from orchestrator_runtime.metrics import MetricsRegistry
     from orchestrator_runtime.runtime import CapabilityRegistry, ProviderAdapter
@@ -58,6 +63,7 @@ class HealthManager:
         self.start_time = start_time or time.time()
         self.scheduling_mode = scheduling_mode or os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
         self._states: dict[str, WorkerHealthState] = {}
+        self._engine_stats: dict[str, dict[str, Any]] = {}
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._poll_thread: threading.Thread | None = None
@@ -183,9 +189,15 @@ class HealthManager:
                     healthy_count += 1
                     effective_healthy = True
 
+                published_stats = self._engine_stats.get(wid)
+                if published_stats is not None and now - published_stats["observed_at"] > ENGINE_STATS_MAX_AGE_SECONDS:
+                    published_stats = None
                 worker_summaries[wid] = {
                     "status": status_str,
                     "healthy": effective_healthy,
+                    "pool": worker_record.get("pool", "lead"),
+                    "engine": worker_record.get("engine", "unknown"),
+                    "engine_stats": published_stats,
                     "public_model_id": worker_record.get("public_model_id", "unknown"),
                     "model_id": worker_record.get("model_id", "unknown"),
                     "last_observed_seconds_ago": round(age, 3),
@@ -277,6 +289,7 @@ class HealthManager:
                     elapsed = time.monotonic() - t0
                     if 200 <= resp.status < 300:
                         self.record_worker_observation(worker_id, healthy=True, duration=elapsed)
+                        self._collect_engine_stats(worker_record, endpoint, headers)
                         return True
                     else:
                         self.record_worker_observation(worker_id, healthy=False, duration=elapsed, error=f"http_{resp.status}")
@@ -289,6 +302,27 @@ class HealthManager:
             is_healthy = bool(worker_record.get("healthy", True))
             self.record_worker_observation(worker_id, healthy=is_healthy, duration=0.0)
             return is_healthy
+
+    def _collect_engine_stats(self, worker_record: dict[str, Any], endpoint: str, headers: dict[str, str]) -> None:
+        """Best-effort read of the engine's own metrics, re-published in a neutral shape.
+
+        Never affects health: a failure here only leaves the previous stats in place until they age
+        out of the published view (see ENGINE_STATS_MAX_AGE_SECONDS).
+        """
+        engine = worker_record.get("engine", "unknown")
+        if engine in ("unknown", "", None):
+            return
+        try:
+            req = urllib.request.Request(endpoint.rstrip("/") + "/metrics", headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                body = resp.read(4_000_000).decode("utf-8", errors="replace")
+            stats = engine_stats.extract(engine, body)
+        except Exception:
+            return
+        if stats is not None:
+            stats["observed_at"] = time.time()
+            with self._lock:
+                self._engine_stats[worker_record["worker_id"]] = stats
 
     def probe_all(self) -> None:
         """Probe all currently registered workers."""
