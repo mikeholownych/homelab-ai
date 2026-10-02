@@ -1,11 +1,29 @@
 ---
-- name: Install the xpu-smi MEI log filter
-  ansible.builtin.template:
-    src: 10-xpu-smi-mei.conf.j2
-    dest: "{{ xpu_smi_log_filter_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-    validate: rsyslogd -N1 -f %s
+- name: Install the xpu-smi MEI log filter (validated against the full rsyslog config)
   when: xpu_smi_log_filter_enabled | bool
-  notify: Restart rsyslog
+  block:
+    - name: Install the filter drop-in
+      ansible.builtin.template:
+        src: 10-xpu-smi-mei.conf.j2
+        dest: "{{ xpu_smi_log_filter_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      register: _xpu_log_filter
+      notify: Restart rsyslog
+
+    - name: Validate the complete rsyslog configuration
+      ansible.builtin.command: rsyslogd -N1
+      changed_when: false
+      check_mode: false
+      when: _xpu_log_filter is changed and not ansible_check_mode
+  rescue:
+    - name: Remove the drop-in if the configuration does not validate
+      ansible.builtin.file:
+        path: "{{ xpu_smi_log_filter_path }}"
+        state: absent
+      when: not ansible_check_mode
+
+    - name: Fail loudly so the broken filter is not silently skipped
+      ansible.builtin.fail:
+        msg: The xpu-smi rsyslog filter failed validation and was removed.
