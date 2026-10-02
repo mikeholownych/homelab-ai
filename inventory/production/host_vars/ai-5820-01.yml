@@ -132,8 +132,8 @@ vllm_xpu_workers:
 
 orchestrator_gateway_enabled: true
 orchestrator_gateway_port: 8010
-orchestrator_gateway_release_id: t5820-gateway-a581454
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-a581454
+orchestrator_gateway_release_id: t5820-gateway-d3bf4a8
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-d3bf4a8
 orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
 orchestrator_gateway_workers:
   - worker_id: b0-live-tp1-worker1
