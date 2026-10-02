@@ -122,6 +122,8 @@ vllm_xpu_workers:
     container_name: vllm-xpu-tp1-worker2
     gpu: 1
     port: 8001
+    extra_config:
+      speculative-config: '{"method":"ngram","num_speculative_tokens":5,"prompt_lookup_max":5,"prompt_lookup_min":2}'
     config_dir: /etc/local-ai/vllm/worker2
     config_file: /etc/local-ai/vllm/worker2/vllm-config.yaml
     env_file: /etc/local-ai/vllm/worker2/vllm.env

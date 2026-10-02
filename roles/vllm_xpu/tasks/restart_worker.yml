@@ -1,0 +1,18 @@
+---
+# Restart a single worker and wait until it serves again before touching the next one,
+# so a configuration change never takes every worker offline at once.
+- name: "Restart {{ vllm_xpu_workers[vllm_xpu_restart_key].service_name }}"
+  ansible.builtin.systemd_service:
+    name: "{{ vllm_xpu_workers[vllm_xpu_restart_key].service_name }}"
+    daemon_reload: true
+    state: restarted
+
+- name: "Wait for {{ vllm_xpu_restart_key }} to report healthy"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ vllm_xpu_workers[vllm_xpu_restart_key].port }}/health"
+    status_code: 200
+    timeout: 10
+  register: _vllm_worker_health
+  until: _vllm_worker_health.status == 200
+  retries: 150
+  delay: 10

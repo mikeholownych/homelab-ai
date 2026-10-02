@@ -76,8 +76,8 @@
   loop: "{{ vllm_xpu_workers | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
+  register: _vllm_worker_env
   no_log: true
-  notify: Restart T5820 worker services
 
 - name: Render T5820 worker configuration
   ansible.builtin.template:
@@ -92,8 +92,8 @@
   loop: "{{ vllm_xpu_workers | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
+  register: _vllm_worker_config
   no_log: true
-  notify: Restart T5820 worker services
 
 - name: Install T5820 worker service units
   ansible.builtin.template:
@@ -105,6 +105,7 @@
   vars:
     vllm_xpu_worker: "{{ item.value }}"
   loop: "{{ vllm_xpu_workers | dict2items }}"
+  register: _vllm_worker_unit
   notify: Reload systemd daemon
 
 - name: Stop legacy single vLLM unit for T5820 dual-worker mode
@@ -121,4 +122,15 @@
     enabled: true
     state: started
   loop: "{{ vllm_xpu_workers | dict2items }}"
+  when: not ansible_check_mode
+
+- name: Restart only the workers whose unit, environment, or configuration changed
+  ansible.builtin.include_tasks: restart_worker.yml
+  vars:
+    vllm_xpu_changed_workers: >-
+      {{ (_vllm_worker_env.results + _vllm_worker_config.results + _vllm_worker_unit.results)
+         | selectattr('changed') | map(attribute='item.key') | unique | sort | list }}
+  loop: "{{ vllm_xpu_changed_workers }}"
+  loop_control:
+    loop_var: vllm_xpu_restart_key
   when: not ansible_check_mode
