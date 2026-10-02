@@ -13,6 +13,12 @@
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
       tags: [inference, runtime, vllm]
+    - role: llama_cpp_container
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+        - llama_cpp_container_enabled | default(false) | bool
+      tags: [inference, runtime, llama]
     - role: orchestrator_gateway
       when:
         - capabilities.inference | default(false) | bool

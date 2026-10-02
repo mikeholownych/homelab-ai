@@ -1,0 +1,20 @@
+---
+# llama.cpp (SYCL) server workers run as rootless-podman systemd services under the
+# runtime account, one per GPU, mirroring the vLLM worker layout. Workers are declared in
+# llama_cpp_container_workers; the image is pinned by digest (never a floating tag).
+llama_cpp_container_enabled: false
+llama_cpp_container_image: ghcr.io/ggml-org/llama.cpp
+llama_cpp_container_digest: ""
+llama_cpp_container_user: "{{ host_runtime_account.name | default('aihost-runtime') }}"
+llama_cpp_container_home: "{{ host_runtime_account.home | default('/var/lib/aihost-runtime') }}"
+llama_cpp_container_uid: "{{ host_runtime_uid | default(999) }}"
+llama_cpp_container_config_root: /etc/local-ai/llama
+llama_cpp_container_log_dir: /var/log/local-ai/llama
+llama_cpp_container_model_dir: /var/lib/local-ai/models/gguf
+llama_cpp_container_host: 0.0.0.0
+# Default server arguments (measured on ai-5820-01: flash attention and large batches
+# raise cold prefill; one slot per GPU keeps the full context window per conversation).
+llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048"]
+llama_cpp_container_workers: {}
+# Services that this role supersedes (stopped and disabled if present), e.g. a vLLM worker.
+llama_cpp_container_retired_services: []

@@ -1,0 +1,137 @@
+---
+- name: Validate llama.cpp container inputs
+  ansible.builtin.assert:
+    that:
+      - llama_cpp_container_digest is match('^sha256:[0-9a-f]{64}$')
+      - llama_cpp_container_workers | length > 0
+    fail_msg: llama.cpp workers require an image pinned by sha256 digest and at least one declared worker.
+  when: llama_cpp_container_enabled | bool
+
+- name: Verify the declared model files exist
+  ansible.builtin.stat:
+    path: "{{ llama_cpp_container_model_dir }}/{{ item.value.model_file }}"
+  loop: "{{ llama_cpp_container_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _llama_model_stat
+  when: llama_cpp_container_enabled | bool
+
+- name: Require the model files before starting any worker
+  ansible.builtin.assert:
+    that: item.stat.exists | default(true)
+    fail_msg: "Model file missing for {{ item.item.key }}: {{ llama_cpp_container_model_dir }}/{{ item.item.value.model_file }}"
+  loop: "{{ _llama_model_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: llama_cpp_container_enabled | bool and not ansible_check_mode
+
+- name: Check whether the pinned image is already in the runtime account's store
+  ansible.builtin.command:
+    argv: [podman, image, exists, "{{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }}"]
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ llama_cpp_container_uid }}"
+  become: true
+  become_user: "{{ llama_cpp_container_user }}"
+  register: _llama_image_present
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: llama_cpp_container_enabled | bool
+
+- name: Pre-pull the pinned image (large; done here so unit start is not delayed)
+  ansible.builtin.command:
+    argv: [podman, pull, "{{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }}"]
+  environment:
+    XDG_RUNTIME_DIR: "/run/user/{{ llama_cpp_container_uid }}"
+  become: true
+  become_user: "{{ llama_cpp_container_user }}"
+  async: 3600
+  poll: 30
+  when:
+    - llama_cpp_container_enabled | bool
+    - _llama_image_present.rc | default(0) != 0
+
+- name: Create llama.cpp directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ llama_cpp_container_user }}"
+    group: "{{ llama_cpp_container_user }}"
+    mode: "0750"
+  loop: "{{ [llama_cpp_container_log_dir, llama_cpp_container_config_root] + (llama_cpp_container_workers.values() | map(attribute='config_dir') | list) }}"
+  when: llama_cpp_container_enabled | bool
+
+- name: Read existing per-worker API credentials
+  ansible.builtin.slurp:
+    src: "{{ item.value.config_dir }}/worker-api-key"
+  loop: "{{ llama_cpp_container_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _llama_keys_existing
+  failed_when: false
+  no_log: true
+  when: llama_cpp_container_enabled | bool
+
+- name: Set per-worker API credentials (preserve existing, otherwise generate)
+  ansible.builtin.set_fact:
+    llama_cpp_container_keys: >-
+      {{ (llama_cpp_container_keys | default({}))
+         | combine({ item.item.key:
+             ((item.content | b64decode | trim)
+              if (item.content is defined and item.content | length > 0)
+              else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43')) }) }}
+  loop: "{{ _llama_keys_existing.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  no_log: true
+  when: llama_cpp_container_enabled | bool
+
+- name: Install per-worker API credential files
+  ansible.builtin.copy:
+    content: "{{ llama_cpp_container_keys[item.key] }}\n"
+    dest: "{{ item.value.config_dir }}/worker-api-key"
+    owner: "{{ llama_cpp_container_user }}"
+    group: "{{ llama_cpp_container_user }}"
+    mode: "0400"
+  loop: "{{ llama_cpp_container_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  when: llama_cpp_container_enabled | bool
+  register: _llama_key_files
+
+- name: Install llama.cpp worker service units
+  ansible.builtin.template:
+    src: llama-worker.service.j2
+    dest: "/etc/systemd/system/{{ item.value.service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    llama_worker: "{{ item.value }}"
+  loop: "{{ llama_cpp_container_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: _llama_units
+  when: llama_cpp_container_enabled | bool
+
+- name: Stop and disable superseded services
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    daemon_reload: true
+  loop: "{{ llama_cpp_container_retired_services }}"
+  when:
+    - llama_cpp_container_enabled | bool
+    - not ansible_check_mode
+
+- name: Start llama.cpp workers (restart one at a time only when their unit changed)
+  ansible.builtin.include_tasks: start_worker.yml
+  loop: "{{ llama_cpp_container_workers | dict2items }}"
+  loop_control:
+    loop_var: llama_item
+    label: "{{ llama_item.key }}"
+  when:
+    - llama_cpp_container_enabled | bool
+    - not ansible_check_mode

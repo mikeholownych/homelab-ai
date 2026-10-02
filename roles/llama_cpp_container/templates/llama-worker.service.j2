@@ -1,0 +1,46 @@
+[Unit]
+Description=llama.cpp SYCL worker {{ llama_worker.worker_id }}
+After=network-online.target user-runtime-dir@{{ llama_cpp_container_uid }}.service
+Wants=network-online.target
+StartLimitIntervalSec=300s
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User={{ llama_cpp_container_user }}
+Group={{ llama_cpp_container_user }}
+SupplementaryGroups=render video
+WorkingDirectory={{ llama_cpp_container_home }}
+ExecStartPre=-/usr/bin/podman rm -f {{ llama_worker.container_name }}
+ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
+  --network host --ipc host --security-opt no-new-privileges \
+  --device local-ai.intel/gpu=all --group-add keep-groups \
+  -e ONEAPI_DEVICE_SELECTOR=level_zero:0,1 -e ZE_AFFINITY_MASK={{ llama_worker.gpu }} \
+  -e SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 \
+  -v /dev/dri/by-path:/dev/dri/by-path:ro \
+  -v {{ llama_cpp_container_model_dir }}:/models:ro \
+  -v {{ llama_worker.config_dir }}/worker-api-key:/cfg/api-key:ro \
+  {{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }} \
+  -m /models/{{ llama_worker.model_file }} -c {{ llama_worker.context }} \
+  --host {{ llama_cpp_container_host }} --port {{ llama_worker.port }} \
+  --api-key-file /cfg/api-key --alias {{ llama_worker.served_name }} \
+  {{ (llama_worker.args | default(llama_cpp_container_default_args)) | join(' ') }}
+ExecStop=/usr/bin/podman stop -t 20 {{ llama_worker.container_name }}
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=900s
+TimeoutStopSec=60s
+KillMode=control-group
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+Delegate=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ llama_cpp_container_log_dir }} {{ llama_cpp_container_home }} /run/user/{{ llama_cpp_container_uid }}
+PrivateTmp=true
+ProtectControlGroups=no
+StandardOutput=append:{{ llama_cpp_container_log_dir }}/{{ llama_worker.worker_id }}.log
+StandardError=append:{{ llama_cpp_container_log_dir }}/{{ llama_worker.worker_id }}-error.log
+
+[Install]
+WantedBy=multi-user.target
