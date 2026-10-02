@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.1
+
+**Fixed** — GPU polling no longer rediscovers devices every 5s. `gpu::probe` ran `xpu-smi discovery -j`
+on every poll; discovery also queries GPU firmware over the root-only MEI interface, which fails for an
+unprivileged monitor and wrote hundreds of `Cannot establish a handle to the Intel MEI driver` /
+`IGSC ... Failed to init HECI driver` lines to syslog per minute (and spawned an extra process each poll
+on a CPU-starved host). The device list is now taken once at startup and only `xpu-smi stats` is polled.
+
+**Added** — GPU temperature from the kernel's hwmon interface (package and video memory), matched to each
+device by PCI address; needs no privileges and no `xpu-smi`. Shown as `temp 42°C (vram 46°C)`, amber at
+80°C and red at 90°C; `temp n/a` when a device exposes no package sensor. Utilisation remains `n/a`
+(the driver does not report it). 2 new tests (123 total).
+
 ## 0.7.0
 
 **Added** — engine-agnostic per-worker view in the orchestrator panel. The gateway already holds each

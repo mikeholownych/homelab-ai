@@ -40,6 +40,10 @@ pub struct GpuInfo {
 #[derive(Debug, Clone, Default)]
 pub struct GpuStats {
     pub index: u32,
+    /// Package temperature (°C) read from the kernel's hwmon interface — no privileges, no `xpu-smi`.
+    pub temp_c: Option<f64>,
+    /// Video-memory temperature (°C), same source.
+    pub vram_temp_c: Option<f64>,
     pub power_w: Option<f64>,
     pub mem_used_mib: Option<f64>,
     pub mem_util_percent: Option<f64>,
@@ -89,16 +93,60 @@ fn static_info_for(index: u32) -> Option<GpuInfo> {
 /// Probe every GPU `xpu-smi` reports, each bounded so one slow/hung device
 /// can't stall the others or the caller. Returns an empty vec (cheaply) if
 /// `xpu-smi` isn't installed at all.
-pub fn probe() -> Vec<GpuStats> {
-    let indices = discover_indices();
-    if indices.is_empty() {
+///
+/// `targets` are the devices found once at startup (`discover_static`). They are deliberately *not*
+/// rediscovered here: `xpu-smi discovery` also queries GPU firmware over the MEI interface (root-only),
+/// which fails for an unprivileged monitor and logged hundreds of syslog lines a minute, and the device
+/// list cannot change while the monitor runs.
+pub fn probe(targets: &[(u32, Option<String>)]) -> Vec<GpuStats> {
+    if targets.is_empty() {
         return Vec::new();
     }
-    let handles: Vec<_> = indices
-        .into_iter()
-        .map(|i| std::thread::spawn(move || stats_for(i)))
+    let handles: Vec<_> = targets
+        .iter()
+        .cloned()
+        .map(|(index, bdf)| {
+            std::thread::spawn(move || {
+                let mut stats = stats_for(index)?;
+                if let Some((pkg, vram)) = bdf.as_deref().and_then(|b| hwmon_temps(std::path::Path::new("/sys/class/hwmon"), b)) {
+                    stats.temp_c = Some(pkg);
+                    stats.vram_temp_c = vram;
+                }
+                Some(stats)
+            })
+        })
         .collect();
     handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+}
+
+/// Package and video-memory temperatures (°C) for the Xe GPU at PCI address `bdf`, from
+/// `<root>/hwmon*/` (`name == xe`, `device` → the PCI function, `temp*_label` of `pkg` / `vram`).
+/// Returns `None` when no matching hwmon exists or it exposes no package temperature.
+pub fn hwmon_temps(root: &std::path::Path, bdf: &str) -> Option<(f64, Option<f64>)> {
+    let read = |p: std::path::PathBuf| std::fs::read_to_string(p).ok();
+    for entry in std::fs::read_dir(root).ok()?.flatten() {
+        let dir = entry.path();
+        if read(dir.join("name")).as_deref().map(str::trim) != Some("xe") {
+            continue;
+        }
+        let device = std::fs::canonicalize(dir.join("device")).ok()?;
+        if device.file_name().and_then(|n| n.to_str()) != Some(bdf) {
+            continue;
+        }
+        let mut pkg = None;
+        let mut vram = None;
+        for n in 1..=32 {
+            let Some(label) = read(dir.join(format!("temp{n}_label"))) else { continue };
+            let Some(milli) = read(dir.join(format!("temp{n}_input"))).and_then(|v| v.trim().parse::<f64>().ok()) else { continue };
+            match label.trim() {
+                "pkg" => pkg = Some(milli / 1000.0),
+                "vram" => vram = Some(milli / 1000.0),
+                _ => {}
+            }
+        }
+        return pkg.map(|p| (p, vram));
+    }
+    None
 }
 
 fn discover_indices() -> Vec<u32> {
@@ -149,6 +197,8 @@ fn stats_for(index: u32) -> Option<GpuStats> {
     let parsed: Stats = serde_json::from_str(&text).ok()?;
     Some(GpuStats {
         index,
+        temp_c: None,
+        vram_temp_c: None,
         power_w: parsed.power.as_ref().and_then(|p| first_tile(&p.gpu_power_w)),
         mem_used_mib: parsed.memory.as_ref().and_then(|m| first_tile(&m.used_mib)),
         mem_util_percent: parsed.memory.as_ref().and_then(|m| first_tile(&m.util_percent)),
@@ -398,5 +448,57 @@ mod tests {
         let (pid, out) = spawn_bounded("this-command-does-not-exist-xyz", &[], Duration::from_millis(500));
         assert_eq!(pid, None);
         assert_eq!(out, None);
+    }
+}
+
+#[cfg(test)]
+mod hwmon_tests {
+    use super::hwmon_temps;
+    use std::fs;
+    use std::path::Path;
+
+    fn write(p: &Path, v: &str) {
+        fs::create_dir_all(p.parent().unwrap()).unwrap();
+        fs::write(p, v).unwrap();
+    }
+
+    /// Builds <root>/pci/<bdf> (the device) and <root>/hwmon/hwmonN with `device` -> that PCI function.
+    fn fake(root: &Path, hw: &str, name: &str, bdf: &str, temps: &[(u32, &str, &str)]) {
+        let dev = root.join("pci").join(bdf);
+        fs::create_dir_all(&dev).unwrap();
+        let hwdir = root.join("hwmon").join(hw);
+        fs::create_dir_all(&hwdir).unwrap();
+        write(&hwdir.join("name"), &format!("{name}\n"));
+        std::os::unix::fs::symlink(&dev, hwdir.join("device")).unwrap();
+        for (n, label, milli) in temps {
+            write(&hwdir.join(format!("temp{n}_label")), &format!("{label}\n"));
+            write(&hwdir.join(format!("temp{n}_input")), &format!("{milli}\n"));
+        }
+    }
+
+    #[test]
+    fn reads_pkg_and_vram_for_the_matching_xe_device_only() {
+        let t = tempfile_dir();
+        fake(&t, "hwmon4", "xe", "0000:51:00.0", &[(2, "pkg", "42000"), (3, "vram", "46000"), (6, "vram_ch_0", "99000")]);
+        fake(&t, "hwmon5", "xe", "0000:93:00.0", &[(2, "pkg", "66000"), (3, "vram", "70000")]);
+        fake(&t, "hwmon1", "coretemp", "0000:00:18.3", &[(2, "pkg", "11000")]);
+        let root = t.join("hwmon");
+        assert_eq!(hwmon_temps(&root, "0000:51:00.0"), Some((42.0, Some(46.0))));
+        assert_eq!(hwmon_temps(&root, "0000:93:00.0"), Some((66.0, Some(70.0))));
+        assert_eq!(hwmon_temps(&root, "0000:ff:00.0"), None, "unknown device");
+    }
+
+    #[test]
+    fn a_device_without_a_package_sensor_reports_nothing_instead_of_zero() {
+        let t = tempfile_dir();
+        fake(&t, "hwmon4", "xe", "0000:51:00.0", &[(3, "vram", "46000")]);
+        assert_eq!(hwmon_temps(&t.join("hwmon"), "0000:51:00.0"), None);
+    }
+
+    fn tempfile_dir() -> std::path::PathBuf {
+        let p = std::env::temp_dir().join(format!("vtop-hwmon-{}-{:?}", std::process::id(), std::thread::current().id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
     }
 }

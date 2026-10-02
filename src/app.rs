@@ -562,8 +562,10 @@ impl App {
         }
         if self.gpu_rx.is_none() && self.last_gpu_poll.elapsed() >= GPU_POLL_INTERVAL {
             let (tx, rx) = mpsc::channel();
+            let targets: Vec<(u32, Option<String>)> =
+                self.gpu_info.iter().map(|i| (i.index, i.pci_bdf.clone())).collect();
             std::thread::spawn(move || {
-                let _ = tx.send(crate::gpu::probe());
+                let _ = tx.send(crate::gpu::probe(&targets));
             });
             self.gpu_rx = Some(rx);
             self.last_gpu_poll = Instant::now();

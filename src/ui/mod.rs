@@ -1603,10 +1603,25 @@ fn draw_gpu_panel(frame: &mut Frame, app: &App, area: Rect) {
             // underlying tool doesn't report them — verified genuinely
             // absent from `xpu-smi`'s own output on the deployment this
             // was built against, never left implicitly zero.
+            // Temperatures come from the kernel's hwmon interface (no privileges needed); utilisation is
+            // still not reported by this driver/tool, so it stays "n/a" rather than a made-up zero.
+            let temp = match live.and_then(|l| l.temp_c) {
+                Some(t) => match live.and_then(|l| l.vram_temp_c) {
+                    Some(v) => format!("temp {t:.0}\u{b0}C (vram {v:.0}\u{b0}C)"),
+                    None => format!("temp {t:.0}\u{b0}C"),
+                },
+                None => "temp n/a".to_string(),
+            };
+            let temp_color = match live.and_then(|l| l.temp_c) {
+                Some(t) if t >= 90.0 => BAD,
+                Some(t) if t >= 80.0 => WARN,
+                Some(_) => ratatui::style::Color::White,
+                None => DIM,
+            };
             lines.push(Line::from(vec![
                 Span::styled("  util n/a", Style::default().fg(DIM)),
                 Span::raw("  ·  "),
-                Span::styled("temp n/a", Style::default().fg(DIM)),
+                Span::styled(temp, Style::default().fg(temp_color)),
             ]));
 
             if let Some(i) = info {
@@ -2165,7 +2180,7 @@ mod tests {
             },
         ];
         app.gpu = vec![
-            crate::gpu::GpuStats { index: 0, power_w: Some(6.8), mem_used_mib: Some(29582.0), mem_util_percent: Some(90.5) },
+            crate::gpu::GpuStats { index: 0, temp_c: Some(64.0), vram_temp_c: Some(70.0), power_w: Some(6.8), mem_used_mib: Some(29582.0), mem_util_percent: Some(90.5) },
             // GPU 1's live probe "failed" (no dynamic entry) — must not
             // prevent GPU 0 from rendering, and must show GPU 1's static
             // identity with its live fields as unavailable rather than
@@ -2177,6 +2192,8 @@ mod tests {
         assert!(gpu_block.contains("gpu1"), "missing gpu1 despite its live probe failing:\n{gpu_block}");
         assert!(gpu_block.contains("6.8W") && gpu_block.contains("90%"), "gpu0's live stats missing:\n{gpu_block}");
         assert!(gpu_block.contains("power n/a"), "gpu1 should show power n/a, not be silently dropped:\n{gpu_block}");
+        assert!(gpu_block.contains("temp 64\u{b0}C (vram 70\u{b0}C)"), "gpu0 hwmon temperatures missing:\n{gpu_block}");
+        assert!(gpu_block.contains("temp n/a"), "gpu1 has no temperature and must say so:\n{gpu_block}");
     }
 
     #[test]
