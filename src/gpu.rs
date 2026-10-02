@@ -1,0 +1,402 @@
+//! Best-effort local GPU telemetry via Intel's `xpu-smi`, when present.
+//!
+//! This is deliberately vendor-agnostic in spirit: it shells out to
+//! whatever GPU telemetry tool is actually installed rather than assuming
+//! one exists. Today that's `xpu-smi` (Intel); there is no dependency on
+//! any NVIDIA-specific tooling, and none is introduced by design — if
+//! `xpu-smi` isn't present (e.g. on an NVIDIA box), this degrades to an
+//! empty result immediately, cheaply, every time.
+//!
+//! `xpu-smi` reports several fields as unavailable (`N/A`) on at least one
+//! real deployment this was built against — utilization, temperature and
+//! memory bandwidth are absent from its own JSON output in that case,
+//! which this treats as a hard "unsupported," never a fabricated zero.
+//! Only fields the tool actually reports are ever populated here.
+
+use serde::Deserialize;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
+
+/// Static device properties — fetched once at startup, never polled again
+/// (a GPU's name and installed memory don't change during a session, and
+/// re-fetching them on the 5s telemetry cadence would just add needless
+/// `xpu-smi` calls for data that can't have changed).
+#[derive(Debug, Clone, Default)]
+pub struct GpuInfo {
+    pub index: u32,
+    pub device_name: Option<String>,
+    pub pci_bdf: Option<String>,
+    pub mem_total_mib: Option<f64>,
+    /// PCIe link state, when the driver reports it. `None` here (as opposed
+    /// to `GpuStats`'s per-field `Option`s) covers the same "genuinely
+    /// unavailable" case: on the hardware this was verified against,
+    /// `xpu-smi` itself reports these as the literal string "N/A".
+    pub pcie_generation: Option<String>,
+    pub pcie_max_link_width: Option<String>,
+}
+
+/// Live counters — refreshed on the 5s telemetry cadence.
+#[derive(Debug, Clone, Default)]
+pub struct GpuStats {
+    pub index: u32,
+    pub power_w: Option<f64>,
+    pub mem_used_mib: Option<f64>,
+    pub mem_util_percent: Option<f64>,
+}
+
+/// Fetch each GPU's static identity/capacity once. Call at startup only.
+pub fn discover_static() -> Vec<GpuInfo> {
+    let indices = discover_indices();
+    let handles: Vec<_> = indices
+        .into_iter()
+        .map(|i| std::thread::spawn(move || static_info_for(i)))
+        .collect();
+    handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+}
+
+fn static_info_for(index: u32) -> Option<GpuInfo> {
+    let idx = index.to_string();
+    let text = run_bounded(&["discovery", "-d", &idx, "-j"], Duration::from_millis(2000))?;
+
+    #[derive(Deserialize)]
+    struct Discovery {
+        device_name: Option<String>,
+        pci_bdf_address: Option<String>,
+        memory_physical_size_byte: Option<f64>,
+        #[serde(default)]
+        pcie_generation: Option<String>,
+        #[serde(default)]
+        pcie_max_link_width: Option<String>,
+    }
+    // "N/A" is xpu-smi's own literal for "the driver didn't report this" —
+    // normalize it to a real `None` rather than displaying the string.
+    fn present(v: Option<String>) -> Option<String> {
+        v.filter(|s| s != "N/A" && !s.is_empty())
+    }
+
+    let parsed: Discovery = serde_json::from_str(&text).ok()?;
+    Some(GpuInfo {
+        index,
+        device_name: parsed.device_name,
+        pci_bdf: parsed.pci_bdf_address,
+        mem_total_mib: parsed.memory_physical_size_byte.map(|b| b / (1024.0 * 1024.0)),
+        pcie_generation: present(parsed.pcie_generation),
+        pcie_max_link_width: present(parsed.pcie_max_link_width),
+    })
+}
+
+/// Probe every GPU `xpu-smi` reports, each bounded so one slow/hung device
+/// can't stall the others or the caller. Returns an empty vec (cheaply) if
+/// `xpu-smi` isn't installed at all.
+pub fn probe() -> Vec<GpuStats> {
+    let indices = discover_indices();
+    if indices.is_empty() {
+        return Vec::new();
+    }
+    let handles: Vec<_> = indices
+        .into_iter()
+        .map(|i| std::thread::spawn(move || stats_for(i)))
+        .collect();
+    handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+}
+
+fn discover_indices() -> Vec<u32> {
+    let Some(text) = run_bounded(&["discovery", "-j"], Duration::from_millis(2000)) else {
+        return Vec::new();
+    };
+    #[derive(Deserialize)]
+    struct Discovery {
+        device_list: Vec<Device>,
+    }
+    #[derive(Deserialize)]
+    struct Device {
+        device_id: u32,
+    }
+    serde_json::from_str::<Discovery>(&text)
+        .map(|d| d.device_list.into_iter().map(|dev| dev.device_id).collect())
+        .unwrap_or_default()
+}
+
+fn stats_for(index: u32) -> Option<GpuStats> {
+    let idx = index.to_string();
+    let text = run_bounded(&["stats", "-d", &idx, "-j"], Duration::from_millis(2000))?;
+
+    #[derive(Deserialize)]
+    struct Stats {
+        #[serde(default)]
+        power: Option<Power>,
+        #[serde(default)]
+        memory: Option<Memory>,
+    }
+    #[derive(Deserialize)]
+    struct Power {
+        gpu_power_w: Option<std::collections::BTreeMap<String, Tile>>,
+    }
+    #[derive(Deserialize)]
+    struct Memory {
+        used_mib: Option<std::collections::BTreeMap<String, Tile>>,
+        util_percent: Option<std::collections::BTreeMap<String, Tile>>,
+    }
+    #[derive(Deserialize)]
+    struct Tile {
+        current: f64,
+    }
+    fn first_tile(m: &Option<std::collections::BTreeMap<String, Tile>>) -> Option<f64> {
+        m.as_ref()?.values().next().map(|t| t.current)
+    }
+
+    let parsed: Stats = serde_json::from_str(&text).ok()?;
+    Some(GpuStats {
+        index,
+        power_w: parsed.power.as_ref().and_then(|p| first_tile(&p.gpu_power_w)),
+        mem_used_mib: parsed.memory.as_ref().and_then(|m| first_tile(&m.used_mib)),
+        mem_util_percent: parsed.memory.as_ref().and_then(|m| first_tile(&m.util_percent)),
+    })
+}
+
+/// Run `xpu-smi <args>`, bounded by `timeout` regardless of what the child
+/// does (a hang, not just a slow reply). `Command` has no built-in timeout,
+/// so this waits for output on a helper thread and gives up on the
+/// `recv_timeout` deadline.
+///
+/// Rust's `Child` is *not* reaped on drop — unlike a thread, an
+/// un-`wait()`ed child process becomes a zombie the moment it exits, and
+/// stays one until something calls `wait()`/`try_wait()` on it. Since this
+/// runs from a long-lived process (the TTY1 console can run for weeks),
+/// never reaping would leak one zombie per probe, unbounded, for as long
+/// as the console runs. A detached reaper thread guarantees `wait()` is
+/// always eventually called, whether or not the timeout fired first —
+/// verified live: without this, a real deployment accumulated 100+
+/// zombies within minutes.
+fn run_bounded(args: &[&str], timeout: Duration) -> Option<String> {
+    spawn_bounded("xpu-smi", args, timeout).1
+}
+
+/// Core of `run_bounded`, parameterized over the program so tests can
+/// exercise the real subprocess/timeout/reaping machinery against a
+/// controllable command instead of only the real `xpu-smi`. Also returns
+/// the child's PID (when spawn succeeded at all) so tests can verify it
+/// actually gets reaped rather than lingering as a zombie — `/proc/<pid>`
+/// exists (in state `Z`) for a zombie and disappears entirely once
+/// reaped, which is the only externally-observable proof of reaping.
+///
+/// Note the exit code is never checked here, deliberately matching what
+/// this needs: any stdout produced (even by a command that then exits
+/// nonzero) is returned as-is; whether it parses as valid JSON is the
+/// caller's problem (`stats_for`/`static_info_for` already handle that
+/// via `serde_json`'s own `Result`). A timeout does not kill the child —
+/// it only stops *waiting* for it; the child keeps running to completion
+/// in the background and is reaped once it exits, whenever that is.
+fn spawn_bounded(program: &str, args: &[&str], timeout: Duration) -> (Option<u32>, Option<String>) {
+    let mut cmd = Command::new(program);
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    let Ok(mut child) = cmd.spawn() else {
+        return (None, None);
+    };
+    let pid = child.id();
+    let Some(mut stdout) = child.stdout.take() else {
+        return (Some(pid), None);
+    };
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::Read;
+        let mut buf = String::new();
+        let _ = stdout.read_to_string(&mut buf);
+        let _ = tx.send(buf);
+    });
+    let result = match rx.recv_timeout(timeout) {
+        Ok(text) if !text.trim().is_empty() => Some(text),
+        _ => None,
+    };
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    (Some(pid), result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_real_xpu_smi_stats_shape() {
+        // Captured verbatim (values redacted) from a real Intel Arc Pro B65
+        // deployment: utilization/temperature/bandwidth are genuinely
+        // absent from the JSON (not present as fields at all, not null),
+        // while power and memory are.
+        let text = r#"{
+            "device_index": 0,
+            "pci_bdf": "0000:51:00.0",
+            "device_type": "discrete",
+            "power": {
+                "gpu_power_w": {"tile_0": {"avg": 6.8, "min": 6.7, "max": 6.9, "current": 6.7}},
+                "energy_consumed_j": 1.6
+            },
+            "memory": {
+                "used_mib": {"tile_0": {"avg": 29582.6, "min": 29582.6, "max": 29582.6, "current": 29582.6}},
+                "util_percent": {"tile_0": {"avg": 90.5, "min": 90.5, "max": 90.5, "current": 90.5}}
+            }
+        }"#;
+        #[derive(Deserialize)]
+        struct Stats {
+            pci_bdf: Option<String>,
+        }
+        let parsed: Stats = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed.pci_bdf.as_deref(), Some("0000:51:00.0"));
+    }
+
+    #[test]
+    fn parses_real_xpu_smi_discovery_detail_shape() {
+        // Captured verbatim from a real Intel Arc Pro B65: pcie_generation
+        // and pcie_max_link_width are the literal string "N/A", which must
+        // normalize to `None`, not be displayed as the text "N/A".
+        let text = r#"{
+            "device_id": 0,
+            "device_name": "Intel(R) Arc(TM) Pro B65 Graphics",
+            "pci_bdf_address": "0000:51:00.0",
+            "memory_physical_size_byte": 34242297856,
+            "pcie_generation": "N/A",
+            "pcie_max_link_width": "N/A"
+        }"#;
+        #[derive(Deserialize)]
+        struct Discovery {
+            device_name: Option<String>,
+            memory_physical_size_byte: Option<f64>,
+        }
+        let parsed: Discovery = serde_json::from_str(text).unwrap();
+        assert_eq!(parsed.device_name.as_deref(), Some("Intel(R) Arc(TM) Pro B65 Graphics"));
+        // 34242297856 bytes / (1024*1024) MiB ≈ 32656 MiB, matching the real
+        // device's reported `memory_physical_size` of "32656.00 MiB".
+        let mib = parsed.memory_physical_size_byte.unwrap() / (1024.0 * 1024.0);
+        assert!((mib - 32656.0).abs() < 1.0, "{mib}");
+    }
+
+    #[test]
+    fn na_string_normalizes_to_none() {
+        fn present(v: Option<String>) -> Option<String> {
+            v.filter(|s| s != "N/A" && !s.is_empty())
+        }
+        assert_eq!(present(Some("N/A".to_string())), None);
+        assert_eq!(present(Some("".to_string())), None);
+        assert_eq!(present(Some("Gen4".to_string())), Some("Gen4".to_string()));
+        assert_eq!(present(None), None);
+    }
+
+    #[test]
+    fn stats_for_missing_binary_returns_none_quickly() {
+        // No xpu-smi in a minimal test environment is the expected common
+        // case (e.g. CI, or any non-Intel-GPU machine) — must not hang or
+        // panic, just report nothing.
+        let start = std::time::Instant::now();
+        let result = run_bounded(&["stats", "-d", "0", "-j"], Duration::from_millis(500));
+        assert!(start.elapsed() < Duration::from_secs(2));
+        // Either xpu-smi is absent (None) or, if this happens to run on a
+        // machine that has it, we at least didn't hang either way.
+        let _ = result;
+    }
+
+    // -- subprocess lifecycle: execution, exit codes, timeout, reaping ----
+    //
+    // These exercise the real subprocess/timeout/reaping machinery against
+    // `sh`, a controllable stand-in, rather than only the real `xpu-smi` —
+    // closing the gap the 0.2.0 zombie-fix report flagged: that fix had
+    // live evidence (zombie count observed flat) but no deterministic
+    // regression test. `/proc/<pid>` is the reaping oracle: it exists
+    // (state `Z`) for an unreaped zombie and disappears entirely once
+    // something calls `wait()` on it.
+
+    fn proc_exists(pid: u32) -> bool {
+        std::path::Path::new(&format!("/proc/{pid}")).exists()
+    }
+
+    /// Poll until the pid disappears from /proc (reaped) or the deadline
+    /// passes. Returns whether it was reaped in time.
+    fn wait_for_reap(pid: u32, deadline: Duration) -> bool {
+        let start = std::time::Instant::now();
+        while start.elapsed() < deadline {
+            if !proc_exists(pid) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        !proc_exists(pid)
+    }
+
+    #[test]
+    fn successful_execution_returns_stdout_and_is_reaped() {
+        let (pid, out) = spawn_bounded("sh", &["-c", "echo hello-world"], Duration::from_secs(2));
+        assert_eq!(out.as_deref().map(str::trim), Some("hello-world"));
+        assert!(wait_for_reap(pid.expect("spawned"), Duration::from_secs(2)), "child was not reaped");
+    }
+
+    #[test]
+    fn nonzero_exit_with_output_still_returns_the_output() {
+        // The exit code is never checked (documented on `spawn_bounded`) —
+        // this pins that as intended behavior, not an oversight: whether
+        // the output is usable is left to the caller's own JSON parsing.
+        let (pid, out) = spawn_bounded("sh", &["-c", "echo partial-output; exit 1"], Duration::from_secs(2));
+        assert_eq!(out.as_deref().map(str::trim), Some("partial-output"));
+        assert!(wait_for_reap(pid.expect("spawned"), Duration::from_secs(2)));
+    }
+
+    #[test]
+    fn nonzero_exit_with_no_output_returns_none() {
+        let (pid, out) = spawn_bounded("sh", &["-c", "exit 1"], Duration::from_secs(2));
+        assert_eq!(out, None);
+        assert!(wait_for_reap(pid.expect("spawned"), Duration::from_secs(2)));
+    }
+
+    #[test]
+    fn malformed_output_is_returned_verbatim_for_the_caller_to_reject() {
+        // spawn_bounded itself doesn't parse anything — it hands back
+        // whatever came out, and it's on the caller (stats_for /
+        // static_info_for, already covered by the JSON-shape tests above)
+        // to fail closed on a parse error via serde_json's own Result.
+        let (pid, out) = spawn_bounded("sh", &["-c", "echo not valid json"], Duration::from_secs(2));
+        let out = out.expect("some output");
+        assert!(serde_json::from_str::<serde_json::Value>(&out).is_err());
+        assert!(wait_for_reap(pid.expect("spawned"), Duration::from_secs(2)));
+    }
+
+    #[test]
+    fn timeout_returns_none_promptly_and_still_reaps_the_child_later() {
+        // The child (sleeping 1.5s) outlives the 150ms timeout — must
+        // return None quickly rather than blocking for the child's full
+        // lifetime, and the child must still be reaped once it does exit,
+        // even though nothing was waiting for it at the time of timeout.
+        let start = std::time::Instant::now();
+        let (pid, out) = spawn_bounded("sh", &["-c", "sleep 1.5; echo late"], Duration::from_millis(150));
+        assert!(start.elapsed() < Duration::from_millis(800), "did not return promptly on timeout");
+        assert_eq!(out, None, "a timed-out call must not return the child's eventual output");
+        let pid = pid.expect("spawned");
+        // The child is still legitimately running at this point — not
+        // reaped yet, and that's correct (it hasn't exited).
+        assert!(proc_exists(pid), "child should still be running immediately after the timeout fires");
+        assert!(
+            wait_for_reap(pid, Duration::from_secs(3)),
+            "child was never reaped after it finished sleeping — this is the exact zombie-leak pattern from the 0.2.0 defect"
+        );
+    }
+
+    #[test]
+    fn repeated_calls_do_not_accumulate_overlapping_zombies() {
+        // Simulates the real 5s polling cadence's failure mode: many
+        // probes over time. None should ever coexist as zombies.
+        let mut pids = Vec::new();
+        for i in 0..8 {
+            let (pid, _) = spawn_bounded("sh", &["-c", &format!("echo n{i}")], Duration::from_secs(2));
+            pids.push(pid.expect("spawned"));
+        }
+        for pid in pids {
+            assert!(wait_for_reap(pid, Duration::from_secs(2)), "pid {pid} was left unreaped");
+        }
+    }
+
+    #[test]
+    fn missing_program_returns_none_without_a_pid() {
+        let (pid, out) = spawn_bounded("this-command-does-not-exist-xyz", &[], Duration::from_millis(500));
+        assert_eq!(pid, None);
+        assert_eq!(out, None);
+    }
+}

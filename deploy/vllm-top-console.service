@@ -1,0 +1,53 @@
+[Unit]
+Description=vllm-top monitoring console on tty1
+Documentation=https://example.invalid/vllm-top
+After=multi-user.target network-online.target vllm.service getty@tty1.service
+Wants=network-online.target
+# This unit owns tty1 instead of the normal login getty. Conflicts= means
+# starting either one stops the other, so the two can never fight over the
+# same device.
+Conflicts=getty@tty1.service
+# Bounded recovery: at most StartLimitBurst restarts within
+# StartLimitIntervalSec, then the unit gives up (goes to "failed") instead
+# of looping forever. tty1 falls back to nothing running on it in that
+# case — not to a login prompt — see the README's TTY1 section for the
+# manual recovery step.
+StartLimitIntervalSec=300s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=mike
+Group=mike
+WorkingDirectory=/home/mike
+# Direct path, not the ~/.local/bin PATH-resolution wrapper or a login
+# shell — no dependency on interactive shell initialization.
+ExecStart=/home/mike/.cargo/bin/vllm-top
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=10s
+
+# Same mechanism a normal getty uses to take ownership of a tty: reset it,
+# hang up any previous session on it, and deallocate the virtual terminal
+# on stop so a subsequent getty (after rollback) starts clean.
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+UtmpIdentifier=tty1
+UtmpMode=user
+
+# Hardening: a per-user, read-only-to-the-rest-of-the-system monitoring
+# TUI has no business with elevated privileges or system-wide write
+# access. It only ever reads /proc, makes outbound HTTP requests, and
+# (best-effort) execs `xpu-smi`; it writes nothing anywhere.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
