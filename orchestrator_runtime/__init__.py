@@ -9,6 +9,7 @@ from .runtime import (
     InMemoryAdapter,
     OpenAIProviderAdapter,
     OrchestratorRuntime,
+    ProviderError,
     TaskGraph,
     WorkerRecord,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "MetricsRegistry",
     "OpenAIProviderAdapter",
     "OrchestratorRuntime",
+    "ProviderError",
     "TaskGraph",
     "WorkerHealthState",
     "WorkerRecord",

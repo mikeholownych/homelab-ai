@@ -128,7 +128,7 @@ class HealthManager:
             self.metrics.worker_check_duration_seconds.set(duration, worker_id=worker_id)
             self.metrics.scheduler_worker_available.set(1.0 if healthy else 0.0, worker_id=worker_id)
             if not healthy and error:
-                err_type = "timeout" if "timeout" in error.lower() else "connection_error"
+                err_type = "timeout" if ("timeout" in error.lower() or "timed out" in error.lower()) else "connection_error"
                 self.metrics.provider_errors_total.inc(worker_id=worker_id, error_type=err_type)
 
     def check(self, *, strict: bool = False) -> tuple[int, dict[str, Any]]:

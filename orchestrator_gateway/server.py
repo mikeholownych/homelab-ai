@@ -222,6 +222,20 @@ def create_gateway(
                     return
 
                 if result["status"] != "ok":
+                    if result["status"] == "rejected":
+                        status_code = HTTPStatus.BAD_REQUEST
+                        self._send(
+                            status_code,
+                            {
+                                "error": {
+                                    "message": result.get("message") or result.get("failure_class", "invalid request"),
+                                    "type": "invalid_request_error",
+                                    "code": result.get("failure_class", "invalid_request"),
+                                }
+                            },
+                            request_id,
+                        )
+                        return
                     status_code = (
                         HTTPStatus.UNPROCESSABLE_ENTITY
                         if result["status"] == "unsupported"

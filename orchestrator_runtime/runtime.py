@@ -179,7 +179,10 @@ class ProviderAdapter(Protocol):
 
 
 class ProviderError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, status: int | None = None, body: str = "") -> None:
+        super().__init__(message)
+        self.status = status
+        self.body = body
 
 
 @dataclass
@@ -216,7 +219,7 @@ class OpenAIProviderAdapter:
                 body = json.loads(response.read().decode())
         except urllib.error.HTTPError as error:
             body = error.read().decode(errors="replace")[:512]
-            raise ProviderError(f"provider HTTP {error.code}: {body}") from error
+            raise ProviderError(f"provider HTTP {error.code}: {body}", status=error.code, body=body) from error
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
             raise ProviderError(f"provider request failed: {error}") from error
         choice = (body.get("choices") or [{}])[0]
@@ -359,6 +362,9 @@ class OrchestratorRuntime:
         self.diagnostic_lineage = diagnostic_lineage
         self.metrics = metrics or MetricsRegistry()
         self.scheduling_mode = scheduling_mode or os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
+        # Whole-response wait for non-streamed upstream calls. Long agent turns (large prefill plus
+        # a long completion at tens of tokens/s) routinely exceed a minute, so the default is generous.
+        self.upstream_timeout = float(os.environ.get("ORCHESTRATOR_UPSTREAM_TIMEOUT_SECONDS", "600"))
         self.health = health or HealthManager(self.registry, self.adapters, self.metrics, scheduling_mode=self.scheduling_mode)
 
     def complete(
@@ -366,9 +372,10 @@ class OrchestratorRuntime:
         request: dict[str, Any],
         *,
         capabilities: frozenset[str] = frozenset({"navigation"}),
-        timeout: float = 60.0,
+        timeout: float | None = None,
         worker_id: str | None = None,
     ) -> dict[str, Any]:
+        timeout = self.upstream_timeout if timeout is None else timeout
         request_id = request.get("request_id") or str(uuid.uuid4())
         self.metrics.inference_requests_total.inc(status="received")
         messages = request.get("messages")
@@ -397,6 +404,25 @@ class OrchestratorRuntime:
             self.evidence.append("routing_rejected", request_id=request_id, failure_class="adapter_unavailable", worker_id=worker.worker_id)
             return {"status": "blocked", "failure_class": "adapter_unavailable", "request_id": request_id}
 
+        # Keep prompt + completion inside the worker's context window instead of letting the
+        # provider reject the whole request. The prompt size is an estimate, so a residual
+        # provider-side overflow is still reported as a client error below.
+        for limit_key in ("max_tokens", "max_completion_tokens"):
+            requested = request.get(limit_key)
+            if isinstance(requested, int) and not isinstance(requested, bool) and requested > 0:
+                room = worker.context_limit - context_tokens - 256
+                if room < requested:
+                    if room < 16:
+                        self.evidence.append("routing_rejected", request_id=request_id, failure_class="context_length_exceeded", worker_id=worker.worker_id)
+                        self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+                        return {
+                            "status": "rejected",
+                            "failure_class": "context_length_exceeded",
+                            "request_id": request_id,
+                            "message": f"Prompt is about {context_tokens} tokens; the model context limit is {worker.context_limit}. Reduce the conversation size.",
+                        }
+                    request = {**request, limit_key: room}
+
         self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="dispatched")
         self.metrics.inference_dispatches_total.inc(worker_id=worker.worker_id, model=worker.public_model_id)
         self.evidence.append("worker_selected", request_id=request_id, worker_id=worker.worker_id, worker_identity=worker.identity_hash)
@@ -416,6 +442,17 @@ class OrchestratorRuntime:
         except ProviderError as error:
             call_duration = time.monotonic() - started
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+            if error.status is not None and 400 <= error.status < 500 and error.status not in (401, 403, 408, 429):
+                # The worker answered correctly; the request was invalid for it (e.g. context overflow).
+                self.health.record_worker_observation(worker.worker_id, healthy=True, duration=call_duration)
+                failure_class = "context_length_exceeded" if "maximum context length" in error.body else "invalid_request"
+                self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class=failure_class, error=type(error).__name__, detail=error.body[:512])
+                message = error.body
+                try:
+                    message = json.loads(error.body)["error"]["message"]
+                except (ValueError, KeyError, TypeError):
+                    pass
+                return {"status": "rejected", "failure_class": failure_class, "request_id": request_id, "message": str(message)[:1000]}
             self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
             self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="provider", error=type(error).__name__, detail=str(error)[:512])
             return {"status": "blocked", "failure_class": "provider", "request_id": request_id}

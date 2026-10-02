@@ -261,3 +261,59 @@ def test_external_validation_and_tool_authority_are_separate(tmp_path):
     assert denied["status"] == "blocked"
     assert denied["failure_class"] == "authority"
     assert runtime.metrics.authority_rejections_total.get(reason="unauthorized_action") == 1.0
+
+
+class _CapturingAdapter:
+    def __init__(self, error=None):
+        self.error = error
+        self.seen = []
+
+    def complete(self, request, timeout):
+        self.seen.append((dict(request), timeout))
+        if self.error:
+            raise self.error
+        return {"content": "ok", "tool_calls": []}
+
+
+def _runtime_with(adapter, tmp_path):
+    from orchestrator_runtime import ProviderError  # noqa: F401  (exported for callers)
+
+    registry = CapabilityRegistry([worker("w1")])
+    return OrchestratorRuntime(registry, {"w1": adapter}, EvidenceStore(tmp_path / "e.jsonl"))
+
+
+def test_max_tokens_is_clamped_to_remaining_context(tmp_path):
+    adapter = _CapturingAdapter()
+    runtime = _runtime_with(adapter, tmp_path)
+    prompt = "x" * 4 * 10_000  # about 10k tokens by the gateway's estimate; limit is 16384
+    result = runtime.complete({"model": "engineering/w1", "max_tokens": 20_000, "messages": [{"role": "user", "content": prompt}]})
+
+    assert result["status"] == "ok"
+    sent, timeout = adapter.seen[0]
+    assert sent["max_tokens"] == 16_384 - 10_000 - 256
+    assert timeout == runtime.upstream_timeout >= 600
+
+
+def test_provider_context_overflow_is_a_client_error_and_keeps_worker_healthy(tmp_path):
+    from orchestrator_runtime import ProviderError
+
+    body = json.dumps({"error": {"message": "This model's maximum context length is 16384 tokens. However, you requested 20000 tokens"}})
+    adapter = _CapturingAdapter(ProviderError("provider HTTP 400: " + body, status=400, body=body))
+    runtime = _runtime_with(adapter, tmp_path)
+    result = runtime.complete({"model": "engineering/w1", "messages": [{"role": "user", "content": "hi"}]})
+
+    assert result["status"] == "rejected"
+    assert result["failure_class"] == "context_length_exceeded"
+    assert "maximum context length" in result["message"]
+    assert runtime.registry.snapshot()[0]["healthy"] is True
+
+
+def test_provider_server_error_still_marks_worker_unhealthy(tmp_path):
+    from orchestrator_runtime import ProviderError
+
+    adapter = _CapturingAdapter(ProviderError("provider HTTP 500: boom", status=500, body="boom"))
+    runtime = _runtime_with(adapter, tmp_path)
+    result = runtime.complete({"model": "engineering/w1", "messages": [{"role": "user", "content": "hi"}]})
+
+    assert result["status"] == "blocked"
+    assert runtime.registry.snapshot()[0]["healthy"] is False

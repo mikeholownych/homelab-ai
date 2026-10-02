@@ -132,3 +132,40 @@ def test_gateway_stream_preserves_tool_call_and_terminal_finish_reason(tmp_path)
     finally:
         server.shutdown()
         thread.join(timeout=2)
+
+
+def test_gateway_reports_context_overflow_as_client_error(tmp_path):
+    from orchestrator_runtime import ProviderError
+
+    body = json.dumps({"error": {"message": "This model's maximum context length is 16384 tokens."}})
+
+    class Overflow:
+        def complete(self, request, timeout):
+            raise ProviderError("provider HTTP 400: " + body, status=400, body=body)
+
+    runtime = OrchestratorRuntime(
+        CapabilityRegistry([worker("ready")]),
+        {"ready": Overflow()},
+        EvidenceStore(tmp_path / "evidence.jsonl"),
+    )
+    server = GatewayServer(("127.0.0.1", 0), create_gateway(runtime, "client-secret"))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        connection = HTTPConnection(host, port)
+        connection.request(
+            "POST",
+            "/v1/chat/completions",
+            body=json.dumps({"model": "engineering/ready", "messages": [{"role": "user", "content": "hi"}]}),
+            headers={"Authorization": "Bearer client-secret", "Content-Type": "application/json"},
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+        assert response.status == 400
+        assert payload["error"]["code"] == "context_length_exceeded"
+        assert "maximum context length" in payload["error"]["message"]
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
