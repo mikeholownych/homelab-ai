@@ -20,3 +20,8 @@ orchestrator_gateway_scheduling_mode: CONFIGURATION_B_PLUS
 orchestrator_gateway_obsolete_dropins:
   - /etc/systemd/system/aihost-orchestrator-gateway.service.d/10-t5820-opencode-client.conf
   - /etc/systemd/system/aihost-orchestrator-gateway.service.d/15-release.conf
+# Model routing (see orchestrator_runtime/routing.py). Empty means legacy routing by model name.
+# Rules are first-match over: model, task_class (X-Task-Class header), has_tools, prompt-token bounds.
+# The last rule must be an unconditional default. Aliases map explicit pool names to pools.
+orchestrator_gateway_routes: []
+orchestrator_gateway_model_aliases: {}

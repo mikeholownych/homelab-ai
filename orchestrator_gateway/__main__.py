@@ -7,6 +7,7 @@ from pathlib import Path
 from orchestrator_gateway import GatewayServer, create_gateway
 from orchestrator_runtime import (
     CapabilityRegistry,
+    Router,
     EvidenceStore,
     HealthManager,
     MetricsRegistry,
@@ -55,6 +56,7 @@ def worker_records() -> list[WorkerRecord]:
                     valid_until=spec["valid_until"],
                     endpoint=spec["endpoint"],
                     auth_token=token_path.read_text(encoding="utf-8").strip(),
+                    pool=spec.get("pool", "lead"),
                 )
             )
         return records
@@ -87,6 +89,23 @@ def worker_records() -> list[WorkerRecord]:
     ]
 
 
+def load_router(workers: list[WorkerRecord]) -> Router | None:
+    """Build the route table from ORCHESTRATOR_ROUTES / ORCHESTRATOR_MODEL_ALIASES.
+
+    An invalid table, or one that references a pool with no registered worker, aborts start-up
+    (fail closed) instead of silently routing somewhere unintended.
+    """
+    raw_routes = os.environ.get("ORCHESTRATOR_ROUTES")
+    if not raw_routes:
+        return None
+    router = Router.from_config(json.loads(raw_routes), json.loads(os.environ.get("ORCHESTRATOR_MODEL_ALIASES", "{}")))
+    known = {worker.pool for worker in workers}
+    missing = router.referenced_pools() - known
+    if missing:
+        raise RuntimeError(f"route table references pools with no worker: {sorted(missing)}")
+    return router
+
+
 def main() -> None:
     workers = worker_records()
     registry = CapabilityRegistry(workers)
@@ -104,6 +123,7 @@ def main() -> None:
         auto_start=True,
         scheduling_mode=scheduling_mode,
     )
+    router = load_router(workers)
     runtime = OrchestratorRuntime(
         registry,
         adapters,
@@ -112,6 +132,7 @@ def main() -> None:
         metrics=metrics,
         health=health,
         scheduling_mode=scheduling_mode,
+        router=router,
     )
     client_tokens = [read_secret("ORCHESTRATOR_CLIENT_TOKEN", "ORCHESTRATOR_CLIENT_TOKEN_FILE")]
     extra_client_token_file = os.environ.get("ORCHESTRATOR_CLIENT_TOKEN_EXTRA_FILE")

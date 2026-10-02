@@ -11,6 +11,32 @@
       release directory.
   when: orchestrator_gateway_enabled | bool
 
+- name: Validate the model route table with the gateway's own router (fail before deploying)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import json, os
+        from orchestrator_runtime import Router
+        router = Router.from_config(json.loads(os.environ["R"]), json.loads(os.environ["A"]))
+        pools = {w.get("pool", "lead") for w in json.loads(os.environ["W"])}
+        missing = router.referenced_pools() - pools
+        assert not missing, f"route table references pools with no worker: {sorted(missing)}"
+        print("ok", len(router.rules), "rules")
+  environment:
+    PYTHONPATH: "{{ playbook_dir }}/.."
+    R: "{{ orchestrator_gateway_routes | to_json }}"
+    A: "{{ orchestrator_gateway_model_aliases | to_json }}"
+    W: "{{ orchestrator_gateway_workers | to_json }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_routes | length > 0
+
 - name: Create gateway directories
   ansible.builtin.file:
     path: "{{ item }}"

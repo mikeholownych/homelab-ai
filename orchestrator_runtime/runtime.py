@@ -18,6 +18,7 @@ from orchestrator_contract import Authority, Task
 
 from .health import HealthManager
 from .metrics import MetricsRegistry
+from .routing import Router
 
 
 def _canonical(value: Any) -> str:
@@ -62,6 +63,7 @@ class WorkerRecord:
     healthy: bool = True
     endpoint: str | None = None
     auth_token: str | None = None
+    pool: str = "lead"
 
     def __post_init__(self) -> None:
         if self.revision in {"", "main", "latest"}:
@@ -114,12 +116,13 @@ class CapabilityRegistry:
 
     def select(
         self, required: frozenset[str], *, context_tokens: int = 0, concurrency: int = 1,
-        public_model_id: str | None = None, affinity_key: str | None = None,
+        public_model_id: str | None = None, affinity_key: str | None = None, pool: str | None = None,
     ) -> WorkerRecord:
         with self._lock:
             candidates = [
                 worker for worker in self._workers.values()
                 if (public_model_id is None or worker.public_model_id == public_model_id)
+                and (pool is None or worker.pool == pool)
                 and worker.eligible(required, context_tokens, concurrency)
             ]
         if not candidates:
@@ -370,7 +373,9 @@ class OrchestratorRuntime:
         metrics: MetricsRegistry | None = None,
         health: HealthManager | None = None,
         scheduling_mode: str | None = None,
+        router: Router | None = None,
     ) -> None:
+        self.router = router
         self.registry = registry
         self.adapters = adapters
         self.evidence = evidence
@@ -392,6 +397,7 @@ class OrchestratorRuntime:
         timeout: float | None = None,
         worker_id: str | None = None,
         affinity: str | None = None,
+        task_class: str | None = None,
     ) -> dict[str, Any]:
         timeout = self.upstream_timeout if timeout is None else timeout
         request_id = request.get("request_id") or str(uuid.uuid4())
@@ -413,13 +419,37 @@ class OrchestratorRuntime:
                 "request_id": request_id,
                 "message": f"Prompt is about {context_tokens} tokens; the model context limit is {largest_window}. Reduce the conversation size.",
             }
+        affinity_key = _affinity_key(request, affinity)
+        route: dict[str, Any] = {"rule_id": "legacy", "pool": None, "fallback_used": False, "reason": "no route table configured"}
         try:
             if worker_id:
-                worker = self.registry.get(worker_id, capabilities, context_tokens=context_tokens, public_model_id=public_model)
+                worker = self.registry.get(worker_id, capabilities, context_tokens=context_tokens,
+                                           public_model_id=None if self.router else public_model)
+                route = {"rule_id": "pinned", "pool": worker.pool, "fallback_used": False, "reason": "explicit worker pin"}
+            elif self.router is not None:
+                decision = self.router.decide(model=public_model, task_class=task_class,
+                                              has_tools=bool(request.get("tools")), prompt_tokens=context_tokens)
+                worker = None
+                for index, pool_name in enumerate(decision.pools):
+                    try:
+                        worker = self.registry.select(capabilities, context_tokens=context_tokens, pool=pool_name,
+                                                      affinity_key=affinity_key)
+                    except LookupError:
+                        continue
+                    route = {"rule_id": decision.rule_id, "pool": pool_name, "fallback_used": index > 0, "reason": decision.reason}
+                    break
+                if worker is None:
+                    self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_pool_unavailable")
+                    self.metrics.inference_completions_total.inc(worker_id="none", outcome="failed")
+                    self.evidence.append("routing_rejected", request_id=request_id, failure_class="pool_unavailable",
+                                         route_rule=decision.rule_id, route_pools=list(decision.pools))
+                    return {"status": "blocked", "failure_class": "pool_unavailable", "request_id": request_id,
+                            "message": f"No healthy worker is available in pool(s) {list(decision.pools)} (rule '{decision.rule_id}').",
+                            "route": {"rule_id": decision.rule_id, "pool": decision.pool, "fallback_used": False, "reason": decision.reason}}
             else:
                 worker = self.registry.select(
                     capabilities, context_tokens=context_tokens, public_model_id=public_model,
-                    affinity_key=_affinity_key(request, affinity),
+                    affinity_key=affinity_key,
                 )
         except LookupError:
             self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_capability")
@@ -456,7 +486,8 @@ class OrchestratorRuntime:
 
         self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="dispatched")
         self.metrics.inference_dispatches_total.inc(worker_id=worker.worker_id, model=worker.public_model_id)
-        self.evidence.append("worker_selected", request_id=request_id, worker_id=worker.worker_id, worker_identity=worker.identity_hash)
+        self.evidence.append("worker_selected", request_id=request_id, worker_id=worker.worker_id, worker_identity=worker.identity_hash,
+                             route_rule=route["rule_id"], route_pool=route["pool"], route_fallback=route["fallback_used"])
 
         started = time.monotonic()
         self.metrics.scheduler_active_work.inc()
@@ -546,7 +577,7 @@ class OrchestratorRuntime:
                 normalized_finish_reason=normalized_finish_reason,
             )
         self.evidence.append("response_validated", request_id=request_id, worker_id=worker.worker_id, elapsed_ms=round((time.monotonic() - started) * 1000, 3), response_hash=_hash(response))
-        return {"status": "ok", "request_id": request_id, "response": response}
+        return {"status": "ok", "request_id": request_id, "response": response, "route": {**route, "worker_id": worker.worker_id}}
 
     def execute_tool(self, task: Task, authority: Authority, tool_name: str, arguments: dict[str, Any], executor: Any) -> dict[str, Any]:
         if not tool_name or not isinstance(arguments, dict) or not authority.allows(task, "execute"):

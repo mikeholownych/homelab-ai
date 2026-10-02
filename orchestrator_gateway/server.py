@@ -14,6 +14,13 @@ from typing import Any, Iterable
 from orchestrator_runtime import OrchestratorRuntime
 
 
+def _route_headers(route: dict[str, Any] | None) -> dict[str, str]:
+    if not route:
+        return {}
+    value = f"rule={route.get('rule_id')};pool={route.get('pool')};worker={route.get('worker_id', '-')};fallback={str(bool(route.get('fallback_used'))).lower()}"
+    return {"X-AIHost-Route": value}
+
+
 def create_gateway(
     runtime: OrchestratorRuntime,
     client_tokens: str | Iterable[str],
@@ -42,12 +49,15 @@ def create_gateway(
                 return True
             return self._authorized()
 
-        def _send(self, status: int, payload: dict[str, Any], request_id: str | None = None) -> None:
+        def _send(self, status: int, payload: dict[str, Any], request_id: str | None = None,
+                  extra_headers: dict[str, str] | None = None) -> None:
             body = json.dumps(payload, separators=(",", ":")).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Request-ID", request_id or str(uuid.uuid4()))
+            for name, value in (extra_headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
 
@@ -72,6 +82,8 @@ def create_gateway(
                 route = "metrics"
             elif clean_path == "/v1/models":
                 route = "v1_models"
+            elif clean_path == "/v1/routes":
+                route = "v1_routes"
             else:
                 route = "unsupported"
 
@@ -114,6 +126,22 @@ def create_gateway(
                     self.wfile.write(metrics_body)
                     return
 
+                if route == "v1_routes":
+                    if not self._authorized():
+                        runtime.metrics.http_auth_failures_total.inc(route="v1_routes")
+                        status_code = HTTPStatus.UNAUTHORIZED
+                        self._send(status_code, {"error": {"message": "authentication required", "type": "authentication_error"}}, request_id)
+                        return
+                    pools: dict[str, list[dict[str, Any]]] = {}
+                    for worker in runtime.registry.snapshot():
+                        pools.setdefault(worker.get("pool", "lead"), []).append({
+                            "worker_id": worker["worker_id"], "model_id": worker["model_id"],
+                            "context_limit": worker["context_limit"], "healthy": worker["healthy"],
+                        })
+                    table = runtime.router.describe() if runtime.router else None
+                    self._send(HTTPStatus.OK, {"object": "route_table", "router": table, "pools": pools}, request_id)
+                    return
+
                 if route == "v1_models":
                     if not self._authorized():
                         runtime.metrics.http_auth_failures_total.inc(route="v1_models")
@@ -130,7 +158,8 @@ def create_gateway(
                             "object": "list",
                             "data": [
                                 {"id": model, "object": "model", "owned_by": "aihost-orchestrator"}
-                                for model in runtime.registry.public_models()
+                                for model in sorted(set(runtime.registry.public_models())
+                                                    | (set(runtime.router.aliases) if runtime.router else set()))
                             ],
                         },
                         request_id,
@@ -210,7 +239,7 @@ def create_gateway(
                     return
 
                 try:
-                    result = runtime.complete(request, worker_id=pinned_worker, affinity=self.headers.get("X-Session-ID"))
+                    result = runtime.complete(request, worker_id=pinned_worker, affinity=self.headers.get("X-Session-ID"), task_class=self.headers.get("X-Task-Class"))
                 except OSError:
                     status_code = HTTPStatus.SERVICE_UNAVAILABLE
                     runtime.metrics.evidence_verification_failures_total.inc()
@@ -243,8 +272,10 @@ def create_gateway(
                     )
                     self._send(
                         status_code,
-                        {"error": {"message": result.get("failure_class", "error"), "type": result["status"]}},
+                        {"error": {"message": result.get("message") or result.get("failure_class", "error"), "type": result["status"],
+                                   "code": result.get("failure_class", "error")}},
                         request_id,
+                        _route_headers(result.get("route")),
                     )
                     return
 
@@ -261,6 +292,8 @@ def create_gateway(
                         self.send_header("Content-Type", "text/event-stream")
                         self.send_header("Cache-Control", "no-cache")
                         self.send_header("X-Request-ID", request_id)
+                        for name, value in _route_headers(result.get("route")).items():
+                            self.send_header(name, value)
                         self.end_headers()
                         choice = response["choices"][0]
                         message = choice["message"]
@@ -295,7 +328,7 @@ def create_gateway(
                         raise
 
                 status_code = HTTPStatus.OK
-                self._send(status_code, result["response"], request_id)
+                self._send(status_code, result["response"], request_id, _route_headers(result.get("route")))
             finally:
                 runtime.metrics.http_requests_in_flight.dec(route=route)
                 self._record_metrics(route, "POST", int(status_code), time.monotonic() - t0)

@@ -138,11 +138,19 @@ llama_cpp_container_workers:
 
 orchestrator_gateway_enabled: true
 orchestrator_gateway_port: 8010
-orchestrator_gateway_release_id: t5820-gateway-d3bf4a8
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-d3bf4a8
+orchestrator_gateway_release_id: t5820-gateway-aa35ffa
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-aa35ffa
 orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
+# Model routing: one pool today (both workers serve the lead model). Add an aux pool and rules such as
+# {id: subagent-aux, match: {task_class: [subagent, summarize, compact]}, pool: aux, fallback: [lead]}
+# once a second model is qualified. Requests naming engineering/lead bypass the table explicitly.
+orchestrator_gateway_routes:
+  - {id: default, match: {}, pool: lead}
+orchestrator_gateway_model_aliases:
+  engineering/lead: lead
 orchestrator_gateway_workers:
   - worker_id: b0-live-tp1-worker1
+    pool: lead
     port: 8000
     public_model_id: engineering/b0
     model_id: cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
@@ -163,6 +171,7 @@ orchestrator_gateway_workers:
     endpoint: http://127.0.0.1:8000
     token_file: /etc/local-ai/vllm/worker1/worker-api-key
   - worker_id: b0-live-llama-worker2
+    pool: lead
     port: 8001
     public_model_id: engineering/b0
     model_id: Qwen3-Coder-30B-A3B-Instruct-Q4_K_M

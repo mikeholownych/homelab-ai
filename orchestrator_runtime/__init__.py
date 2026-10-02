@@ -2,6 +2,7 @@
 
 from .health import HealthManager, WorkerHealthState
 from .metrics import Counter, Gauge, Histogram, MetricsRegistry
+from .routing import RouteConfigError, RouteDecision, Router, RouteRule
 from .runtime import (
     CapabilityRegistry,
     EvidenceStore,
@@ -15,6 +16,10 @@ from .runtime import (
 )
 
 __all__ = [
+    "RouteConfigError",
+    "RouteDecision",
+    "RouteRule",
+    "Router",
     "CapabilityRegistry",
     "Counter",
     "EvidenceStore",
