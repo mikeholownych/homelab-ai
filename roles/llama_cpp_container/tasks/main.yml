@@ -25,9 +25,18 @@
     label: "{{ item.item.key }}"
   when: llama_cpp_container_enabled | bool and not ansible_check_mode
 
+- name: Create the runtime account's image-copy temp directory
+  ansible.builtin.file:
+    path: "{{ llama_cpp_container_home }}/tmp"
+    state: directory
+    owner: "{{ llama_cpp_container_user }}"
+    group: "{{ llama_cpp_container_user }}"
+    mode: "0700"
+  when: llama_cpp_container_enabled | bool
+
 - name: Check whether the pinned image is already in the runtime account's store
   ansible.builtin.command:
-    argv: [runuser, -u, "{{ llama_cpp_container_user }}", --, env, "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_container_uid }}",
+    argv: [runuser, -u, "{{ llama_cpp_container_user }}", --, env, "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_container_uid }}", "TMPDIR={{ llama_cpp_container_home }}/tmp",
            podman, image, exists, "{{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }}"]
   args:
     chdir: "{{ llama_cpp_container_home }}"
@@ -39,7 +48,7 @@
 
 - name: Pre-pull the pinned image (large; done here so unit start is not delayed)
   ansible.builtin.command:
-    argv: [runuser, -u, "{{ llama_cpp_container_user }}", --, env, "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_container_uid }}",
+    argv: [runuser, -u, "{{ llama_cpp_container_user }}", --, env, "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_container_uid }}", "TMPDIR={{ llama_cpp_container_home }}/tmp",
            podman, pull, "{{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }}"]
   args:
     chdir: "{{ llama_cpp_container_home }}"
