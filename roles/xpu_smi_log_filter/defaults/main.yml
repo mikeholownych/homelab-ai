@@ -1,0 +1,7 @@
+---
+# xpu-smi run by non-root monitors (e.g. vllm-top polling every second) also tries to read GPU
+# firmware versions through /dev/mei*, which is root-only by design. The stats work; only the
+# firmware query fails, producing hundreds of syslog lines per minute. We filter exactly those
+# messages and deliberately do NOT grant group access to the GPU firmware-management device.
+xpu_smi_log_filter_enabled: true
+xpu_smi_log_filter_path: /etc/rsyslog.d/10-xpu-smi-mei.conf

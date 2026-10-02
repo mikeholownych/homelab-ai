@@ -1,0 +1,11 @@
+---
+- name: Install the xpu-smi MEI log filter
+  ansible.builtin.template:
+    src: 10-xpu-smi-mei.conf.j2
+    dest: "{{ xpu_smi_log_filter_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: rsyslogd -N1 -f %s
+  when: xpu_smi_log_filter_enabled | bool
+  notify: Restart rsyslog

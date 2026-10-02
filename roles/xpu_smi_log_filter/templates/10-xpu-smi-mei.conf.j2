@@ -1,0 +1,3 @@
+# Managed by Ansible (role xpu_smi_log_filter). Suppress only the known-benign MEI/IGSC permission
+# errors emitted by xpu-smi when it cannot read GPU firmware versions as a non-root user.
+if $programname == 'xpu-smi' and ($msg contains 'Intel MEI driver' or $msg contains 'IGSC:' or $msg contains 'HECI') then stop

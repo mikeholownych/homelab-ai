@@ -13,6 +13,9 @@
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
       tags: [inference, runtime, vllm]
+    - role: xpu_smi_log_filter
+      when: capabilities.gpu | default(false) | bool
+      tags: [inference, logging, xpu_log]
     - role: llama_cpp_container
       when:
         - capabilities.gpu | default(false) | bool

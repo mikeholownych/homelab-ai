@@ -1,0 +1,6 @@
+---
+- name: Restart rsyslog
+  ansible.builtin.systemd_service:
+    name: rsyslog
+    state: restarted
+  when: not ansible_check_mode

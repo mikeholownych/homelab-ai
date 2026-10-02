@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: aihost
+  description: Drops the benign xpu-smi MEI/IGSC permission noise from syslog without opening /dev/mei*.
+  license: MIT
+  min_ansible_version: "2.16"
+dependencies: []
