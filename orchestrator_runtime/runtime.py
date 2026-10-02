@@ -28,6 +28,17 @@ def _hash(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode()).hexdigest()
 
 
+def _affinity_key(request: dict[str, Any], explicit: str | None) -> str | None:
+    """Stable per-conversation key: an explicit session id, else the leading system/user messages."""
+    if explicit:
+        return "session:" + explicit
+    messages = request.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return None
+    head = [(m.get("role"), str(m.get("content", ""))[:2000]) for m in messages[:2] if isinstance(m, dict)]
+    return "prefix:" + _hash([request.get("model"), head])
+
+
 @dataclass(frozen=True)
 class WorkerRecord:
     worker_id: str
@@ -103,7 +114,7 @@ class CapabilityRegistry:
 
     def select(
         self, required: frozenset[str], *, context_tokens: int = 0, concurrency: int = 1,
-        public_model_id: str | None = None,
+        public_model_id: str | None = None, affinity_key: str | None = None,
     ) -> WorkerRecord:
         with self._lock:
             candidates = [
@@ -113,6 +124,10 @@ class CapabilityRegistry:
             ]
         if not candidates:
             raise LookupError("no worker proves the requested capability")
+        if affinity_key:
+            # Rendezvous hashing: a conversation keeps landing on the same worker so its prompt/prefix
+            # cache stays warm, and losing a worker only remaps that worker's conversations.
+            return max(candidates, key=lambda worker: _hash([affinity_key, worker.worker_id]))
         candidates = sorted(candidates, key=lambda worker: worker.worker_id)
         cursor = self._selection_cursors.get(public_model_id, 0)
         selected = candidates[cursor % len(candidates)]
@@ -376,6 +391,7 @@ class OrchestratorRuntime:
         capabilities: frozenset[str] = frozenset({"navigation"}),
         timeout: float | None = None,
         worker_id: str | None = None,
+        affinity: str | None = None,
     ) -> dict[str, Any]:
         timeout = self.upstream_timeout if timeout is None else timeout
         request_id = request.get("request_id") or str(uuid.uuid4())
@@ -401,7 +417,10 @@ class OrchestratorRuntime:
             if worker_id:
                 worker = self.registry.get(worker_id, capabilities, context_tokens=context_tokens, public_model_id=public_model)
             else:
-                worker = self.registry.select(capabilities, context_tokens=context_tokens, public_model_id=public_model)
+                worker = self.registry.select(
+                    capabilities, context_tokens=context_tokens, public_model_id=public_model,
+                    affinity_key=_affinity_key(request, affinity),
+                )
         except LookupError:
             self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_capability")
             self.metrics.inference_completions_total.inc(worker_id="none", outcome="failed")

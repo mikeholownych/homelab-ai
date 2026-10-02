@@ -210,7 +210,7 @@ def create_gateway(
                     return
 
                 try:
-                    result = runtime.complete(request, worker_id=pinned_worker)
+                    result = runtime.complete(request, worker_id=pinned_worker, affinity=self.headers.get("X-Session-ID"))
                 except OSError:
                     status_code = HTTPStatus.SERVICE_UNAVAILABLE
                     runtime.metrics.evidence_verification_failures_total.inc()

@@ -338,3 +338,31 @@ def test_provider_usage_is_passed_through_to_the_response(tmp_path):
     result = runtime.complete({"model": "engineering/w1", "messages": [{"role": "user", "content": "hi"}]})
 
     assert result["response"]["usage"] == {"prompt_tokens": 5, "completion_tokens": 2}
+
+
+def test_conversations_stick_to_one_worker_and_spread_across_workers():
+    registry = CapabilityRegistry([worker("a"), worker("b")])
+    for w in registry._workers.values():
+        object.__setattr__(w, "public_model_id", "engineering/shared")
+
+    picks = {
+        c: {
+            registry.select(frozenset({"navigation"}), public_model_id="engineering/shared", affinity_key=f"session:{c}").worker_id
+            for _ in range(5)
+        }
+        for c in range(40)
+    }
+    assert all(len(p) == 1 for p in picks.values())
+    assert {next(iter(p)) for p in picks.values()} == {"a", "b"}
+
+
+def test_affinity_follows_the_conversation_prefix_not_the_latest_turn(tmp_path):
+    from orchestrator_runtime.runtime import _affinity_key
+
+    first = {"model": "m", "messages": [{"role": "system", "content": "s"}, {"role": "user", "content": "task"}]}
+    later = {"model": "m", "messages": first["messages"] + [{"role": "assistant", "content": "x"}, {"role": "user", "content": "more"}]}
+    other = {"model": "m", "messages": [{"role": "system", "content": "s"}, {"role": "user", "content": "different task"}]}
+
+    assert _affinity_key(first, None) == _affinity_key(later, None)
+    assert _affinity_key(first, None) != _affinity_key(other, None)
+    assert _affinity_key(first, "abc") == "session:abc"
