@@ -296,6 +296,10 @@ pub struct App {
     pub orch_hist: Ring,
     pub orch_dispatch_rate: f64,
     orch_prev: Option<(orchestrator::MetricsTotals, Instant)>,
+    /// Latest engine observation per worker, and the token rates derived from the last two *distinct*
+    /// gateway observations (the gateway refreshes every ~10s, so most polls see the same sample).
+    orch_prev_engine: std::collections::BTreeMap<String, orchestrator::EngineStats>,
+    pub orch_worker_rates: std::collections::BTreeMap<String, orchestrator::EngineRates>,
     orch_rx: Option<Receiver<Option<orchestrator::Snapshot>>>,
     last_orch_poll: Instant,
 }
@@ -381,6 +385,8 @@ impl App {
             orch_hist: Ring::new(settings.history),
             orch_dispatch_rate: 0.0,
             orch_prev: None,
+            orch_prev_engine: Default::default(),
+            orch_worker_rates: Default::default(),
             orch_rx: None,
             last_orch_poll: Instant::now() - ORCH_POLL_INTERVAL,
         })
@@ -581,6 +587,7 @@ impl App {
                             self.orch_hist.push(self.orch_dispatch_rate);
                         }
                         self.orch_prev = Some((snap.metrics.clone(), now));
+                        self.update_engine_rates(snap);
                     }
                     self.orchestrator = snap;
                     self.orch_rx = None;
@@ -596,6 +603,35 @@ impl App {
             });
             self.orch_rx = Some(rx);
             self.last_orch_poll = Instant::now();
+        }
+    }
+
+    /// Derive per-worker token rates from the gateway's engine observations. A worker whose stats
+    /// disappear (unknown/stale) drops out so a stale rate is never shown as current.
+    fn update_engine_rates(&mut self, snap: &orchestrator::Snapshot) {
+        let present: std::collections::BTreeSet<&String> = snap
+            .health
+            .workers
+            .iter()
+            .filter(|(_, w)| w.engine_stats.is_some())
+            .map(|(name, _)| name)
+            .collect();
+        self.orch_worker_rates.retain(|name, _| present.contains(name));
+        self.orch_prev_engine.retain(|name, _| present.contains(name));
+        for (name, worker) in &snap.health.workers {
+            let Some(cur) = &worker.engine_stats else { continue };
+            match self.orch_prev_engine.get(name) {
+                Some(prev) if cur.observed_at > prev.observed_at => {
+                    if let Some(rates) = orchestrator::engine_rates(prev, cur) {
+                        self.orch_worker_rates.insert(name.clone(), rates);
+                    }
+                    self.orch_prev_engine.insert(name.clone(), cur.clone());
+                }
+                Some(_) => {} // same observation as last time: keep the rates we already derived
+                None => {
+                    self.orch_prev_engine.insert(name.clone(), cur.clone());
+                }
+            }
         }
     }
 

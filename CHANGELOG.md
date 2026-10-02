@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+**Added** — engine-agnostic per-worker view in the orchestrator panel. The gateway already holds each
+worker's credential and polls it, so it now republishes the engine's own statistics (vLLM, llama.cpp) in
+one neutral shape in `GET /health`; vllm-top reads only the gateway and never needs a worker key:
+- per worker: routing pool and engine (`lead/llama.cpp`), running/waiting requests, KV-cache use, and
+  prefix-cache hit rate where the engine reports it;
+- reset-safe prompt/generation token rates derived from the gateway's own observation clock (the
+  gateway refreshes about every 10s, so two polls usually see the same sample and keep the last rate);
+- routing decisions by `rule → pool` from `aihost_route_decisions_total`.
+Values an engine does not report are shown as `–`, never as zero. A gateway that predates these fields
+renders exactly as before. 8 new tests (121 total).
+
 ## 0.6.0
 
 **Added** — best-effort local orchestrator gateway integration

@@ -1386,7 +1386,40 @@ fn draw_orchestrator_panel(frame: &mut Frame, app: &App, orch: &crate::orchestra
                 Style::default().fg(WARN),
             ));
         }
+        if let Some(pool) = &w.pool {
+            spans.push(Span::styled(format!("  {pool}"), Style::default().fg(ratatui::style::Color::White)));
+        }
+        if let Some(engine) = &w.engine {
+            spans.push(Span::styled(format!("/{engine}"), Style::default().fg(DIM)));
+        }
         lines.push(Line::from(spans));
+        // Engine statistics the gateway republished. Unknown values are shown as "–", never as zero.
+        if let Some(es) = &w.engine_stats {
+            let fmt = |v: Option<f64>, f: &dyn Fn(f64) -> String| v.map(f).unwrap_or_else(|| "\u{2013}".to_string());
+            let rates = app.orch_worker_rates.get(name);
+            let mut stat = format!(
+                "    run {} wait {} kv {}",
+                fmt(es.requests_running, &|v| format!("{}", v as u64)),
+                fmt(es.requests_waiting, &|v| format!("{}", v as u64)),
+                fmt(es.kv_cache_usage, &|v| format!("{:.0}%", v * 100.0)),
+            );
+            if let Some(hit) = es.prefix_cache_hit_ratio {
+                stat.push_str(&format!(" hit {:.0}%", hit * 100.0));
+            }
+            if let Some(r) = rates {
+                stat.push_str(&format!("  gen {:.1} tok/s  prompt {:.0} tok/s", r.generation_tps, r.prompt_tps));
+            }
+            lines.push(Line::from(Span::styled(stat, Style::default().fg(DIM))));
+        }
+    }
+    // Where routed requests went (rule \u{2192} pool), when the gateway publishes route counters.
+    if !orch.metrics.routes.is_empty() {
+        let mut parts: Vec<String> = orch.metrics.routes.iter().map(|(k, v)| format!("{k} {}", *v as u64)).collect();
+        parts.truncate(4);
+        lines.push(Line::from(vec![
+            Span::styled("routes    ", Style::default().fg(DIM)),
+            Span::styled(parts.join(" \u{b7} "), Style::default().fg(ratatui::style::Color::White)),
+        ]));
     }
     let header_height = lines.len() as u16;
 
@@ -2162,11 +2195,11 @@ mod tests {
         let mut workers = BTreeMap::new();
         workers.insert(
             "b0-live-tp1-worker1".to_string(),
-            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0 },
+            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, model_id: None, engine_stats: None },
         );
         workers.insert(
             "b0-live-tp1-worker2".to_string(),
-            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3 },
+            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, model_id: None, engine_stats: None },
         );
         Snapshot {
             health: Health {
@@ -2188,6 +2221,7 @@ mod tests {
                 completions_total: 9.0,
                 http_requests_total: 50.0,
                 authority_validations_total: 2.0,
+                routes: BTreeMap::new(),
             },
             fetch_latency: Duration::from_millis(8),
         }
@@ -2846,5 +2880,44 @@ mod tests {
             }
         }
         assert!(fgs.len() > 3, "expected several distinct gradient colors on screen, found {}", fgs.len());
+    }
+
+    #[test]
+    fn orchestrator_panel_shows_pool_engine_stats_rates_and_routes_with_unknowns_as_dashes() {
+        use crate::orchestrator::{EngineRates, EngineStats};
+        let mut app = single_instance_app();
+        let mut snap = sample_orchestrator_snapshot();
+        let w = snap.health.workers.get_mut("b0-live-tp1-worker1").expect("worker");
+        w.pool = Some("lead".into());
+        w.engine = Some("llama.cpp".into());
+        w.engine_stats = Some(EngineStats {
+            requests_running: Some(1.0),
+            requests_waiting: None, // not reported by this engine: must render as a dash, not 0
+            kv_cache_usage: Some(0.125),
+            prefix_cache_hit_ratio: None,
+            ..Default::default()
+        });
+        snap.metrics.routes.insert("default \u{2192} lead".into(), 12.0);
+        app.orchestrator = Some(snap);
+        app.orch_worker_rates.insert(
+            "b0-live-tp1-worker1".into(),
+            EngineRates { prompt_tps: 812.0, generation_tps: 58.4 },
+        );
+        let text = render_text(&app, 240, 67).expect("renders");
+        let panel = panel_content(&text, " orchestrator ");
+        assert!(panel.contains("lead/llama.cpp"), "pool/engine tag missing:\n{panel}");
+        assert!(panel.contains("run 1 wait \u{2013} kv 12%"), "engine stats (unknown as a dash) missing:\n{panel}");
+        assert!(panel.contains("gen 58.4 tok/s"), "derived generation rate missing:\n{panel}");
+        assert!(panel.contains("default \u{2192} lead 12"), "route counters missing:\n{panel}");
+        assert!(!panel.contains("hit "), "an unknown prefix-cache ratio must not be displayed:\n{panel}");
+    }
+
+    #[test]
+    fn a_gateway_without_engine_stats_renders_exactly_as_before() {
+        let mut app = single_instance_app();
+        app.orchestrator = Some(sample_orchestrator_snapshot());
+        let text = render_text(&app, 240, 67).expect("renders");
+        let panel = panel_content(&text, " orchestrator ");
+        assert!(!panel.contains("run ") && !panel.contains("routes"), "no engine rows without stats:\n{panel}");
     }
 }

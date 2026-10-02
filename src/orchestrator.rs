@@ -71,6 +71,65 @@ pub struct WorkerHealth {
     pub healthy: bool,
     #[serde(default)]
     pub consecutive_failures: u64,
+    /// Routing pool this worker serves (e.g. `lead`, `aux`). Absent on gateways that predate routing.
+    #[serde(default)]
+    pub pool: Option<String>,
+    /// Inference engine behind the worker (`vllm`, `llama.cpp`, ...). Absent on older gateways.
+    #[serde(default)]
+    pub engine: Option<String>,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    /// Engine statistics the *gateway* collected and republished in a neutral shape — vllm-top never
+    /// talks to workers (or needs their credentials) for this. `None` when unknown or stale.
+    #[serde(default)]
+    pub engine_stats: Option<EngineStats>,
+}
+
+/// Neutral per-worker engine statistics as published by the gateway. Every field is optional because
+/// engines expose different series; a missing value is *unknown*, never zero.
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+pub struct EngineStats {
+    #[serde(default)]
+    pub requests_running: Option<f64>,
+    #[serde(default)]
+    pub requests_waiting: Option<f64>,
+    /// Fraction 0..1.
+    #[serde(default)]
+    pub kv_cache_usage: Option<f64>,
+    #[serde(default)]
+    pub prompt_tokens_total: Option<f64>,
+    #[serde(default)]
+    pub generation_tokens_total: Option<f64>,
+    #[serde(default)]
+    pub prefix_cache_hit_ratio: Option<f64>,
+    /// Gateway wall-clock (epoch seconds) when it read the engine; rates use this, not our poll time.
+    #[serde(default)]
+    pub observed_at: f64,
+}
+
+/// Token rates derived from two consecutive gateway observations of one worker.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct EngineRates {
+    pub prompt_tps: f64,
+    pub generation_tps: f64,
+}
+
+/// Reset-safe token rates between two engine observations. Returns `None` when there is no newer
+/// observation (the gateway only refreshes every ~10s, so most of our polls see the same sample)
+/// or a counter is unknown; a counter that went backwards (engine restart) contributes zero.
+pub fn engine_rates(prev: &EngineStats, cur: &EngineStats) -> Option<EngineRates> {
+    let dt = cur.observed_at - prev.observed_at;
+    if dt <= 0.0 {
+        return None;
+    }
+    let rate = |p: Option<f64>, c: Option<f64>| -> Option<f64> {
+        let (p, c) = (p?, c?);
+        Some(if c >= p { (c - p) / dt } else { 0.0 })
+    };
+    Some(EngineRates {
+        prompt_tps: rate(prev.prompt_tokens_total, cur.prompt_tokens_total)?,
+        generation_tps: rate(prev.generation_tokens_total, cur.generation_tokens_total)?,
+    })
 }
 
 /// The subset of the gateway's `aihost_*` Prometheus metrics vllm-top
@@ -83,6 +142,8 @@ pub struct MetricsTotals {
     pub completions_total: f64,
     pub http_requests_total: f64,
     pub authority_validations_total: f64,
+    /// Routing decisions by `rule → pool` (from `aihost_route_decisions_total`).
+    pub routes: BTreeMap<String, f64>,
 }
 
 impl MetricsTotals {
@@ -94,6 +155,10 @@ impl MetricsTotals {
                 "aihost_inference_completions_total" => out.completions_total += s.value,
                 "aihost_http_requests_total" => out.http_requests_total += s.value,
                 "aihost_authority_validations_total" => out.authority_validations_total += s.value,
+                "aihost_route_decisions_total" => {
+                    let key = format!("{} \u{2192} {}", s.label("rule").unwrap_or("?"), s.label("pool").unwrap_or("?"));
+                    *out.routes.entry(key).or_insert(0.0) += s.value;
+                }
                 _ => {}
             }
         }
@@ -250,6 +315,67 @@ aihost_authority_validations_total{outcome="accepted"} 2
         let t1 = t0 + Duration::from_secs(2);
         let rate = MetricsTotals::dispatch_rate(&prev, t0, &cur, t1);
         assert_eq!(rate, 0.0, "a counter reset must never produce a negative rate");
+    }
+
+    const HEALTH_WITH_ENGINE_STATS: &str = r#"{
+        "status": "healthy", "ready": true,
+        "gateway": {"status": "alive", "uptime_seconds": 10.0},
+        "scheduler": {"ready": true, "status": "ready", "queued_work": 0, "active_work": 0, "available_workers": 1, "total_workers": 1},
+        "workers": {"w-llama": {"status": "healthy", "healthy": true, "pool": "lead", "engine": "llama.cpp",
+            "model_id": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M",
+            "engine_stats": {"requests_running": 1, "requests_waiting": 0, "kv_cache_usage": 0.125,
+                "prompt_tokens_total": 5000, "generation_tokens_total": 900, "prefix_cache_hit_ratio": null, "observed_at": 1000.0}}}
+    }"#;
+
+    #[test]
+    fn parses_pool_engine_and_engine_stats_and_keeps_unknowns_unknown() {
+        let h: Health = serde_json::from_str(HEALTH_WITH_ENGINE_STATS).expect("parses");
+        let w = &h.workers["w-llama"];
+        assert_eq!(w.pool.as_deref(), Some("lead"));
+        assert_eq!(w.engine.as_deref(), Some("llama.cpp"));
+        let s = w.engine_stats.as_ref().expect("stats");
+        assert_eq!(s.kv_cache_usage, Some(0.125));
+        assert_eq!(s.prefix_cache_hit_ratio, None, "an engine that does not report it stays unknown, not 0%");
+    }
+
+    #[test]
+    fn an_older_gateway_without_the_new_fields_still_parses() {
+        let h: Health = serde_json::from_str(REAL_HEALTHY_PAYLOAD).expect("parses");
+        assert!(h.workers["b0-live-tp1-worker1"].engine_stats.is_none());
+        assert!(h.workers["b0-live-tp1-worker1"].pool.is_none());
+    }
+
+    fn stats(p: f64, g: f64, t: f64) -> EngineStats {
+        EngineStats { prompt_tokens_total: Some(p), generation_tokens_total: Some(g), observed_at: t, ..Default::default() }
+    }
+
+    #[test]
+    fn engine_rates_use_the_gateways_observation_clock() {
+        let r = engine_rates(&stats(1000.0, 100.0, 50.0), &stats(1600.0, 700.0, 60.0)).expect("rates");
+        assert!((r.prompt_tps - 60.0).abs() < 1e-9 && (r.generation_tps - 60.0).abs() < 1e-9, "{r:?}");
+    }
+
+    #[test]
+    fn engine_rates_are_none_without_a_newer_observation_or_with_unknown_counters() {
+        assert!(engine_rates(&stats(1.0, 1.0, 50.0), &stats(9.0, 9.0, 50.0)).is_none(), "same observation");
+        let unknown = EngineStats { observed_at: 60.0, ..Default::default() };
+        assert!(engine_rates(&stats(1.0, 1.0, 50.0), &unknown).is_none());
+    }
+
+    #[test]
+    fn engine_rates_treat_an_engine_restart_as_zero_not_negative() {
+        let r = engine_rates(&stats(9000.0, 5000.0, 50.0), &stats(10.0, 5.0, 60.0)).expect("rates");
+        assert_eq!((r.prompt_tps, r.generation_tps), (0.0, 0.0));
+    }
+
+    #[test]
+    fn route_decisions_are_grouped_by_rule_and_pool() {
+        let samples = promparse::parse(
+            "aihost_route_decisions_total{rule=\"default\",pool=\"lead\"} 7\naihost_route_decisions_total{rule=\"subagent-aux\",pool=\"aux\"} 3\n",
+        );
+        let t = MetricsTotals::from_samples(&samples);
+        assert_eq!(t.routes["default \u{2192} lead"], 7.0);
+        assert_eq!(t.routes["subagent-aux \u{2192} aux"], 3.0);
     }
 
     #[test]
