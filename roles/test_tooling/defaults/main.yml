@@ -1,0 +1,7 @@
+---
+# Distribution-packaged pytest for the system Python. Used by the engineering evaluation harness,
+# which runs candidate code under bubblewrap with /usr mounted read-only, so the package must live
+# in the system site-packages (not a per-user venv).
+test_tooling_enabled: true
+test_tooling_packages:
+  - python3-pytest

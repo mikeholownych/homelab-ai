@@ -30,3 +30,6 @@
     - role: vllm_top_console
       when: capabilities.gpu | default(false) | bool
       tags: [inference, monitoring, console]
+    - role: test_tooling
+      when: capabilities.inference | default(false) | bool
+      tags: [inference, tooling, pytest]

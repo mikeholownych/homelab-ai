@@ -1,0 +1,6 @@
+---
+- name: Install test tooling from the distribution archive
+  ansible.builtin.apt:
+    name: "{{ test_tooling_packages }}"
+    state: present
+  when: test_tooling_enabled | bool
