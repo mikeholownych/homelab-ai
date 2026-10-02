@@ -317,3 +317,13 @@ def test_provider_server_error_still_marks_worker_unhealthy(tmp_path):
 
     assert result["status"] == "blocked"
     assert runtime.registry.snapshot()[0]["healthy"] is False
+
+
+def test_prompt_larger_than_any_worker_window_is_rejected_as_context_overflow(tmp_path):
+    runtime = _runtime_with(_CapturingAdapter(), tmp_path)
+    prompt = "x" * 4 * 20_000  # about 20k tokens; the test worker's window is 16384
+    result = runtime.complete({"model": "engineering/w1", "messages": [{"role": "user", "content": prompt}]})
+
+    assert result["status"] == "rejected"
+    assert result["failure_class"] == "context_length_exceeded"
+    assert "context limit is 16384" in result["message"]

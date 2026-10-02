@@ -385,6 +385,16 @@ class OrchestratorRuntime:
             return {"status": "rejected", "failure_class": "request_shape", "request_id": request_id}
         context_tokens = sum(len(str(message.get("content", ""))) for message in messages) // 4
         public_model = request.get("model")
+        largest_window = max((w["context_limit"] for w in self.registry.snapshot()), default=0)
+        if largest_window and context_tokens > largest_window:
+            self.metrics.inference_requests_total.inc(status="rejected")
+            self.evidence.append("routing_rejected", request_id=request_id, failure_class="context_length_exceeded")
+            return {
+                "status": "rejected",
+                "failure_class": "context_length_exceeded",
+                "request_id": request_id,
+                "message": f"Prompt is about {context_tokens} tokens; the model context limit is {largest_window}. Reduce the conversation size.",
+            }
         try:
             if worker_id:
                 worker = self.registry.get(worker_id, capabilities, context_tokens=context_tokens, public_model_id=public_model)
