@@ -1,0 +1,150 @@
+# Recording and alerting rules for the aihost inference host.
+#
+# Metric sources: the orchestrator gateway (`aihost_*`, job "aihost-gateway"), the host textfile exporter
+# (`aihost_gpu_*`, via node_exporter) and node_exporter itself (`node_*`, job "node").
+#
+# Thresholds in the alert group are INITIAL DEFAULTS chosen from this host's observed behaviour, not SLOs;
+# revisit them once Prometheus holds a few weeks of history.
+groups:
+  - name: aihost_recording
+    interval: 30s
+    rules:
+      # ---- engine throughput (the engine's own counters; they advance when a request finishes) ----------
+      - record: aihost:engine_decode_tokens_per_second:rate5m
+        # Tokens generated per second of *generation time* (decode speed), not per wall-clock second.
+        expr: rate(aihost_engine_generation_tokens_total[5m]) / (rate(aihost_engine_generation_seconds_total[5m]) > 0)
+      - record: aihost:engine_prompt_eval_tokens_per_second:rate5m
+        # Prompt tokens evaluated per second of prompt-processing time (cached tokens excluded).
+        expr: rate(aihost_engine_prompt_tokens_total[5m]) / (rate(aihost_engine_prompt_seconds_total[5m]) > 0)
+      - record: aihost:engine_prefix_cache_hit_ratio:rate1h
+        # Windowed share of prompt tokens served from cache (the exported gauge is a lifetime ratio).
+        expr: >-
+          rate(aihost_engine_prompt_tokens_cached_total[1h])
+          / ((rate(aihost_engine_prompt_tokens_cached_total[1h]) + rate(aihost_engine_prompt_tokens_total[1h])) > 0)
+
+      # ---- gateway requests -----------------------------------------------------------------------------
+      - record: aihost:inference_completions:rate5m
+        expr: sum by (worker_id, outcome) (rate(aihost_inference_completions_total[5m]))
+      - record: aihost:inference_error_ratio:rate5m
+        # Provider-side failures only. outcome="rejected" is a caller fault and is deliberately excluded.
+        # With traffic and no failures the numerator series does not exist, so it is built as 0 * completed:
+        # a healthy worker reads 0, an idle worker (no traffic) correctly has no sample.
+        expr: >-
+          (
+            sum by (worker_id) (rate(aihost_inference_completions_total{outcome=~"failed|timed_out"}[5m]))
+            or (0 * sum by (worker_id) (rate(aihost_inference_completions_total{outcome="completed"}[5m])))
+          )
+          / (sum by (worker_id) (rate(aihost_inference_completions_total{outcome=~"completed|failed|timed_out"}[5m])) > 0)
+      - record: aihost:inference_duration_seconds:p50_5m
+        expr: histogram_quantile(0.5, sum by (pool, le) (rate(aihost_inference_duration_seconds_bucket[5m])))
+      - record: aihost:inference_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (pool, le) (rate(aihost_inference_duration_seconds_bucket[5m])))
+      - record: aihost:inference_tokens_estimated_share:rate1h
+        # Share of counted tokens (prompt + completion) that are the gateway's estimate, not the engine's exact usage.
+        # No estimated series at all (the healthy case) means 0%, not "no data": hence the vector(0) fallbacks.
+        expr: >-
+          (
+            (sum(rate(aihost_inference_prompt_tokens_total{source="estimated"}[1h])) or vector(0))
+            + (sum(rate(aihost_inference_completion_tokens_total{source="estimated"}[1h])) or vector(0))
+          )
+          / ((sum(rate(aihost_inference_prompt_tokens_total[1h])) + sum(rate(aihost_inference_completion_tokens_total[1h]))) > 0)
+
+      # ---- GPU ------------------------------------------------------------------------------------------
+      - record: aihost:gpu_utilization_ratio:rate5m
+        # 1 - share of time the graphics tile spent in RC6 idle: "awake", a coarse busy signal (not EU occupancy).
+        expr: clamp(1 - rate(aihost_gpu_gt_idle_residency_seconds_total{gt="gt0"}[5m]), 0, 1)
+      - record: aihost:gpu_power_watts:rate5m
+        expr: sum by (gpu) (rate(aihost_gpu_energy_joules_total{domain="card"}[5m]))
+      - record: aihost:joules_per_generated_token_incl_idle:rate15m
+        # Whole-card energy over 15 minutes per generated token, idle time included: it falls as utilisation rises.
+        expr: >-
+          sum by (worker_id) (rate(aihost_gpu_energy_joules_total{domain="card"}[15m]) * on (gpu) group_left (worker_id) aihost_worker_info)
+          / (sum by (worker_id) (rate(aihost_engine_generation_tokens_total[15m])) > 0)
+      - record: aihost:gpu_temperature_headroom_celsius:min
+        # Smallest gap between any sensor and its kernel-reported critical limit, per GPU.
+        expr: min by (gpu) (aihost_gpu_temperature_limit_celsius - on (gpu, bdf, sensor) aihost_gpu_temperature_celsius)
+
+      # ---- host CPU: decode is bound by one CPU thread, so the busiest core is the number that matters -----
+      - record: aihost:cpu_core_busy_ratio:rate5m
+        expr: 1 - rate(node_cpu_seconds_total{mode="idle"}[5m])
+      - record: aihost:cpu_busiest_core_ratio:rate5m
+        expr: max by (instance) (1 - rate(node_cpu_seconds_total{mode="idle"}[5m]))
+
+  - name: aihost_alerts
+    rules:
+      - alert: AihostGatewayDown
+        expr: up{job="aihost-gateway"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "The orchestrator gateway is not being scraped"
+      - alert: AihostMetricsFileStale
+        expr: time() - aihost_metrics_last_success_timestamp_seconds > 300
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Host GPU metrics have not been refreshed for over 5 minutes (aihost-metrics.timer runs every minute)"
+      - alert: AihostWorkerUnhealthy
+        expr: aihost_worker_health_status == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Worker {{ $labels.worker_id }} is reported unhealthy by the gateway"
+      - alert: AihostWorkerEngineStatsMissing
+        expr: aihost_worker_health_status == 1 unless on (worker_id) aihost_engine_requests_running
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "Worker {{ $labels.worker_id }} is healthy but its engine statistics are not being published"
+      - alert: AihostInferenceErrorRatioHigh
+        expr: >-
+          aihost:inference_error_ratio:rate5m > 0.05
+          and on (worker_id) sum by (worker_id) (rate(aihost_inference_completions_total[5m])) > 0.01
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "More than 5% of requests to {{ $labels.worker_id }} are failing on the provider side"
+      - alert: AihostRequestsQueueingInEngine
+        expr: aihost_engine_requests_waiting > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.worker_id }} has requests waiting for a free slot (sustained queueing)"
+      - alert: AihostKvCacheNearFull
+        expr: aihost_engine_kv_cache_usage_ratio > 0.9
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.worker_id }} context occupancy is above 90%"
+      - alert: AihostGpuThermalWarning
+        expr: aihost_gpu_thermal_severity >= 1
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "GPU thermal severity is warning or worse (host thresholds)"
+      - alert: AihostGpuThermalCritical
+        expr: aihost_gpu_thermal_severity >= 2
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "GPU thermal severity is critical"
+      - alert: AihostGpuNearKernelTemperatureLimit
+        expr: aihost:gpu_temperature_headroom_celsius:min < 10
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "GPU {{ $labels.gpu }} is within 10 C of a kernel-reported critical limit"
+      - alert: AihostDiskSpaceLow
+        expr: >-
+          node_filesystem_avail_bytes{mountpoint=~"/|/var/lib/local-ai",fstype!~"tmpfs|overlay"}
+          / node_filesystem_size_bytes{mountpoint=~"/|/var/lib/local-ai",fstype!~"tmpfs|overlay"} < 0.10
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.mountpoint }} has less than 10% free space"
+      - alert: AihostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.05
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "Less than 5% of host memory is available"

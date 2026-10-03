@@ -1,0 +1,239 @@
+# promtool test rules observability/prometheus/tests/aihost.rules.test.yml
+# Every number below is derived by hand from the synthetic series, so a wrong expression fails loudly.
+rule_files:
+  - ../rules/aihost.rules.yml
+evaluation_interval: 1m
+
+tests:
+  - name: decode speed is tokens per second of generation time, not per wall-clock second
+    interval: 1m
+    input_series:
+      - series: 'aihost_engine_generation_tokens_total{worker_id="w1",pool="lead",engine="llama.cpp"}'
+        values: '0+600x20'           # 10 tokens per wall-clock second
+      - series: 'aihost_engine_generation_seconds_total{worker_id="w1",pool="lead",engine="llama.cpp"}'
+        values: '0+6x20'            # busy 6 s per minute -> 600 tokens / 6 s = 100 tokens per busy second
+    promql_expr_test:
+      - expr: aihost:engine_decode_tokens_per_second:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'aihost:engine_decode_tokens_per_second:rate5m{worker_id="w1",pool="lead",engine="llama.cpp"}'
+            value: 100
+
+  - name: an idle engine produces no decode-speed sample instead of a division by zero
+    interval: 1m
+    input_series:
+      - series: 'aihost_engine_generation_tokens_total{worker_id="w1",pool="lead",engine="llama.cpp"}'
+        values: '5+0x20'
+      - series: 'aihost_engine_generation_seconds_total{worker_id="w1",pool="lead",engine="llama.cpp"}'
+        values: '9+0x20'
+    promql_expr_test:
+      - expr: aihost:engine_decode_tokens_per_second:rate5m
+        eval_time: 10m
+        exp_samples: []
+
+  - name: error ratio counts provider failures and timeouts and ignores caller faults
+    interval: 1m
+    input_series:
+      - series: 'aihost_inference_completions_total{worker_id="w1",outcome="completed",failure_class="none"}'
+        values: '0+9x20'
+      - series: 'aihost_inference_completions_total{worker_id="w1",outcome="failed",failure_class="provider"}'
+        values: '0+1x20'
+      - series: 'aihost_inference_completions_total{worker_id="w1",outcome="rejected",failure_class="invalid_request"}'
+        values: '0+100x20'          # 100 caller faults per minute must not move the ratio
+    promql_expr_test:
+      - expr: aihost:inference_error_ratio:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'aihost:inference_error_ratio:rate5m{worker_id="w1"}'
+            value: 0.1
+
+  - name: a healthy worker with traffic and no failures reads an error ratio of 0, an idle one has no sample
+    interval: 1m
+    input_series:
+      - series: 'aihost_inference_completions_total{worker_id="w1",outcome="completed",failure_class="none"}'
+        values: '0+9x20'
+      - series: 'aihost_inference_completions_total{worker_id="w2",outcome="completed",failure_class="none"}'
+        values: '5+0x20'            # no traffic in the window
+    promql_expr_test:
+      - expr: aihost:inference_error_ratio:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'aihost:inference_error_ratio:rate5m{worker_id="w1"}'
+            value: 0
+
+  - name: estimated-token share is 0 when the engine always reports usage, and absent with no traffic at all
+    interval: 1m
+    input_series:
+      - series: 'aihost_inference_prompt_tokens_total{worker_id="w1",model="m",source="provider"}'
+        values: '0+90x120'
+      - series: 'aihost_inference_completion_tokens_total{worker_id="w1",model="m",source="provider"}'
+        values: '0+70x120'
+    promql_expr_test:
+      - expr: aihost:inference_tokens_estimated_share:rate1h
+        eval_time: 90m
+        exp_samples:
+          - labels: 'aihost:inference_tokens_estimated_share:rate1h{}'
+            value: 0
+
+  - name: p95 latency interpolates inside the right histogram bucket
+    interval: 1m
+    input_series:
+      - series: 'aihost_inference_duration_seconds_bucket{worker_id="w1",pool="lead",le="1.0"}'
+        values: '0+90x20'
+      - series: 'aihost_inference_duration_seconds_bucket{worker_id="w1",pool="lead",le="10.0"}'
+        values: '0+99x20'
+      - series: 'aihost_inference_duration_seconds_bucket{worker_id="w1",pool="lead",le="+Inf"}'
+        values: '0+100x20'
+    promql_expr_test:
+      - expr: round(aihost:inference_duration_seconds:p95_5m, 0.01)      # round() only to absorb float noise (5.999...98)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{pool="lead"}'
+            value: 6                # rank 95 of 100: 1 + (95-90)/(99-90) * (10-1)
+
+  - name: estimated-token share adds prompt and completion estimates (not a label-set union)
+    interval: 1m
+    input_series:
+      - series: 'aihost_inference_prompt_tokens_total{worker_id="w1",model="m",source="estimated"}'
+        values: '0+10x120'
+      - series: 'aihost_inference_completion_tokens_total{worker_id="w1",model="m",source="estimated"}'
+        values: '0+30x120'
+      - series: 'aihost_inference_prompt_tokens_total{worker_id="w1",model="m",source="provider"}'
+        values: '0+90x120'
+      - series: 'aihost_inference_completion_tokens_total{worker_id="w1",model="m",source="provider"}'
+        values: '0+70x120'
+    promql_expr_test:
+      - expr: aihost:inference_tokens_estimated_share:rate1h
+        eval_time: 90m
+        exp_samples:
+          - labels: 'aihost:inference_tokens_estimated_share:rate1h{}'
+            value: 0.2              # (10+30) / (10+30+90+70)
+
+  - name: GPU utilisation is one minus the idle residency rate
+    interval: 1m
+    input_series:
+      - series: 'aihost_gpu_gt_idle_residency_seconds_total{gpu="0",bdf="0000:51:00.0",gt="gt0"}'
+        values: '0+54x20'           # idle 54 s of every 60 s
+      - series: 'aihost_gpu_gt_idle_residency_seconds_total{gpu="0",bdf="0000:51:00.0",gt="gt1"}'
+        values: '0+60x20'           # the media tile must not leak into the figure
+    promql_expr_test:
+      - expr: round(aihost:gpu_utilization_ratio:rate5m, 0.01)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{gpu="0",bdf="0000:51:00.0",gt="gt0"}'
+            value: 0.1
+
+  - name: energy per generated token joins the card energy to the worker through its GPU
+    interval: 1m
+    input_series:
+      - series: 'aihost_gpu_energy_joules_total{gpu="0",bdf="0000:51:00.0",domain="card"}'
+        values: '0+3000x40'         # 50 W
+      - series: 'aihost_gpu_energy_joules_total{gpu="0",bdf="0000:51:00.0",domain="pkg"}'
+        values: '0+600x40'          # a sub-domain of the card: must not be added again
+      - series: 'aihost_worker_info{worker_id="w1",pool="lead",engine="llama.cpp",model="m",gpu="0"}'
+        values: '1x40'
+      - series: 'aihost_engine_generation_tokens_total{worker_id="w1",pool="lead",engine="llama.cpp"}'
+        values: '0+600x40'          # 10 tokens per second
+    promql_expr_test:
+      - expr: aihost:joules_per_generated_token_incl_idle:rate15m
+        eval_time: 25m
+        exp_samples:
+          - labels: 'aihost:joules_per_generated_token_incl_idle:rate15m{worker_id="w1"}'
+            value: 5                # 50 W / 10 tokens per second
+      - expr: aihost:gpu_power_watts:rate5m
+        eval_time: 25m
+        exp_samples:
+          - labels: 'aihost:gpu_power_watts:rate5m{gpu="0"}'
+            value: 50
+
+  - name: temperature headroom is the smallest gap to any sensor's kernel limit
+    interval: 1m
+    input_series:
+      - series: 'aihost_gpu_temperature_limit_celsius{gpu="0",bdf="0000:51:00.0",sensor="pkg"}'
+        values: '100x10'
+      - series: 'aihost_gpu_temperature_celsius{gpu="0",bdf="0000:51:00.0",sensor="pkg"}'
+        values: '88x10'
+      - series: 'aihost_gpu_temperature_limit_celsius{gpu="0",bdf="0000:51:00.0",sensor="vram"}'
+        values: '105x10'
+      - series: 'aihost_gpu_temperature_celsius{gpu="0",bdf="0000:51:00.0",sensor="vram"}'
+        values: '80x10'
+    promql_expr_test:
+      - expr: aihost:gpu_temperature_headroom_celsius:min
+        eval_time: 5m
+        exp_samples:
+          - labels: 'aihost:gpu_temperature_headroom_celsius:min{gpu="0"}'
+            value: 12
+
+  - name: busiest-core ratio exposes a single saturated CPU thread
+    interval: 1m
+    input_series:
+      - series: 'node_cpu_seconds_total{instance="h",cpu="0",mode="idle"}'
+        values: '0+0x20'            # core 0 never idle
+      - series: 'node_cpu_seconds_total{instance="h",cpu="1",mode="idle"}'
+        values: '0+54x20'
+    promql_expr_test:
+      - expr: aihost:cpu_busiest_core_ratio:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'aihost:cpu_busiest_core_ratio:rate5m{instance="h"}'
+            value: 1
+
+  - name: the gateway-down alert fires after two minutes of failed scrapes
+    interval: 1m
+    input_series:
+      - series: 'up{job="aihost-gateway",instance="127.0.0.1:8010"}'
+        values: '1 1 0 0 0 0 0 0'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AihostGatewayDown
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AihostGatewayDown
+        exp_alerts:
+          - exp_labels: {severity: critical, job: aihost-gateway, instance: "127.0.0.1:8010"}
+            exp_annotations: {summary: "The orchestrator gateway is not being scraped"}
+
+  - name: a healthy worker without engine statistics raises the missing-stats warning only then
+    interval: 1m
+    input_series:
+      - series: 'aihost_worker_health_status{worker_id="w1"}'
+        values: '1x12'
+      - series: 'aihost_worker_health_status{worker_id="w2"}'
+        values: '1x12'
+      - series: 'aihost_engine_requests_running{worker_id="w2",pool="deep",engine="llama.cpp"}'
+        values: '0x12'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: AihostWorkerEngineStatsMissing
+        exp_alerts:
+          - exp_labels: {severity: warning, worker_id: w1}
+            exp_annotations: {summary: "Worker w1 is healthy but its engine statistics are not being published"}
+
+  - name: thermal critical is pending when severity 2 first appears and fires once it has held for one minute
+    interval: 1m
+    input_series:
+      - series: 'aihost_gpu_thermal_severity'
+        values: '0 0 2 2 2 2'      # severity 2 from minute 2
+    alert_rule_test:
+      - eval_time: 2m              # condition just became true: pending, not firing
+        alertname: AihostGpuThermalCritical
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: AihostGpuThermalCritical
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "GPU thermal severity is critical"}
+
+  - name: sustained engine-side queueing alerts, a brief wait does not
+    interval: 1m
+    input_series:
+      - series: 'aihost_engine_requests_waiting{worker_id="w1",pool="lead",engine="llama.cpp"}'
+        values: '0 1 1 0 0 0 0 0 0 0'
+      - series: 'aihost_engine_requests_waiting{worker_id="w2",pool="deep",engine="llama.cpp"}'
+        values: '0 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: AihostRequestsQueueingInEngine
+        exp_alerts:
+          - exp_labels: {severity: warning, worker_id: w2, pool: deep, engine: llama.cpp}
+            exp_annotations: {summary: "w2 has requests waiting for a free slot (sustained queueing)"}
