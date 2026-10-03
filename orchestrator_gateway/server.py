@@ -301,6 +301,10 @@ def create_gateway(
                         for key in ("content", "reasoning_content", "tool_calls"):
                             if message.get(key):
                                 delta[key] = message[key]
+                        if delta.get("tool_calls"):
+                            # Streamed tool-call deltas must carry an index (OpenAI streaming contract);
+                            # without it clients cannot tell parallel calls apart and merge them into one.
+                            delta["tool_calls"] = [{**call, "index": position} for position, call in enumerate(delta["tool_calls"])]
                         event = {
                             "id": response["id"],
                             "object": "chat.completion.chunk",

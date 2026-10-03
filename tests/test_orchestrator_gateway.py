@@ -127,7 +127,7 @@ def test_gateway_stream_preserves_tool_call_and_terminal_finish_reason(tmp_path)
         ]
 
         assert response.status == 200
-        assert events[0]["choices"][0]["delta"]["tool_calls"] == [tool_call]
+        assert events[0]["choices"][0]["delta"]["tool_calls"] == [{**tool_call, "index": 0}]
         assert events[-1]["choices"][0]["finish_reason"] == "tool_calls"
     finally:
         server.shutdown()
@@ -169,3 +169,34 @@ def test_gateway_reports_context_overflow_as_client_error(tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_gateway_stream_gives_parallel_tool_calls_distinct_indexes(tmp_path):
+    calls = [
+        {"id": "a", "type": "function", "function": {"name": "find_files", "arguments": '{"pattern":"x"}'}},
+        {"id": "b", "type": "function", "function": {"name": "list_dir", "arguments": '{"path":"tests"}'}},
+    ]
+
+    class ParallelAdapter:
+        def complete(self, request, timeout):
+            return {"content": "", "tool_calls": [dict(c) for c in calls]}
+
+    runtime = OrchestratorRuntime(CapabilityRegistry([worker("ready")]), {"ready": ParallelAdapter()}, EvidenceStore(tmp_path / "evidence.jsonl"))
+    server = GatewayServer(("127.0.0.1", 0), create_gateway(runtime, "client-secret"))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        connection = HTTPConnection(host, port)
+        connection.request(
+            "POST", "/v1/chat/completions",
+            body=json.dumps({"model": "engineering/ready", "stream": True, "messages": [{"role": "user", "content": "go"}]}),
+            headers={"Authorization": "Bearer client-secret", "Content-Type": "application/json"},
+        )
+        events = [json.loads(l.removeprefix("data: ")) for l in connection.getresponse().read().decode().splitlines() if l.startswith("data: {")]
+        streamed = events[0]["choices"][0]["delta"]["tool_calls"]
+        assert [c["index"] for c in streamed] == [0, 1]
+        assert [c["function"]["name"] for c in streamed] == ["find_files", "list_dir"]
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)

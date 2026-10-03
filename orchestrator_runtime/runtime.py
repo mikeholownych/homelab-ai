@@ -506,8 +506,10 @@ class OrchestratorRuntime:
         except ProviderError as error:
             call_duration = time.monotonic() - started
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
-            if error.status is not None and 400 <= error.status < 500 and error.status not in (401, 403, 408, 429):
-                # The worker answered correctly; the request was invalid for it (e.g. context overflow).
+            malformed_history = error.status == 500 and "Failed to parse tool call arguments" in error.body
+            if malformed_history or (error.status is not None and 400 <= error.status < 500 and error.status not in (401, 403, 408, 429)):
+                # The worker answered correctly; the request was invalid for it (e.g. context overflow, or an
+                # assistant tool call in the history whose arguments are not valid JSON: llama.cpp reports that as 500).
                 self.health.record_worker_observation(worker.worker_id, healthy=True, duration=call_duration)
                 failure_class = "context_length_exceeded" if "maximum context length" in error.body else "invalid_request"
                 self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class=failure_class, error=type(error).__name__, detail=error.body[:512])

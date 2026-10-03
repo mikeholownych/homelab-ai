@@ -308,6 +308,20 @@ def test_provider_context_overflow_is_a_client_error_and_keeps_worker_healthy(tm
     assert runtime.registry.snapshot()[0]["healthy"] is True
 
 
+def test_malformed_tool_call_history_is_a_client_error_and_keeps_worker_healthy(tmp_path):
+    from orchestrator_runtime import ProviderError
+
+    body = json.dumps({"error": {"code": 500, "message": "Failed to parse tool call arguments as JSON: [json.exception.parse_error.101] parse error at line 1, column 16", "type": "server_error"}})
+    adapter = _CapturingAdapter(ProviderError("provider HTTP 500: " + body, status=500, body=body))
+    runtime = _runtime_with(adapter, tmp_path)
+    result = runtime.complete({"model": "engineering/w1", "messages": [{"role": "user", "content": "hi"}]})
+
+    assert result["status"] == "rejected"
+    assert result["failure_class"] == "invalid_request"
+    assert "Failed to parse tool call arguments" in result["message"]
+    assert runtime.registry.snapshot()[0]["healthy"] is True
+
+
 def test_provider_server_error_still_marks_worker_unhealthy(tmp_path):
     from orchestrator_runtime import ProviderError
 
