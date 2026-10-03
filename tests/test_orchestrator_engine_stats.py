@@ -114,3 +114,114 @@ def test_stats_refresh_independently_of_health_and_stale_stats_are_not_published
         assert payload["workers"]["w3"]["engine_stats"] is None
     finally:
         server.shutdown(); server.server_close()
+
+
+# ----------------------------------------------------------------------------- llama.cpp build 11347 shape
+LLAMA_NEW = """llamacpp:prompt_tokens_total 1000
+llamacpp:prompt_tokens_cached_total 9000
+llamacpp:prompt_seconds_total 12.5
+llamacpp:tokens_predicted_total 400
+llamacpp:tokens_predicted_seconds_total 5.0
+llamacpp:requests_processing 1
+llamacpp:requests_deferred 0
+"""
+
+
+def _slot(*, n_ctx=65536, prompt=0, decoded=0, processing=False, processed=0):
+    return {"id": 0, "n_ctx": n_ctx, "is_processing": processing, "n_prompt_tokens": prompt,
+            "n_prompt_tokens_processed": processed, "next_token": [{"n_decoded": decoded, "n_remain": -1}]}
+
+
+def test_llama_cached_tokens_drive_prefix_hit_ratio_and_seconds_totals_are_published():
+    stats = extract("llama.cpp", LLAMA_NEW)
+    assert stats["prefix_cache_hit_ratio"] == 0.9           # 9000 / (9000 + 1000)
+    assert stats["prompt_tokens_cached_total"] == 9000 and stats["generation_seconds_total"] == 5.0
+    assert stats["kv_cache_usage"] is None                  # this build exposes no KV series: unknown, not zero
+    assert extract("llama.cpp", "llamacpp:prompt_tokens_total 7\n")["prefix_cache_hit_ratio"] is None
+
+
+def test_slots_supply_kv_usage_and_in_flight_tokens_when_metrics_have_no_kv_series():
+    idle = extract("llama.cpp", LLAMA_NEW, [_slot(prompt=13107)])
+    assert idle["kv_cache_usage"] == 13107 / 65536 and idle["generation_tokens_in_flight"] == 0   # retained context
+    busy = extract("llama.cpp", LLAMA_NEW, [_slot(prompt=100, decoded=300, processing=True, processed=23)])
+    assert abs(busy["kv_cache_usage"] - 400 / 65536) < 1e-9
+    assert (busy["generation_tokens_in_flight"], busy["prompt_tokens_in_flight"]) == (300, 23)
+
+
+def test_an_engine_kv_series_wins_over_the_slots_estimate_and_bad_slots_are_ignored():
+    assert extract("llama.cpp", LLAMA + "", [_slot(prompt=60000)])["kv_cache_usage"] == 0.5
+    for bad in (None, [], "x", [{"n_ctx": 0}], [None], [{"n_ctx": 10}, 3]):
+        stats = extract("llama.cpp", LLAMA_NEW, bad)
+        assert stats["kv_cache_usage"] is None and "generation_tokens_in_flight" not in stats
+
+
+def test_live_counters_never_go_backwards_within_an_epoch_and_reset_on_engine_restart():
+    from orchestrator_runtime.engine_stats import with_live_counters
+
+    def stats(done, flight): return {"generation_tokens_total": done, "generation_tokens_in_flight": flight,
+                                     "prompt_tokens_total": 0.0, "prompt_tokens_in_flight": 0.0}
+    a = with_live_counters(stats(1000, 300), None);          assert a["generation_tokens_live"] == 1300
+    # request finished between the two reads: completed not yet visible, in-flight already gone -> raw sum dips
+    b = with_live_counters(stats(1000, 0), a);               assert b["generation_tokens_live"] == 1300
+    c = with_live_counters(stats(1420, 0), b);               assert c["generation_tokens_live"] == 1420
+    # engine restarted: completed total decreased -> guard resets instead of holding the old high-water mark
+    d = with_live_counters(stats(10, 0), c);                 assert d["generation_tokens_live"] == 10
+    assert "generation_tokens_live" not in with_live_counters({"generation_tokens_total": 5.0}, None)
+
+
+class _LlamaWithSlots(BaseHTTPRequestHandler):
+    def do_GET(self):  # noqa: N802
+        if self.headers.get("Authorization") != "Bearer sekret-worker-token-123":
+            self.send_response(401); self.end_headers(); return
+        if self.path == "/slots":
+            body = json.dumps([_slot(prompt=200, decoded=50, processing=True, processed=20)])
+        elif self.path == "/metrics":
+            body = LLAMA_NEW
+        else:
+            body = json.dumps({"data": []})
+        data = body.encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
+
+    def log_message(self, *a):
+        return
+
+
+def test_health_collects_slots_for_llama_cpp_and_publishes_live_fields():
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _LlamaWithSlots)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        w = worker("w4")
+        object.__setattr__(w, "endpoint", f"http://127.0.0.1:{server.server_address[1]}")
+        object.__setattr__(w, "auth_token", "sekret-worker-token-123")
+        object.__setattr__(w, "engine", "llama.cpp")
+        hm = HealthManager(CapabilityRegistry([w]), {}, MetricsRegistry())
+        hm.collect_all_engine_stats()
+        hm.collect_all_engine_stats()
+        stats = hm.check()[1]["workers"]["w4"]["engine_stats"]
+        assert stats["generation_tokens_live"] == 450 and stats["prompt_tokens_live"] == 1020
+        assert abs(stats["kv_cache_usage"] - 250 / 65536) < 1e-9 and stats["prefix_cache_hit_ratio"] == 0.9
+    finally:
+        server.shutdown(); server.server_close()
+
+
+def test_a_missing_slots_endpoint_leaves_metrics_stats_intact():
+    class NoSlots(_LlamaWithSlots):
+        def do_GET(self):  # noqa: N802
+            if self.path == "/slots":
+                self.send_response(404); self.end_headers(); return
+            super().do_GET()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), NoSlots)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        w = worker("w5")
+        object.__setattr__(w, "endpoint", f"http://127.0.0.1:{server.server_address[1]}")
+        object.__setattr__(w, "auth_token", "sekret-worker-token-123")
+        object.__setattr__(w, "engine", "llama.cpp")
+        hm = HealthManager(CapabilityRegistry([w]), {}, MetricsRegistry())
+        hm.collect_all_engine_stats()
+        stats = hm.check()[1]["workers"]["w5"]["engine_stats"]
+        assert stats["generation_tokens_total"] == 400 and stats["kv_cache_usage"] is None
+        assert "generation_tokens_live" not in stats
+    finally:
+        server.shutdown(); server.server_close()

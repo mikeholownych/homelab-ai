@@ -28,6 +28,9 @@ _LLAMA = {
     "kv_cache_usage": ("llamacpp:kv_cache_usage_ratio",),
     "prompt_tokens_total": ("llamacpp:prompt_tokens_total",),
     "generation_tokens_total": ("llamacpp:tokens_predicted_total",),
+    "prompt_tokens_cached_total": ("llamacpp:prompt_tokens_cached_total",),
+    "prompt_seconds_total": ("llamacpp:prompt_seconds_total",),
+    "generation_seconds_total": ("llamacpp:tokens_predicted_seconds_total",),
 }
 _MAPS = {"vllm": _VLLM, "llama.cpp": _LLAMA}
 
@@ -51,7 +54,65 @@ def parse_prometheus(text: str) -> dict[str, float]:
     return totals
 
 
-def extract(engine: str, metrics_text: str) -> dict[str, Any] | None:
+def _number(value: Any) -> float | None:
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value == value else None
+
+
+def slots_summary(slots: Any) -> dict[str, float] | None:
+    """llama.cpp ``/slots``: live per-request progress that the cumulative counters only report on completion.
+
+    KV occupancy is the tokens currently held by each slot (prompt plus tokens decoded so far) over its
+    context window; for an idle slot that is the retained context. Returns None for an unusable payload.
+    """
+    if not isinstance(slots, list) or not slots:
+        return None
+    used = capacity = gen_in_flight = prompt_in_flight = 0.0
+    for slot in slots:
+        if not isinstance(slot, dict):
+            return None
+        n_ctx = _number(slot.get("n_ctx"))
+        if not n_ctx or n_ctx <= 0:
+            return None
+        next_token = slot.get("next_token")
+        if isinstance(next_token, list):
+            next_token = next_token[0] if next_token and isinstance(next_token[0], dict) else {}
+        decoded = _number((next_token or {}).get("n_decoded")) or 0.0
+        prompt = _number(slot.get("n_prompt_tokens")) or 0.0
+        capacity += n_ctx
+        used += prompt + decoded
+        if slot.get("is_processing") is True:
+            gen_in_flight += decoded
+            prompt_in_flight += _number(slot.get("n_prompt_tokens_processed")) or 0.0
+    return {
+        "kv_cache_usage": min(1.0, used / capacity),
+        "generation_tokens_in_flight": gen_in_flight,
+        "prompt_tokens_in_flight": prompt_in_flight,
+    }
+
+
+def with_live_counters(stats: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, Any]:
+    """Add monotonic ``*_tokens_live`` counters (completed + in flight).
+
+    The two reads are not atomic, so the raw sum can dip when a request finishes between them. Consumers
+    treat a decreasing counter as an engine restart, so within one counter epoch the value never goes
+    backwards; when the completed total itself decreases the engine restarted and the guard resets.
+    """
+    for total, flight, live in (
+        ("generation_tokens_total", "generation_tokens_in_flight", "generation_tokens_live"),
+        ("prompt_tokens_total", "prompt_tokens_in_flight", "prompt_tokens_live"),
+    ):
+        completed, in_flight = stats.get(total), stats.get(flight)
+        if completed is None or in_flight is None:
+            continue
+        value = completed + in_flight
+        before, before_total = (previous or {}).get(live), (previous or {}).get(total)
+        if before is not None and before_total is not None and completed >= before_total:
+            value = max(value, before)
+        stats[live] = value
+    return stats
+
+
+def extract(engine: str, metrics_text: str, slots: Any = None) -> dict[str, Any] | None:
     """Neutral stats for a known engine, or None when the engine is unknown or exposes nothing usable."""
     mapping = _MAPS.get(engine)
     if mapping is None:
@@ -66,4 +127,14 @@ def extract(engine: str, metrics_text: str) -> dict[str, Any] | None:
     stats.pop("prefix_cache_hits_total", None)
     if all(v is None for v in stats.values()):
         return None
+    if engine == "llama.cpp":
+        cached, processed = stats.get("prompt_tokens_cached_total"), stats.get("prompt_tokens_total")
+        if cached is not None and processed is not None and cached + processed > 0:
+            stats["prefix_cache_hit_ratio"] = cached / (cached + processed)
+        live = slots_summary(slots)
+        if live is not None:
+            if stats.get("kv_cache_usage") is None:
+                stats["kv_cache_usage"] = live["kv_cache_usage"]
+            stats["generation_tokens_in_flight"] = live["generation_tokens_in_flight"]
+            stats["prompt_tokens_in_flight"] = live["prompt_tokens_in_flight"]
     return stats

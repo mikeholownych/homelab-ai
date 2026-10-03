@@ -6,6 +6,7 @@ Guarantees fail-closed evaluation, bounded freshness, and zero inference side ef
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
@@ -318,12 +319,22 @@ class HealthManager:
             req = urllib.request.Request(endpoint.rstrip("/") + "/metrics", headers=headers, method="GET")
             with urllib.request.urlopen(req, timeout=3.0) as resp:
                 body = resp.read(4_000_000).decode("utf-8", errors="replace")
-            stats = engine_stats.extract(engine, body)
+            slots = None
+            if engine == "llama.cpp":
+                # Live per-request progress (KV occupancy, in-flight tokens); optional and never fatal.
+                try:
+                    slots_req = urllib.request.Request(endpoint.rstrip("/") + "/slots", headers=headers, method="GET")
+                    with urllib.request.urlopen(slots_req, timeout=2.0) as slots_resp:
+                        slots = json.loads(slots_resp.read(4_000_000).decode("utf-8", errors="replace"))
+                except Exception:
+                    slots = None
+            stats = engine_stats.extract(engine, body, slots)
         except Exception:
             return
         if stats is not None:
             stats["observed_at"] = time.time()
             with self._lock:
+                engine_stats.with_live_counters(stats, self._engine_stats.get(worker_record["worker_id"]))
                 self._engine_stats[worker_record["worker_id"]] = stats
 
     def collect_all_engine_stats(self) -> None:
