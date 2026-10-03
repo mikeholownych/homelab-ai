@@ -49,3 +49,9 @@
     path: "{{ item }}"
     state: absent
   loop: "{{ vllm_top_console_shadow_paths }}"
+
+- name: Set aside the superseded on-host vllm-top source checkout
+  ansible.builtin.command:
+    cmd: "mv {{ vllm_top_console_superseded_source }} {{ vllm_top_console_superseded_source }}.superseded-0.6.0"
+    creates: "{{ vllm_top_console_superseded_source }}.superseded-0.6.0"
+    removes: "{{ vllm_top_console_superseded_source }}/Cargo.toml"

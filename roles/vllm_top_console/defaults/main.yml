@@ -14,3 +14,6 @@ vllm_top_console_min_version: "0.8.0"
 vllm_top_console_shadow_paths:
   - "/home/{{ vllm_top_console_user }}/.cargo/bin/vllm-top"
   - "/home/{{ vllm_top_console_user }}/.local/bin/vllm-top"
+# Pre-vendoring source checkout on the host (0.6.0, not a git repo). The source of truth is vllm-top/ in
+# this repository; the old directory is renamed (not deleted) so nobody rebuilds an old version by mistake.
+vllm_top_console_superseded_source: "/home/{{ vllm_top_console_user }}/vllm-top"
