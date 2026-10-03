@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from . import engine_stats
 
 # Engine stats older than this are not published (they would look current but be stale).
-ENGINE_STATS_MAX_AGE_SECONDS = 60.0
+ENGINE_STATS_MAX_AGE_SECONDS = 15.0
 
 if TYPE_CHECKING:
     from orchestrator_runtime.metrics import MetricsRegistry
@@ -67,6 +67,8 @@ class HealthManager:
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._poll_thread: threading.Thread | None = None
+        self._stats_thread: threading.Thread | None = None
+        self.stats_interval_seconds = max(0.5, float(os.environ.get("ORCHESTRATOR_ENGINE_STATS_INTERVAL_SECONDS", "1.0")))
 
         # Initialize health states for all workers currently registered
         self._sync_registered_workers()
@@ -324,6 +326,25 @@ class HealthManager:
             with self._lock:
                 self._engine_stats[worker_record["worker_id"]] = stats
 
+    def collect_all_engine_stats(self) -> None:
+        """Refresh engine statistics for every worker (independent of health probing)."""
+        for w in self.registry.snapshot():
+            endpoint, token = w.get("endpoint"), w.get("auth_token")
+            if not endpoint or not str(endpoint).startswith(("http://", "https://")):
+                continue
+            headers = {"Authorization": f"Bearer {token}"} if token else {}
+            self._collect_engine_stats(w, endpoint, headers)
+
+    def _stats_loop(self) -> None:
+        """Frequent, lightweight engine-stats refresh so monitors can derive smooth token rates."""
+        while not self._stop_event.is_set():
+            try:
+                self.collect_all_engine_stats()
+            except Exception:
+                pass
+            if self._stop_event.wait(self.stats_interval_seconds):
+                break
+
     def probe_all(self) -> None:
         """Probe all currently registered workers."""
         for w in self.registry.snapshot():
@@ -355,9 +376,13 @@ class HealthManager:
                 target=self._poll_loop, daemon=True, name="HealthManagerPoller"
             )
             self._poll_thread.start()
+            self._stats_thread = threading.Thread(target=self._stats_loop, daemon=True, name="EngineStatsPoller")
+            self._stats_thread.start()
 
     def stop(self) -> None:
         """Stop background polling thread."""
         self._stop_event.set()
         if self._poll_thread is not None:
             self._poll_thread.join(timeout=2.0)
+        if self._stats_thread is not None:
+            self._stats_thread.join(timeout=2.0)

@@ -92,3 +92,25 @@ def test_stats_collection_failure_never_changes_health():
     health = HealthManager(CapabilityRegistry([w]), {}, MetricsRegistry())
     _, payload = health.check()
     assert payload["workers"]["w2"]["engine_stats"] is None
+
+
+def test_stats_refresh_independently_of_health_and_stale_stats_are_not_published():
+    from orchestrator_runtime import health as health_module
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Engine)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        w = worker("w3")
+        object.__setattr__(w, "endpoint", f"http://127.0.0.1:{server.server_address[1]}")
+        object.__setattr__(w, "auth_token", "sekret-worker-token-123")
+        object.__setattr__(w, "engine", "llama.cpp")
+        hm = HealthManager(CapabilityRegistry([w]), {}, MetricsRegistry())
+        hm.collect_all_engine_stats()          # no /v1/models probe involved
+        _, payload = hm.check()
+        assert payload["workers"]["w3"]["engine_stats"]["requests_waiting"] == 2
+        # age the stored observation beyond the publish window: it must disappear, not look current
+        hm._engine_stats["w3"]["observed_at"] -= health_module.ENGINE_STATS_MAX_AGE_SECONDS + 1
+        _, payload = hm.check()
+        assert payload["workers"]["w3"]["engine_stats"] is None
+    finally:
+        server.shutdown(); server.server_close()
