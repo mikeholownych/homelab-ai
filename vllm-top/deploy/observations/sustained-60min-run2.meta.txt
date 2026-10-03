@@ -1,0 +1,7 @@
+observation_start_utc=2026-09-24T19:27:34Z
+monitor_pid_at_start=538627
+executable_sha256_at_start=477a98cc46cb0019ff5b9e67074ac7d551fac80491e481fb57c233bcb6afeeb8
+duration_seconds=3600
+interval_seconds=30
+supervisor=systemd transient unit vllm-top-stability-obs-2.service (system.slice, independent of any login session)
+note=run 1 (deploy/observations/sustained-60min.csv) was interrupted at ~57m20s of 60m target when launched via nohup+disown from an interactive tool session; this run uses systemd-run instead for guaranteed independence

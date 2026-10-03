@@ -1,0 +1,36 @@
+2026-09-24T19:27:22Z observation started, duration=3600s interval=30s
+2026-09-24T19:27:22Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed
+2026-09-24T19:47:29Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed
+2026-09-24T19:52:31Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed
+2026-09-24T19:57:33Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed
+2026-09-24T20:02:35Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed
+2026-09-24T20:07:37Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed
+2026-09-24T20:12:38Z --once check failed:
+instance           source     endpoint                       model                        run   wait      kv   prompt tok   output tok       ttft p50/p99
+------------------------------------------------------------------------------------------------------------------------------------------------------
+127.0.0.1:8000     direct     127.0.0.1:8000                 ERROR: GET http://127.0.0.1:8000/metrics: error sending request for url (http://127.0.0.1:8000/metrics): client error (Connect): tcp connect error: Connection refused (os error 111)
+Error: 1 instance(s) failed

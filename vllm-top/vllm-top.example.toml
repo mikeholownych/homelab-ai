@@ -1,0 +1,31 @@
+# vllm-top configuration
+#
+# Search order when --config is not given:
+#   ./vllm-top.toml
+#   ~/.config/vllm-top/config.toml
+
+# How often to scrape (milliseconds). Also adjustable at runtime with +/-.
+poll_ms = 1000
+
+# Samples kept per graph (240 samples at 1s = 4 minutes of history).
+history = 240
+
+# Each instance needs a url; kind is "direct" (scrape /metrics) or
+# "prometheus" (query /api/v1/query). Names show up as tabs in the header.
+
+[[instances]]
+name = "local"
+url = "http://localhost:8000"
+kind = "direct"
+# api_key = "sk-..."  # optional; falls back to VLLM_API_KEY if omitted
+# and the url above is localhost/127.0.0.1
+
+[[instances]]
+name = "gpu-node-09"
+url = "http://10.0.9.21:8000"
+kind = "direct"
+
+[[instances]]
+name = "cluster"
+url = "http://prometheus:9090"
+kind = "prometheus"

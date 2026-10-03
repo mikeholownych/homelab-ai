@@ -1,0 +1,26 @@
+[package]
+name = "vllm-top"
+version = "0.8.0"
+edition = "2021"
+description = "btop-style terminal monitor for vLLM usage and performance"
+license = "MIT"
+repository = "https://example.invalid/vllm-top"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4.5", features = ["derive"] }
+crossterm = "=0.28.1"
+libc = "0.2"
+ratatui = "=0.29.0"
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+    "json",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+[profile.release]
+lto = "thin"
+strip = true
