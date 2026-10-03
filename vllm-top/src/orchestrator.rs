@@ -100,6 +100,12 @@ pub struct EngineStats {
     pub generation_tokens_total: Option<f64>,
     #[serde(default)]
     pub prefix_cache_hit_ratio: Option<f64>,
+    /// Completed plus in-flight tokens (llama.cpp only counts a request when it finishes). Monotonic per
+    /// engine epoch, so rates computed from it are smooth while a request is still generating.
+    #[serde(default)]
+    pub prompt_tokens_live: Option<f64>,
+    #[serde(default)]
+    pub generation_tokens_live: Option<f64>,
     /// Gateway wall-clock (epoch seconds) when it read the engine; rates use this, not our poll time.
     #[serde(default)]
     pub observed_at: f64,
@@ -113,7 +119,7 @@ pub struct EngineRates {
 }
 
 /// Reset-safe token rates between two engine observations. Returns `None` when there is no newer
-/// observation (the gateway only refreshes every ~10s, so most of our polls see the same sample)
+/// observation (the gateway refreshes about once a second, so some of our polls see the same sample)
 /// or a counter is unknown; a counter that went backwards (engine restart) contributes zero.
 pub fn engine_rates(prev: &EngineStats, cur: &EngineStats) -> Option<EngineRates> {
     let dt = cur.observed_at - prev.observed_at;
@@ -124,10 +130,13 @@ pub fn engine_rates(prev: &EngineStats, cur: &EngineStats) -> Option<EngineRates
         let (p, c) = (p?, c?);
         Some(if c >= p { (c - p) / dt } else { 0.0 })
     };
-    Some(EngineRates {
-        prompt_tps: rate(prev.prompt_tokens_total, cur.prompt_tokens_total)?,
-        generation_tps: rate(prev.generation_tokens_total, cur.generation_tokens_total)?,
-    })
+    // Prefer the live counters, but only when both observations carry them (a gateway upgrade mid-session).
+    let pick = |p_live: Option<f64>, c_live: Option<f64>, p_total: Option<f64>, c_total: Option<f64>| {
+        if p_live.is_some() && c_live.is_some() { (p_live, c_live) } else { (p_total, c_total) }
+    };
+    let (pp, pc) = pick(prev.prompt_tokens_live, cur.prompt_tokens_live, prev.prompt_tokens_total, cur.prompt_tokens_total);
+    let (gp, gc) = pick(prev.generation_tokens_live, cur.generation_tokens_live, prev.generation_tokens_total, cur.generation_tokens_total);
+    Some(EngineRates { prompt_tps: rate(pp, pc)?, generation_tps: rate(gp, gc)? })
 }
 
 /// The subset of the gateway's `aihost_*` Prometheus metrics vllm-top
@@ -364,6 +373,24 @@ aihost_authority_validations_total{outcome="accepted"} 2
     fn engine_rates_use_the_gateways_observation_clock() {
         let r = engine_rates(&stats(1000.0, 100.0, 50.0), &stats(1600.0, 700.0, 60.0)).expect("rates");
         assert!((r.prompt_tps - 60.0).abs() < 1e-9 && (r.generation_tps - 60.0).abs() < 1e-9, "{r:?}");
+    }
+
+    #[test]
+    fn engine_rates_prefer_live_counters_so_an_unfinished_request_still_shows_throughput() {
+        let with_live = |total: f64, live: f64, at: f64| EngineStats {
+            generation_tokens_total: Some(total),
+            generation_tokens_live: Some(live),
+            prompt_tokens_total: Some(0.0),
+            prompt_tokens_live: Some(0.0),
+            observed_at: at,
+            ..Default::default()
+        };
+        // 100 tokens decoded in flight over 2 s while nothing has completed: 50 tok/s, not 0.
+        let r = engine_rates(&with_live(1000.0, 1000.0, 10.0), &with_live(1000.0, 1100.0, 12.0)).expect("rates");
+        assert!((r.generation_tps - 50.0).abs() < 1e-9, "{r:?}");
+        // Only one side has live counters: fall back to the completed totals for both.
+        let r = engine_rates(&stats(0.0, 1000.0, 10.0), &with_live(1300.0, 1400.0, 12.0)).expect("rates");
+        assert!((r.generation_tps - 150.0).abs() < 1e-9, "{r:?}");
     }
 
     #[test]

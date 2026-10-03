@@ -8,7 +8,7 @@ vllm_top_console_user: mike
 vllm_top_console_tty: tty1
 vllm_top_console_service: vllm-top-console.service
 # Minimum acceptable version; the play fails rather than installing something older.
-vllm_top_console_min_version: "0.9.0"
+vllm_top_console_min_version: "0.9.1"
 # Per-user copies that sit earlier on PATH than the managed binary and would run an older version in
 # SSH sessions. Removed so `vllm-top` always resolves to vllm_top_console_binary_dest.
 vllm_top_console_shadow_paths:
