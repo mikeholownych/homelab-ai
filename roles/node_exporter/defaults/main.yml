@@ -1,0 +1,13 @@
+---
+# Host metrics for a future Prometheus. CPU saturation matters most on this host: decode is bound by a
+# single CPU thread, so per-core usage is the evidence that explains inference speed.
+node_exporter_enabled: false
+node_exporter_package: prometheus-node-exporter
+# Loopback until a Prometheus host exists; widening it is a deliberate, explicit decision.
+node_exporter_listen_address: "127.0.0.1:9100"
+node_exporter_allow_non_loopback: false
+# Files written atomically by the monitoring role (aihost-metrics.timer): GPU thermals, energy, GT activity.
+node_exporter_textfile_dir: /var/lib/local-ai/metrics
+# Unit-state series are limited to the inference stack (the pattern is anchored by node_exporter itself).
+# No backslashes, dollar signs or spaces: the value travels through systemd's EnvironmentFile unchanged.
+node_exporter_systemd_unit_include: "aihost-.*[.]service|llama-.*[.]service|vllm-top-console[.]service"

@@ -11,7 +11,9 @@ llama_cpp_container_uid: "{{ host_runtime_uid | default(999) }}"
 llama_cpp_container_config_root: /etc/local-ai/llama
 llama_cpp_container_log_dir: /var/log/local-ai/llama
 llama_cpp_container_model_dir: /var/lib/local-ai/models/gguf
-llama_cpp_container_host: 0.0.0.0
+# Loopback: the gateway (127.0.0.1) is the only client. Binding all interfaces exposed the workers' API to
+# the whole LAN (the ufw rules only masked port 8000 with a leftover temporary deny).
+llama_cpp_container_host: 127.0.0.1
 # Default server arguments (measured on ai-5820-01: flash attention and large batches
 # raise cold prefill; one slot per GPU keeps the full context window per conversation).
 llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]

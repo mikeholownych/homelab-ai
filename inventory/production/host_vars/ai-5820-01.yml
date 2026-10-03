@@ -165,6 +165,9 @@ scheduled_ansible_validate_enabled: false
 # systemd-networkd-wait-online time out (2 min) at every boot.
 boot_network_wait_optional_interfaces: [eno1]
 
+# Host metrics (loopback only until a Prometheus host exists).
+node_exporter_enabled: true
+
 # TTY1 monitoring console (vllm-top, built from ~/Projects/vllm-top)
 vllm_top_console_enabled: true
 

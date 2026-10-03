@@ -1,0 +1,44 @@
+---
+- name: Refuse a non-loopback listen address unless it was explicitly allowed
+  ansible.builtin.assert:
+    that:
+      - node_exporter_listen_address is match('^(127[.]0[.]0[.]1|localhost|\[::1\]):[0-9]+$') or (node_exporter_allow_non_loopback | bool)
+      - node_exporter_systemd_unit_include is not search('[\\$ ]')
+    fail_msg: >-
+      node_exporter_listen_address must be loopback (set node_exporter_allow_non_loopback=true to publish it
+      deliberately), and the systemd unit pattern must not contain backslashes, dollar signs or spaces.
+  when: node_exporter_enabled | bool
+
+- name: Install node exporter from the distribution archive
+  ansible.builtin.apt:
+    name: "{{ node_exporter_package }}"
+    state: present
+  when: node_exporter_enabled | bool
+
+- name: Ensure the textfile collector directory exists
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: node_exporter_enabled | bool
+
+- name: Configure node exporter arguments
+  ansible.builtin.template:
+    src: prometheus-node-exporter.default.j2
+    dest: /etc/default/prometheus-node-exporter
+    owner: root
+    group: root
+    mode: "0644"
+  when: node_exporter_enabled | bool
+  notify: Restart node exporter
+
+- name: Enable and start node exporter
+  ansible.builtin.systemd_service:
+    name: prometheus-node-exporter.service
+    enabled: true
+    state: started
+  when:
+    - node_exporter_enabled | bool
+    - not ansible_check_mode
