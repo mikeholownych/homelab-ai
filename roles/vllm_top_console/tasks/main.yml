@@ -43,3 +43,9 @@
   when:
     - vllm_top_console_enabled | bool
     - not ansible_check_mode
+
+- name: Remove stale per-user vllm-top copies that shadow the managed binary
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ vllm_top_console_shadow_paths }}"
