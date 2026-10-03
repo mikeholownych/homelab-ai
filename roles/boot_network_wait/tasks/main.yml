@@ -1,0 +1,25 @@
+---
+# Additive netplan fragment: marks listed interfaces optional so boot does not wait on them.
+# It never changes addressing or links; only `netplan generate` is run (no apply, no link bounce).
+- name: Mark non-addressed interfaces optional for boot network wait
+  ansible.builtin.copy:
+    dest: /etc/netplan/60-boot-wait-optional.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by Ansible (role boot_network_wait)
+      network:
+        version: 2
+        ethernets:
+      {% for nic in boot_network_wait_optional_interfaces %}
+          {{ nic }}:
+            optional: true
+      {% endfor %}
+  when: boot_network_wait_optional_interfaces | length > 0
+  register: _boot_wait_netplan
+
+- name: Regenerate netplan backend configuration (no apply)
+  ansible.builtin.command: netplan generate
+  when: _boot_wait_netplan is changed
+  changed_when: true

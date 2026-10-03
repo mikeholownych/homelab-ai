@@ -1,0 +1,4 @@
+---
+# Interfaces that never reach "configured" (e.g. a bare VLAN parent) and so make
+# systemd-networkd-wait-online time out at every boot. Marked optional in netplan.
+boot_network_wait_optional_interfaces: []

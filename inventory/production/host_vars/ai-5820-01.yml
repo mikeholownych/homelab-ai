@@ -156,6 +156,10 @@ llama_cpp_container_workers:
 scheduled_ansible_reconcile_enabled: false
 scheduled_ansible_validate_enabled: false
 
+# eno1 is only the VLAN parent (address lives on eno1.2) and never reaches 'configured', which made
+# systemd-networkd-wait-online time out (2 min) at every boot.
+boot_network_wait_optional_interfaces: [eno1]
+
 # TTY1 monitoring console (vllm-top, built from ~/Projects/vllm-top)
 vllm_top_console_enabled: true
 

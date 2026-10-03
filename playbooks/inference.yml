@@ -37,3 +37,6 @@
     # safely is reproducibly off instead of silently failing and alerting.
     - role: scheduled_ansible
       tags: [inference, operations, scheduled_ansible]
+    - role: boot_network_wait
+      when: boot_network_wait_optional_interfaces | default([]) | length > 0
+      tags: [inference, operations, boot_network]
