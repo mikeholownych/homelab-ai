@@ -329,7 +329,7 @@ impl App {
                 crate::config::SourceKind::Direct => {
                     source::probe_direct_info(&def.url, def.api_key.as_deref())
                 }
-                crate::config::SourceKind::Prometheus => (None, None),
+                crate::config::SourceKind::Prometheus | crate::config::SourceKind::Gateway => (None, None),
             };
             // Sender is created per poll round; the placeholder receiver just
             // sits empty until the first fetch starts.

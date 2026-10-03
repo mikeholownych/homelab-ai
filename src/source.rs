@@ -19,6 +19,10 @@ pub fn build(kind: SourceKind, url: &str, api_key: Option<&str>) -> Result<Arc<d
             client,
             api_key,
         }),
+        SourceKind::Gateway => {
+            let (base, worker) = url.split_once('#').unwrap_or((url, ""));
+            Arc::new(GatewaySource { base: base.to_string(), worker: worker.to_string(), client })
+        }
         SourceKind::Prometheus => Arc::new(PrometheusSource {
             url: url.to_string(),
             client,
@@ -109,6 +113,66 @@ impl MetricsSource for DirectSource {
         let body = resp.text().context("reading /metrics body")?;
         Ok(promparse::parse(&body))
     }
+}
+
+/// One worker's engine statistics, republished by the orchestrator gateway in a neutral shape and mapped
+/// here onto the `vllm:*` series the rest of the app understands. Series the engine does not report are
+/// simply absent (shown as unavailable), never emitted as zero.
+pub struct GatewaySource {
+    base: String,
+    worker: String,
+    client: reqwest::blocking::Client,
+}
+
+impl MetricsSource for GatewaySource {
+    fn fetch(&self) -> Result<Vec<Sample>> {
+        let endpoint = format!("{}/health", self.base.trim_end_matches('/'));
+        let body: serde_json::Value = self
+            .client
+            .get(&endpoint)
+            .send()
+            .with_context(|| format!("GET {endpoint}"))?
+            .error_for_status()
+            .with_context(|| format!("GET {endpoint}"))?
+            .json()
+            .context("parsing gateway /health")?;
+        samples_from_gateway_health(&body, &self.worker)
+    }
+}
+
+/// Pure mapping, separated for testing.
+pub fn samples_from_gateway_health(body: &serde_json::Value, worker: &str) -> Result<Vec<Sample>> {
+    let w = body
+        .get("workers")
+        .and_then(|ws| ws.get(worker))
+        .with_context(|| format!("gateway does not list worker {worker:?}"))?;
+    if w.get("healthy").and_then(|h| h.as_bool()) == Some(false) {
+        bail!("gateway reports worker {worker:?} {}", w.get("status").and_then(|s| s.as_str()).unwrap_or("unhealthy"));
+    }
+    let stats = w
+        .get("engine_stats")
+        .filter(|v| v.is_object())
+        .with_context(|| format!("gateway publishes no engine statistics for {worker:?}"))?;
+    let model = w.get("model_id").and_then(|m| m.as_str()).unwrap_or("").to_string();
+    let mut out = Vec::new();
+    let mut push = |name: &str, key: &str| {
+        if let Some(v) = stats.get(key).and_then(|v| v.as_f64()) {
+            let mut labels = std::collections::BTreeMap::new();
+            if !model.is_empty() {
+                labels.insert("model_name".to_string(), model.clone());
+            }
+            out.push(Sample { name: name.to_string(), labels, value: v });
+        }
+    };
+    push("vllm:num_requests_running", "requests_running");
+    push("vllm:num_requests_waiting", "requests_waiting");
+    push("vllm:kv_cache_usage_perc", "kv_cache_usage");
+    push("vllm:prompt_tokens_total", "prompt_tokens_total");
+    push("vllm:generation_tokens_total", "generation_tokens_total");
+    if out.is_empty() {
+        bail!("gateway engine statistics for {worker:?} are empty");
+    }
+    Ok(out)
 }
 
 /// Runs an instant vector query against Prometheus for every `vllm:` metric.
@@ -243,5 +307,44 @@ mod tests {
         let samples = parse_prometheus_response(body).expect("parses");
         assert_eq!(samples.len(), 1);
         assert_eq!(samples[0].name, "vllm:ok");
+    }
+}
+
+#[cfg(test)]
+mod gateway_tests {
+    use super::*;
+    use crate::metrics::Snapshot;
+
+    fn health(worker_json: &str) -> serde_json::Value {
+        serde_json::from_str(&format!(r#"{{"workers": {{"w-llama": {worker_json}}}}}"#)).unwrap()
+    }
+
+    #[test]
+    fn maps_neutral_engine_stats_onto_the_series_the_app_understands() {
+        let body = health(r#"{"status":"healthy","healthy":true,"model_id":"Qwen3-Coder-Q4","engine_stats":{
+            "requests_running":1,"requests_waiting":2,"kv_cache_usage":0.25,
+            "prompt_tokens_total":5000,"generation_tokens_total":900,"prefix_cache_hit_ratio":null,"observed_at":1.0}}"#);
+        let samples = samples_from_gateway_health(&body, "w-llama").expect("samples");
+        let snap = Snapshot::extract(&samples);
+        assert_eq!((snap.running, snap.waiting, snap.kv_cache_usage), (1.0, 2.0, 0.25));
+        assert_eq!((snap.prompt_tokens, snap.generation_tokens), (5000.0, 900.0));
+        assert_eq!(snap.model.as_deref(), Some("Qwen3-Coder-Q4"));
+    }
+
+    #[test]
+    fn an_unreported_series_is_absent_not_zero() {
+        let body = health(r#"{"healthy":true,"engine_stats":{"requests_running":3,"kv_cache_usage":null}}"#);
+        let samples = samples_from_gateway_health(&body, "w-llama").expect("samples");
+        assert!(samples.iter().any(|s| s.name == "vllm:num_requests_running"));
+        assert!(!samples.iter().any(|s| s.name == "vllm:kv_cache_usage_perc"), "unknown kv usage must not be emitted as 0");
+    }
+
+    #[test]
+    fn missing_unhealthy_or_stats_less_workers_are_errors_not_fake_data() {
+        let body = health(r#"{"healthy":true,"engine_stats":null}"#);
+        assert!(samples_from_gateway_health(&body, "w-llama").is_err(), "no stats published");
+        assert!(samples_from_gateway_health(&body, "nope").is_err(), "unknown worker");
+        let down = health(r#"{"healthy":false,"status":"stale","engine_stats":{"requests_running":1}}"#);
+        assert!(samples_from_gateway_health(&down, "w-llama").is_err(), "an unhealthy worker is not shown as live");
     }
 }

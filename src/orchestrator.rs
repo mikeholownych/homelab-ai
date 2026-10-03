@@ -195,6 +195,19 @@ pub struct Snapshot {
     pub fetch_latency: Duration,
 }
 
+/// Gateway workers that publish engine statistics and are not vLLM (vLLM workers are scraped directly),
+/// as `(worker-id, "http://host:port#worker-id")` pairs. Empty when no gateway answers.
+pub fn gateway_worker_instances(base_url: &str) -> Vec<(String, String)> {
+    let Some(snap) = probe(base_url) else { return Vec::new() };
+    let base = base_url.trim_end_matches('/');
+    snap.health
+        .workers
+        .iter()
+        .filter(|(_, w)| w.engine_stats.is_some() && w.engine.as_deref() != Some("vllm"))
+        .map(|(name, _)| (name.clone(), format!("{base}#{name}")))
+        .collect()
+}
+
 /// Best-effort probe: `None` on any failure (unreachable, timeout,
 /// malformed response) — never a partial/guessed snapshot. Meant to run
 /// on its own background thread (see `App::maybe_poll_orchestrator`),

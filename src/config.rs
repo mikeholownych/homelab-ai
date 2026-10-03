@@ -15,6 +15,10 @@ pub enum SourceKind {
     Direct,
     /// Query a Prometheus server's `/api/v1/query`.
     Prometheus,
+    /// One worker's engine statistics as republished by the orchestrator gateway (`GET /health`).
+    /// Engine-agnostic (vLLM, llama.cpp, ...) and needs no worker credential. The url is
+    /// `http://host:port#<worker-id>`.
+    Gateway,
 }
 
 impl SourceKind {
@@ -22,6 +26,7 @@ impl SourceKind {
         match self {
             SourceKind::Direct => "direct",
             SourceKind::Prometheus => "prometheus",
+            SourceKind::Gateway => "gateway",
         }
     }
 }
@@ -138,6 +143,27 @@ pub fn resolve(cli: &Cli) -> Result<(Settings, Vec<InstanceDef>)> {
                     discovered_via: Some(inst.discovered_via),
                     auth: Some(inst.auth),
                     confidence: Some(inst.confidence),
+                });
+            }
+        }
+        // Workers behind a local orchestrator gateway that are not vLLM (vLLM workers are monitored
+        // directly, which gives richer latency data) become gateway instances. When no vLLM was
+        // discovered the localhost:8000 placeholder above is dropped if the gateway covers it.
+        let gateway_workers = crate::orchestrator::gateway_worker_instances(crate::orchestrator::DEFAULT_URL);
+        if !gateway_workers.is_empty() {
+            let have_real_direct = defs.iter().any(|d| d.discovered_via.is_some());
+            if !have_real_direct {
+                defs.retain(|d| d.kind != SourceKind::Direct);
+            }
+            for (worker, url) in gateway_workers {
+                defs.push(InstanceDef {
+                    name: worker,
+                    kind: SourceKind::Gateway,
+                    url,
+                    api_key: None,
+                    discovered_via: Some("orchestrator gateway".to_string()),
+                    auth: None,
+                    confidence: None,
                 });
             }
         }
