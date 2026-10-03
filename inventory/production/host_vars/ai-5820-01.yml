@@ -170,8 +170,8 @@ vllm_top_console_enabled: true
 
 orchestrator_gateway_enabled: true
 orchestrator_gateway_port: 8010
-orchestrator_gateway_release_id: t5820-gateway-01d389f
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-01d389f
+orchestrator_gateway_release_id: t5820-gateway-2d75d4c
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-2d75d4c
 orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
 # Model routing. Pools: lead = Qwen3-Coder-30B (fast, best first-attempt), deep = Qwen3.5-27B (slower, best
 # validated accuracy; uniquely solves tasks the lead misses; best reviewer). Aliases bypass the rules.
