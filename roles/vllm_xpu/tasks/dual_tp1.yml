@@ -119,8 +119,8 @@
   ansible.builtin.systemd_service:
     name: "{{ item.value.service_name }}"
     daemon_reload: true
-    enabled: true
-    state: started
+    enabled: "{{ vllm_xpu_workers_state == 'started' }}"
+    state: "{{ vllm_xpu_workers_state }}"
   loop: "{{ vllm_xpu_workers | dict2items }}"
   when: not ansible_check_mode
 
@@ -133,4 +133,4 @@
   loop: "{{ vllm_xpu_changed_workers }}"
   loop_control:
     loop_var: vllm_xpu_restart_key
-  when: not ansible_check_mode
+  when: not ansible_check_mode and vllm_xpu_workers_state == 'started'

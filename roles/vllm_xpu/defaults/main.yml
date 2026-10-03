@@ -74,3 +74,7 @@ vllm_xpu_api_key_secret_file_key: "key"
 # Worker scheduling defaults (dual_tp1 mode); override per worker in vllm_xpu_workers.
 vllm_xpu_max_num_seqs: 2
 vllm_xpu_max_num_batched_tokens: 4096
+
+# dual_tp1 only: "stopped" retires every vLLM worker defined in vllm_xpu_workers (stopped and disabled)
+# while keeping its configuration and credentials, so the vLLM baseline stays reproducible.
+vllm_xpu_workers_state: started
