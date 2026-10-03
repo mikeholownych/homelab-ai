@@ -32,20 +32,27 @@ sampling the same hwmon sources the benchmark harness uses plus reconciliation
 status. This gives any future Alloy deployment an immediate scrape target and
 gives cron-level history even before the full stack lands.
 
-GPU sampling is **per device**: both B65 cards contribute their own
-labeled series (`aihost_gpu_temperature_celsius{device="hwmon1/xe"}`) plus an
-unlabeled cross-device peak. The thermal gate in benchmark fixtures reads the
-peak across both devices, so neither card can hide a hotspot behind the other's
-nominal temperature.
+GPU sampling is **per device and per sensor**: every temperature sensor on each B65 card is its own series,
+`aihost_gpu_temperature_celsius{gpu="0",bdf="0000:51:00.0",sensor="pkg"}`. `gpu` is the ordinal by PCI address
+(it matches the workers' `gpu_assignment`) and `bdf` is the stable PCI address; the unstable `hwmonN` name is never
+used as a label. `aihost_gpu_temperature_max_celsius{gpu,bdf}` is the hottest sensor on each card, and
+`aihost_gpu_temperature_limit_celsius{gpu,bdf,sensor}` is the critical limit the kernel reports for that sensor
+(headroom = limit - temperature). The same file also carries cumulative energy
+(`aihost_gpu_energy_joules_total`), graphics-tile idle residency (`aihost_gpu_gt_idle_residency_seconds_total`),
+power cap, frequency, fan speed and `aihost_metrics_last_success_timestamp_seconds`. The benchmark harness reads
+the hwmon files directly and takes the hottest sensor across both devices, so neither card can hide a hotspot
+behind the other's nominal temperature.
 
 The metrics writer also runs a debounced **GPU thermal severity guard**
 (`aihost_gpu_thermal_severity` 0/1/2 from ok/warning/critical). Thresholds
 default to `monitoring_gpu_temp_warn_threshold_c: 75` and
 `monitoring_gpu_temp_crit_threshold_c: 85` — deliberately below the benchmark
 abort guardrail (`benchmarking_abort_temperature_c: 90`) so an operator is
-alerted before a workload would be killed. A critical transition is written to
-the alert log and forwarded through `AIHOST_ALERT_COMMAND` on both GPU cards'
-behalf with context `state=critical temperature_c=<peak>`; recovery to ok after
+alerted before a workload would be killed. A sensor that publishes its own kernel limit is judged against
+`min(configured threshold, limit - margin)`, so a kernel limit can only tighten alerting (margins 25/15 C, role
+variables `monitoring_gpu_temp_warn_margin_c` / `_crit_margin_c`). Every transition is written to the alert log,
+naming the sensor that set the severity (`sensor=gpu1/vram`). A critical transition is also forwarded through
+`AIHOST_ALERT_COMMAND` with context `state=critical temperature_c=<peak>`; recovery to ok after
 critical logs a `state=recovered` line.
 
 **Scheduled drift alerting**: `aihost-reconcile.timer` runs the snapshot runner
