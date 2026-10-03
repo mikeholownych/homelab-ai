@@ -384,6 +384,10 @@ class HealthManager:
             if not endpoint or not str(endpoint).startswith(("http://", "https://")):
                 continue
             headers = {"Authorization": f"Bearer {token}"} if token else {}
+            if self.metrics:
+                self.metrics.worker_info.set(
+                    1.0, worker_id=w["worker_id"], pool=str(w.get("pool", "lead")), engine=str(w.get("engine", "unknown")),
+                    model=str(w.get("model_id", "unknown")), gpu=",".join(str(g) for g in w.get("gpu_assignment") or []) or "unknown")
             self._collect_engine_stats(w, endpoint, headers)
             # A reading that has aged out must disappear from the scrape instead of freezing at its last value.
             with self._lock:

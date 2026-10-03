@@ -263,3 +263,17 @@ def test_the_validator_rejects_the_defects_the_old_host_exporter_had():
         validate_exposition('# HELP h h\n# TYPE h histogram\nh_bucket{le="1"} 5\nh_bucket{le="+Inf"} 3\nh_sum 1\nh_count 3\n')
     with pytest.raises(AssertionError, match="newline"):
         validate_exposition("# HELP g g\n# TYPE g gauge\ng 1")
+
+
+def test_worker_info_joins_a_worker_to_its_gpu_and_model():
+    metrics = MetricsRegistry()
+    server, w, health = _engine_health(metrics)
+    try:
+        health.collect_all_engine_stats()
+    finally:
+        server.shutdown(); server.server_close()
+    text = metrics.render_prometheus_text()
+    validate_exposition(text)
+    line = next(l for l in text.splitlines() if l.startswith("aihost_worker_info{"))
+    assert 'worker_id="w1"' in line and 'pool="lead"' in line and 'engine="llama.cpp"' in line and line.endswith(" 1")
+    assert re.search(r'gpu="[^"]+"', line)

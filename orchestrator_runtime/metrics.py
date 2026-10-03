@@ -330,6 +330,12 @@ class MetricsRegistry:
             "waits inside the engine.",
             ("worker_id",),
         )
+        self.worker_info = self._register_gauge(
+            "aihost_worker_info",
+            "Worker identity (always 1): pool, engine, served model and the GPU ordinal(s) it runs on. The gpu "
+            "label matches the host exporter's gpu label, so power and energy series can be joined to a worker.",
+            ("worker_id", "pool", "engine", "model", "gpu"),
+        )
         self.worker_max_concurrency = self._register_gauge(
             "aihost_worker_max_concurrency",
             "Concurrent requests a worker is configured to serve.",
