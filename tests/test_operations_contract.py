@@ -117,8 +117,11 @@ class GpuThermalGuardContractTests(unittest.TestCase):
 
     def test_metrics_writer_emits_per_device_series_and_severity(self) -> None:
         script = (MONITORING_DIR / "files" / "write-textfile-metrics.sh").read_text(encoding="utf-8")
-        self.assertIn('device=\\"$label\\"', script)
-        self.assertIn("aihost_gpu_temperature_celsius $max_c", script)
+        # Series are identified by gpu ordinal + PCI address + sensor (behaviour is covered by
+        # tests/test_monitoring_textfile_metrics.py); the unlabeled legacy aggregate is gone.
+        self.assertIn("aihost_gpu_temperature_celsius gauge", script)
+        self.assertIn("aihost_gpu_temperature_max_celsius", script)
+        self.assertNotIn("aihost_gpu_temperature_celsius $max_c", script)
         self.assertIn("aihost_gpu_thermal_severity", script)
         self.assertIn("gpu-temp.state", script)
 

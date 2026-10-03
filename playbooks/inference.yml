@@ -40,3 +40,7 @@
     - role: boot_network_wait
       when: boot_network_wait_optional_interfaces | default([]) | length > 0
       tags: [inference, operations, boot_network]
+    # Host textfile metrics writer (GPU thermals, energy, GT activity) and its thermal alert hook.
+    - role: monitoring
+      when: features.monitoring | default(false) | bool
+      tags: [inference, monitoring, telemetry]

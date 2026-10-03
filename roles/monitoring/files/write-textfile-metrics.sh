@@ -29,28 +29,83 @@ HWMON_ROOT="${AIHOST_HWMON_ROOT:-/sys/class/hwmon}"
 mkdir -p "$OUT_DIR" "$LOG_DIR" "$ALERT_LOG_DIR" "$STATE_DIR"
 TMP="$OUT_FILE.$$"
 
-max_c=""
-dev_lines=""
+PCI_ROOT="${AIHOST_PCI_ROOT:-/sys/bus/pci/devices}"
 
-for d in "$HWMON_ROOT"/hwmon*; do
+# Prometheus label values must be plain and stable: keep [A-Za-z0-9_./:-] only.
+lbl() { printf '%s' "$1" | tr -c 'A-Za-z0-9_./:-' '_'; }
+
+max_c=""
+temp_lines=""
+gpu_max_lines=""
+info_lines=""
+energy_lines=""
+cap_lines=""
+fan_lines=""
+idle_lines=""
+freq_lines=""
+
+# One entry per xe GPU, ordered by PCI address so the `gpu` ordinal is stable across reboots (hwmonN is not).
+gpus="$(for d in "$HWMON_ROOT"/hwmon*; do
     [ -f "$d/name" ] || continue
-    name="$(cat "$d/name")"
-    case "$name" in *xe*|*i915*|*gpu*|*drm*)
-        for t in "$d"/temp*_input; do
-            [ -f "$t" ] || continue
-            mv="$(cat "$t")"
-            c="$(awk "BEGIN{print $mv/1000}")"
-            label="$(printf '%s/%s' "$(basename "$d")" "$name" | tr -c 'A-Za-z0-9_./-' '_')"
-            dev_lines="$dev_lines
-aihost_gpu_temperature_celsius{device=\"$label\"} $c"
-            if [ -z "$max_c" ]; then
-                max_c=$c
-            else
-                max_c="$(awk "BEGIN{print ($c>$max_c)?$c:$max_c}")"
-            fi
-        done
+    case "$(cat "$d/name")" in xe|i915)
+        bdf="$(basename "$(readlink -f "$d/device" 2>/dev/null)" 2>/dev/null || true)"
+        [ -n "$bdf" ] && printf '%s %s\n' "$bdf" "$d"
     ;; esac
-done
+done | sort)"
+
+ord=0
+while read -r bdf d; do
+    [ -n "$bdf" ] || continue
+    drv="$(cat "$d/name")"
+    info_lines="$info_lines
+aihost_gpu_info{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",driver=\"$drv\"} 1"
+    gpu_max=""
+    for t in "$d"/temp*_input; do
+        [ -f "$t" ] || continue
+        base="${t%_input}"
+        sensor="temp$(basename "$base" | sed 's/^temp//')"
+        [ -f "${base}_label" ] && sensor="$(cat "${base}_label")"
+        c="$(awk "BEGIN{print $(cat "$t")/1000}")"
+        temp_lines="$temp_lines
+aihost_gpu_temperature_celsius{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",sensor=\"$(lbl "$sensor")\"} $c"
+        gpu_max="$(awk -v a="${gpu_max:-$c}" -v b="$c" 'BEGIN{print (b>a)?b:a}')"
+    done
+    if [ -n "$gpu_max" ]; then
+        gpu_max_lines="$gpu_max_lines
+aihost_gpu_temperature_max_celsius{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $gpu_max"
+        max_c="$(awk -v a="${max_c:-$gpu_max}" -v b="$gpu_max" 'BEGIN{print (b>a)?b:a}')"
+    fi
+    # Cumulative energy (microjoules -> joules): rate() of it is the real average power.
+    for e in "$d"/energy*_input; do
+        [ -f "$e" ] || continue
+        base="${e%_input}"; dom="$(basename "$base")"
+        [ -f "${base}_label" ] && dom="$(cat "${base}_label")"
+        energy_lines="$energy_lines
+aihost_gpu_energy_joules_total{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",domain=\"$(lbl "$dom")\"} $(awk "BEGIN{printf \"%.6f\", $(cat "$e")/1000000}")"
+    done
+    if [ -f "$d/power1_cap" ]; then
+        cap_lines="$cap_lines
+aihost_gpu_power_cap_watts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(awk "BEGIN{print $(cat "$d/power1_cap")/1000000}")"
+    fi
+    if [ -f "$d/fan1_input" ]; then
+        fan_lines="$fan_lines
+aihost_gpu_fan_speed_rpm{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$d/fan1_input")"
+    fi
+    # Xe GT activity: time spent in RC6 idle (ms -> s) is a counter, so 1 - rate(idle_seconds) is utilisation.
+    for gt in "$PCI_ROOT/$bdf"/tile0/gt*; do
+        [ -f "$gt/gtidle/idle_residency_ms" ] || continue
+        gtn="$(basename "$gt")"
+        idle_lines="$idle_lines
+aihost_gpu_gt_idle_residency_seconds_total{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"$(lbl "$gtn")\"} $(awk "BEGIN{printf \"%.3f\", $(cat "$gt/gtidle/idle_residency_ms")/1000}")"
+        if [ -f "$gt/freq0/act_freq" ]; then
+            freq_lines="$freq_lines
+aihost_gpu_actual_frequency_hertz{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"$(lbl "$gtn")\"} $(awk "BEGIN{print $(cat "$gt/freq0/act_freq")*1000000}")"
+        fi
+    done
+    ord=$((ord + 1))
+done <<EOF_GPUS
+$gpus
+EOF_GPUS
 
 severity="ok"
 if [ -n "$max_c" ] && [ "$(awk "BEGIN{print ($max_c>=$CRIT_C)?1:0}")" = 1 ]; then
@@ -85,14 +140,22 @@ if [ "$severity" != "$prev" ]; then
     printf '%s\n' "$severity" >"$STATE_FILE"
 fi
 
+family() { # family <name> <type> <help> <lines>: a family is emitted only when it has samples
+    [ -n "$4" ] || return 0
+    echo "# HELP $1 $3"
+    echo "# TYPE $1 $2"
+    printf '%s\n' "$4" | sed '/^$/d'
+}
+
 {
-    echo "# HELP aihost_gpu_temperature_celsius Per-device GPU temperature in celsius sampled this interval."
-    echo "# TYPE aihost_gpu_temperature_celsius gauge"
-    if [ -n "$max_c" ]; then
-        printf '%s\n' "$dev_lines"
-        # Keep the unlabeled aggregate peak for backwards compatibility.
-        echo "aihost_gpu_temperature_celsius $max_c"
-    fi
+    family aihost_gpu_info gauge "GPU identity; gpu is the ordinal by PCI address, bdf the stable PCI address." "$info_lines"
+    family aihost_gpu_temperature_celsius gauge "Temperature of one GPU sensor (pkg, vram, per-channel vram, ...) in celsius." "$temp_lines"
+    family aihost_gpu_temperature_max_celsius gauge "Hottest sensor on each GPU in celsius; the thermal alert thresholds apply to this." "$gpu_max_lines"
+    family aihost_gpu_energy_joules_total counter "Cumulative energy drawn by a GPU power domain in joules; rate() gives watts." "$energy_lines"
+    family aihost_gpu_power_cap_watts gauge "Configured GPU power cap in watts." "$cap_lines"
+    family aihost_gpu_fan_speed_rpm gauge "GPU fan speed in revolutions per minute." "$fan_lines"
+    family aihost_gpu_gt_idle_residency_seconds_total counter "Cumulative seconds a GPU graphics tile spent in RC6 idle; 1 - rate() is utilisation." "$idle_lines"
+    family aihost_gpu_actual_frequency_hertz gauge "Actual graphics tile frequency in hertz." "$freq_lines"
 
     echo "# HELP aihost_gpu_thermal_severity Cross-device peak severity (0=ok, 1=warning, 2=critical) vs monitoring thresholds."
     echo "# TYPE aihost_gpu_thermal_severity gauge"
@@ -109,6 +172,10 @@ fi
     else
         echo "aihost_reconciliation_timer_active 0"
     fi
+
+    echo "# HELP aihost_metrics_last_success_timestamp_seconds Unix time this file was last written; alert when it stops advancing."
+    echo "# TYPE aihost_metrics_last_success_timestamp_seconds gauge"
+    echo "aihost_metrics_last_success_timestamp_seconds $(date +%s)"
 } >"$TMP"
 
 mv "$TMP" "$OUT_FILE"
