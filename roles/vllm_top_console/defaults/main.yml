@@ -1,8 +1,8 @@
 ---
-# The binary is built on the controller from the vllm-top repository and installed root-owned, so the
+# The binary is built on the controller from the in-repo vllm-top/ source (cargo build --release in vllm-top/) and installed root-owned, so the
 # console that runs on TTY1 cannot be modified by the account it runs as.
 vllm_top_console_enabled: false
-vllm_top_console_binary_src: "{{ playbook_dir }}/../../vllm-top/target/release/vllm-top"
+vllm_top_console_binary_src: "{{ playbook_dir }}/../vllm-top/target/release/vllm-top"
 vllm_top_console_binary_dest: /usr/local/bin/vllm-top
 vllm_top_console_user: mike
 vllm_top_console_tty: tty1
