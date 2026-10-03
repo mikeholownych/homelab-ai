@@ -20,6 +20,11 @@ ALERT_LOG_DIR="${MONITORING_ALERT_LOG_DIR:-/var/log/local-ai/alerts}"
 STATE_DIR="${MONITORING_GPU_TEMP_STATE_DIR:-/var/lib/local-ai/monitoring}"
 WARN_C="${MONITORING_GPU_TEMP_WARN_C:-75}"
 CRIT_C="${MONITORING_GPU_TEMP_CRIT_C:-85}"
+# A sensor that publishes its own kernel limit (hwmon tempN_crit) is judged against
+# min(configured threshold, limit - margin): the kernel limit can only make alerting stricter,
+# never looser, so alerts keep firing below the benchmark abort guardrail.
+WARN_MARGIN_C="${MONITORING_GPU_TEMP_WARN_MARGIN_C:-25}"
+CRIT_MARGIN_C="${MONITORING_GPU_TEMP_CRIT_MARGIN_C:-15}"
 STATE_FILE="$STATE_DIR/gpu-temp.state"
 ALERT_ENV_FILE="/etc/local-ai/alert.env"
 # Default hwmon tree; overridable so the script is exercisable without real
@@ -35,6 +40,9 @@ PCI_ROOT="${AIHOST_PCI_ROOT:-/sys/bus/pci/devices}"
 lbl() { printf '%s' "$1" | tr -c 'A-Za-z0-9_./:-' '_'; }
 
 max_c=""
+sev=0
+trigger=""
+limit_lines=""
 temp_lines=""
 gpu_max_lines=""
 info_lines=""
@@ -69,6 +77,19 @@ aihost_gpu_info{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",driver=\"$drv\"} 1"
         temp_lines="$temp_lines
 aihost_gpu_temperature_celsius{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",sensor=\"$(lbl "$sensor")\"} $c"
         gpu_max="$(awk -v a="${gpu_max:-$c}" -v b="$c" 'BEGIN{print (b>a)?b:a}')"
+        w="$WARN_C"; k="$CRIT_C"
+        if [ -f "${base}_crit" ]; then
+            lim="$(awk "BEGIN{print $(cat "${base}_crit")/1000}")"
+            limit_lines="$limit_lines
+aihost_gpu_temperature_limit_celsius{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",sensor=\"$(lbl "$sensor")\"} $lim"
+            w="$(awk -v a="$WARN_C" -v l="$lim" -v m="$WARN_MARGIN_C" 'BEGIN{x=l-m; print (x<a)?x:a}')"
+            k="$(awk -v a="$CRIT_C" -v l="$lim" -v m="$CRIT_MARGIN_C" 'BEGIN{x=l-m; print (x<a)?x:a}')"
+        fi
+        level="$(awk -v c="$c" -v w="$w" -v k="$k" 'BEGIN{print (c>=k)?2:((c>=w)?1:0)}')"
+        if [ "$level" -gt "$sev" ]; then
+            sev="$level"
+            trigger="gpu$ord/$(lbl "$sensor")"
+        fi
     done
     if [ -n "$gpu_max" ]; then
         gpu_max_lines="$gpu_max_lines
@@ -107,12 +128,11 @@ done <<EOF_GPUS
 $gpus
 EOF_GPUS
 
-severity="ok"
-if [ -n "$max_c" ] && [ "$(awk "BEGIN{print ($max_c>=$CRIT_C)?1:0}")" = 1 ]; then
-    severity="critical"
-elif [ -n "$max_c" ] && [ "$(awk "BEGIN{print ($max_c>=$WARN_C)?1:0}")" = 1 ]; then
-    severity="warning"
-fi
+case "$sev" in
+    2) severity="critical" ;;
+    1) severity="warning" ;;
+    *) severity="ok" ;;
+esac
 
 prev=""
 if [ -f "$STATE_FILE" ]; then
@@ -121,7 +141,7 @@ fi
 if [ "$severity" != "$prev" ]; then
     ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     if [ "$severity" = "critical" ]; then
-        printf '%s unit=aihost-gpu-thermal state=critical temperature_c=%s\n' "$ts" "$max_c" >>"$ALERT_LOG_DIR/alerts.log"
+        printf '%s unit=aihost-gpu-thermal state=critical temperature_c=%s sensor=%s\n' "$ts" "$max_c" "$trigger" >>"$ALERT_LOG_DIR/alerts.log"
         if [ -f "$ALERT_ENV_FILE" ]; then
             # shellcheck disable=SC1090
             . "$ALERT_ENV_FILE"
@@ -132,7 +152,7 @@ if [ "$severity" != "$prev" ]; then
             fi
         fi
     elif [ "$severity" = "warning" ]; then
-        printf '%s unit=aihost-gpu-thermal state=warning temperature_c=%s\n' "$ts" "$max_c" >>"$ALERT_LOG_DIR/alerts.log"
+        printf '%s unit=aihost-gpu-thermal state=warning temperature_c=%s sensor=%s\n' "$ts" "$max_c" "$trigger" >>"$ALERT_LOG_DIR/alerts.log"
     fi
     if [ "$severity" = "ok" ] && [ "$prev" = "critical" ]; then
         printf '%s unit=aihost-gpu-thermal state=recovered temperature_c=%s\n' "$ts" "$max_c" >>"$ALERT_LOG_DIR/alerts.log"
@@ -150,6 +170,7 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
 {
     family aihost_gpu_info gauge "GPU identity; gpu is the ordinal by PCI address, bdf the stable PCI address." "$info_lines"
     family aihost_gpu_temperature_celsius gauge "Temperature of one GPU sensor (pkg, vram, per-channel vram, ...) in celsius." "$temp_lines"
+    family aihost_gpu_temperature_limit_celsius gauge "Kernel-reported critical limit of one GPU sensor in celsius; limit minus temperature is the headroom." "$limit_lines"
     family aihost_gpu_temperature_max_celsius gauge "Hottest sensor on each GPU in celsius; the thermal alert thresholds apply to this." "$gpu_max_lines"
     family aihost_gpu_energy_joules_total counter "Cumulative energy drawn by a GPU power domain in joules; rate() gives watts." "$energy_lines"
     family aihost_gpu_power_cap_watts gauge "Configured GPU power cap in watts." "$cap_lines"

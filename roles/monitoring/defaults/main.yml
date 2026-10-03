@@ -48,4 +48,8 @@ monitoring_config_dir: /etc/local-ai
 monitoring_gpu_temp_alert_enabled: true
 monitoring_gpu_temp_warn_threshold_c: 75
 monitoring_gpu_temp_crit_threshold_c: 85
+# A sensor with its own kernel limit is judged against min(threshold above, limit - margin): a limit can
+# only tighten alerting. 25/15 reproduces 75/85 for the 100 C package/controller sensors.
+monitoring_gpu_temp_warn_margin_c: 25
+monitoring_gpu_temp_crit_margin_c: 15
 monitoring_gpu_temp_state_dir: /var/lib/local-ai/monitoring
