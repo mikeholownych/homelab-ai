@@ -440,6 +440,14 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 // overview strip: at-a-glance KPIs, wide terminals only (see compute_layout)
 // ---------------------------------------------------------------------------
 
+/// A meter row for a signal this source does not publish: honest "n/a", never an empty bar that reads as 0%.
+fn na_line(label: &str) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("{label} "), Style::default().fg(DIM)),
+        Span::styled("n/a (not reported by this engine)", Style::default().fg(DIM)),
+    ])
+}
+
 fn kpi(label: &str, value: String, color: ratatui::style::Color) -> Vec<Span<'static>> {
     vec![
         Span::styled(format!("{label} "), Style::default().fg(DIM)),
@@ -461,8 +469,16 @@ fn draw_overview(frame: &mut Frame, app: &App, area: Rect) {
     spans.extend(kpi("WAIT", format!("{:.0}", d.waiting), WARN));
     spans.extend(kpi("GEN", format!("{}/s", util::fmt_si(d.gen_tps)), GOOD));
     spans.extend(kpi("PROMPT", format!("{}/s", util::fmt_si(d.prompt_tps)), GRAPH_2));
-    spans.extend(kpi("KV", util::fmt_pct(d.kv), gauge_color(d.kv)));
-    spans.extend(kpi("TTFT p99", util::fmt_secs(d.ttft_p99), color_for_p99(d.ttft_p99)));
+    if d.has.kv {
+        spans.extend(kpi("KV", util::fmt_pct(d.kv), gauge_color(d.kv)));
+    } else {
+        spans.extend(kpi("KV", "n/a".to_string(), DIM));
+    }
+    if d.has.ttft {
+        spans.extend(kpi("TTFT p99", util::fmt_secs(d.ttft_p99), color_for_p99(d.ttft_p99)));
+    } else {
+        spans.extend(kpi("TTFT p99", "n/a".to_string(), DIM));
+    }
     if !app.gpu.is_empty() {
         let total_power: f64 = app.gpu.iter().filter_map(|g| g.power_w).sum();
         if total_power > 0.0 {
@@ -568,27 +584,37 @@ fn draw_kv(frame: &mut Frame, app: &App, area: Rect) {
     .split(inner);
 
     frame.render_widget(
-        Paragraph::new(gradient_meter("kv cache", d.kv, rows[0].width)),
+        Paragraph::new(if d.has.kv {
+            gradient_meter("kv cache", d.kv, rows[0].width)
+        } else {
+            na_line("kv cache")
+        }),
         rows[0],
     );
     frame.render_widget(
-        Paragraph::new(gradient_meter("prefix hit", d.prefix_hit_rate.unwrap_or(0.0), rows[1].width)),
+        Paragraph::new(if d.has.prefix {
+            gradient_meter("prefix hit", d.prefix_hit_rate.unwrap_or(0.0), rows[1].width)
+        } else {
+            na_line("prefix hit")
+        }),
         rows[1],
     );
 
     let (cached, model) = match snap {
         Some(s) => (
             s.cached_ratio()
+                .filter(|_| s.has.prefix)
                 .map(util::fmt_pct)
-                .unwrap_or_else(|| "-".into()),
+                .unwrap_or_else(|| "n/a".into()),
             s.model.clone().unwrap_or_else(|| "unknown model".into()),
         ),
         None => ("-".into(), "waiting for first sample…".into()),
     };
     let prefix_rate = d
         .prefix_hit_rate
+        .filter(|_| d.has.prefix)
         .map(util::fmt_pct)
-        .unwrap_or_else(|| "-".into());
+        .unwrap_or_else(|| if d.has.prefix { "-".into() } else { "n/a".into() });
 
     let lines = vec![
         Line::from(vec![
@@ -945,24 +971,28 @@ fn draw_latency(frame: &mut Frame, app: &App, area: Rect) {
         .height(1);
 
     let empty = crate::metrics::Histogram::default();
-    let rows_data: [(&str, &crate::metrics::Histogram); 4] = match snap {
+    let rows_data: [(&str, &crate::metrics::Histogram, bool); 4] = match snap {
         Some(s) => [
-            ("ttft", &s.ttft),
-            ("queue", &s.queue),
-            ("e2e", &s.e2e),
-            ("itl", &s.itl),
+            ("ttft", &s.ttft, s.has.ttft),
+            ("queue", &s.queue, s.has.queue),
+            ("e2e", &s.e2e, s.has.e2e),
+            ("itl", &s.itl, s.has.itl),
         ],
         None => [
-            ("ttft", &empty),
-            ("queue", &empty),
-            ("e2e", &empty),
-            ("itl", &empty),
+            ("ttft", &empty, true),
+            ("queue", &empty, true),
+            ("e2e", &empty, true),
+            ("itl", &empty, true),
         ],
     };
 
     let table_rows: Vec<Row> = rows_data
         .iter()
-        .map(|(name, h)| {
+        .map(|(name, h, available)| {
+            if !*available {
+                let na = || Span::styled("n/a", Style::default().fg(DIM));
+                return Row::new([Span::styled(*name, Style::default().fg(ACCENT)), na(), na(), na(), na()]);
+            }
             Row::new([
                 Span::styled(*name, Style::default().fg(ACCENT)),
                 Span::raw(util::fmt_secs(h.p50)),
@@ -997,12 +1027,12 @@ fn draw_latency(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled("e2e p99  ", Style::default().fg(DIM)),
             Span::styled(
-                util::fmt_secs(app.histories().e2e_p99.last()),
+                if app.derived().has.e2e { util::fmt_secs(app.histories().e2e_p99.last()) } else { "n/a".to_string() },
                 Style::default().fg(ratatui::style::Color::White),
             ),
             Span::styled("  ttft p99  ", Style::default().fg(DIM)),
             Span::styled(
-                util::fmt_secs(app.histories().ttft_p99.last()),
+                if app.derived().has.ttft { util::fmt_secs(app.histories().ttft_p99.last()) } else { "n/a".to_string() },
                 Style::default().fg(ratatui::style::Color::White),
             ),
         ]),
@@ -1153,10 +1183,11 @@ fn draw_instances(frame: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(GOOD),
                 ),
                 Span::raw(format!("{:.1}", d.req_per_s)),
-                Span::styled(
-                    util::fmt_secs(d.ttft_p99),
-                    Style::default().fg(color_for_p99(d.ttft_p99)),
-                ),
+                if d.has.ttft {
+                    Span::styled(util::fmt_secs(d.ttft_p99), Style::default().fg(color_for_p99(d.ttft_p99)))
+                } else {
+                    Span::styled("n/a", Style::default().fg(DIM))
+                },
             ])
             .style(style)
         })
@@ -1618,8 +1649,12 @@ fn draw_gpu_panel(frame: &mut Frame, app: &App, area: Rect) {
                 Some(_) => ratatui::style::Color::White,
                 None => DIM,
             };
+            let util = match live.and_then(|l| l.util_percent) {
+                Some(u) => Span::styled(format!("  util {u:.0}%"), Style::default().fg(gauge_color(u / 100.0))),
+                None => Span::styled("  util n/a", Style::default().fg(DIM)),
+            };
             lines.push(Line::from(vec![
-                Span::styled("  util n/a", Style::default().fg(DIM)),
+                util,
                 Span::raw("  ·  "),
                 Span::styled(temp, Style::default().fg(temp_color)),
             ]));
@@ -2180,7 +2215,7 @@ mod tests {
             },
         ];
         app.gpu = vec![
-            crate::gpu::GpuStats { index: 0, temp_c: Some(64.0), vram_temp_c: Some(70.0), power_w: Some(6.8), mem_used_mib: Some(29582.0), mem_util_percent: Some(90.5) },
+            crate::gpu::GpuStats { index: 0, temp_c: Some(64.0), vram_temp_c: Some(70.0), power_w: Some(6.8), mem_used_mib: Some(29582.0), mem_util_percent: Some(90.5) , util_percent: Some(42.0) },
             // GPU 1's live probe "failed" (no dynamic entry) — must not
             // prevent GPU 0 from rendering, and must show GPU 1's static
             // identity with its live fields as unavailable rather than
@@ -2212,11 +2247,11 @@ mod tests {
         let mut workers = BTreeMap::new();
         workers.insert(
             "b0-live-tp1-worker1".to_string(),
-            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, model_id: None, engine_stats: None },
+            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, engine_stats: None },
         );
         workers.insert(
             "b0-live-tp1-worker2".to_string(),
-            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, model_id: None, engine_stats: None },
+            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, engine_stats: None },
         );
         Snapshot {
             health: Health {
@@ -2936,5 +2971,31 @@ mod tests {
         let text = render_text(&app, 240, 67).expect("renders");
         let panel = panel_content(&text, " orchestrator ");
         assert!(!panel.contains("run ") && !panel.contains("routes"), "no engine rows without stats:\n{panel}");
+    }
+
+    #[test]
+    fn signals_a_source_does_not_publish_render_as_na_not_as_zero() {
+        use crate::metrics::{Has, Snapshot};
+        let mut app = single_instance_app();
+        let has = Has { e2e: true, ..Has::default() };
+        let snap = Snapshot { has, model: Some("m".into()), ..Snapshot::default() };
+        app.agg.derived.has = has;
+        app.agg.snapshot = Some(snap.clone());
+        for rt in app.runtimes.iter_mut() {
+            rt.derived.has = has;
+            rt.snapshot = Some(snap.clone());
+        }
+        let text = render_text(&app, 240, 67).expect("renders");
+        let kv = panel_content(&text, "kv cache");
+        assert!(kv.contains("kv cache n/a") && kv.contains("prefix hit n/a"), "meters must say n/a:\n{kv}");
+        assert!(kv.contains("hit rate n/a") && kv.contains("cached   n/a"), "cached/hit lines must say n/a:\n{kv}");
+        let lat = panel_content(&text, "latency");
+        for row in ["ttft", "queue", "itl"] {
+            let line = lat.lines().find(|l| l.contains(row)).unwrap_or_else(|| panic!("no {row} row:\n{lat}"));
+            assert!(line.contains("n/a") && !line.contains("0\u{b5}s"), "{row} must be n/a, not zeros: {line}");
+        }
+        let e2e = lat.lines().find(|l| l.contains("e2e") && !l.contains("p99")).expect("e2e row");
+        assert!(!e2e.contains("n/a"), "e2e is published (gateway-measured) and must render values: {e2e}");
+        assert!(text.contains("KV n/a") && text.contains("TTFT p99 n/a"), "header KPIs must say n/a");
     }
 }

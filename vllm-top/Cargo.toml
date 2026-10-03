@@ -1,6 +1,6 @@
 [package]
 name = "vllm-top"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 description = "btop-style terminal monitor for vLLM usage and performance"
 license = "MIT"

@@ -47,6 +47,10 @@ pub struct GpuStats {
     pub power_w: Option<f64>,
     pub mem_used_mib: Option<f64>,
     pub mem_util_percent: Option<f64>,
+    /// Share of the last interval the GPU was awake (not in RC6 idle), from the Xe `gtidle` residency
+    /// counter. Coarse - it says "busy or not", not execution-unit occupancy - but real, unprivileged and
+    /// cheap. `None` on the first sample or when the driver does not expose the counter.
+    pub util_percent: Option<f64>,
 }
 
 /// Fetch each GPU's static identity/capacity once. Call at startup only.
@@ -112,11 +116,42 @@ pub fn probe(targets: &[(u32, Option<String>)]) -> Vec<GpuStats> {
                     stats.temp_c = Some(pkg);
                     stats.vram_temp_c = vram;
                 }
+                stats.util_percent = bdf.as_deref().and_then(|b| sample_gt_util(std::path::Path::new("/sys/bus/pci/devices"), b));
                 Some(stats)
             })
         })
         .collect();
     handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+}
+
+/// Idle residency (ms) of GT0 for the Xe GPU at `bdf`: `<root>/<bdf>/tile0/gt0/gtidle/idle_residency_ms`.
+pub fn read_gtidle_ms(root: &std::path::Path, bdf: &str) -> Option<u64> {
+    std::fs::read_to_string(root.join(bdf).join("tile0/gt0/gtidle/idle_residency_ms"))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+}
+
+/// Active percentage between two `(time, idle_residency_ms)` readings. `None` when the interval is too
+/// short to mean anything or the counter went backwards (driver reload).
+pub fn gt_active_percent(prev: (std::time::Instant, u64), now: (std::time::Instant, u64)) -> Option<f64> {
+    let wall_ms = now.0.checked_duration_since(prev.0)?.as_secs_f64() * 1000.0;
+    if wall_ms < 50.0 || now.1 < prev.1 {
+        return None;
+    }
+    Some((100.0 * (1.0 - (now.1 - prev.1) as f64 / wall_ms)).clamp(0.0, 100.0))
+}
+
+/// Read the counter now and compare with the previous reading for this device (kept per process).
+fn sample_gt_util(root: &std::path::Path, bdf: &str) -> Option<f64> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static PREVIOUS: OnceLock<Mutex<HashMap<String, (std::time::Instant, u64)>>> = OnceLock::new();
+    let now = (std::time::Instant::now(), read_gtidle_ms(root, bdf)?);
+    let mut map = PREVIOUS.get_or_init(|| Mutex::new(HashMap::new())).lock().ok()?;
+    let prev = map.insert(bdf.to_string(), now)?;
+    gt_active_percent(prev, now)
 }
 
 /// Package and video-memory temperatures (°C) for the Xe GPU at PCI address `bdf`, from
@@ -202,6 +237,7 @@ fn stats_for(index: u32) -> Option<GpuStats> {
         power_w: parsed.power.as_ref().and_then(|p| first_tile(&p.gpu_power_w)),
         mem_used_mib: parsed.memory.as_ref().and_then(|m| first_tile(&m.used_mib)),
         mem_util_percent: parsed.memory.as_ref().and_then(|m| first_tile(&m.util_percent)),
+        util_percent: None,
     })
 }
 
@@ -500,5 +536,40 @@ mod hwmon_tests {
         let _ = fs::remove_dir_all(&p);
         fs::create_dir_all(&p).unwrap();
         p
+    }
+}
+
+#[cfg(test)]
+mod gtidle_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn active_percent_is_one_minus_idle_share_of_wall_time() {
+        let t0 = Instant::now();
+        let t1 = t0 + Duration::from_millis(1000);
+        let ten = gt_active_percent((t0, 5_000), (t1, 5_900)).expect("measurable");
+        assert!((ten - 10.0).abs() < 1e-6, "idle 900 of 1000 ms -> 10% active, got {ten}");
+        assert_eq!(gt_active_percent((t0, 5_000), (t1, 6_000)), Some(0.0), "fully idle");
+        assert_eq!(gt_active_percent((t0, 5_000), (t1, 5_000)), Some(100.0), "never idle");
+        assert_eq!(gt_active_percent((t0, 5_000), (t1, 7_000)), Some(0.0), "clamped when residency outruns the clock");
+    }
+
+    #[test]
+    fn unusable_intervals_are_unknown_not_zero() {
+        let t0 = Instant::now();
+        assert_eq!(gt_active_percent((t0, 10), (t0 + Duration::from_millis(10), 12)), None, "too short to mean anything");
+        assert_eq!(gt_active_percent((t0, 900), (t0 + Duration::from_millis(1000), 100)), None, "counter went backwards");
+    }
+
+    #[test]
+    fn reads_the_xe_residency_counter_from_the_pci_device_directory() {
+        let root = std::env::temp_dir().join(format!("vt-gtidle-{}", std::process::id()));
+        let dir = root.join("0000:51:00.0/tile0/gt0/gtidle");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("idle_residency_ms"), "3504771\n").unwrap();
+        assert_eq!(read_gtidle_ms(&root, "0000:51:00.0"), Some(3_504_771));
+        assert_eq!(read_gtidle_ms(&root, "0000:99:00.0"), None, "unknown device");
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

@@ -77,8 +77,6 @@ pub struct WorkerHealth {
     /// Inference engine behind the worker (`vllm`, `llama.cpp`, ...). Absent on older gateways.
     #[serde(default)]
     pub engine: Option<String>,
-    #[serde(default)]
-    pub model_id: Option<String>,
     /// Engine statistics the *gateway* collected and republished in a neutral shape — vllm-top never
     /// talks to workers (or needs their credentials) for this. `None` when unknown or stale.
     #[serde(default)]

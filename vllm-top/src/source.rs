@@ -126,7 +126,8 @@ pub struct GatewaySource {
 
 impl MetricsSource for GatewaySource {
     fn fetch(&self) -> Result<Vec<Sample>> {
-        let endpoint = format!("{}/health", self.base.trim_end_matches('/'));
+        let base = self.base.trim_end_matches('/');
+        let endpoint = format!("{base}/health");
         let body: serde_json::Value = self
             .client
             .get(&endpoint)
@@ -136,11 +137,21 @@ impl MetricsSource for GatewaySource {
             .with_context(|| format!("GET {endpoint}"))?
             .json()
             .context("parsing gateway /health")?;
-        samples_from_gateway_health(&body, &self.worker)
+        let mut samples = samples_from_gateway_health(&body, &self.worker)?;
+        // Gateway-measured request latency and completions (best effort: engine stats stand on their own).
+        if let Ok(text) = self.client.get(format!("{base}/metrics")).send().and_then(|r| r.text()) {
+            samples.extend(samples_from_gateway_metrics(&promparse::parse(&text), &self.worker));
+        }
+        Ok(samples)
     }
 }
 
-/// Pure mapping, separated for testing.
+/// Pure mapping of one worker's republished engine statistics onto the `vllm:*` series the rest of the app
+/// reads. A series the engine does not report is absent (the UI shows n/a), never emitted as zero.
+///
+/// Token counters prefer the gateway's `*_tokens_live` values (completed plus in-flight): llama.cpp only
+/// bumps its own counters when a request finishes, which would make throughput a single-poll spike.
+/// Prompt tokens follow vLLM's meaning (cached tokens included) so the cached ratio is cached / all.
 pub fn samples_from_gateway_health(body: &serde_json::Value, worker: &str) -> Result<Vec<Sample>> {
     let w = body
         .get("workers")
@@ -154,9 +165,10 @@ pub fn samples_from_gateway_health(body: &serde_json::Value, worker: &str) -> Re
         .filter(|v| v.is_object())
         .with_context(|| format!("gateway publishes no engine statistics for {worker:?}"))?;
     let model = w.get("model_id").and_then(|m| m.as_str()).unwrap_or("").to_string();
+    let num = |key: &str| stats.get(key).and_then(|v| v.as_f64());
     let mut out = Vec::new();
-    let mut push = |name: &str, key: &str| {
-        if let Some(v) = stats.get(key).and_then(|v| v.as_f64()) {
+    let mut push = |name: &str, value: Option<f64>| {
+        if let Some(v) = value {
             let mut labels = std::collections::BTreeMap::new();
             if !model.is_empty() {
                 labels.insert("model_name".to_string(), model.clone());
@@ -164,15 +176,50 @@ pub fn samples_from_gateway_health(body: &serde_json::Value, worker: &str) -> Re
             out.push(Sample { name: name.to_string(), labels, value: v });
         }
     };
-    push("vllm:num_requests_running", "requests_running");
-    push("vllm:num_requests_waiting", "requests_waiting");
-    push("vllm:kv_cache_usage_perc", "kv_cache_usage");
-    push("vllm:prompt_tokens_total", "prompt_tokens_total");
-    push("vllm:generation_tokens_total", "generation_tokens_total");
+    push("vllm:num_requests_running", num("requests_running"));
+    push("vllm:num_requests_waiting", num("requests_waiting"));
+    push("vllm:kv_cache_usage_perc", num("kv_cache_usage"));
+    push("vllm:generation_tokens_total", num("generation_tokens_live").or_else(|| num("generation_tokens_total")));
+    let processed = num("prompt_tokens_live").or_else(|| num("prompt_tokens_total"));
+    match (processed, num("prompt_tokens_cached_total")) {
+        (Some(p), Some(c)) => {
+            push("vllm:prompt_tokens_total", Some(p + c));
+            push("vllm:prompt_tokens_cached_total", Some(c));
+            push("vllm:prefix_cache_queries_total", Some(p + c));
+            push("vllm:prefix_cache_hits_total", Some(c));
+        }
+        (p, _) => push("vllm:prompt_tokens_total", p),
+    }
     if out.is_empty() {
         bail!("gateway engine statistics for {worker:?} are empty");
     }
     Ok(out)
+}
+
+/// The gateway's own per-worker request metrics, renamed onto the series vllm-top already understands:
+/// end-to-end latency (time the gateway spent on the worker call) and completed requests. These are
+/// gateway-side measurements; TTFT, queue time and inter-token latency are not observable there.
+pub fn samples_from_gateway_metrics(samples: &[Sample], worker: &str) -> Vec<Sample> {
+    let mut out = Vec::new();
+    for s in samples.iter().filter(|s| s.label("worker_id") == Some(worker)) {
+        let renamed = match s.name.as_str() {
+            "aihost_inference_duration_seconds_bucket" => Some("vllm:e2e_request_latency_seconds_bucket"),
+            "aihost_inference_duration_seconds_sum" => Some("vllm:e2e_request_latency_seconds_sum"),
+            "aihost_inference_duration_seconds_count" => Some("vllm:e2e_request_latency_seconds_count"),
+            "aihost_inference_completions_total" if s.label("outcome") == Some("completed") => Some("vllm:request_success_total"),
+            _ => None,
+        };
+        let Some(name) = renamed else { continue };
+        let mut labels = std::collections::BTreeMap::new();
+        if let Some(le) = s.label("le") {
+            labels.insert("le".to_string(), le.to_string());
+        }
+        if name == "vllm:request_success_total" {
+            labels.insert("finished_reason".to_string(), "completed".to_string());
+        }
+        out.push(Sample { name: name.to_string(), labels, value: s.value });
+    }
+    out
 }
 
 /// Runs an instant vector query against Prometheus for every `vllm:` metric.
@@ -346,5 +393,54 @@ mod gateway_tests {
         assert!(samples_from_gateway_health(&body, "nope").is_err(), "unknown worker");
         let down = health(r#"{"healthy":false,"status":"stale","engine_stats":{"requests_running":1}}"#);
         assert!(samples_from_gateway_health(&down, "w-llama").is_err(), "an unhealthy worker is not shown as live");
+    }
+
+    const GATEWAY_METRICS: &str = r#"aihost_inference_completions_total{worker_id="w-llama",outcome="completed"} 418
+aihost_inference_completions_total{worker_id="w-llama",outcome="failed"} 1
+aihost_inference_completions_total{worker_id="other",outcome="completed"} 99
+aihost_inference_duration_seconds_bucket{worker_id="w-llama",model="m",le="1.0"} 100
+aihost_inference_duration_seconds_bucket{worker_id="w-llama",model="m",le="10.0"} 400
+aihost_inference_duration_seconds_bucket{worker_id="w-llama",model="m",le="+Inf"} 418
+aihost_inference_duration_seconds_sum{worker_id="w-llama",model="m"} 2090.0
+aihost_inference_duration_seconds_count{worker_id="w-llama",model="m"} 418
+aihost_inference_duration_seconds_count{worker_id="other",model="m"} 7
+"#;
+
+    #[test]
+    fn live_counters_and_cached_tokens_follow_vllm_semantics() {
+        let body = health(r#"{"healthy":true,"model_id":"m","engine_stats":{
+            "requests_running":1,"requests_waiting":0,"kv_cache_usage":0.2,
+            "generation_tokens_total":400,"generation_tokens_live":450,
+            "prompt_tokens_total":1000,"prompt_tokens_live":1020,"prompt_tokens_cached_total":9000}}"#);
+        let snap = Snapshot::extract(&samples_from_gateway_health(&body, "w-llama").unwrap());
+        assert_eq!(snap.generation_tokens, 450.0, "in-flight tokens must be counted so throughput is not a completion spike");
+        assert_eq!(snap.prompt_tokens, 10_020.0, "vLLM semantics: processed + cached");
+        assert_eq!(snap.prompt_tokens_cached, 9000.0);
+        assert!((snap.cached_ratio().unwrap() - 9000.0 / 10_020.0).abs() < 1e-9);
+        assert_eq!((snap.prefix_hits, snap.prefix_queries), (9000.0, 10_020.0));
+        assert!(snap.has.kv && snap.has.prefix);
+    }
+
+    #[test]
+    fn availability_follows_what_the_engine_reports() {
+        let body = health(r#"{"healthy":true,"engine_stats":{"requests_running":0,"kv_cache_usage":null,
+            "generation_tokens_total":5,"prompt_tokens_total":7}}"#);
+        let snap = Snapshot::extract(&samples_from_gateway_health(&body, "w-llama").unwrap());
+        assert!(!snap.has.kv, "no KV figure: n/a, not 0%");
+        assert!(!snap.has.prefix, "no cached-token series: n/a, not 0%");
+        assert!(!snap.has.ttft && !snap.has.queue && !snap.has.e2e && !snap.has.itl);
+        assert_eq!((snap.generation_tokens, snap.prompt_tokens), (5.0, 7.0), "falls back to the completed totals");
+    }
+
+    #[test]
+    fn gateway_request_metrics_become_e2e_latency_and_completions_for_one_worker_only() {
+        let samples = samples_from_gateway_metrics(&promparse::parse(GATEWAY_METRICS), "w-llama");
+        let snap = Snapshot::extract(&samples);
+        assert!(snap.has.e2e && !snap.has.ttft && !snap.has.queue && !snap.has.itl, "only e2e is measurable at the gateway");
+        assert_eq!(snap.e2e.count, 418.0);
+        assert!((snap.e2e.avg - 5.0).abs() < 1e-9, "avg = sum/count = 2090/418");
+        assert!(snap.e2e.p99 > 1.0, "p99 comes from the real bucket layout incl. +Inf, got {}", snap.e2e.p99);
+        assert_eq!(snap.success_total, 418.0, "only outcome=completed counts as a success");
+        assert!(samples_from_gateway_metrics(&promparse::parse(GATEWAY_METRICS), "nobody").is_empty());
     }
 }

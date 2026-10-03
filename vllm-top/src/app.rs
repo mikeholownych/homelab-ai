@@ -793,6 +793,7 @@ fn demo_derived(i: usize, step: usize) -> Derived {
     let base = 900.0 + i as f64 * 260.0;
     let t = step as f64;
     Derived {
+        has: crate::metrics::Has::all(),
         gen_tps: (base + (t * 0.11).sin() * base * 0.35 + t * 1.4).max(0.0),
         prompt_tps: (base * 0.45 + (t * 0.07).cos() * base * 0.2).max(0.0),
         req_per_s: (2.5 + (t * 0.19).sin() * 1.8).max(0.0),

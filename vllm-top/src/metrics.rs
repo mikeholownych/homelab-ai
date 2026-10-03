@@ -14,8 +14,39 @@ pub struct Histogram {
     pub avg: f64,
 }
 
+/// Which signal families a source actually publishes. Derived from series presence, never from the engine's
+/// name: an engine that exports no KV gauge or no latency histograms must show "n/a", not 0.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Has {
+    pub kv: bool,
+    pub prefix: bool,
+    pub ttft: bool,
+    pub queue: bool,
+    pub e2e: bool,
+    pub itl: bool,
+}
+
+impl Has {
+    pub fn all() -> Has {
+        Has { kv: true, prefix: true, ttft: true, queue: true, e2e: true, itl: true }
+    }
+
+    /// A family is available in a cluster view when any instance publishes it.
+    pub fn or(self, other: Has) -> Has {
+        Has {
+            kv: self.kv || other.kv,
+            prefix: self.prefix || other.prefix,
+            ttft: self.ttft || other.ttft,
+            queue: self.queue || other.queue,
+            e2e: self.e2e || other.e2e,
+            itl: self.itl || other.itl,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Snapshot {
+    pub has: Has,
     pub model: Option<String>,
     pub running: f64,
     pub waiting: f64,
@@ -78,6 +109,7 @@ impl SessionTotals {
 /// Everything shown on screen that needs history or rates behind it.
 #[derive(Clone, Debug, Default)]
 pub struct Derived {
+    pub has: Has,
     pub gen_tps: f64,
     pub prompt_tps: f64,
     pub req_per_s: f64,
@@ -107,6 +139,12 @@ fn sum(samples: &[Sample], base: &str) -> f64 {
         .filter(|s| matches(&s.name, base))
         .map(|s| s.value)
         .sum()
+}
+
+/// True when the family `base` is exported at all (the bare name, `_total`, `_bucket`, `_count`, `_sum`).
+fn present(samples: &[Sample], base: &str) -> bool {
+    let prefix = format!("{base}_");
+    samples.iter().any(|s| s.name == base || s.name.starts_with(&prefix))
 }
 
 /// Gauges such as KV cache usage may be exported per rank; take the worst one.
@@ -221,6 +259,14 @@ impl Snapshot {
         };
 
         Snapshot {
+            has: Has {
+                kv: present(samples, "vllm:kv_cache_usage_perc"),
+                prefix: present(samples, "vllm:prefix_cache_queries"),
+                ttft: present(samples, "vllm:time_to_first_token_seconds"),
+                queue: present(samples, "vllm:request_queue_time_seconds"),
+                e2e: present(samples, "vllm:e2e_request_latency_seconds"),
+                itl: present(samples, "vllm:inter_token_latency_seconds"),
+            },
             model,
             running: sum(samples, "vllm:num_requests_running"),
             waiting: sum(samples, "vllm:num_requests_waiting"),
@@ -251,6 +297,7 @@ impl Snapshot {
             return out;
         }
         out.model = parts.iter().find_map(|p| p.model.clone());
+        out.has = parts.iter().fold(Has::default(), |acc, p| acc.or(p.has));
         for p in parts {
             out.running += p.running;
             out.waiting += p.waiting;
@@ -339,6 +386,7 @@ pub fn derive(
 
     let inv_dt = if dt > 0.0 { 1.0 / dt } else { 0.0 };
     let d = Derived {
+        has: cur.has,
         gen_tps: delta(prev.generation_tokens, cur.generation_tokens) * inv_dt,
         prompt_tps: delta(prev.prompt_tokens, cur.prompt_tokens) * inv_dt,
         req_per_s: delta(prev.success_total, cur.success_total) * inv_dt,
@@ -357,6 +405,7 @@ pub fn derive(
 /// First sample: no rates yet, gauges are already valid.
 pub fn initial(cur: &Snapshot) -> Derived {
     Derived {
+        has: cur.has,
         kv: cur.kv_cache_usage.clamp(0.0, 1.0),
         running: cur.running,
         waiting: cur.waiting,
@@ -378,6 +427,7 @@ pub fn merge_derived(parts: &[&Derived]) -> Derived {
     let mut rate_weight = 0.0_f64;
     let mut lat_weight = 0.0_f64;
     for p in parts {
+        out.has = out.has.or(p.has);
         out.gen_tps += p.gen_tps;
         out.prompt_tps += p.prompt_tps;
         out.req_per_s += p.req_per_s;
@@ -493,5 +543,23 @@ vllm:time_to_first_token_seconds_count 10.0
         assert_eq!(merged.prompt_tokens, 15.0);
         assert_eq!(merged.generation_tokens, 27.0);
         assert_eq!(merged.requests_completed, 3.0);
+    }
+
+    #[test]
+    fn availability_is_derived_from_series_presence_and_merged_as_any() {
+        let vllm = promparse::parse(
+            "vllm:kv_cache_usage_perc 0.1\nvllm:prefix_cache_queries_total 5\nvllm:e2e_request_latency_seconds_count 3\n\
+             vllm:time_to_first_token_seconds_bucket{le=\"1\"} 1\n",
+        );
+        let a = Snapshot::extract(&vllm);
+        assert!(a.has.kv && a.has.prefix && a.has.e2e && a.has.ttft);
+        assert!(!a.has.itl && !a.has.queue, "series that are not exported are not available");
+        let bare = Snapshot::extract(&promparse::parse("vllm:num_requests_running 1\n"));
+        assert_eq!(bare.has, Has::default());
+        let merged = Snapshot::merge(&[&a, &bare]);
+        assert!(merged.has.kv && merged.has.ttft, "a cluster view has a family when any instance publishes it");
+        assert!(!merged.has.itl);
+        let d = derive(&bare, Instant::now(), &a, Instant::now(), None).0;
+        assert_eq!(d.has, a.has, "derived values carry the snapshot's availability");
     }
 }
