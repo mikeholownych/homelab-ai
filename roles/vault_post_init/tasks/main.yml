@@ -26,7 +26,9 @@
 
 - name: Converge observed Vault post-initialization state without initialization
   ansible.builtin.command:
-    argv:
+    argv: "{{ _vault_post_init_base_args + _vault_post_init_rotate_args }}"
+  vars:
+    _vault_post_init_base_args:
       - /usr/local/sbin/vault-post-init.py
       - --vault-addr
       - "{{ vault_post_init_vault_addr }}"
@@ -40,6 +42,8 @@
       - "{{ vault_post_init_handoff_dir }}"
       - --seed-dir
       - "{{ vault_post_init_seed_stage_dir }}"
+    # Operator-requested rotation: ['worker1'] becomes ['--rotate', 'worker1'].
+    _vault_post_init_rotate_args: "{{ ['--rotate'] | product(vault_post_init_rotate) | list | flatten }}"
   register: vault_post_init_result
   changed_when: vault_post_init_result.rc == 0 and (vault_post_init_result.stdout | from_json).changed | bool
   no_log: true

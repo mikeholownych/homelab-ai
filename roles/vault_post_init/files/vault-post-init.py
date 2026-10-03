@@ -20,8 +20,8 @@ KV_PATH = "secret/"
 WORKLOAD_POLICY = """path \"secret/data/local-ai/services/orchestrator-gateway/client-token\" { capabilities = [\"read\"] }
 path \"secret/data/local-ai/hosts/ai-5820-01/opencode-client-token\" { capabilities = [\"read\"] }
 path \"secret/data/local-ai/services/vllm/api-key\" { capabilities = [\"read\"] }
-path \"secret/data/local-ai/services/vllm/worker1-api-key\" { capabilities = [\"read\"] }
-path \"secret/data/local-ai/services/vllm/worker2-api-key\" { capabilities = [\"read\"] }
+path \"secret/data/local-ai/services/inference/worker1-api-key\" { capabilities = [\"read\"] }
+path \"secret/data/local-ai/services/inference/worker2-api-key\" { capabilities = [\"read\"] }
 """
 SNAPSHOT_POLICY = 'path "sys/storage/raft/snapshot" { capabilities = ["read", "sudo"] }\n'
 APPROLES = {
@@ -48,9 +48,16 @@ SEEDS = {
     "gateway_client": ("local-ai/services/orchestrator-gateway/client-token", "token"),
     "opencode_client": ("local-ai/hosts/ai-5820-01/opencode-client-token", "token"),
     "vllm_compat": ("local-ai/services/vllm/api-key", "key"),
-    "worker1": ("local-ai/services/vllm/worker1-api-key", "key"),
-    "worker2": ("local-ai/services/vllm/worker2-api-key", "key"),
+    "worker1": ("local-ai/services/inference/worker1-api-key", "key"),
+    "worker2": ("local-ai/services/inference/worker2-api-key", "key"),
 }
+ROTATABLE = tuple(SEEDS)
+# Records superseded by the engine-neutral worker slots. Their values were exposed, so every version is
+# permanently removed (KV v2 metadata delete) instead of being left behind unreferenced.
+RETIRED_PATHS = (
+    "local-ai/services/vllm/worker1-api-key",
+    "local-ai/services/vllm/worker2-api-key",
+)
 SAFE_NAME = re.compile(r"^[a-z0-9_-]+$")
 
 
@@ -246,6 +253,33 @@ def seed_missing_records(api: VaultAPI, seed_dir: Path) -> list[str]:
     return created
 
 
+def remove_retired_records(api: VaultAPI) -> list[str]:
+    removed = []
+    for path in RETIRED_PATHS:
+        status, _ = api.request("GET", "secret/metadata/" + path, allow_missing=True)
+        if status == 200:
+            api.request("DELETE", "secret/metadata/" + path)
+            removed.append(path)
+    return removed
+
+
+def rotate_records(api: VaultAPI, names: list[str]) -> list[str]:
+    """Write a fresh random value (new KV version) for each named record. Values are never printed."""
+    import secrets
+    import string
+
+    rotated = []
+    for name in names:
+        if name not in SEEDS:
+            raise VaultError(f"Unknown rotatable record: {name}")
+        path, key = SEEDS[name]
+        alphabet = string.ascii_letters + string.digits
+        value = "".join(secrets.choice(alphabet) for _ in range(43))
+        api.request("POST", "secret/data/" + path, {"data": {key: value}})
+        rotated.append(name)
+    return rotated
+
+
 def unseal_if_needed(api: VaultAPI, health: dict, unseal_file: Path) -> dict:
     if not health.get("initialized"):
         raise VaultError("Vault must be initialized before post-initialization convergence")
@@ -268,7 +302,7 @@ def unseal_if_needed(api: VaultAPI, health: dict, unseal_file: Path) -> dict:
     return health
 
 
-def converge(address: str, ca_file: Path, token_file: Path, handoff: Path, seed_dir: Path, unseal_file: Path | None = None) -> dict:
+def converge(address: str, ca_file: Path, token_file: Path, handoff: Path, seed_dir: Path, unseal_file: Path | None = None, rotate: list[str] | None = None) -> dict:
     api = VaultAPI(address, ca_file, token_file)
     health_status, health = api.request("GET", "sys/health")
     if health_status == 503:
@@ -310,6 +344,12 @@ def converge(address: str, ca_file: Path, token_file: Path, handoff: Path, seed_
     seeded = seed_missing_records(api, seed_dir)
     if seeded:
         changed.append("workload-secret-bootstrap")
+    removed = remove_retired_records(api)
+    if removed:
+        changed.append("retired-records-removed")
+    rotated = rotate_records(api, rotate or [])
+    if rotated:
+        changed.append("rotated-records")
     workload_handoff_changed = ensure_handoff_credentials(
         api, "t5820-platform", handoff / "approle"
     )
@@ -326,6 +366,8 @@ def converge(address: str, ca_file: Path, token_file: Path, handoff: Path, seed_
         "workload_handoff_changed": workload_handoff_changed,
         "snapshot_handoff_changed": snapshot_handoff_changed,
         "seeded_records": seeded,
+        "rotated_records": rotated,
+        "retired_records_removed": removed,
     }
 
 
@@ -337,6 +379,8 @@ def main() -> None:
     parser.add_argument("--handoff-dir", required=True)
     parser.add_argument("--seed-dir", required=True)
     parser.add_argument("--unseal-key-file", required=True)
+    parser.add_argument("--rotate", action="append", default=[], choices=ROTATABLE,
+                        help="write a fresh random value for this record (repeatable)")
     args = parser.parse_args()
     result = converge(
         args.vault_addr,
@@ -345,6 +389,7 @@ def main() -> None:
         Path(args.handoff_dir),
         Path(args.seed_dir),
         Path(args.unseal_key_file),
+        args.rotate,
     )
     print(json.dumps(result, sort_keys=True))
 

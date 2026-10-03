@@ -22,8 +22,9 @@ SECRETS = {
     "gateway_client": ("local-ai/services/orchestrator-gateway/client-token", "token"),
     "opencode_client": ("local-ai/hosts/ai-5820-01/opencode-client-token", "token"),
     "vllm_compat": ("local-ai/services/vllm/api-key", "key"),
-    "worker1": ("local-ai/services/vllm/worker1-api-key", "key"),
-    "worker2": ("local-ai/services/vllm/worker2-api-key", "key"),
+    # Engine-neutral worker slots: the key belongs to the GPU slot, not to whichever engine serves it.
+    "worker1": ("local-ai/services/inference/worker1-api-key", "key"),
+    "worker2": ("local-ai/services/inference/worker2-api-key", "key"),
 }
 
 
@@ -51,13 +52,6 @@ def http_status(url: str, key: str | None = None) -> int | str:
         return error.code
     except Exception as error:  # Do not expose headers, URL parameters, or secret values.
         return type(error).__name__
-
-
-def read_worker_key(config_path: Path) -> str:
-    match = re.search(r"^api-key:\s*[\"']?(.*?)[\"']?\s*$", read_regular_file(config_path, "worker config"), re.M)
-    if not match:
-        raise RuntimeError(f"Worker config has no API key field: {config_path}")
-    return match.group(1)
 
 
 def read_regular_file(path: Path, label: str) -> str:
@@ -202,6 +196,10 @@ def apply_transaction(targets, restart_units, restart, verify_new, verify_old) -
                 pass
 
 
+def worker_key_file(worker: dict) -> Path:
+    return Path(worker["key_dir"]) / "worker-api-key"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
@@ -222,17 +220,20 @@ def main() -> None:
 
     paths = config["paths"]
     gateway_env = Path(config["gateway_env"])
-    worker_cfg = [Path(paths[f"worker{i}_dir"]) / "vllm-config.yaml" for i in (1, 2)]
-    worker_env = [Path(paths[f"worker{i}_dir"]) / "vllm.env" for i in (1, 2)]
+    workers = {w["name"]: w for w in config["workers"]}
+    require(set(workers) == {"worker1", "worker2"}, "Worker roster must define exactly worker1 and worker2")
+    gateway_unit = config.get("gateway_unit", "aihost-orchestrator-gateway.service")
+    gateway_url = config.get("gateway_url", "http://127.0.0.1:8010")
     previous = {
         "gateway_client": read_regular_file(Path(paths["gateway_client"]), "gateway credential").strip(),
         "opencode_client": read_regular_file(Path(paths["opencode_client"]), "OpenCode credential").strip(),
-        "worker1": read_worker_key(worker_cfg[0]),
-        "worker2": read_worker_key(worker_cfg[1]),
         "vllm_compat": read_regular_file(Path(paths["vllm_compat"]), "vLLM compatibility credential").strip(),
     }
+    for name, worker in workers.items():
+        previous[name] = read_regular_file(worker_key_file(worker), f"{name} token file").strip()
 
     targets = []
+    files_changed = []
 
     def add_target(path: Path, content: str, name: str, owner=None, group=None):
         path = Path(path)
@@ -240,125 +241,65 @@ def main() -> None:
             targets.append((path, content, owner, group))
             files_changed.append(name)
 
-    files_changed = []
-    for name, key in (("gateway_client", values["gateway_client"]), ("opencode_client", values["opencode_client"]), ("vllm_compat", values["vllm_compat"])):
-        add_target(Path(paths[name]), key + "\n", name)
-    worker_auth_changed = False
-    for index in (1, 2):
-        directory = Path(paths[f"worker{index}_dir"])
-        key = values[f"worker{index}"]
-        token_path = directory / "worker-api-key"
-        if not token_path.exists() or read_regular_file(token_path, f"worker{index} token file") != key + "\n":
-            targets.append((token_path, key + "\n", "aihost-runtime", "aihost-runtime"))
-            files_changed.append(f"worker{index}_token_file")
-            worker_auth_changed = True
-        config_text = read_regular_file(worker_cfg[index - 1], f"worker{index} config")
-        updated_config, config_count = re.subn(r"^api-key:.*$", "api-key: " + json.dumps(key), config_text, count=1, flags=re.M)
-        if config_count != 1:
-            raise RuntimeError(f"Expected one worker{index} YAML API key field")
-        if updated_config != config_text:
-            add_target(worker_cfg[index - 1], updated_config, f"worker{index}_config")
-            worker_auth_changed = True
-        env_text = read_regular_file(worker_env[index - 1], f"worker{index} environment")
-        updated_env, env_count = re.subn(r"^VLLM_API_KEY=.*$", "VLLM_API_KEY=" + key, env_text, count=1, flags=re.M)
-        if env_count != 1:
-            raise RuntimeError(f"Expected one worker{index} environment API key field")
-        if updated_env != env_text:
-            add_target(worker_env[index - 1], updated_env, f"worker{index}_environment")
-            worker_auth_changed = True
+    for name in ("gateway_client", "opencode_client", "vllm_compat"):
+        add_target(Path(paths[name]), values[name] + "\n", name)
+    changed_workers = []
+    for name, worker in workers.items():
+        owner = worker.get("owner")
+        before_text = worker_key_file(worker).read_text() if worker_key_file(worker).exists() else None
+        if before_text != values[name] + "\n":
+            targets.append((worker_key_file(worker), values[name] + "\n", owner, owner))
+            files_changed.append(f"{name}_token_file")
+            changed_workers.append(name)
 
-    original_gateway_env = read_regular_file(gateway_env, "gateway environment")
-    env_lines = original_gateway_env.splitlines()
-    specs_found = False
-    for index, line in enumerate(env_lines):
-        if line.startswith("ORCHESTRATOR_WORKER_SPECS="):
-            specs = json.loads(line.split("=", 1)[1])
-            require(len(specs) == 2, "Gateway worker roster does not contain exactly two workers")
-            seen = set()
-            for spec in specs:
-                worker_id = spec.get("worker_id", "")
-                worker_index = 1 if worker_id.endswith("worker1") else 2 if worker_id.endswith("worker2") else 0
-                require(worker_index > 0 and worker_index not in seen, "Gateway worker roster has an unknown or duplicate worker")
-                seen.add(worker_index)
-                spec["token_file"] = f"/etc/local-ai/vllm/worker{worker_index}/worker-api-key"
-            require(seen == {1, 2}, "Gateway worker roster is missing a configured worker")
-            env_lines[index] = "ORCHESTRATOR_WORKER_SPECS=" + json.dumps(specs, separators=(",", ":"))
-            specs_found = True
-    require(specs_found, "Gateway worker specs are not configured")
-    updated_gateway_env = "\n".join(env_lines) + "\n"
-    if updated_gateway_env != original_gateway_env:
-        add_target(gateway_env, updated_gateway_env, "gateway_worker_token_references")
+    def worker_urls(name: str) -> tuple[str, str]:
+        base = f"http://127.0.0.1:{workers[name]['port']}"
+        return base + "/v1/models", base + "/health"
+
+    def validate_boundary(credentials: dict, label: str) -> dict:
+        results = {
+            f"gateway_{label}": http_status(gateway_url + "/v1/models", credentials["gateway_client"]),
+            f"opencode_{label}": http_status(gateway_url + "/v1/models", credentials["opencode_client"]),
+        }
+        for name in workers:
+            results[f"{name}_{label}"] = http_status(worker_urls(name)[0], credentials[name])
+            require(http_status(worker_urls(name)[1]) == 200, f"{name} health check failed")
+        require(all(status == 200 for status in results.values()), "A credential failed its live acceptance check (" + label + ")")
+        require(http_status(gateway_url + "/health") == 200, "Gateway health check failed")
+        units = [gateway_unit] + [w["unit"] for w in workers.values()]
+        states = {unit: subprocess.check_output(["systemctl", "is-active", unit], text=True).strip() for unit in units}
+        require(all(state == "active" for state in states.values()), "A platform service is not active")
+        require("ORCHESTRATOR_SCHEDULING_MODE=CONFIGURATION_B_PLUS" in read_regular_file(gateway_env, "gateway environment"), "Configuration B+ is not active")
+        return results
 
     restarted = []
     if files_changed:
-        before = {
-            "gateway_client": http_status("http://127.0.0.1:8010/v1/models", previous["gateway_client"]),
-            "opencode_client": http_status("http://127.0.0.1:8010/v1/models", previous["opencode_client"]),
-            "worker1": http_status("http://127.0.0.1:8000/v1/models", previous["worker1"]),
-            "worker2": http_status("http://127.0.0.1:8001/v1/models", previous["worker2"]),
-        }
-        require(all(status == 200 for status in before.values()), "A pre-rotation credential acceptance check failed")
-        gateway_changed = any(name in files_changed for name in ("gateway_client", "opencode_client", "vllm_compat", "gateway_worker_token_references")) or worker_auth_changed
-        restart_units = []
-        for index in (1, 2):
-            if any(item.startswith(f"worker{index}_") for item in files_changed):
-                restart_units.append(f"aihost-vllm-worker{index}.service")
-        if gateway_changed:
-            restart_units.append("aihost-orchestrator-gateway.service")
+        before = validate_boundary(previous, "old")
+        restart_units = [workers[name]["unit"] for name in changed_workers]
+        # The gateway reads worker token files and client tokens at start; any credential change reloads it.
+        restart_units.append(gateway_unit)
 
         def restart(unit):
-            subprocess.run(["systemctl", "restart", unit], check=True, timeout=1200 if "worker" in unit else 60, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["systemctl", "restart", unit], check=True, timeout=1800 if unit != gateway_unit else 120, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if unit not in restarted:
                 restarted.append(unit)
 
-        def validate_boundary(credentials: dict, expect_new: bool) -> dict:
-            label = "new" if expect_new else "old"
-            results = {
-                f"gateway_{label}": http_status("http://127.0.0.1:8010/v1/models", credentials["gateway_client"]),
-                f"opencode_{label}": http_status("http://127.0.0.1:8010/v1/models", credentials["opencode_client"]),
-                f"worker1_{label}": http_status("http://127.0.0.1:8000/v1/models", credentials["worker1"]),
-                f"worker2_{label}": http_status("http://127.0.0.1:8001/v1/models", credentials["worker2"]),
-            }
-            if expect_new:
-                require(all(status == 200 for status in results.values()), "A Vault replacement credential was rejected")
-            else:
-                require(all(status == 200 for status in results.values()), "The previously working credential set is no longer accepted")
-            for port in (8000, 8001):
-                require(http_status(f"http://127.0.0.1:{port}/health") == 200, "A vLLM worker health check failed")
-            require(http_status("http://127.0.0.1:8010/health") == 200, "Gateway health check failed")
-            states = {unit: subprocess.check_output(["systemctl", "is-active", unit], text=True).strip() for unit in ("aihost-orchestrator-gateway.service", "aihost-vllm-worker1.service", "aihost-vllm-worker2.service")}
-            require(all(state == "active" for state in states.values()), "A platform service is not active")
-            require("ORCHESTRATOR_SCHEDULING_MODE=CONFIGURATION_B_PLUS" in read_regular_file(gateway_env, "gateway environment"), "Configuration B+ is not active")
-            return results
-
-        before_state = validate_boundary(previous, expect_new=False)
         evidence = {}
         apply_transaction(
             targets,
             restart_units,
             restart,
-            lambda: evidence.update(validate_boundary(values, expect_new=True)),
-            lambda: validate_boundary(previous, expect_new=False),
+            lambda: evidence.update(validate_boundary(values, "new")),
+            lambda: validate_boundary(previous, "old"),
         )
-        evidence = {"before": before, "before_state": before_state, "after": evidence}
+        evidence = {"before": before, "after": evidence}
     else:
-        checks = {
-            "gateway": http_status("http://127.0.0.1:8010/v1/models", values["gateway_client"]),
-            "opencode": http_status("http://127.0.0.1:8010/v1/models", values["opencode_client"]),
-            "worker1": http_status("http://127.0.0.1:8000/v1/models", values["worker1"]),
-            "worker2": http_status("http://127.0.0.1:8001/v1/models", values["worker2"]),
-        }
-        failed = sorted(name for name, status in checks.items() if status != 200)
-        require(not failed, "Vault credentials failed live boundary checks: " + ", ".join(failed))
-        require(all(http_status(f"http://127.0.0.1:{port}/health") == 200 for port in (8000, 8001)), "A vLLM worker health check failed")
-        require(http_status("http://127.0.0.1:8010/health") == 200, "Gateway health check failed")
-        evidence = {"live_acceptance": checks}
+        evidence = {"live_acceptance": validate_boundary(values, "current")}
 
-    states = {unit: subprocess.check_output(["systemctl", "is-active", unit], text=True).strip() for unit in ("aihost-orchestrator-gateway.service", "aihost-vllm-worker1.service", "aihost-vllm-worker2.service")}
+    units = [gateway_unit] + [w["unit"] for w in workers.values()]
+    states = {unit: subprocess.check_output(["systemctl", "is-active", unit], text=True).strip() for unit in units}
     require(all(state == "active" for state in states.values()), "A platform service is not active")
-    bplus = "ORCHESTRATOR_SCHEDULING_MODE=CONFIGURATION_B_PLUS" in gateway_env.read_text()
-    require(bplus, "Configuration B+ is not active in the gateway environment")
-    print(json.dumps({"changed": bool(files_changed), "changed_files": files_changed, "restarted": restarted, "service_states": states, "configuration_b_plus": bplus, **evidence}, sort_keys=True))
+    print(json.dumps({"changed": bool(files_changed), "changed_files": files_changed, "restarted": restarted, "service_states": states, **evidence}, sort_keys=True))
 
 
 if __name__ == "__main__":

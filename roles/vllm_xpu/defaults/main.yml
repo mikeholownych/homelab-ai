@@ -78,3 +78,7 @@ vllm_xpu_max_num_batched_tokens: 4096
 # dual_tp1 only: "stopped" retires every vLLM worker defined in vllm_xpu_workers (stopped and disabled)
 # while keeping its configuration and credentials, so the vLLM baseline stays reproducible.
 vllm_xpu_workers_state: started
+
+# One-shot: discard the per-worker API keys and generate new ones (config and env are re-rendered from
+# them). Use with -e vllm_xpu_regenerate_worker_keys=true after a key exposure; never leave it enabled.
+vllm_xpu_regenerate_worker_keys: false

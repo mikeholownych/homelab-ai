@@ -41,8 +41,8 @@
             - { name: gateway_client, source: /etc/local-ai/orchestrator/client-token }
             - { name: opencode_client, source: /etc/local-ai/orchestrator/opencode-client-token }
             - { name: vllm_compat, source: /etc/local-ai/vllm/vllm-api-key }
-            - { name: worker1, source: /etc/local-ai/vllm/worker1/worker-api-key }
-            - { name: worker2, source: /etc/local-ai/vllm/worker2/worker-api-key }
+            - { name: worker1, source: /etc/local-ai/llama/worker1/worker-api-key }
+            - { name: worker2, source: /etc/local-ai/llama/worker2/worker-api-key }
           changed_when: false
           no_log: true
         - name: Tighten in-memory staged service credential permissions

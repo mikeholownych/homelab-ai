@@ -29,8 +29,8 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
                 "gateway_client": ("local-ai/services/orchestrator-gateway/client-token", "token"),
                 "opencode_client": ("local-ai/hosts/ai-5820-01/opencode-client-token", "token"),
                 "vllm_compat": ("local-ai/services/vllm/api-key", "key"),
-                "worker1": ("local-ai/services/vllm/worker1-api-key", "key"),
-                "worker2": ("local-ai/services/vllm/worker2-api-key", "key"),
+                "worker1": ("local-ai/services/inference/worker1-api-key", "key"),
+                "worker2": ("local-ai/services/inference/worker2-api-key", "key"),
             },
         )
 

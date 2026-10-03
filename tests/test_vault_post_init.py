@@ -300,6 +300,50 @@ class VaultPostInitTests(unittest.TestCase):
             self.assertEqual(health, {"initialized": True, "sealed": True})
 
 
+class VaultRotationAndPolicyTests(unittest.TestCase):
+    def test_workload_policy_grants_engine_neutral_worker_slots_read_only(self):
+        helper = load_helper()
+        policy = helper.WORKLOAD_POLICY
+        for slot in ("worker1", "worker2"):
+            self.assertIn(f"secret/data/local-ai/services/inference/{slot}-api-key", policy)
+        self.assertNotIn("services/vllm/worker", policy)
+        self.assertNotIn("create", policy)
+        self.assertNotIn("update", policy)
+
+    def test_rotation_writes_a_fresh_value_per_record_and_returns_only_names(self):
+        helper = load_helper()
+        fake = ExistingVault(helper)
+        rotated = helper.rotate_records(fake, ["worker1", "worker2"])
+        self.assertEqual(rotated, ["worker1", "worker2"])
+        written = {path: payload["data"]["key"] for _, path, payload in fake.writes}
+        self.assertEqual(set(written), {"secret/data/local-ai/services/inference/worker1-api-key",
+                                        "secret/data/local-ai/services/inference/worker2-api-key"})
+        values = list(written.values())
+        self.assertTrue(all(len(v) == 43 and v.isalnum() for v in values))
+        self.assertNotEqual(values[0], values[1])
+
+    def test_retired_vllm_worker_records_are_removed_only_when_present(self):
+        helper = load_helper()
+
+        class Fake(ExistingVault):
+            def request(self, method, path, payload=None, allow_missing=False):
+                if method == "GET" and path.startswith("secret/metadata/"):
+                    return (200, {}) if path.endswith("worker1-api-key") else (404, {})
+                if method == "DELETE":
+                    self.writes.append((method, path, payload))
+                    return 204, {}
+                return super().request(method, path, payload, allow_missing)
+
+        fake = Fake(helper)
+        self.assertEqual(helper.remove_retired_records(fake), ["local-ai/services/vllm/worker1-api-key"])
+        self.assertEqual(fake.writes, [("DELETE", "secret/metadata/local-ai/services/vllm/worker1-api-key", None)])
+
+    def test_rotation_rejects_unknown_records(self):
+        helper = load_helper()
+        with self.assertRaises(helper.VaultError):
+            helper.rotate_records(ExistingVault(helper), ["not-a-record"])
+
+
 class VaultInitHandoffTests(unittest.TestCase):
     def test_init_response_schema_is_saved_without_exposing_values(self):
         path = ROOT / "roles/vault_post_init/files/vault-init-handoff.py"

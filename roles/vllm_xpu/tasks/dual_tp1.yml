@@ -28,6 +28,15 @@
     force: false
   loop: "{{ vllm_xpu_workers | dict2items }}"
 
+- name: Discard existing per-worker API credentials so fresh ones are generated (one-shot rotation)
+  ansible.builtin.file:
+    path: "{{ item.value.config_dir }}/worker-api-key"
+    state: absent
+  loop: "{{ vllm_xpu_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: vllm_xpu_regenerate_worker_keys | bool
+
 - name: Read existing per-worker API credentials
   ansible.builtin.slurp:
     src: "{{ item.value.config_dir }}/worker-api-key"

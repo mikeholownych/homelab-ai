@@ -16,6 +16,7 @@ vault_platform_credentials_worker_specs_path: /etc/local-ai/orchestrator/gateway
 vault_platform_credentials_gateway_client_path: /etc/local-ai/orchestrator/client-token
 vault_platform_credentials_opencode_client_path: /etc/local-ai/orchestrator/opencode-client-token
 vault_platform_credentials_vllm_compat_path: /etc/local-ai/vllm/vllm-api-key
-vault_platform_credentials_worker1_dir: /etc/local-ai/vllm/worker1
-vault_platform_credentials_worker2_dir: /etc/local-ai/vllm/worker2
+# Worker slots (key dir, unit and port) come from llama_cpp_container_workers.
+vault_platform_credentials_worker_owner: aihost-runtime
+vault_platform_credentials_gateway_unit: aihost-orchestrator-gateway.service
 vault_platform_credentials_opencode_env_path: ""
