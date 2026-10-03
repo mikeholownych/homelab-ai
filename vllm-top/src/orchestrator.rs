@@ -159,7 +159,8 @@ impl MetricsTotals {
         for s in samples {
             match s.name.as_str() {
                 "aihost_inference_dispatches_total" => out.dispatches_total += s.value,
-                "aihost_inference_completions_total" => out.completions_total += s.value,
+                // "done" means completed: failed, timed-out and rejected requests are not completions.
+                "aihost_inference_completions_total" if s.label("outcome") == Some("completed") => out.completions_total += s.value,
                 "aihost_http_requests_total" => out.http_requests_total += s.value,
                 "aihost_authority_validations_total" => out.authority_validations_total += s.value,
                 "aihost_route_decisions_total" => {
@@ -287,6 +288,15 @@ aihost_http_requests_total{route="health",status_class="2xx"} 8
 aihost_http_requests_total{route="metrics",status_class="2xx"} 10
 aihost_authority_validations_total{outcome="accepted"} 2
 "#;
+
+    #[test]
+    fn only_completed_outcomes_count_as_done() {
+        let text = "aihost_inference_completions_total{worker_id=\"w\",outcome=\"completed\",failure_class=\"none\"} 7\n\
+                    aihost_inference_completions_total{worker_id=\"w\",outcome=\"failed\",failure_class=\"provider\"} 2\n\
+                    aihost_inference_completions_total{worker_id=\"w\",outcome=\"rejected\",failure_class=\"invalid_request\"} 3\n";
+        let totals = MetricsTotals::from_samples(&promparse::parse(text));
+        assert_eq!(totals.completions_total, 7.0);
+    }
 
     #[test]
     fn parses_the_real_healthy_payload_shape() {
