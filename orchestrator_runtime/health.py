@@ -22,6 +22,21 @@ from . import engine_stats
 # Engine stats older than this are not published (they would look current but be stale).
 ENGINE_STATS_MAX_AGE_SECONDS = 15.0
 
+# neutral engine-stat name -> registry attribute that exports it (all labelled worker_id, pool, engine)
+_ENGINE_METRICS = {
+    "requests_running": "engine_requests_running",
+    "requests_waiting": "engine_requests_waiting",
+    "kv_cache_usage": "engine_kv_cache_usage_ratio",
+    "prefix_cache_hit_ratio": "engine_prefix_cache_hit_ratio",
+    "generation_tokens_in_flight": "engine_generation_tokens_in_flight",
+    "prompt_tokens_in_flight": "engine_prompt_tokens_in_flight",
+    "prompt_tokens_total": "engine_prompt_tokens_total",
+    "prompt_tokens_cached_total": "engine_prompt_tokens_cached_total",
+    "generation_tokens_total": "engine_generation_tokens_total",
+    "prompt_seconds_total": "engine_prompt_seconds_total",
+    "generation_seconds_total": "engine_generation_seconds_total",
+}
+
 if TYPE_CHECKING:
     from orchestrator_runtime.metrics import MetricsRegistry
     from orchestrator_runtime.runtime import CapabilityRegistry, ProviderAdapter
@@ -336,6 +351,31 @@ class HealthManager:
             with self._lock:
                 engine_stats.with_live_counters(stats, self._engine_stats.get(worker_record["worker_id"]))
                 self._engine_stats[worker_record["worker_id"]] = stats
+            self._export_engine_metrics(worker_record, stats)
+
+    def _engine_labels(self, worker_record: dict[str, Any]) -> dict[str, str]:
+        return {"worker_id": worker_record["worker_id"], "pool": str(worker_record.get("pool", "lead")),
+                "engine": str(worker_record.get("engine", "unknown"))}
+
+    def _export_engine_metrics(self, worker_record: dict[str, Any], stats: dict[str, Any]) -> None:
+        """Republish engine state as Prometheus series; a value the engine does not report is removed, not zeroed."""
+        if not self.metrics:
+            return
+        labels = self._engine_labels(worker_record)
+        for key, attribute in _ENGINE_METRICS.items():
+            metric = getattr(self.metrics, attribute)
+            value = stats.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                metric.set(float(value), **labels)
+            else:
+                metric.remove(**labels)
+
+    def _retire_engine_metrics(self, worker_record: dict[str, Any]) -> None:
+        if not self.metrics:
+            return
+        labels = self._engine_labels(worker_record)
+        for attribute in _ENGINE_METRICS.values():
+            getattr(self.metrics, attribute).remove(**labels)
 
     def collect_all_engine_stats(self) -> None:
         """Refresh engine statistics for every worker (independent of health probing)."""
@@ -345,6 +385,12 @@ class HealthManager:
                 continue
             headers = {"Authorization": f"Bearer {token}"} if token else {}
             self._collect_engine_stats(w, endpoint, headers)
+            # A reading that has aged out must disappear from the scrape instead of freezing at its last value.
+            with self._lock:
+                published = self._engine_stats.get(w["worker_id"])
+                stale = published is not None and time.time() - published["observed_at"] > ENGINE_STATS_MAX_AGE_SECONDS
+            if stale:
+                self._retire_engine_metrics(w)
 
     def _stats_loop(self) -> None:
         """Frequent, lightweight engine-stats refresh so monitors can derive smooth token rates."""

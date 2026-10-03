@@ -32,6 +32,21 @@ def _format_labels(
     return "{" + ",".join(parts) + "}"
 
 
+def _format_value(value: float) -> str:
+    """Exact sample value: integers without a decimal point, other floats at full round-trip precision.
+
+    (A fixed 6-significant-digit format makes large second-valued counters advance in coarse steps, which
+    corrupts rate() and histogram sums once they grow.)"""
+    value = float(value)
+    if value != value:
+        return "NaN"
+    if value in (float("inf"), float("-inf")):
+        return "+Inf" if value > 0 else "-Inf"
+    if value.is_integer() and abs(value) < 1e15:
+        return str(int(value))
+    return repr(value)
+
+
 class Counter:
     """Thread-safe monotonic counter."""
 
@@ -72,8 +87,7 @@ class Counter:
         ]
         for key, val in items:
             label_str = _format_labels(self.label_names, key)
-            formatted = f"{int(val)}" if val.is_integer() else f"{val:.6g}"
-            lines.append(f"{self.name}{label_str} {formatted}")
+            lines.append(f"{self.name}{label_str} {_format_value(val)}")
         return lines
 
 
@@ -102,6 +116,12 @@ class Gauge:
         with self._lock:
             self._values[key] = self._values.get(key, 0.0) - amount
 
+    def remove(self, **labels: str) -> None:
+        """Drop a series so a stale reading is absent from the scrape instead of frozen at its last value."""
+        key = tuple(str(labels.get(k, "")) for k in self.label_names)
+        with self._lock:
+            self._values.pop(key, None)
+
     def get(self, **labels: str) -> float:
         key = tuple(str(labels.get(k, "")) for k in self.label_names)
         with self._lock:
@@ -124,9 +144,20 @@ class Gauge:
         ]
         for key, val in items:
             label_str = _format_labels(self.label_names, key)
-            formatted = f"{int(val)}" if val.is_integer() else f"{val:.6g}"
-            lines.append(f"{self.name}{label_str} {formatted}")
+            lines.append(f"{self.name}{label_str} {_format_value(val)}")
         return lines
+
+
+class MirroredCounter(Gauge):
+    """A cumulative counter owned by another system (an inference engine), re-exported verbatim.
+
+    The value is set, never incremented here. When the engine restarts its counter drops; that is a normal
+    counter reset to Prometheus, which handles it in rate(). Absent (removed) when the reading is stale.
+    """
+
+    def collect(self) -> list[str]:
+        lines = super().collect()
+        return [line.replace(" gauge", " counter", 1) if line.startswith("# TYPE") else line for line in lines]
 
 
 class Histogram:
@@ -199,7 +230,7 @@ class Histogram:
             inf_labels = _format_labels(self.label_names, key, extra={"le": "+Inf"})
             lines.append(f"{self.name}_bucket{inf_labels} {count}")
             base_labels = _format_labels(self.label_names, key)
-            lines.append(f"{self.name}_sum{base_labels} {sum_val:.6g}")
+            lines.append(f"{self.name}_sum{base_labels} {_format_value(sum_val)}")
             lines.append(f"{self.name}_count{base_labels} {count}")
         return lines
 
@@ -262,31 +293,75 @@ class MetricsRegistry:
         )
         self.inference_completions_total = self._register_counter(
             "aihost_inference_completions_total",
-            "Total number of inference completions by outcome.",
-            ("worker_id", "outcome"),
+            "Inference requests that reached a worker, by outcome (completed, failed, timed_out, rejected). "
+            "`rejected` means the request itself was invalid for the worker (caller fault, e.g. context overflow or "
+            "malformed history) and says nothing about worker health; `failure_class` is `none` for completed.",
+            ("worker_id", "outcome", "failure_class"),
         )
         self.inference_duration_seconds = self._register_histogram(
             "aihost_inference_duration_seconds",
-            "End-to-end inference request duration in seconds.",
-            ("worker_id", "model"),
-            (0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0),
+            "Wall time the gateway spent on the worker call, in seconds. Includes any queueing inside the engine "
+            "(see aihost_engine_requests_waiting); it is not time-to-first-token.",
+            ("worker_id", "model", "pool"),
+            (0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0),
         )
         self.inference_ttft_seconds = self._register_histogram(
             "aihost_inference_ttft_seconds",
-            "Time to first token in seconds for streaming inference.",
+            "Time to first token in seconds. Only observed for streaming upstream calls; the gateway currently "
+            "calls workers without streaming, so this family has no samples.",
             ("worker_id",),
             (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
         )
         self.inference_prompt_tokens_total = self._register_counter(
             "aihost_inference_prompt_tokens_total",
-            "Total number of prompt tokens processed across inference requests.",
-            ("worker_id", "model"),
+            "Prompt tokens across completed inference requests. source=provider is the engine's own count "
+            "(exact); source=estimated is the gateway's fallback when the engine reported no usage.",
+            ("worker_id", "model", "source"),
         )
         self.inference_completion_tokens_total = self._register_counter(
             "aihost_inference_completion_tokens_total",
-            "Total number of completion tokens generated across inference requests.",
-            ("worker_id", "model"),
+            "Completion tokens across completed inference requests, including tool-call arguments. "
+            "source=provider is the engine's own count (exact); source=estimated is a fallback.",
+            ("worker_id", "model", "source"),
         )
+        self.worker_inflight = self._register_gauge(
+            "aihost_worker_inflight",
+            "Requests the gateway currently has outstanding on a worker. Above max_concurrency, the excess "
+            "waits inside the engine.",
+            ("worker_id",),
+        )
+        self.worker_max_concurrency = self._register_gauge(
+            "aihost_worker_max_concurrency",
+            "Concurrent requests a worker is configured to serve.",
+            ("worker_id",),
+        )
+        # Engine-reported state, republished by the gateway (it holds the worker credentials). A series is
+        # absent when the engine does not report it or the reading is stale - never a made-up zero.
+        engine_labels = ("worker_id", "pool", "engine")
+        self.engine_requests_running = self._register_gauge(
+            "aihost_engine_requests_running", "Requests the engine is processing right now.", engine_labels)
+        self.engine_requests_waiting = self._register_gauge(
+            "aihost_engine_requests_waiting", "Requests deferred inside the engine, waiting for a free slot.", engine_labels)
+        self.engine_kv_cache_usage_ratio = self._register_gauge(
+            "aihost_engine_kv_cache_usage_ratio",
+            "Fraction (0..1) of the engine's context/KV capacity held by active or retained sequences.", engine_labels)
+        self.engine_prefix_cache_hit_ratio = self._register_gauge(
+            "aihost_engine_prefix_cache_hit_ratio",
+            "Lifetime fraction (0..1) of prompt tokens served from cache rather than recomputed.", engine_labels)
+        self.engine_generation_tokens_in_flight = self._register_gauge(
+            "aihost_engine_generation_tokens_in_flight", "Tokens decoded so far by requests still running.", engine_labels)
+        self.engine_prompt_tokens_in_flight = self._register_gauge(
+            "aihost_engine_prompt_tokens_in_flight", "Prompt tokens evaluated so far by requests still running.", engine_labels)
+        self.engine_prompt_tokens_total = self._register_mirrored_counter(
+            "aihost_engine_prompt_tokens_total", "Prompt tokens the engine evaluated (excludes cached), as the engine counts them.", engine_labels)
+        self.engine_prompt_tokens_cached_total = self._register_mirrored_counter(
+            "aihost_engine_prompt_tokens_cached_total", "Prompt tokens the engine reused from cache.", engine_labels)
+        self.engine_generation_tokens_total = self._register_mirrored_counter(
+            "aihost_engine_generation_tokens_total", "Tokens the engine generated, as the engine counts them.", engine_labels)
+        self.engine_prompt_seconds_total = self._register_mirrored_counter(
+            "aihost_engine_prompt_seconds_total", "Seconds the engine spent evaluating prompts.", engine_labels)
+        self.engine_generation_seconds_total = self._register_mirrored_counter(
+            "aihost_engine_generation_seconds_total", "Seconds the engine spent generating tokens.", engine_labels)
         self.inference_streaming_requests_total = self._register_counter(
             "aihost_inference_streaming_requests_total",
             "Total number of streaming inference requests by outcome.",
@@ -306,7 +381,8 @@ class MetricsRegistry:
         )
         self.scheduler_queue_wait_seconds = self._register_histogram(
             "aihost_scheduler_queue_wait_seconds",
-            "Scheduler queue wait duration in seconds.",
+            "Time work waited in the gateway scheduler's own queue, in seconds. Engine-side queueing is not "
+            "included; see aihost_engine_requests_waiting and aihost_worker_inflight.",
             (),
             (0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 30.0, 60.0),
         )
@@ -396,6 +472,11 @@ class MetricsRegistry:
         gauge = Gauge(name, help_text, label_names)
         self._metrics.append(gauge)
         return gauge
+
+    def _register_mirrored_counter(self, name: str, help_text: str, label_names: tuple[str, ...] = ()) -> MirroredCounter:
+        counter = MirroredCounter(name, help_text, label_names)
+        self._metrics.append(counter)
+        return counter
 
     def _register_histogram(
         self,

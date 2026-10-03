@@ -106,8 +106,8 @@ def test_metrics_registry_format_and_prometheus_parser_conformance():
     registry.http_request_duration_seconds.observe(0.125, route="v1_chat_completions", method="POST")
     registry.http_requests_in_flight.set(2.0, route="v1_chat_completions")
     registry.inference_dispatches_total.inc(1.0, worker_id="w1", model="engineering/b0")
-    registry.inference_completions_total.inc(1.0, worker_id="w1", outcome="completed")
-    registry.inference_prompt_tokens_total.inc(42.0, worker_id="w1", model="engineering/b0")
+    registry.inference_completions_total.inc(1.0, worker_id="w1", outcome="completed", failure_class="none")
+    registry.inference_prompt_tokens_total.inc(42.0, worker_id="w1", model="engineering/b0", source="provider")
     registry.scheduler_queued_work.set(3.0)
     registry.worker_health_status.set(1.0, worker_id="w1")
 
@@ -397,11 +397,12 @@ def test_runtime_inference_lifecycle_metrics(tmp_path):
     assert result["status"] == "ok"
     assert metrics.inference_requests_total.get(status="received") == 1.0
     assert metrics.inference_dispatches_total.get(worker_id="w1", model="engineering/w1") == 1.0
-    assert metrics.inference_completions_total.get(worker_id="w1", outcome="completed") == 1.0
-    assert metrics.inference_prompt_tokens_total.get(worker_id="w1", model="engineering/w1") > 0
-    assert metrics.inference_completion_tokens_total.get(worker_id="w1", model="engineering/w1") > 0
+    assert metrics.inference_completions_total.get(worker_id="w1", outcome="completed", failure_class="none") == 1.0
+    # the test adapter reports no usage, so both counts are the gateway's estimate and are labelled as such
+    assert metrics.inference_prompt_tokens_total.get(worker_id="w1", model="engineering/w1", source="estimated") > 0
+    assert metrics.inference_completion_tokens_total.get(worker_id="w1", model="engineering/w1", source="estimated") > 0
 
-    count, total_sum = metrics.inference_duration_seconds.get_summary(worker_id="w1", model="engineering/w1")
+    count, total_sum = metrics.inference_duration_seconds.get_summary(worker_id="w1", model="engineering/w1", pool="lead")
     assert count == 1
     assert total_sum > 0.0
 
@@ -412,7 +413,7 @@ def test_runtime_inference_lifecycle_metrics(tmp_path):
     )
     assert timed_out["status"] == "blocked"
     assert timed_out["failure_class"] == "timeout"
-    assert metrics.inference_completions_total.get(worker_id="w1", outcome="timed_out") == 1.0
+    assert metrics.inference_completions_total.get(worker_id="w1", outcome="timed_out", failure_class="timeout") == 1.0
     assert metrics.provider_errors_total.get(worker_id="w1", error_type="timeout") == 1.0
 
     # Upstream error handling (re-enable worker first)
@@ -423,7 +424,7 @@ def test_runtime_inference_lifecycle_metrics(tmp_path):
     )
     assert errored["status"] == "blocked"
     assert errored["failure_class"] == "worker"
-    assert metrics.inference_completions_total.get(worker_id="w1", outcome="failed") == 1.0
+    assert metrics.inference_completions_total.get(worker_id="w1", outcome="failed", failure_class="worker") == 1.0
     assert metrics.provider_errors_total.get(worker_id="w1", error_type="connection_error") == 1.0
 
 
@@ -590,7 +591,7 @@ def test_bounded_label_cardinality():
     """Verify that metric label names and values are strictly bounded enums."""
     registry = MetricsRegistry()
     registry.http_requests_total.inc(route="v1_chat_completions", method="POST", status_class="2xx")
-    registry.inference_completions_total.inc(worker_id="b0-live-tp1-worker1", outcome="completed")
+    registry.inference_completions_total.inc(worker_id="b0-live-tp1-worker1", outcome="completed", failure_class="none")
     registry.scheduler_dispatch_decisions_total.inc(worker_id="b0-live-tp1-worker1", decision="dispatched")
 
     text = registry.render_prometheus_text()
@@ -601,7 +602,8 @@ def test_bounded_label_cardinality():
                 for label_name, label_val in sample.labels.items():
                     assert label_name in {
                         "route", "method", "status_class", "worker_id", "model",
-                        "status", "outcome", "decision", "error_type", "reason", "le"
+                        "status", "outcome", "decision", "error_type", "reason", "le",
+                        "failure_class", "source", "pool", "engine"
                     }, f"Unexpected high-cardinality label name: {label_name}"
                     assert len(label_val) < 64, f"Suspiciously long label value: {label_val}"
                     assert " " not in label_val, f"Label value contains whitespace: {label_val}"
@@ -614,7 +616,8 @@ def test_bounded_label_cardinality():
                 k, v = item.split("=", 1)
                 assert k in {
                     "route", "method", "status_class", "worker_id", "model",
-                    "status", "outcome", "decision", "error_type", "reason", "le"
+                    "status", "outcome", "decision", "error_type", "reason", "le",
+                        "failure_class", "source", "pool", "engine"
                 }, f"Unexpected label name: {k}"
                 clean_v = v.strip('"')
                 assert len(clean_v) < 64

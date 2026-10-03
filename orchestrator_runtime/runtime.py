@@ -197,6 +197,33 @@ class ProviderAdapter(Protocol):
     def complete(self, request: dict[str, Any], timeout: float) -> dict[str, Any]: ...
 
 
+def _token_counts(output: dict[str, Any], context_tokens: int) -> tuple[int, int, tuple[str, str]]:
+    """Prompt and completion token counts plus where each came from.
+
+    The engine's own ``usage`` is exact and wins. Only when it is missing do we estimate: the prompt from the
+    gateway's pre-flight count, the completion from the characters of the content *and* tool-call arguments
+    (a tool-call-only reply still generated tokens).
+    """
+    usage = output.get("usage") if isinstance(output.get("usage"), dict) else {}
+
+    def exact(key: str) -> int | None:
+        value = usage.get(key)
+        return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+    prompt, completion = exact("prompt_tokens"), exact("completion_tokens")
+    if completion is None:
+        text = str(output.get("content", "") or "")
+        for call in output.get("tool_calls") or []:
+            function = call.get("function", {}) if isinstance(call, dict) else {}
+            text += str(function.get("name", "")) + str(function.get("arguments", ""))
+        completion_source, completion = "estimated", (max(1, len(text) // 4) if text else 0)
+    else:
+        completion_source = "provider"
+    if prompt is None:
+        return context_tokens, completion, ("estimated", completion_source)
+    return prompt, completion, ("provider", completion_source)
+
+
 class ProviderError(RuntimeError):
     def __init__(self, message: str, *, status: int | None = None, body: str = "") -> None:
         super().__init__(message)
@@ -441,7 +468,7 @@ class OrchestratorRuntime:
                     break
                 if worker is None:
                     self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_pool_unavailable")
-                    self.metrics.inference_completions_total.inc(worker_id="none", outcome="failed")
+                    self.metrics.inference_completions_total.inc(worker_id="none", outcome="failed", failure_class="pool_unavailable")
                     self.evidence.append("routing_rejected", request_id=request_id, failure_class="pool_unavailable",
                                          route_rule=decision.rule_id, route_pools=list(decision.pools))
                     return {"status": "blocked", "failure_class": "pool_unavailable", "request_id": request_id,
@@ -454,14 +481,14 @@ class OrchestratorRuntime:
                 )
         except LookupError:
             self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_capability")
-            self.metrics.inference_completions_total.inc(worker_id="none", outcome="failed")
+            self.metrics.inference_completions_total.inc(worker_id="none", outcome="rejected", failure_class="capability")
             self.evidence.append("routing_rejected", request_id=request_id, failure_class="capability")
             return {"status": "unsupported", "failure_class": "capability", "request_id": request_id}
 
         adapter = self.adapters.get(worker.worker_id)
         if adapter is None:
             self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="rejected_unhealthy")
-            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="adapter_unavailable")
             self.health.record_worker_observation(worker.worker_id, healthy=False, error="adapter_unavailable")
             self.evidence.append("routing_rejected", request_id=request_id, failure_class="adapter_unavailable", worker_id=worker.worker_id)
             return {"status": "blocked", "failure_class": "adapter_unavailable", "request_id": request_id}
@@ -476,7 +503,7 @@ class OrchestratorRuntime:
                 if room < requested:
                     if room < 16:
                         self.evidence.append("routing_rejected", request_id=request_id, failure_class="context_length_exceeded", worker_id=worker.worker_id)
-                        self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+                        self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="rejected", failure_class="context_length_exceeded")
                         return {
                             "status": "rejected",
                             "failure_class": "context_length_exceeded",
@@ -493,25 +520,27 @@ class OrchestratorRuntime:
 
         started = time.monotonic()
         self.metrics.scheduler_active_work.inc()
+        self.metrics.worker_inflight.inc(worker_id=worker.worker_id)
+        self.metrics.worker_max_concurrency.set(worker.max_concurrency, worker_id=worker.worker_id)
         try:
             output = adapter.complete(request, timeout)
             call_duration = time.monotonic() - started
             self.health.record_worker_observation(worker.worker_id, healthy=True, duration=call_duration)
         except TimeoutError:
             call_duration = time.monotonic() - started
-            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="timed_out")
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="timed_out", failure_class="timeout")
             self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error="timeout")
             self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="timeout")
             return {"status": "blocked", "failure_class": "timeout", "request_id": request_id}
         except ProviderError as error:
             call_duration = time.monotonic() - started
-            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
             malformed_history = error.status == 500 and "Failed to parse tool call arguments" in error.body
             if malformed_history or (error.status is not None and 400 <= error.status < 500 and error.status not in (401, 403, 408, 429)):
                 # The worker answered correctly; the request was invalid for it (e.g. context overflow, or an
                 # assistant tool call in the history whose arguments are not valid JSON: llama.cpp reports that as 500).
                 self.health.record_worker_observation(worker.worker_id, healthy=True, duration=call_duration)
                 failure_class = "context_length_exceeded" if "maximum context length" in error.body else "invalid_request"
+                self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="rejected", failure_class=failure_class)
                 self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class=failure_class, error=type(error).__name__, detail=error.body[:512])
                 message = error.body
                 try:
@@ -519,37 +548,37 @@ class OrchestratorRuntime:
                 except (ValueError, KeyError, TypeError):
                     pass
                 return {"status": "rejected", "failure_class": failure_class, "request_id": request_id, "message": str(message)[:1000]}
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="provider")
             self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
             self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="provider", error=type(error).__name__, detail=str(error)[:512])
             return {"status": "blocked", "failure_class": "provider", "request_id": request_id}
         except Exception as error:
             call_duration = time.monotonic() - started
-            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+            self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="worker")
             self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
             self.evidence.append("execution_failed", request_id=request_id, worker_id=worker.worker_id, failure_class="worker", error=type(error).__name__)
             return {"status": "blocked", "failure_class": "worker", "request_id": request_id}
         finally:
             self.metrics.scheduler_active_work.dec()
+            self.metrics.worker_inflight.dec(worker_id=worker.worker_id)
 
         if self.validator is not None:
             is_valid = bool(self.validator(output))
             self.metrics.authority_validations_total.inc(outcome="accepted" if is_valid else "rejected")
             if not is_valid:
-                self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed")
+                self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="external_validation")
                 self.evidence.append("response_rejected", request_id=request_id, worker_id=worker.worker_id, failure_class="external_validation")
                 return {"status": "blocked", "failure_class": "external_validation", "request_id": request_id}
         else:
             self.metrics.authority_validations_total.inc(outcome="accepted")
 
         total_duration = time.monotonic() - started
-        self.metrics.inference_duration_seconds.observe(total_duration, worker_id=worker.worker_id, model=worker.public_model_id)
-        self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="completed")
+        self.metrics.inference_duration_seconds.observe(total_duration, worker_id=worker.worker_id, model=worker.public_model_id, pool=str(route["pool"] or worker.pool))
+        self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="completed", failure_class="none")
 
-        prompt_tokens = context_tokens
-        completion_content = str(output.get("content", ""))
-        completion_tokens = max(1, len(completion_content) // 4) if completion_content else 0
-        self.metrics.inference_prompt_tokens_total.inc(prompt_tokens, worker_id=worker.worker_id, model=worker.public_model_id)
-        self.metrics.inference_completion_tokens_total.inc(completion_tokens, worker_id=worker.worker_id, model=worker.public_model_id)
+        prompt_tokens, completion_tokens, usage_source = _token_counts(output, context_tokens)
+        self.metrics.inference_prompt_tokens_total.inc(prompt_tokens, worker_id=worker.worker_id, model=worker.public_model_id, source=usage_source[0])
+        self.metrics.inference_completion_tokens_total.inc(completion_tokens, worker_id=worker.worker_id, model=worker.public_model_id, source=usage_source[1])
 
         tool_calls = output.get("tool_calls", [])
         normalized_finish_reason = "tool_calls" if tool_calls else "stop"
