@@ -34,6 +34,21 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
             },
         )
 
+    def test_restart_waits_for_engine_health_before_continuing(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_wait")
+        statuses = iter([503, 503, "URLError", 200])
+        with patch.object(helper, "http_status", side_effect=lambda *_: next(statuses)), \
+             patch.object(helper.time, "sleep") as sleep:
+            helper.wait_until_healthy("http://127.0.0.1:8000/health", "worker1")
+        self.assertEqual(sleep.call_count, 3)
+
+    def test_restart_wait_gives_up_with_a_clear_error(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_wait_timeout")
+        with patch.object(helper, "http_status", return_value=503), patch.object(helper.time, "sleep"), \
+             patch.object(helper.time, "monotonic", side_effect=[0, 1, 2000]):
+            with self.assertRaisesRegex(RuntimeError, "did not become healthy"):
+                helper.wait_until_healthy("http://127.0.0.1:8000/health", "worker1", timeout=10)
+
     def test_atomic_write_is_content_idempotent_and_keeps_permissions(self):
         helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_apply_atomic")
         with tempfile.TemporaryDirectory() as directory:

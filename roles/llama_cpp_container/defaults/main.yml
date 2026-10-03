@@ -18,3 +18,6 @@ llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "
 llama_cpp_container_workers: {}
 # Services that this role supersedes (stopped and disabled if present), e.g. a vLLM worker.
 llama_cpp_container_retired_services: []
+# Configuration directories of superseded services that still embed API keys; removed so a retired
+# service's credentials do not linger on disk.
+llama_cpp_container_retired_paths: []

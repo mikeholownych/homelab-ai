@@ -133,6 +133,13 @@
     - llama_cpp_container_enabled | bool
     - not ansible_check_mode
 
+- name: Remove credential-bearing configuration of superseded services
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ llama_cpp_container_retired_paths }}"
+  when: llama_cpp_container_enabled | bool
+
 - name: Start llama.cpp workers (restart one at a time only when their unit changed)
   ansible.builtin.include_tasks: start_worker.yml
   loop: "{{ llama_cpp_container_workers | dict2items }}"

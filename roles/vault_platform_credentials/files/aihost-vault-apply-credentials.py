@@ -196,6 +196,17 @@ def apply_transaction(targets, restart_units, restart, verify_new, verify_old) -
                 pass
 
 
+def wait_until_healthy(url: str, label: str, timeout: float = 1500.0, interval: float = 5.0) -> None:
+    """A restarted engine returns from systemctl long before its model is loaded; wait for /health."""
+    deadline = time.monotonic() + timeout
+    while True:
+        if http_status(url) == 200:
+            return
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"{label} did not become healthy after restart")
+        time.sleep(interval)
+
+
 def worker_key_file(worker: dict) -> Path:
     return Path(worker["key_dir"]) / "worker-api-key"
 
@@ -283,6 +294,9 @@ def main() -> None:
             subprocess.run(["systemctl", "restart", unit], check=True, timeout=1800 if unit != gateway_unit else 120, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if unit not in restarted:
                 restarted.append(unit)
+            health = {w["unit"]: f"http://127.0.0.1:{w['port']}/health" for w in workers.values()}
+            health[gateway_unit] = gateway_url + "/health"
+            wait_until_healthy(health[unit], unit)
 
         evidence = {}
         apply_transaction(

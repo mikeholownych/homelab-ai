@@ -127,6 +127,11 @@ vllm_xpu_workers:
 llama_cpp_container_enabled: true
 llama_cpp_container_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
 llama_cpp_container_retired_services: [aihost-vllm-worker2.service]
+# Retired vLLM worker2 config plus the manual dual-worker experiment configs; all embed API keys.
+llama_cpp_container_retired_paths:
+  - /etc/local-ai/vllm/worker2
+  - /etc/local-ai/t5820-dual-worker
+  - /etc/local-ai/t5820-dual-worker-attempt2
 llama_cpp_container_workers:
   worker1:
     worker_id: b0-live-llama-worker1
