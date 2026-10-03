@@ -33,3 +33,7 @@
     - role: test_tooling
       when: capabilities.inference | default(false) | bool
       tags: [inference, tooling, pytest]
+    # Scheduled lifecycle timers. Declared here (all disabled in host_vars) so a timer that cannot run
+    # safely is reproducibly off instead of silently failing and alerting.
+    - role: scheduled_ansible
+      tags: [inference, operations, scheduled_ansible]

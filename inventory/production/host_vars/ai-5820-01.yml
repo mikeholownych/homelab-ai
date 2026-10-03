@@ -149,6 +149,13 @@ llama_cpp_container_workers:
     served_name: Qwen3.5-27B-Q4_K_M
     context: 65536
 
+# Scheduled lifecycle timers are OFF. The snapshot runner needs a deployed repo snapshot at /opt/local-ai
+# (absent), and the reconcile unit converges with site.yml, which would overwrite the live inference
+# topology (OS tuning, single-vLLM unit). Re-enable only after (a) a snapshot is deployed, and
+# (b) reconcile/validate target playbooks/inference.yml and a validate play that matches this topology.
+scheduled_ansible_reconcile_enabled: false
+scheduled_ansible_validate_enabled: false
+
 # TTY1 monitoring console (vllm-top, built from ~/Projects/vllm-top)
 vllm_top_console_enabled: true
 
