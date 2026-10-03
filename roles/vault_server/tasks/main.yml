@@ -1,0 +1,512 @@
+---
+- name: Require explicit server deployment approval and complete non-secret topology
+  ansible.builtin.assert:
+    that:
+      - vault_server_manage | bool
+      - vault_server_version == '2.1.1'
+      - vault_server_archive_sha256 is match('^[0-9a-f]{64}$')
+      - vault_server_listener_address is match('^[0-9A-Fa-f:.]+:8200$')
+      - vault_server_listener_address not in ['0.0.0.0:8200', '[::]:8200', ':::8200']
+      - vault_server_listener_address.split(':')[0] in ansible_facts.all_ipv4_addresses
+      - vault_server_api_addr is match('^https://[A-Za-z0-9._:-]+:8200$')
+      - vault_server_cluster_addr is match('^https://[A-Za-z0-9._:-]+:8201$')
+      - vault_server_tls_certificate_source is match('^/')
+      - vault_server_tls_private_key_source is match('^/')
+      - vault_server_tls_ca_source is match('^/')
+      - vault_server_tls_cert_file is match('^/')
+      - vault_server_tls_key_file is match('^/')
+      - vault_server_tls_ca_file is match('^/')
+      - >-
+        vault_server_tls_server_name is match('^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$')
+        or vault_server_tls_server_name is match('^[0-9]{1,3}(\.[0-9]{1,3}){3}$')
+      - vault_server_api_addr.split('://', 1)[1].rsplit(':', 1)[0] == vault_server_tls_server_name
+      - vault_server_cluster_addr.split('://', 1)[1].rsplit(':', 1)[0] == vault_server_tls_server_name
+      - vault_server_tls_min_validity_seconds | int > 0
+      - vault_server_data_dir == '/var/lib/vault'
+      - vault_server_min_free_bytes | int > 0
+      - vault_server_ssh_allowed_sources | length > 0
+      - vault_server_api_allowed_sources | length > 0
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version in ['24.04', '26.04']
+      - ansible_facts.architecture in ['x86_64', 'aarch64']
+      - vault_server_arch == ('amd64' if ansible_facts.architecture == 'x86_64' else 'arm64')
+    fail_msg: >-
+      Vault server deployment is gated. Set explicit approval and provide the
+      approved node addresses and externally provisioned TLS file paths.
+
+- name: Identify the actual mount backing the Vault Raft data directory
+  ansible.builtin.set_fact:
+    vault_server_raft_mount: >-
+      {{ ansible_mounts
+         | selectattr('mount', 'in', ['/', '/var', '/var/lib', '/var/lib/vault'])
+         | sort(attribute='mount') | last }}
+
+- name: Require sufficient local block-backed storage for Raft
+  ansible.builtin.assert:
+    that:
+      - vault_server_raft_mount is mapping
+      - vault_server_raft_mount.fstype in ['ext4', 'xfs', 'btrfs', 'zfs']
+      - vault_server_raft_mount.device is match('^/dev/')
+      - vault_server_raft_mount.size_available | int >= vault_server_min_free_bytes | int
+    fail_msg: >-
+      Raft data must remain on approved local block storage with the explicitly
+      configured free-space reserve; network filesystems are not accepted.
+
+- name: Read existing Vault systemd unit load state before any mutation
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - --property=LoadState
+      - --value
+      - vault.service
+  register: vault_server_unit_load_state
+  check_mode: false
+  changed_when: false
+  failed_when: false
+
+- name: Inspect paths that could belong to an existing Vault installation
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ vault_server_config_dir }}/vault.hcl"
+    - "{{ vault_server_data_dir }}"
+    - "{{ vault_server_install_dir }}/vault"
+    - /usr/bin/vault
+    - /etc/systemd/system/vault.service
+  register: vault_server_existing_artifacts
+
+- name: Inspect role ownership marker
+  ansible.builtin.stat:
+    path: "{{ vault_server_managed_marker }}"
+    follow: false
+  register: vault_server_marker_stat
+
+- name: Inspect any existing Vault Raft data without following symlinks
+  ansible.builtin.find:
+    paths: "{{ vault_server_data_dir }}"
+    recurse: true
+    hidden: true
+    file_type: any
+  register: vault_server_raft_contents
+  when:
+    - vault_server_existing_artifacts.results[1].stat.isdir | default(false)
+    - not vault_server_marker_stat.stat.exists
+
+- name: Initialize the interrupted-installation empty-directory guard
+  ansible.builtin.set_fact:
+    vault_server_empty_uninitialized_data_dir: false
+
+- name: Recognize only an empty data directory left by a failed first install
+  ansible.builtin.assert:
+    that:
+      - vault_server_unit_load_state.stdout | trim in ['', 'not-found']
+      - not vault_server_existing_artifacts.results[0].stat.exists
+      - not vault_server_existing_artifacts.results[2].stat.exists
+      - not vault_server_existing_artifacts.results[3].stat.exists
+      - not vault_server_existing_artifacts.results[4].stat.exists
+      - vault_server_existing_artifacts.results[1].stat.isdir
+      - vault_server_existing_artifacts.results[1].stat.pw_name == 'vault'
+      - vault_server_existing_artifacts.results[1].stat.mode == '0700'
+      - vault_server_raft_contents.matched | int == 0
+    fail_msg: >-
+      Refusing to adopt an existing Vault data directory unless it is empty and
+      belongs to the incomplete first run of this installation.
+  when:
+    - vault_server_existing_artifacts.results[1].stat.isdir | default(false)
+    - not vault_server_marker_stat.stat.exists
+
+- name: Mark a verified empty first-install data directory as safe to resume
+  ansible.builtin.set_fact:
+    vault_server_empty_uninitialized_data_dir: true
+  when:
+    - vault_server_existing_artifacts.results[1].stat.isdir | default(false)
+    - not vault_server_marker_stat.stat.exists
+
+- name: Recognize only a role-managed or demonstrably clean Vault installation
+  ansible.builtin.assert:
+    that:
+      - vault_server_unit_load_state.rc == 0
+      - >-
+        vault_server_unit_load_state.stdout | trim in ['', 'not-found']
+        or (vault_server_marker_stat.stat.exists
+            and vault_server_marker_stat.stat.isreg
+            and not vault_server_marker_stat.stat.islnk | default(false)
+            and vault_server_marker_stat.stat.pw_name == 'root'
+            and vault_server_marker_stat.stat.mode == '0400')
+      - >-
+        not item.stat.exists
+        or (vault_server_marker_stat.stat.exists
+            and vault_server_marker_stat.stat.isreg
+            and not vault_server_marker_stat.stat.islnk | default(false)
+            and vault_server_marker_stat.stat.pw_name == 'root'
+            and vault_server_marker_stat.stat.mode == '0400')
+        or (item.item == vault_server_data_dir
+            and vault_server_empty_uninitialized_data_dir | bool)
+    fail_msg: >-
+      Existing Vault service or state was detected without this role's protected
+      ownership marker. Stop and review existing state before installation.
+  loop: "{{ vault_server_existing_artifacts.results }}"
+
+- name: Record ownership before any managed Vault installation changes
+  ansible.builtin.copy:
+    content: "Managed by roles/vault_server. Non-secret ownership marker\n"
+    dest: "{{ vault_server_managed_marker }}"
+    owner: root
+    group: root
+    mode: "0400"
+    force: false
+
+- name: Create dedicated Vault service identity
+  ansible.builtin.user:
+    name: vault
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/vault
+    create_home: false
+
+- name: Create Vault configuration directory
+  ansible.builtin.file:
+    path: "{{ vault_server_config_dir }}"
+    state: directory
+    owner: root
+    group: vault
+    mode: "0750"
+
+- name: Create Vault Raft data directory
+  ansible.builtin.file:
+    path: "{{ vault_server_data_dir }}"
+    state: directory
+    owner: vault
+    group: vault
+    mode: "0700"
+
+- name: Create Vault TLS directory
+  ansible.builtin.file:
+    path: "{{ vault_server_tls_dir }}"
+    state: directory
+    owner: root
+    group: vault
+    mode: "0750"
+
+- name: Inspect externally generated TLS sources on the Ansible controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: false
+  loop:
+    - "{{ vault_server_tls_certificate_source }}"
+    - "{{ vault_server_tls_private_key_source }}"
+    - "{{ vault_server_tls_ca_source }}"
+  delegate_to: localhost
+  become: false
+  register: vault_server_tls_source_stats
+  no_log: true
+
+- name: Require regular, non-symlink TLS source files
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+      - not item.stat.islnk | default(false)
+    fail_msg: TLS source files must be regular files on the controller.
+  loop: "{{ vault_server_tls_source_stats.results }}"
+  no_log: true
+
+- name: Require the controller-side TLS private key source to be protected
+  ansible.builtin.assert:
+    that:
+      - vault_server_tls_source_stats.results[1].stat.mode == '0600'
+      - vault_server_tls_source_stats.results[1].stat.readable | default(false)
+    fail_msg: The controller-side TLS private key must be mode 0600 and readable.
+  no_log: true
+
+- name: Install the Vault server certificate
+  ansible.builtin.copy:
+    src: "{{ vault_server_tls_certificate_source }}"
+    dest: "{{ vault_server_tls_cert_file }}"
+    owner: root
+    group: vault
+    mode: "0640"
+  diff: false
+  notify: Restart Vault
+
+- name: Install the Vault server private key without displaying content
+  ansible.builtin.copy:
+    src: "{{ vault_server_tls_private_key_source }}"
+    dest: "{{ vault_server_tls_key_file }}"
+    owner: root
+    group: vault
+    mode: "0440"
+  diff: false
+  notify: Restart Vault
+  no_log: true
+
+- name: Install the Vault issuing CA certificate
+  ansible.builtin.copy:
+    src: "{{ vault_server_tls_ca_source }}"
+    dest: "{{ vault_server_tls_ca_file }}"
+    owner: root
+    group: vault
+    mode: "0644"
+  diff: false
+
+- name: Download pinned Vault release with the independently reviewed SHA-256
+  ansible.builtin.get_url:
+    url: >-
+      {{ vault_server_download_base ~ '/' ~ vault_server_version
+         ~ '/vault_' ~ vault_server_version ~ '_linux_' ~ vault_server_arch
+         ~ '.zip' }}
+    dest: "/var/tmp/vault_{{ vault_server_version }}_linux_{{ vault_server_arch }}.zip"
+    checksum: "sha256:{{ vault_server_archive_sha256 }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: not ansible_check_mode
+
+- name: Install unzip prerequisite
+  ansible.builtin.package:
+    name: unzip
+    state: present
+
+- name: Inspect installed Vault version
+  ansible.builtin.command:
+    argv:
+      - "{{ vault_server_install_dir }}/vault"
+      - version
+  register: vault_server_installed_version
+  check_mode: false
+  changed_when: false
+  failed_when: false
+
+- name: Install pinned Vault binary
+  ansible.builtin.unarchive:
+    src: "/var/tmp/vault_{{ vault_server_version }}_linux_{{ vault_server_arch }}.zip"
+    dest: "{{ vault_server_install_dir }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: >-
+    (not ansible_check_mode)
+    and (
+      vault_server_installed_version.rc != 0
+      or ('Vault v' ~ vault_server_version) not in vault_server_installed_version.stdout
+    )
+
+- name: Install UFW network firewall
+  ansible.builtin.package:
+    name: ufw
+    state: present
+
+- name: Allow SSH only from the configured management hosts
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: Vault SSH management
+  loop: "{{ vault_server_ssh_allowed_sources }}"
+
+- name: Allow Vault API only from the configured clients
+  community.general.ufw:
+    rule: allow
+    port: "8200"
+    proto: tcp
+    from_ip: "{{ item }}"
+    comment: Vault API clients
+  loop: "{{ vault_server_api_allowed_sources }}"
+
+- name: Deny unsolicited inbound traffic by default
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Allow outbound traffic for updates and Vault clients
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Enable host firewall after allow rules are installed
+  community.general.ufw:
+    state: enabled
+    logging: low
+
+- name: Install Vault configuration after confirming external TLS material exists
+  when: vault_server_manage | bool
+  block:
+    - name: Inspect externally provisioned Vault TLS material
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ vault_server_tls_cert_file }}"
+        - "{{ vault_server_tls_key_file }}"
+        - "{{ vault_server_tls_ca_file }}"
+      register: vault_server_tls_stats
+
+    - name: Require regular, non-symlink TLS files
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.isreg
+          - not item.stat.islnk | default(false)
+        fail_msg: Vault TLS files must be provisioned externally as regular files.
+      loop: "{{ vault_server_tls_stats.results }}"
+
+    - name: Require tightly protected Vault TLS private key
+      ansible.builtin.assert:
+        that:
+          - >-
+            (vault_server_tls_stats.results[1].stat.pw_name == 'vault'
+              and vault_server_tls_stats.results[1].stat.mode == '0400')
+            or
+            (vault_server_tls_stats.results[1].stat.pw_name == 'root'
+              and vault_server_tls_stats.results[1].stat.gr_name == 'vault'
+              and vault_server_tls_stats.results[1].stat.mode == '0440')
+        fail_msg: >-
+          Vault TLS private key must be readable by the vault service identity
+          and protected from other local users.
+
+    - name: Verify externally issued Vault TLS certificate chain
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - verify
+          - -CAfile
+          - "{{ vault_server_tls_ca_file }}"
+          - -purpose
+          - sslserver
+          - "{{ vault_server_tls_cert_file }}"
+      changed_when: false
+      check_mode: false
+
+    - name: Select the Vault certificate identity check for DNS or IPv4
+      ansible.builtin.set_fact:
+        vault_server_tls_identity_check: >-
+          {{ '-checkip' if vault_server_tls_server_name is match('^[0-9]{1,3}(\\.[0-9]{1,3}){3}$') else '-checkhost' }}
+
+    - name: Verify Vault TLS certificate name and remaining validity
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ vault_server_tls_cert_file }}"
+          - -noout
+          - "{{ vault_server_tls_identity_check }}"
+          - "{{ vault_server_tls_server_name }}"
+          - -checkend
+          - "{{ vault_server_tls_min_validity_seconds | string }}"
+      changed_when: false
+      check_mode: false
+
+    - name: Verify Vault TLS certificate and private key are a usable pair
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - >-
+            import ssl, sys; context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);
+            context.load_cert_chain(sys.argv[1], sys.argv[2])
+          - "{{ vault_server_tls_cert_file }}"
+          - "{{ vault_server_tls_key_file }}"
+      register: vault_server_tls_pair_check
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Require a matching Vault TLS certificate and private key
+      ansible.builtin.assert:
+        that:
+          - vault_server_tls_pair_check.rc == 0
+        fail_msg: Vault TLS certificate and private key must form a usable pair.
+
+    - name: Render TLS protected Raft configuration
+      ansible.builtin.template:
+        src: vault.hcl.j2
+        dest: "{{ vault_server_config_dir }}/vault.hcl"
+        owner: root
+        group: vault
+        mode: "0640"
+      notify: Restart Vault
+
+    - name: Install hardened Vault systemd unit
+      ansible.builtin.template:
+        src: vault.service.j2
+        dest: /etc/systemd/system/vault.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart Vault
+
+    - name: Create protected Vault audit log directory
+      ansible.builtin.file:
+        path: "{{ vault_server_audit_log_dir }}"
+        state: directory
+        owner: vault
+        group: vault
+        mode: "0700"
+
+    - name: Create protected Vault audit log file
+      ansible.builtin.file:
+        path: "{{ vault_server_audit_log_file }}"
+        state: touch
+        owner: vault
+        group: vault
+        mode: "0600"
+        access_time: preserve
+        modification_time: preserve
+
+    - name: Install Vault audit log rotation policy
+      ansible.builtin.copy:
+        dest: /etc/logrotate.d/vault
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {{ vault_server_audit_log_file }} {
+              weekly
+              rotate 8
+              missingok
+              notifempty
+              compress
+              delaycompress
+              copytruncate
+              su vault vault
+          }
+
+    - name: Enable Vault at boot only when explicitly requested
+      ansible.builtin.systemd_service:
+        name: vault.service
+        enabled: true
+        daemon_reload: true
+      when: vault_server_service_enabled | bool
+
+    - name: Start Vault only when explicitly requested
+      ansible.builtin.systemd_service:
+        name: vault.service
+        state: started
+        daemon_reload: true
+      when: vault_server_service_started | bool
+
+    - name: Apply pending Vault unit and certificate changes before health validation
+      ansible.builtin.meta: flush_handlers
+
+    - name: Require the TLS health endpoint to answer after service start
+      ansible.builtin.uri:
+        url: "{{ vault_server_api_addr }}/v1/sys/health"
+        method: GET
+        ca_path: "{{ vault_server_tls_ca_file }}"
+        validate_certs: true
+        status_code: [200, 429, 472, 473, 501]
+        return_content: false
+      register: vault_server_health
+      retries: 12
+      delay: 5
+      until: vault_server_health.status is defined
+      changed_when: false
+      when: vault_server_service_started | bool

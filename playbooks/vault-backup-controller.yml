@@ -1,0 +1,9 @@
+---
+- name: Configure an encrypted Vault snapshot backup on the Ansible controller
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  roles:
+    - vault_snapshot_backup
