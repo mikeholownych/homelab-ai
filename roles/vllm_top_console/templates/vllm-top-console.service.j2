@@ -11,10 +11,15 @@ Type=simple
 User={{ vllm_top_console_user }}
 Group={{ vllm_top_console_user }}
 WorkingDirectory=/home/{{ vllm_top_console_user }}
+# vllm-top discovers its endpoints once, at startup. The gateway is Type=simple, so ordering After= it does
+# not mean it is listening yet; without this wait the console falls back to localhost:8000 and shows nothing.
+# Best-effort ("-"): after the timeout it still starts rather than leaving tty1 blank.
+ExecStartPre=-/usr/bin/timeout {{ vllm_top_console_gateway_wait_seconds }} /bin/sh -c 'until /usr/bin/curl -fsS -m 2 -o /dev/null http://127.0.0.1:{{ vllm_top_console_gateway_port }}/health; do sleep 1; done'
 ExecStart={{ vllm_top_console_binary_dest }}
 Restart=on-failure
 RestartSec=2s
 TimeoutStopSec=10s
+TimeoutStartSec={{ vllm_top_console_gateway_wait_seconds | int + 30 }}s
 TTYPath=/dev/{{ vllm_top_console_tty }}
 TTYReset=yes
 TTYVHangup=yes

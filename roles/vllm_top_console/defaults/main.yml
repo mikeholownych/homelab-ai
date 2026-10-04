@@ -6,6 +6,9 @@ vllm_top_console_binary_src: "{{ playbook_dir }}/../vllm-top/target/release/vllm
 vllm_top_console_binary_dest: /usr/local/bin/vllm-top
 vllm_top_console_user: mike
 vllm_top_console_tty: tty1
+# Startup wait for the orchestrator gateway so one-shot discovery finds it (see the unit template).
+vllm_top_console_gateway_port: "{{ orchestrator_gateway_port | default(8010) }}"
+vllm_top_console_gateway_wait_seconds: 90
 vllm_top_console_service: vllm-top-console.service
 # Minimum acceptable version; the play fails rather than installing something older.
 vllm_top_console_min_version: "0.9.2"
