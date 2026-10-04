@@ -3,8 +3,9 @@
 `vllm-top` remains a normal terminal application — nothing in its code
 knows or cares that it might be running on a physical console instead of
 an SSH session. "Owning TTY1" is entirely a systemd deployment concern,
-implemented by `vllm-top-console.service` (source of truth:
-`deploy/vllm-top-console.service` in this repo; installed copy:
+implemented by `vllm-top-console.service` (source of truth: the Ansible role
+`roles/vllm_top_console` in this repo, template
+`templates/vllm-top-console.service.j2`; installed copy:
 `/etc/systemd/system/vllm-top-console.service`).
 
 ## Architecture
@@ -50,34 +51,21 @@ configuration was touched.
 
 ## Installing / re-deploying
 
-```sh
-sudo cp deploy/vllm-top-console.service /etc/systemd/system/vllm-top-console.service
-sudo systemctl daemon-reload
-sudo systemctl restart vllm-top-console.service   # picks up unit file changes
-```
-
-To deploy from scratch on a host that still has the normal login getty on
-tty1:
+Deployed by Ansible only (builds nothing on the host; installs the binary from
+`vllm-top/target/release/vllm-top` root-owned, writes the unit, masks getty):
 
 ```sh
-sudo cp deploy/vllm-top-console.service /etc/systemd/system/vllm-top-console.service
-sudo systemctl daemon-reload
-sudo systemctl stop getty@tty1.service
-sudo systemctl mask getty@tty1.service
-sudo systemctl enable --now vllm-top-console.service
+cd vllm-top && cargo build --release && cd ..
+.venv/bin/ansible-playbook playbooks/inference.yml --limit ai-5820-01 --tags console
 ```
+
+The unit waits for the orchestrator gateway before starting, because vllm-top
+discovers its endpoints once at startup.
 
 ## Upgrading `vllm-top` itself
 
-Installing a new binary (`cargo install --path .`) does **not** affect an
-already-running monitor process — same as any other already-open
-executable. Restart the service to pick it up (this also resets
-monitor-lifetime statistics, by design):
-
-```sh
-cargo build --release && cargo install --path .
-sudo systemctl restart vllm-top-console.service
-```
+Re-run the playbook command above after `cargo build --release`; the handler
+restarts the service (this also resets monitor-lifetime statistics, by design).
 
 ## Rollback
 
