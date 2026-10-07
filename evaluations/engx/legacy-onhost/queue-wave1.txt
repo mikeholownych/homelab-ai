@@ -1,0 +1,5 @@
+c-q38-27b-q4km|qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf|NOTHINK=1|
+c-glimmer30b-q4km|muse-glimmer-30b/Muse-Glimmer-30B-KQuant-17GB-Q4_K_M.gguf|NOTHINK=1|
+c-q36-35b-a3b-q4km|qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf|NOTHINK=1|
+c-glm47flash-q4km|glm-4.7-flash/GLM-4.7-Flash-Q4_K_M.gguf|NOTHINK=1|
+c-flashnext-gsq-1gpu|flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf|NOTHINK=1 CTX=32768|-lm mmap -lzm on
