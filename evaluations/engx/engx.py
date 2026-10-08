@@ -216,24 +216,36 @@ REASONING_BUDGET = int(os.environ["ENGX_REASONING_BUDGET"]) if os.environ.get("E
 REASONING_BUDGET_MESSAGE = os.environ.get("ENGX_REASONING_BUDGET_MESSAGE", "")
 
 
-def count_tokens(base, headers, text):
-    """Exact token count from the serving engine's own tokenizer (llama.cpp /tokenize); None if unavailable."""
+def _gateway_prompt_tokens(base, headers, model, content):
+    body = {"model": model, "messages": [{"role": "user", "content": content}]}
+    req = urllib.request.Request(base + "/v1/tokenize", json.dumps(body).encode(), headers)
+    counted = json.load(urllib.request.urlopen(req, timeout=60))
+    return counted.get("prompt_tokens") if counted.get("source") == "exact" else None
+
+
+def count_tokens(base, headers, model, text):
+    """Exact token count of `text` with the serving worker's own tokenizer, through the gateway; None if unavailable.
+
+    The gateway's /v1/tokenize counts a whole chat request rendered with the worker's template, so the text is
+    counted as one user message (Qwen3-family templates refuse a conversation without one) and the same request
+    with empty content is subtracted, leaving the text's own tokens."""
     if not text:
         return 0
     try:
-        req = urllib.request.Request(base + "/tokenize", json.dumps({"content": text}).encode(), headers)
-        return len(json.load(urllib.request.urlopen(req, timeout=60)).get("tokens") or [])
+        with_text = _gateway_prompt_tokens(base, headers, model, text)
+        empty = _gateway_prompt_tokens(base, headers, model, "")
     except Exception:
         return None
+    return with_text - empty if with_text is not None and empty is not None else None
 
 
-def attempt_metrics(r, base, headers, text, reasoning, files):
+def attempt_metrics(r, base, headers, model, text, reasoning, files):
     """Per-attempt serving evidence, kept separate from the validator result."""
     choice = r["choices"][0]
     usage = r.get("usage") or {}
     timings = r.get("timings") or {}
-    reasoning_tokens = count_tokens(base, headers, reasoning)
-    answer_tokens = count_tokens(base, headers, text)
+    reasoning_tokens = count_tokens(base, headers, model, reasoning)
+    answer_tokens = count_tokens(base, headers, model, text)
     prompt_ms, predicted_ms, predicted_n = timings.get("prompt_ms"), timings.get("predicted_ms"), timings.get("predicted_n")
     ttft_ms = None
     if isinstance(prompt_ms, (int, float)):
@@ -302,7 +314,7 @@ def run_task(task, base, headers, model, max_attempts):
             ok, stage, feedback = validate(task, None, files)
         rec["history"].append({"attempt": attempt, "stage": stage, "ok": ok, "files": sorted(files), "ignored": ignored, "finish": r["choices"][0].get("finish_reason"),
                                "feedback": feedback[:1500], "response": text[:12000], "reasoning_tail": reasoning[-2000:],
-                               "wall_secs": attempt_secs, **attempt_metrics(r, base, headers, text, reasoning, files)})
+                               "wall_secs": attempt_secs, **attempt_metrics(r, base, headers, model, text, reasoning, files)})
         if ok:
             rec["success"] = True; break
         messages += [{"role": "assistant", "content": text},
