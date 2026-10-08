@@ -85,6 +85,10 @@ class HealthManager:
         self._poll_thread: threading.Thread | None = None
         self._stats_thread: threading.Thread | None = None
         self.stats_interval_seconds = max(0.5, float(os.environ.get("ORCHESTRATOR_ENGINE_STATS_INTERVAL_SECONDS", "1.0")))
+        # Run after every probe cycle (the runtime re-observes worker capacity here, docs/design/01).
+        self.cycle_hooks: list[Any] = []
+        # Extra per-worker fields for /health supplied by the runtime (capacity, capabilities, drain, endpoint).
+        self.worker_detail: Any = None
 
         # Initialize health states for all workers currently registered
         self._sync_registered_workers()
@@ -99,16 +103,17 @@ class HealthManager:
         with self._lock:
             for worker_dict in self.registry.snapshot():
                 wid = worker_dict["worker_id"]
-                is_healthy = bool(worker_dict.get("healthy", True))
+                is_stopped = worker_dict.get("status") == "stopped"
+                is_healthy = not is_stopped and bool(worker_dict.get("healthy", True))
                 if wid not in self._states:
                     self._states[wid] = WorkerHealthState(
                         worker_id=wid,
                         healthy=is_healthy,
-                        status="healthy" if is_healthy else "unhealthy",
+                        status="stopped" if is_stopped else "healthy" if is_healthy else "unhealthy",
                         last_observed_timestamp=now,
                         last_observed_iso=now_iso,
                         check_duration_seconds=0.0,
-                        consecutive_failures=0 if is_healthy else 1,
+                        consecutive_failures=0 if is_healthy or is_stopped else 1,
                     )
                     if self.metrics:
                         self.metrics.worker_health_status.set(1.0 if is_healthy else 0.0, worker_id=wid)
@@ -166,7 +171,11 @@ class HealthManager:
         with self._lock:
             self._sync_registered_workers()
             registered_workers = {w["worker_id"]: w for w in self.registry.snapshot()}
-            total_registered = len(registered_workers)
+            active_workers = {
+                wid: worker for wid, worker in registered_workers.items()
+                if worker.get("status") != "stopped"
+            }
+            total_registered = len(active_workers)
 
             worker_summaries: dict[str, dict[str, Any]] = {}
             healthy_count = 0
@@ -175,6 +184,27 @@ class HealthManager:
             max_age = 0.0
 
             for wid, worker_record in registered_workers.items():
+                if worker_record.get("status") == "stopped":
+                    worker_summaries[wid] = {
+                        "status": "stopped",
+                        "healthy": False,
+                        "expected_state": "stopped",
+                        "blocked_reason": "operator_stopped",
+                        "pool": worker_record.get("pool", "lead"),
+                        "engine": worker_record.get("engine", "unknown"),
+                        "engine_stats": None,
+                        "public_model_id": worker_record.get("public_model_id", "unknown"),
+                        "model_id": worker_record.get("model_id", "unknown"),
+                        "last_observed_seconds_ago": None,
+                        "last_check_timestamp": None,
+                        "consecutive_failures": 0,
+                    }
+                    if self.worker_detail is not None:
+                        try:
+                            worker_summaries[wid].update(self.worker_detail(wid))
+                        except Exception:  # noqa: BLE001 - detail is additive; health must still answer
+                            pass
+                    continue
                 state = self._states.get(wid)
                 if state is None:
                     worker_summaries[wid] = {
@@ -222,6 +252,11 @@ class HealthManager:
                     "last_check_timestamp": state.last_observed_iso,
                     "consecutive_failures": state.consecutive_failures,
                 }
+                if self.worker_detail is not None:
+                    try:
+                        worker_summaries[wid].update(self.worker_detail(wid))
+                    except Exception:  # noqa: BLE001 - detail is additive; health must still answer
+                        pass
 
         # Deterministic status resolution
         if total_registered == 0:
@@ -271,6 +306,8 @@ class HealthManager:
                 "active_work": active_work,
                 "available_workers": healthy_count,
                 "total_workers": total_registered,
+                "configured_workers": len(registered_workers),
+                "stopped_workers": len(registered_workers) - total_registered,
             },
             "workers": worker_summaries,
             "dependency_freshness": {
@@ -290,6 +327,10 @@ class HealthManager:
                 worker_record = w
                 break
         if worker_record is None:
+            return False
+        if worker_record.get("status") == "stopped":
+            # An operator-stopped worker is expected not to answer. Do not turn
+            # that configured state into a health failure or alter its metrics.
             return False
 
         endpoint = worker_record.get("endpoint")
@@ -380,6 +421,8 @@ class HealthManager:
     def collect_all_engine_stats(self) -> None:
         """Refresh engine statistics for every worker (independent of health probing)."""
         for w in self.registry.snapshot():
+            if w.get("status") == "stopped":
+                continue
             endpoint, token = w.get("endpoint"), w.get("auth_token")
             if not endpoint or not str(endpoint).startswith(("http://", "https://")):
                 continue
@@ -407,9 +450,16 @@ class HealthManager:
                 break
 
     def probe_all(self) -> None:
-        """Probe all currently registered workers."""
+        """Probe all currently registered workers, then run the cycle hooks (capacity re-observation)."""
         for w in self.registry.snapshot():
+            if w.get("status") == "stopped":
+                continue
             self.probe_worker(w["worker_id"])
+        for hook in list(self.cycle_hooks):
+            try:
+                hook()
+            except Exception:  # noqa: BLE001 - a hook must never stop health probing
+                pass
 
     def _poll_loop(self) -> None:
         """Periodic background polling loop that refreshes worker health."""

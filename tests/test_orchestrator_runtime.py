@@ -52,6 +52,12 @@ def test_registry_routes_only_current_validated_workers():
     assert registry.public_models() == ["engineering/ready"]
 
 
+def test_stopped_worker_is_not_eligible():
+    registry = CapabilityRegistry([worker("lent-gpu", status="stopped")])
+
+    assert registry.candidates(frozenset({"navigation"})) == []
+
+
 def test_graph_blocks_dependents_until_artifact_is_accepted():
     graph = TaskGraph("task-1")
     graph.add("inspect", capabilities={"navigation"})
@@ -211,7 +217,8 @@ def test_provider_adapter_captures_safe_response_metadata(monkeypatch):
                 }
             ).encode()
 
-    monkeypatch.setattr("orchestrator_runtime.runtime.urllib.request.urlopen", lambda *args, **kwargs: Response())
+    # The adapter's transport seam (http.client, so the gateway can close the connection to cancel generation).
+    monkeypatch.setattr(OpenAIProviderAdapter, "_send", lambda self, *args, **kwargs: (200, Response().read()))
 
     output = OpenAIProviderAdapter("http://provider", "token").complete(
         {"messages": [{"role": "user", "content": "hi"}]},
@@ -290,7 +297,12 @@ def test_max_tokens_is_clamped_to_remaining_context(tmp_path):
 
     assert result["status"] == "ok"
     sent, timeout = adapter.seen[0]
-    assert sent["max_tokens"] == 16_384 - 10_000 - 256
+    # No engine tokenizer here, so the prompt is a conservative over-estimate; the completion gets exactly what is
+    # left of the window after it and the safety margin (and never more than the client asked for).
+    prompt = int(result["headers"]["X-AIHost-Prompt-Tokens"].lstrip("~"))
+    assert result["headers"]["X-AIHost-Prompt-Tokens-Source"] == "estimated_conservative"
+    assert prompt >= 10_000
+    assert sent["max_tokens"] == 16_384 - prompt - 16 == int(result["headers"]["X-AIHost-Max-Completion"])
     assert timeout == runtime.upstream_timeout >= 600
 
 

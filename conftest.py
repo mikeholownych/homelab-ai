@@ -27,6 +27,8 @@ TOKEN_DEPENDENT_TEST_NAMES = {
     "test_gate_g14_real_inference_comparative_campaign",
     "test_gate_g12_protected_service_non_interference",
     "test_endpoint_health",
+    "test_live_adapter_contract_and_model_completion",
+    "test_controlled_live_execution_e2e",
 }
 
 
@@ -67,5 +69,7 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 
     # 3. Physical live endpoint token dependent tests
     if item.name in TOKEN_DEPENDENT_TEST_NAMES:
+        if not os.environ.get("AIHOST_RUN_LIVE_TESTS"):
+            pytest.skip("Live gateway tests require AIHOST_RUN_LIVE_TESTS=1 and use the remote TLS gateway")
         if not _has_client_token():
             pytest.skip("Physical client token (/home/mike/.config/opencode/t5820-client-token) not present on this host (physical qualification test)")

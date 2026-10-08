@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Dict, Any, List, Optional
 import urllib.request
 import urllib.error
+from orchestrator_contract.http import gateway_urlopen
 
 from autonomous_engineering.eval.candidates import CandidateManifest
 
@@ -128,7 +129,7 @@ class DeploymentQualifier:
                 if auth_token:
                     headers["Authorization"] = f"Bearer {auth_token}"
                 req = urllib.request.Request(f"{live_endpoint}/models", headers=headers, method="GET")
-                with urllib.request.urlopen(req, timeout=5) as resp:
+                with gateway_urlopen(req, timeout=5) as resp:
                     if resp.status == 200:
                         live_verified = True
             except Exception as e:

@@ -6,6 +6,7 @@ from autonomous_engineering.eval.candidates import (
     CandidateManifest,
 )
 from autonomous_engineering.eval.deployment_qual import DeploymentQualifier
+from orchestrator_contract.http import gateway_base_url
 
 
 def test_qualify_valid_candidate():
@@ -50,7 +51,7 @@ def test_live_endpoint_qualification_check():
     qualifier = DeploymentQualifier(min_host_ram_reserve_gb=4.0)
     res = qualifier.qualify_candidate(
         CONTROL_QWEN3_CODER_30B_AWQ,
-        live_endpoint="http://127.0.0.1:18010/v1",
+        live_endpoint=gateway_base_url(),
         auth_token=token,
     )
     # The control candidate passes qualification

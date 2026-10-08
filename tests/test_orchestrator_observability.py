@@ -221,6 +221,39 @@ def test_health_manager_stale_detection():
     assert payload["dependency_freshness"]["is_stale"] is True
 
 
+def test_intentionally_stopped_worker_is_expected_and_excluded_from_health(monkeypatch):
+    stopped = make_worker("stopped", status="stopped")
+    active = make_worker("active")
+    registry = CapabilityRegistry([stopped, active])
+    metrics = MetricsRegistry()
+    health = HealthManager(registry, metrics=metrics)
+
+    def unexpected_probe(*args, **kwargs):
+        raise AssertionError("a stopped worker must never be probed")
+
+    monkeypatch.setattr("urllib.request.urlopen", unexpected_probe)
+    health.probe_all()
+    health.collect_all_engine_stats()
+
+    status_code, payload = health.check()
+    assert status_code == HTTPStatus.OK
+    assert payload["status"] == "healthy"
+    assert payload["ready"] is True and payload["can_route"] is True
+    assert payload["scheduler"]["available_workers"] == 1
+    assert payload["scheduler"]["total_workers"] == 1
+    assert payload["scheduler"]["configured_workers"] == 2
+    assert payload["scheduler"]["stopped_workers"] == 1
+    expected = payload["workers"]["stopped"]
+    assert expected["status"] == "stopped"
+    assert expected["healthy"] is False
+    assert expected["expected_state"] == "stopped"
+    assert expected["blocked_reason"] == "operator_stopped"
+    assert expected["consecutive_failures"] == 0
+    assert expected["engine_stats"] is None
+    assert metrics.worker_health_status.get(worker_id="stopped") == 0.0
+    assert metrics.scheduler_worker_available.get(worker_id="stopped") == 0.0
+
+
 def test_health_manager_empty_registry():
     """Verify that a registry with zero workers returns unavailable."""
     cap_registry = CapabilityRegistry([])

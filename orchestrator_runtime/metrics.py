@@ -469,6 +469,103 @@ class MetricsRegistry:
             ("reason",),
         )
 
+        # ---------------------------------------------------------------------
+        # 6. Live capacity, admission and limits (docs/design/01)
+        # ---------------------------------------------------------------------
+        self.worker_context_limit = self._register_gauge(
+            "aihost_worker_context_limit_tokens",
+            "Observed per-slot context window of each worker (the engine's own value, not the inventory's).",
+            ("worker_id",),
+        )
+        self.worker_slots_total = self._register_gauge(
+            "aihost_worker_slots",
+            "Observed number of request slots each worker can run at once.",
+            ("worker_id",),
+        )
+        self.worker_concurrency_limit = self._register_gauge(
+            "aihost_worker_concurrency_limit",
+            "Adaptive concurrency limit the gateway applies to each worker (bounded by its observed slots).",
+            ("worker_id",),
+        )
+        self.worker_inventory_mismatch = self._register_gauge(
+            "aihost_worker_inventory_mismatch",
+            "1 when the observed worker differs from the inventory for `field` (model_identity blocks routing).",
+            ("worker_id", "field"),
+        )
+        self.worker_drained = self._register_gauge(
+            "aihost_worker_drained",
+            "1 while a worker is drained (admits no new work; in-flight work completes).",
+            ("worker_id",),
+        )
+        self.scheduler_queue_depth = self._register_gauge(
+            "aihost_scheduler_queue_depth",
+            "Requests waiting in the gateway admission queue, per pool.",
+            ("pool",),
+        )
+        self.admission_rejections_total = self._register_counter(
+            "aihost_admission_rejections_total",
+            "Requests refused at admission: capacity_exhausted and deadline_exceeded (429/504), quota_exceeded (429).",
+            ("code", "pool"),
+        )
+        self.prompt_token_counts_total = self._register_counter(
+            "aihost_prompt_token_counts_total",
+            "How the gateway sized each request's prompt: exact (worker tokenizer over the rendered request) or "
+            "estimated_conservative (fallback that over-counts).",
+            ("source",),
+        )
+        self.client_limit_clamped_total = self._register_counter(
+            "aihost_client_limit_clamped_total",
+            "Client requests whose limits were lowered to what the platform permits (monotonic limits).",
+            ("client_id", "field"),
+        )
+
+        # ---------------------------------------------------------------------
+        # 7. Completion termination, cancellation and retries (docs/design/02, 03)
+        # ---------------------------------------------------------------------
+        self.completion_terminations_total = self._register_counter(
+            "aihost_completion_terminations_total",
+            "Completed worker calls by how generation ended: stop, tool_calls or output_limit.",
+            ("worker_id", "pool", "termination"),
+        )
+        self.reasoning_budget_exhausted_total = self._register_counter(
+            "aihost_reasoning_budget_exhausted_total",
+            "Completions whose reasoning hit the effective budget (the end-of-budget instruction was injected).",
+            ("worker_id", "pool"),
+        )
+        self.requests_cancelled_total = self._register_counter(
+            "aihost_requests_cancelled_total",
+            "Requests cancelled before completion (client_disconnect, deadline), freeing the worker slot.",
+            ("reason", "pool"),
+        )
+        self.retries_total = self._register_counter(
+            "aihost_retries_total",
+            "Safe retries to another worker after a pre-generation failure (no output produced, nothing sent).",
+            ("reason",),
+        )
+        self.shadow_comparisons_total = self._register_counter(
+            "aihost_shadow_comparisons_total",
+            "Shadow-routed requests (never returned to the client) by comparison result.",
+            ("pool", "result"),
+        )
+
+        # ---------------------------------------------------------------------
+        # 8. Clients, origin, outcomes and evidence integrity (docs/design/03, 05)
+        # ---------------------------------------------------------------------
+        self.local_origin_refused_total = self._register_counter(
+            "aihost_local_origin_refused_total",
+            "Workload requests refused because they originated on the aihost itself (remote-origin-only policy).",
+            ("listener",),
+        )
+        self.outcomes_total = self._register_counter(
+            "aihost_outcomes_total",
+            "Client-reported outcomes of completed requests, joined to the route, pool and model that served them.",
+            ("rule", "pool", "model", "outcome"),
+        )
+        self.evidence_chain_valid = self._register_gauge(
+            "aihost_evidence_chain_valid",
+            "1 when the persisted evidence chain verified intact at start (0 = a break was detected and evidenced).",
+        )
+
     def _register_counter(self, name: str, help_text: str, label_names: tuple[str, ...] = ()) -> Counter:
         counter = Counter(name, help_text, label_names)
         self._metrics.append(counter)

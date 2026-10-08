@@ -31,10 +31,16 @@ Both endpoints are **non-blocking**, **scrape-safe**, and execute in $O(1)$ memo
 
 | Health State | HTTP Status (Default) | HTTP Status (`strict=true`) | `ready` | `can_route` | Description |
 |:---|:---:|:---:|:---:|:---:|:---|
-| **`healthy`** | `200 OK` | `200 OK` | `true` | `true` | Gateway alive, scheduler operational, all registered workers healthy and fresh. |
-| **`degraded`** | `200 OK` | `503 Service Unavailable` | `true` | `true` | Gateway alive and able to route inference to at least one healthy worker, but one or more registered workers are unhealthy or stale. |
+| **`healthy`** | `200 OK` | `200 OK` | `true` | `true` | Gateway alive, scheduler operational, all workers expected to serve are healthy and fresh. |
+| **`degraded`** | `200 OK` | `503 Service Unavailable` | `true` | `true` | Gateway alive and able to route inference to at least one healthy worker, but one or more workers expected to serve are unhealthy or stale. |
 | **`unavailable`** | `503 Service Unavailable` | `503 Service Unavailable` | `false` | `false` | Zero workers are healthy/available, or scheduler is unable to route requests. |
 | **`stale`** | Evaluated as `unavailable` or `degraded` | Evaluated as `unavailable` or `degraded` | Dynamic | Dynamic | Worker observation age exceeds configured TTL (`max_freshness_seconds`, default 30.0s). |
+
+A worker configured with `status: "stopped"` remains in the worker registry and `/health` response, with
+`status: "stopped"`, `healthy: false`, `expected_state: "stopped"`, and `blocked_reason: "operator_stopped"`.
+It is not probed, does not contribute to degradation or dependency staleness, and is excluded from scheduler
+`total_workers`. `configured_workers` and `stopped_workers` retain the inventory counts. vllm-top does not
+discover stopped workers as inference instances; its gateway detail panel labels them `stopped` neutrally.
 
 ### 2.3 JSON Schema Contract
 
@@ -79,7 +85,9 @@ Both endpoints are **non-blocking**, **scrape-safe**, and execute in $O(1)$ memo
         "queued_work": { "type": "integer", "minimum": 0 },
         "active_work": { "type": "integer", "minimum": 0 },
         "available_workers": { "type": "integer", "minimum": 0 },
-        "total_workers": { "type": "integer", "minimum": 0 }
+        "total_workers": { "type": "integer", "minimum": 0, "description": "Workers expected to serve, including unhealthy workers; excludes stopped workers." },
+        "configured_workers": { "type": "integer", "minimum": 0 },
+        "stopped_workers": { "type": "integer", "minimum": 0 }
       }
     },
     "workers": {
@@ -88,7 +96,7 @@ Both endpoints are **non-blocking**, **scrape-safe**, and execute in $O(1)$ memo
         "type": "object",
         "required": ["status", "healthy", "public_model_id", "model_id", "last_observed_seconds_ago", "last_check_timestamp", "consecutive_failures"],
         "properties": {
-          "status": { "type": "string", "enum": ["healthy", "unhealthy", "stale", "unknown"] },
+          "status": { "type": "string", "enum": ["healthy", "unhealthy", "stale", "unknown", "stopped"] },
           "healthy": { "type": "boolean" },
           "public_model_id": { "type": "string" },
           "model_id": { "type": "string" },

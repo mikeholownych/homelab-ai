@@ -206,14 +206,16 @@ def test_gate_g14_real_inference_comparative_campaign(tmp_path):
     assert token_path.exists()
     import json
     import urllib.request
+    from orchestrator_contract.http import gateway_base_url, gateway_urlopen
     token = token_path.read_text().strip()
+    base_url = gateway_base_url()
 
     # 2. Verify model endpoint enumeration
     req_models = urllib.request.Request(
-        "http://127.0.0.1:18010/v1/models",
+        f"{base_url}/models",
         headers={"Authorization": f"Bearer {token}"},
     )
-    with urllib.request.urlopen(req_models, timeout=5) as response:
+    with gateway_urlopen(req_models, timeout=5) as response:
         assert response.status == 200
         models_data = json.loads(response.read().decode("utf-8"))
         model_ids = [m["id"] for m in models_data.get("data", [])]
@@ -232,11 +234,11 @@ def test_gate_g14_real_inference_comparative_campaign(tmp_path):
     def _call(msgs):
         payload = json.dumps({"model": "engineering/b0", "messages": msgs, "max_tokens": 100, "temperature": 0.0}).encode("utf-8")
         req = urllib.request.Request(
-            "http://127.0.0.1:18010/v1/chat/completions",
+            f"{base_url}/chat/completions",
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             data=payload,
         )
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with gateway_urlopen(req, timeout=20) as resp:
             assert resp.status == 200
             res = json.loads(resp.read().decode("utf-8"))
             return res["choices"][0]["message"]["content"]

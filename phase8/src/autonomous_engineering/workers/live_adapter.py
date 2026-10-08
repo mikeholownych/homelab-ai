@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import ssl
 from typing import Any
 import urllib.error
 import urllib.request
@@ -17,6 +18,7 @@ from autonomous_engineering.containment.bwrap import BwrapSandbox
 from autonomous_engineering.core.types import ArtifactType, FailureClass
 from autonomous_engineering.planning.models import TaskStepDefinition
 from autonomous_engineering.workers.simulated import BaseWorker, WorkerExecutionResult
+from orchestrator_contract.http import gateway_base_url, gateway_ssl_context
 
 
 class LiveWorkerError(RuntimeError):
@@ -40,13 +42,14 @@ class LiveModelWorker(BaseWorker):
         worker_id: str,
         profile_hash: str,
         artifact_store: ArtifactStore,
-        endpoint_url: str = "http://127.0.0.1:18010/v1/chat/completions",
+        endpoint_url: str | None = None,
         token_path: Path | str = "/home/mike/.config/opencode/t5820-client-token",
         model_name: str = "engineering/b0",
         sandbox: BwrapSandbox | None = None,
     ) -> None:
         super().__init__(worker_id, profile_hash, artifact_store)
-        self.endpoint_url = endpoint_url
+        self.endpoint_url = endpoint_url or f"{gateway_base_url()}/chat/completions"
+        self.ssl_context: ssl.SSLContext | None = gateway_ssl_context(self.endpoint_url)
         self.token_path = Path(token_path)
         self.model_name = model_name
         self.sandbox = sandbox
@@ -120,7 +123,7 @@ class LiveModelWorker(BaseWorker):
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=60.0) as resp:
+            with urllib.request.urlopen(req, timeout=60.0, context=self.ssl_context) as resp:
                 raw_bytes = resp.read()
                 resp_json = json.loads(raw_bytes.decode("utf-8"))
         except urllib.error.HTTPError as err:

@@ -7,6 +7,7 @@ import time
 import urllib.error
 
 import urllib.request
+from orchestrator_contract.http import gateway_base_url, gateway_urlopen
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -56,10 +57,10 @@ class PhysicalInferenceEvaluator:
 
     def __init__(
         self,
-        endpoint_url: str = "http://127.0.0.1:18010/v1",
+        endpoint_url: str | None = None,
         auth_token_path: str = "/home/mike/.config/opencode/t5820-client-token",
     ):
-        self.endpoint_url = endpoint_url
+        self.endpoint_url = endpoint_url or gateway_base_url()
         self.auth_token_path = auth_token_path
 
     def _get_bearer_token(self) -> Optional[str]:
@@ -79,7 +80,7 @@ class PhysicalInferenceEvaluator:
                 f"{self.endpoint_url}/models",
                 headers={"Authorization": f"Bearer {token}"},
             )
-            with urllib.request.urlopen(req, timeout=5) as resp:
+            with gateway_urlopen(req, timeout=5) as resp:
                 if resp.status == 200:
                     data = json.loads(resp.read().decode("utf-8"))
                     models = [m["id"] for m in data.get("data", [])]

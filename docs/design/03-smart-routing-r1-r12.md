@@ -76,7 +76,7 @@ started_at, bytes_sent_to_client}`, plus the per-pool admission queue.
 
 ## R6 Per-client identity, quotas and budgets
 - **Design:**
-  - The client registry `/etc/local-ai/orchestrator/clients.json` (Ansible-rendered, gateway-readable 0440) holds, per client:
+  - The digest-only client registry `/var/lib/aihost-gateway/clients.json` (Ansible-rendered, gateway-readable 0640) holds, per client. It lives in the service's private state directory because `/etc/local-ai` is not traversable by the isolated gateway account:
     `client_id`, `token_sha256`, `scopes ⊆ {workload, qualification, monitoring, admin}`, `max_priority`, `default_priority`,
     `quota: {requests_per_minute, tokens_per_day}`.
   - Tokens are stored only as sha256 in the registry. Plaintext token files are root-only (`/etc/local-ai/orchestrator/clients/
@@ -96,8 +96,14 @@ started_at, bytes_sent_to_client}`, plus the per-pool admission queue.
   - **Safe retry:** retry/fallback only when (a) no byte was sent to the client and (b) the failure happened before
     generation: connection refused/reset before response headers, worker unhealthy, or 503. Never retry after a timeout, after the
     worker produced output, or mid-stream. At most one retry, to the next fit- and capability-checked candidate. Evidenced.
-  - Streaming: the gateway currently emits SSE only after the full upstream response, so "before the first streamed token" is
-    structurally guaranteed. This invariant is asserted in tests.
+  - Streaming (amended during implementation, 2026-10-07): the gateway now streams for real. It reads the worker's SSE and
+    forwards each delta as it arrives (fix for N3), keeping a full copy of the response for validation, termination
+    classification and evidence. "Before the first streamed token" is the point where the gateway sends its response
+    headers (`on_stream_start`):
+    - a pre-generation failure before it may be retried;
+    - nothing after it is retried;
+    - a client write failure mid-stream is a cancellation (R1), never a worker failure.
+    The termination class travels in the final SSE frame (`x_aihost.termination`), because the headers have already gone out.
 - **Review:** no duplicate generation billed or emitted. Deterministic. Accepted.
 
 ## R8 Reasoning control per route

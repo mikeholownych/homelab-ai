@@ -9,6 +9,24 @@ from orchestrator_runtime import CapabilityRegistry, EvidenceStore, InMemoryAdap
 from tests.test_orchestrator_runtime import worker
 
 
+class StreamingAdapter:
+    supports_streaming = True
+
+    def __init__(self, *, content="", tool_calls=None):
+        self.content = content
+        self.tool_calls = tool_calls or []
+
+    def complete(self, request, timeout, cancel=None, on_stream_start=None, on_stream_chunk=None):
+        on_stream_start()
+        delta = {}
+        if self.content:
+            delta["content"] = self.content
+        if self.tool_calls:
+            delta["tool_calls"] = [{**call, "index": index} for index, call in enumerate(self.tool_calls)]
+        on_stream_chunk({"choices": [{"index": 0, "delta": delta, "finish_reason": None}]})
+        return {"content": self.content, "tool_calls": self.tool_calls, "provider_finish_reason": "tool_calls" if self.tool_calls else "stop"}
+
+
 def test_gateway_auth_models_and_chat(tmp_path):
     registry = CapabilityRegistry([worker("ready")])
     runtime = OrchestratorRuntime(
@@ -56,10 +74,7 @@ def test_gateway_auth_models_and_chat(tmp_path):
             headers={"Authorization": "Bearer client-secret", "Content-Type": "application/json"},
         )
         response = connection.getresponse()
-        stream = response.read().decode()
-        assert response.status == 200
-        assert response.getheader("Content-Type") == "text/event-stream"
-        assert "[DONE]" in stream
+        assert response.status == 422  # in-memory adapters do not pretend to stream
         connection.close()
 
         connection = HTTPConnection(host, port)
@@ -91,13 +106,9 @@ def test_gateway_stream_preserves_tool_call_and_terminal_finish_reason(tmp_path)
         "function": {"name": "read", "arguments": '{"path":"README.md"}'},
     }
 
-    class ToolCallAdapter:
-        def complete(self, request, timeout):
-            return {"content": "", "tool_calls": [tool_call]}
-
     runtime = OrchestratorRuntime(
         CapabilityRegistry([worker("ready")]),
-        {"ready": ToolCallAdapter()},
+        {"ready": StreamingAdapter(tool_calls=[tool_call])},
         EvidenceStore(tmp_path / "evidence.jsonl"),
     )
     server = GatewayServer(("127.0.0.1", 0), create_gateway(runtime, "client-secret"))
@@ -177,11 +188,7 @@ def test_gateway_stream_gives_parallel_tool_calls_distinct_indexes(tmp_path):
         {"id": "b", "type": "function", "function": {"name": "list_dir", "arguments": '{"path":"tests"}'}},
     ]
 
-    class ParallelAdapter:
-        def complete(self, request, timeout):
-            return {"content": "", "tool_calls": [dict(c) for c in calls]}
-
-    runtime = OrchestratorRuntime(CapabilityRegistry([worker("ready")]), {"ready": ParallelAdapter()}, EvidenceStore(tmp_path / "evidence.jsonl"))
+    runtime = OrchestratorRuntime(CapabilityRegistry([worker("ready")]), {"ready": StreamingAdapter(tool_calls=[dict(c) for c in calls])}, EvidenceStore(tmp_path / "evidence.jsonl"))
     server = GatewayServer(("127.0.0.1", 0), create_gateway(runtime, "client-secret"))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

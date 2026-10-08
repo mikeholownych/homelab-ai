@@ -62,7 +62,8 @@ def test_invalid_route_tables_are_rejected(bad):
 
 
 def _runtime(tmp_path, *, aux_healthy=True, lead_healthy=True):
-    lead = worker("lead1"); aux = worker("aux1")
+    # Both declare tool support (production inventory name), so tool requests are routable under R9.
+    lead = worker("lead1", capabilities=("navigation", "tool_call_proposal")); aux = worker("aux1", capabilities=("navigation", "tool_call_proposal"))
     object.__setattr__(lead, "pool", "lead"); object.__setattr__(aux, "pool", "aux")
     object.__setattr__(lead, "healthy", lead_healthy); object.__setattr__(aux, "healthy", aux_healthy)
     adapters = {"lead1": InMemoryAdapter("from-lead"), "aux1": InMemoryAdapter("from-aux")}
@@ -137,7 +138,9 @@ def test_gateway_exposes_route_header_inventory_and_aliases(tmp_path):
         status, _, inventory = _call(server, "GET", "/v1/routes")
         assert status == 200
         assert [r["id"] for r in inventory["router"]["rules"]] == ["subagent-aux", "tools-lead", "small-aux", "default"]
-        assert inventory["router"]["aliases"] == ALIASES
+        # aliases are described with their pool, scope and reasoning policy (Design 03 R4 / Design 02)
+        assert {name: spec["pool"] for name, spec in inventory["router"]["aliases"].items()} == ALIASES
+        assert all(spec["scope"] == "workload" for spec in inventory["router"]["aliases"].values())
         assert sorted(inventory["pools"]) == ["aux", "lead"] and inventory["pools"]["aux"][0]["worker_id"] == "aux1"
 
         status, _, models = _call(server, "GET", "/v1/models")
