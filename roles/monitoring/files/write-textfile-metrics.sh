@@ -128,6 +128,42 @@ done <<EOF_GPUS
 $gpus
 EOF_GPUS
 
+# llama.cpp workers memory-map their GGUF weights (Flash-Next maps far more than it keeps resident), so a page-cache
+# eviction turns into major faults and stalls on the next request. Observed per worker, identified by its --port:
+# faults and file-backed residency of the process, and how much of each mapped model file the page cache holds.
+PROC_ROOT="${AIHOST_PROC_ROOT:-/proc}"
+fault_lines=""
+rss_file_lines=""
+model_size_lines=""
+model_cached_lines=""
+for p in "$PROC_ROOT"/[0-9]*; do
+    [ "$(cat "$p/comm" 2>/dev/null)" = "llama-server" ] || continue
+    port="$(tr '\0' '\n' <"$p/cmdline" 2>/dev/null | awk 'prev == "--port" {print; exit} {prev = $0}')"
+    [ -n "$port" ] || continue
+    port="$(lbl "$port")"
+    majflt="$(sed 's/^.*) //' "$p/stat" 2>/dev/null | awk '{print $10}')"
+    [ -n "$majflt" ] && fault_lines="$fault_lines
+aihost_llama_worker_major_faults_total{port=\"$port\"} $majflt"
+    rss_file="$(awk '/^RssFile:/ {print $2 * 1024}' "$p/status" 2>/dev/null || true)"
+    [ -n "$rss_file" ] && rss_file_lines="$rss_file_lines
+aihost_llama_worker_resident_file_bytes{port=\"$port\"} $rss_file"
+    command -v fincore >/dev/null 2>&1 || continue
+    while read -r f; do
+        [ -n "$f" ] || continue
+        # The path is as the container sees it; the process's own root resolves it on the host.
+        res_size="$(fincore --bytes --noheadings --output RES,SIZE "$p/root$f" 2>/dev/null || true)"
+        res="$(printf '%s' "$res_size" | awk 'NF == 2 {print $1}')"
+        size="$(printf '%s' "$res_size" | awk 'NF == 2 {print $2}')"
+        if [ -z "$res" ] || [ -z "$size" ]; then continue; fi
+        model_cached_lines="$model_cached_lines
+aihost_llama_model_file_cached_bytes{port=\"$port\",file=\"$(lbl "$(basename "$f")")\"} $res"
+        model_size_lines="$model_size_lines
+aihost_llama_model_file_size_bytes{port=\"$port\",file=\"$(lbl "$(basename "$f")")\"} $size"
+    done <<EOF_MAPS
+$(awk '$6 ~ /[.]gguf$/ {print $6}' "$p/maps" 2>/dev/null | sort -u)
+EOF_MAPS
+done
+
 case "$sev" in
     2) severity="critical" ;;
     1) severity="warning" ;;
@@ -177,6 +213,10 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
     family aihost_gpu_fan_speed_rpm gauge "GPU fan speed in revolutions per minute." "$fan_lines"
     family aihost_gpu_gt_idle_residency_seconds_total counter "Cumulative seconds a GPU graphics tile spent in RC6 idle; 1 - rate() is utilisation." "$idle_lines"
     family aihost_gpu_actual_frequency_hertz gauge "Actual graphics tile frequency in hertz." "$freq_lines"
+    family aihost_llama_worker_major_faults_total counter "Major page faults of one llama.cpp worker process; a rising rate means mapped weights are being read back from disk." "$fault_lines"
+    family aihost_llama_worker_resident_file_bytes gauge "File-backed resident memory of one llama.cpp worker process (mapped model weights in use) in bytes." "$rss_file_lines"
+    family aihost_llama_model_file_size_bytes gauge "Size of one model file memory-mapped by a llama.cpp worker in bytes." "$model_size_lines"
+    family aihost_llama_model_file_cached_bytes gauge "Bytes of one mapped model file held in the host page cache; cached / size is its residency." "$model_cached_lines"
 
     echo "# HELP aihost_gpu_thermal_severity Cross-device peak severity (0=ok, 1=warning, 2=critical) vs monitoring thresholds."
     echo "# TYPE aihost_gpu_thermal_severity gauge"

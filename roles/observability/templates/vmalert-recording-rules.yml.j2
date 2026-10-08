@@ -11,6 +11,11 @@ groups:
         expr: max(aihost_gpu_temperature_celsius)
       - record: aihost:gpu_thermal_severity:peak
         expr: max(aihost_gpu_thermal_severity)
+      - record: aihost:llama_model_file_cache_residency:ratio
+        # Share of each mapped model file in the page cache (fincore counts whole pages, so a full file reads ~1).
+        expr: aihost_llama_model_file_cached_bytes / aihost_llama_model_file_size_bytes
+      - record: aihost:llama_worker_major_faults:rate5m
+        expr: rate(aihost_llama_worker_major_faults_total[5m])
 {% if observability_vllm_recording_rules_enabled | bool %}
   # Enabled only after the live vLLM /metrics series names are validated at
   # commissioning (see observability_verification_checklist). aihost_gpu_power_watts

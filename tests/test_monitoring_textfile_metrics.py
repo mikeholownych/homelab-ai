@@ -120,3 +120,56 @@ def test_the_alert_log_names_the_sensor_that_set_the_severity(tmp_path):
     _run(tmp_path, hot={"vram": 90_000}, limits=REAL_LIMITS)
     log = (tmp_path / "alerts" / "alerts.log").read_text()
     assert "state=critical" in log and "sensor=gpu1/vram" in log, log
+
+
+def _worker(proc: Path, pid: int, comm: str, port: str, majflt: int, rss_file_kb: int, model: bytes) -> None:
+    p = proc / str(pid)
+    (p / "root/models/m").mkdir(parents=True)
+    (p / "root/models/m/weights-00001-of-00002.gguf").write_bytes(model)
+    (p / "comm").write_text(f"{comm}\n")
+    (p / "cmdline").write_bytes(b"\0".join([b"/app/llama-server", b"-m", b"/models/m/weights-00001-of-00002.gguf",
+                                            b"--port", port.encode(), b"--metrics"]) + b"\0")
+    # comm in parentheses may contain spaces; majflt is field 12 of the whole line.
+    (p / "stat").write_text(f"{pid} ({comm}) S 1 1 1 0 -1 4194560 15224766 0 {majflt} 0 5 6 0 0 20 0 9 0 100 0 0\n")
+    (p / "status").write_text(f"Name:\t{comm}\nVmRSS:\t{rss_file_kb * 3} kB\nRssAnon:\t{rss_file_kb * 2} kB\nRssFile:\t{rss_file_kb} kB\n")
+    (p / "maps").write_text("7f00-7f10 r--s 00000000 00:2a 77 /models/m/weights-00001-of-00002.gguf\n"
+                            "7f10-7f20 r--s 00001000 00:2a 77 /models/m/weights-00001-of-00002.gguf\n"
+                            "7f20-7f30 r-xp 00000000 00:2a 78 /opt/intel/lib/libintlc.so.5\n")
+
+
+def test_llama_workers_report_faults_residency_and_page_cache_of_mapped_weights(tmp_path):
+    proc = tmp_path / "proc"
+    # util-linux fincore prints "RES SIZE" in bytes for these flags; a stub keeps the test independent of whether the
+    # controller ships util-linux-extra, and of what the page cache happens to hold.
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "fincore").write_text('#!/bin/sh\n[ "$*" = "--bytes --noheadings --output RES,SIZE $5" ] || exit 2\n'
+                                     'echo "  40960 $(wc -c <"$5")"\n')
+    (bin_dir / "fincore").chmod(0o755)
+    _worker(proc, 4242, "llama-server", "8003", 12, 4652460, b"\0" * 65536)
+    _worker(proc, 4243, "python3", "9000", 99, 1, b"\0" * 4096)          # not a llama.cpp worker: ignored
+    # A worker that exits mid-scan leaves only some of its /proc files; the writer must still succeed.
+    (proc / "4244").mkdir()
+    (proc / "4244/comm").write_text("llama-server\n")
+    (proc / "4244/cmdline").write_bytes(b"llama-server\0--port\08001\0")
+    out = tmp_path / "out"
+    env_file = tmp_path / "monitoring.env"
+    env_file.write_text(f"MONITORING_METRICS_TEXTFILE_DIR={out}\nMONITORING_LOG_DIR={tmp_path}/log\nMONITORING_ALERT_LOG_DIR={tmp_path}/a\n"
+                        f"MONITORING_GPU_TEMP_STATE_DIR={tmp_path}/state\n")
+    empty = tmp_path / "none"
+    empty.mkdir()
+    subprocess.run(["sh", str(SCRIPT)], check=True, capture_output=True, text=True,
+                   env={**os.environ, "AIHOST_MONITORING_ENV": str(env_file), "AIHOST_HWMON_ROOT": str(empty),
+                        "AIHOST_PCI_ROOT": str(empty), "AIHOST_PROC_ROOT": str(proc),
+                        "PATH": f"{bin_dir}:{os.environ['PATH']}"})
+    text = (out / "gpu.prom").read_text()
+    types = validate_exposition(text)
+    assert types["aihost_llama_worker_major_faults_total"] == "counter"
+    assert 'aihost_llama_worker_major_faults_total{port="8003"} 12' in text
+    assert 'aihost_llama_worker_resident_file_bytes{port="8003"} 4764119040' in text
+    # One series per mapped file, however many mappings it has; shared libraries are not model files.
+    assert text.count("aihost_llama_model_file_size_bytes{") == 1
+    assert 'aihost_llama_model_file_size_bytes{port="8003",file="weights-00001-of-00002.gguf"} 65536' in text
+    assert 'aihost_llama_model_file_cached_bytes{port="8003",file="weights-00001-of-00002.gguf"} 40960' in text
+    assert 'port="9000"' not in text
+    assert 'aihost_llama_worker_resident_file_bytes{port="8001"}' not in text

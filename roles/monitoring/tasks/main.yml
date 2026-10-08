@@ -89,6 +89,15 @@
     - monitoring_enabled | bool
   tags: [monitoring, evidence_sync]
 
+- name: Install the page-cache residency tool used by the metrics writer
+  # fincore (util-linux-extra) reports how much of each mapped model file the page cache holds.
+  ansible.builtin.apt:
+    name: util-linux-extra
+    state: present
+    update_cache: false
+  when: monitoring_metrics_textfile_enabled | bool
+  tags: [monitoring, telemetry]
+
 - name: Install the textfile metrics writer
   ansible.builtin.copy:
     src: write-textfile-metrics.sh
