@@ -1,12 +1,54 @@
 ---
 orchestrator_gateway_enabled: false
-orchestrator_gateway_user: "{{ host_runtime_account.name }}"
-orchestrator_gateway_group: "{{ host_runtime_account.group }}"
+orchestrator_gateway_user: "{{ users_gateway_service_account.name | default('aihost-gateway') }}"
+orchestrator_gateway_group: "{{ users_gateway_service_account.name | default('aihost-gateway') }}"
 orchestrator_gateway_port: 8010
 orchestrator_gateway_host: 127.0.0.1
+orchestrator_gateway_local_listener_mode: local
+orchestrator_gateway_remote_host: ""
+orchestrator_gateway_remote_port: 8443
+orchestrator_gateway_remote_client_cidrs: []
+orchestrator_gateway_tls_cert: /etc/local-ai/orchestrator/tls/gateway.crt
+orchestrator_gateway_tls_key: /etc/local-ai/orchestrator/tls/gateway.key
+orchestrator_gateway_tls_sans: []
+orchestrator_gateway_tls_pki_dir: "{{ lookup('env', 'HOME') }}/.local/share/aihost/pki/orchestrator-gateway"
+orchestrator_gateway_tls_ca_key: "{{ orchestrator_gateway_tls_pki_dir }}/gateway-ca.key"
+orchestrator_gateway_tls_ca_cert: "{{ orchestrator_gateway_tls_pki_dir }}/gateway-ca.crt"
+orchestrator_gateway_tls_server_key: "{{ orchestrator_gateway_tls_pki_dir }}/gateway-server.key"
+orchestrator_gateway_tls_server_cert: "{{ orchestrator_gateway_tls_pki_dir }}/gateway-server.crt"
+orchestrator_gateway_tls_ca_fetch_dest: ""
+orchestrator_gateway_tls_server_fetch_dest: ""
+orchestrator_gateway_tls_rotate_server: false
+orchestrator_gateway_tls_controller_trust_paths: []
+orchestrator_gateway_tls_controller_trust_store_enabled: true
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-af6aa94
 orchestrator_gateway_release_id: t5820-gateway-af6aa94
-orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
+# R11: the new chain (starts with chain_genesis naming the sealed legacy chain) and the sealed legacy chain.
+orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
+# Earlier chains sealed by the new chain's genesis record (sha256 taken by the gateway when the new chain starts).
+# The first predates the closeout (it restarted at each gateway restart, finding N2); the second is the interim
+# copy made
+# during the 2026-10-07 closeout deployment.
+orchestrator_gateway_evidence_predecessors:
+  - /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
+  - /var/lib/aihost-gateway/t5820-gateway-persistent.jsonl
+# Gateway state (drain flags, quota counters) lives in the unit's StateDirectory.
+orchestrator_gateway_state_dir: /var/lib/aihost-gateway
+# R6 clients: [{client_id, scopes: [workload|qualification|monitoring|admin], default_priority, max_priority,
+# quota: {requests_per_minute, tokens_per_day}, legacy_token_file?}]. Tokens: root-only files in clients_dir.
+orchestrator_gateway_clients: []
+orchestrator_gateway_clients_dir: /etc/local-ai/orchestrator/clients
+# The digest-only registry lives in the gateway's private state directory. `/etc/local-ai` is intentionally
+# not traversable by this isolated service account; plaintext client tokens remain root-only under clients_dir.
+orchestrator_gateway_clients_file: /var/lib/aihost-gateway/clients.json
+# Verified capabilities by artifact digest (Design 01 section 4), written from qualification evidence.
+orchestrator_gateway_capability_evidence: {}
+orchestrator_gateway_prompt_policy: hash
+# R12: graceful stop waits this long for in-flight work (sized to the longest bounded generation).
+orchestrator_gateway_shutdown_grace_seconds: 600
+# Must equal the worker --reasoning-budget-message (Design 02 telemetry detects exhaustion by it).
+orchestrator_gateway_reasoning_budget_message: >-
+  Reasoning budget exhausted. Stop reasoning now and write the final answer in the required format.
 orchestrator_gateway_client_token_file: /etc/local-ai/orchestrator/client-token
 orchestrator_gateway_client_token_extra_file: /etc/local-ai/orchestrator/opencode-client-token
 orchestrator_gateway_worker_token_file: /etc/local-ai/vllm/vllm-api-key

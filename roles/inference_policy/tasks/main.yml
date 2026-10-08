@@ -1,0 +1,207 @@
+---
+- name: Derive inference ports from the declared engine and gateway workers
+  ansible.builtin.set_fact:
+    inference_policy_worker_ports: >-
+      {{
+        (
+          inference_policy_worker_ports
+          + (llama_cpp_container_workers | default({}) | dict2items | map(attribute='value.port') | list)
+          + (orchestrator_gateway_workers | default([]) | map(attribute='port') | list)
+        ) | map('int') | unique | sort
+      }}
+    inference_policy_candidate_ports: >-
+      {{
+        (
+          inference_policy_candidate_ports
+          + (
+            orchestrator_gateway_workers | default([])
+            | selectattr('role', 'defined')
+            | selectattr('role', 'equalto', 'candidate')
+            | map(attribute='port') | list
+          )
+        ) | map('int') | unique | sort
+      }}
+  when: inference_policy_enabled | bool
+
+- name: Validate inference network policy inputs
+  ansible.builtin.assert:
+    that:
+      - inference_policy_worker_ports | length > 0
+      - inference_policy_gateway_client_cidrs | length > 0
+      - inference_policy_gateway_client_cidrs == orchestrator_gateway_remote_client_cidrs
+      - inference_policy_worker_ports | map('int') | select('lt', 1) | list | length == 0
+      - inference_policy_worker_ports | map('int') | select('gt', 65535) | list | length == 0
+      - inference_policy_remote_gateway_port | int > 0
+      - inference_policy_remote_gateway_port | int < 65536
+    fail_msg: Inference policy requires valid inventory worker ports and remote client CIDRs.
+  when: inference_policy_enabled | bool
+
+- name: Install nftables policy engine
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: false
+  when: inference_policy_enabled | bool
+
+- name: Create inference policy directory
+  ansible.builtin.file:
+    path: "{{ inference_policy_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: inference_policy_enabled | bool
+
+- name: Resolve the gateway service uid for nftables socket-owner matching
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ inference_policy_gateway_user }}"
+  register: _inference_policy_gateway_passwd
+  failed_when: false
+  when: inference_policy_enabled | bool
+
+- name: Require a real gateway uid outside Ansible check mode
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_check_mode
+        or inference_policy_gateway_user in (_inference_policy_gateway_passwd.ansible_facts.getent_passwd | default({}))
+    fail_msg: The gateway account must exist before installing its nftables uid policy.
+  when: inference_policy_enabled | bool
+
+- name: Record gateway service uid
+  ansible.builtin.set_fact:
+    inference_policy_gateway_uid: >-
+      {{
+        (
+          _inference_policy_gateway_passwd.ansible_facts.getent_passwd[inference_policy_gateway_user][1]
+          if inference_policy_gateway_user
+             in (_inference_policy_gateway_passwd.ansible_facts.getent_passwd | default({}))
+          else 65534
+        ) | int
+      }}
+  when: inference_policy_enabled | bool
+
+- name: Initialize reserved inference ports
+  ansible.builtin.set_fact:
+    inference_policy_all_ports: >-
+      {{ (inference_policy_worker_ports + inference_policy_candidate_ports) | map('int') | unique | list }}
+  when: inference_policy_enabled | bool
+
+- name: Add inventory-reserved ports to the enforcement set
+  ansible.builtin.set_fact:
+    inference_policy_all_ports: >-
+      {{
+        (
+          inference_policy_all_ports
+          + range(item.split('-')[0] | int, item.split('-')[1] | int + 1) | list
+        ) | unique | sort
+      }}
+  loop: "{{ inference_policy_reserved_port_ranges }}"
+  when: inference_policy_enabled | bool
+
+- name: Add every declared inventory worker and candidate port
+  ansible.builtin.set_fact:
+    inference_policy_all_ports: >-
+      {{ (inference_policy_all_ports + [item | int]) | unique | sort }}
+  loop: "{{ inference_policy_worker_ports + inference_policy_candidate_ports }}"
+  when: inference_policy_enabled | bool
+
+- name: Render gateway-only inference policy
+  ansible.builtin.template:
+    src: aihost-policy.nft.j2
+    dest: "{{ inference_policy_directory }}/aihost-policy.nft"
+    owner: root
+    group: root
+    mode: "0644"
+  when: inference_policy_enabled | bool
+  notify: Reload inference policy
+
+- name: Validate rendered nftables policy before it can be activated
+  ansible.builtin.command:
+    argv: [nft, -c, -f, "{{ inference_policy_directory }}/aihost-policy.nft"]
+  changed_when: false
+  check_mode: false
+  when:
+    - inference_policy_enabled | bool
+    - not ansible_check_mode
+
+- name: Install inference policy loader
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/aihost-inference-policy
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/bin/sh
+      set -eu
+      if nft list table inet aihost_policy >/dev/null 2>&1; then
+        {
+          echo 'delete table inet aihost_policy'
+          cat {{ inference_policy_directory }}/aihost-policy.nft
+        } | nft -f -
+      else
+        exec nft -f {{ inference_policy_directory }}/aihost-policy.nft
+      fi
+  when: inference_policy_enabled | bool
+  notify: Reload inference policy
+
+- name: Install inference policy systemd unit
+  ansible.builtin.template:
+    src: aihost-inference-policy.service.j2
+    dest: /etc/systemd/system/aihost-inference-policy.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: inference_policy_enabled | bool
+  notify: Reload inference policy
+
+- name: Establish inference policy before any worker starts
+  ansible.builtin.systemd_service:
+    name: aihost-inference-policy.service
+    daemon_reload: true
+    enabled: true
+    state: started
+  when:
+    - inference_policy_enabled | bool
+    - not ansible_check_mode
+
+- name: Apply pending policy changes before later worker roles run
+  ansible.builtin.meta: flush_handlers
+  when: inference_policy_enabled | bool
+
+- name: Read current UFW rules before retiring temporary inference denies
+  ansible.builtin.command:
+    argv: [ufw, status, numbered]
+  register: inference_policy_ufw_status
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: inference_policy_enabled | bool
+
+- name: Remove superseded temporary worker-port deny rules
+  community.general.ufw:
+    rule: deny
+    delete: true
+    port: "{{ item.port }}"
+    proto: tcp
+  loop:
+    - {port: "8000", pattern: "8000/tcp"}
+    - {port: "4096:4099", pattern: "4096:4099/tcp"}
+  when:
+    - inference_policy_enabled | bool
+    - not ansible_check_mode
+    - inference_policy_ufw_status.rc | default(1) == 0
+    - (inference_policy_ufw_status.stdout | regex_search('(?m)^.*' ~ item.pattern ~ '.*DENY IN')) is not none
+
+- name: Allow the declared remote gateway clients through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ inference_policy_remote_gateway_port }}"
+    proto: tcp
+    src: "{{ item }}"
+    comment: Managed remote orchestrator gateway
+  loop: "{{ inference_policy_gateway_client_cidrs }}"
+  when:
+    - inference_policy_enabled | bool
+    - not ansible_check_mode

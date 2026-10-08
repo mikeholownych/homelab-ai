@@ -16,10 +16,22 @@ llama_cpp_container_model_dir: /var/lib/local-ai/models/gguf
 llama_cpp_container_host: 127.0.0.1
 # Default server arguments (measured on ai-5820-01: flash attention and large batches
 # raise cold prefill; one slot per GPU keeps the full context window per conversation).
-llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]
+llama_cpp_container_default_args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048",
+                                   "--metrics"]
 llama_cpp_container_workers: {}
 # Services that this role supersedes (stopped and disabled if present), e.g. a vLLM worker.
 llama_cpp_container_retired_services: []
+llama_cpp_container_retired_unit_files: []
 # Configuration directories of superseded services that still embed API keys; removed so a retired
 # service's credentials do not linger on disk.
 llama_cpp_container_retired_paths: []
+# Design 02 L1: per-worker hard reasoning cap (worker key `reasoning_budget`; omit/null for non-reasoning models). The
+# message is injected when the budget is spent and must equal orchestrator_gateway_reasoning_budget_message.
+llama_cpp_container_reasoning_budget_message: >-
+  Reasoning budget exhausted. Stop reasoning now and write the final answer in the required format.
+# R5: restarts drain the worker through the gateway admin API first (controller -> remote listener, admin client token).
+llama_cpp_container_drain_via_gateway: true
+llama_cpp_container_admin_client: ansible-admin
+llama_cpp_container_drain_timeout_seconds: 900
+# R4: candidate worker profiles (see playbooks/candidate.yml). Units of profiles that are not active are removed.
+llama_cpp_container_candidate_profiles: {}

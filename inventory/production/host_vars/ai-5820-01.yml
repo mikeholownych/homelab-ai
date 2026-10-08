@@ -84,13 +84,13 @@ users_local_ai_device_groups:
   - render
   - video
 
-vllm_xpu_install_enabled: true
-vllm_xpu_service_enabled: true
+vllm_xpu_install_enabled: false
+vllm_xpu_service_enabled: false
 vllm_xpu_version: "0.29.0"
 vllm_xpu_container_image: "docker.io/vllm/vllm-openai-xpu"
 vllm_xpu_container_tag: "v0.29.0"
 vllm_xpu_container_digest: "sha256:4bdfd5b928b4a6a95c92b1edc861f13587a797a32db8c1bc96ca4e2c0d58629d"
-vllm_xpu_host: "0.0.0.0"
+vllm_xpu_host: "127.0.0.1"
 vllm_xpu_api_key_required: true
 vllm_xpu_tensor_parallel_size: 2
 vllm_xpu_active_profile: coder_30b
@@ -101,10 +101,11 @@ vllm_xpu_model_id: "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit"
 vllm_xpu_tool_call_parser: qwen3_coder
 vllm_xpu_deployment_mode: dual_tp1
 # vLLM baseline retired from GPU 0 in favor of llama.cpp (higher accuracy-per-time in the engineering
-# benchmark); configuration is kept so it can be restored with vllm_xpu_workers_state: started.
+# benchmark); configuration is retained for historical reference but install and service are disabled.
 vllm_xpu_workers_state: stopped
 vllm_xpu_model_revision: "4bd30395b72ea6045edd04806c4fea448d4467b3"
-vllm_xpu_model_path: "/var/lib/local-ai/models/hub/models--cyankiwi--Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit/snapshots/4bd30395b72ea6045edd04806c4fea448d4467b3"
+vllm_xpu_model_path: "/var/lib/local-ai/models/hub/models--cyankiwi--Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit/snapshots/\
+  4bd30395b72ea6045edd04806c4fea448d4467b3"
 vllm_xpu_workers:
   worker1:
     worker_id: b0-live-tp1-worker1
@@ -119,14 +120,39 @@ vllm_xpu_workers:
     env_file: /etc/local-ai/vllm/worker1/vllm.env
     recovery_record: /var/lib/aihost/evidence/vllm-worker1-recovery.json
     readiness_record: /var/lib/aihost/evidence/vllm-worker1-readiness.json
-    initial_recovery_record: '{"service":"vllm-worker1","event":"initialized","class":"none","stage_reached":"","exit_code":0,"restart_count":null,"restart_count_source":"uninitialized","restart_count_obtained_at":"","service_invocation_id":"","terminal":false,"started_at":"","boot_id":""}'
-    initial_readiness_record: '{"schema_version":"1.0.0","service":"vllm-worker1","readiness_state":"initialized","process_started_at":"","health_ready_at":null,"model_ready_at":null,"validation_ready_at":null,"startup_duration":null,"model_identity":{"expected":"","observed":""},"tensor_parallel_size":{"expected":1,"observed":null},"boot_id":"","service_invocation_id":"","endpoint":"","probe_note":"record created by role"}'
+    initial_recovery_record:
+      service: "vllm-worker1"
+      event: "initialized"
+      class: "none"
+      stage_reached: ""
+      exit_code: 0
+      restart_count: null
+      restart_count_source: "uninitialized"
+      restart_count_obtained_at: ""
+      service_invocation_id: ""
+      terminal: false
+      started_at: ""
+      boot_id: ""
+    initial_readiness_record:
+      schema_version: "1.0.0"
+      service: "vllm-worker1"
+      readiness_state: "initialized"
+      process_started_at: ""
+      health_ready_at: null
+      model_ready_at: null
+      validation_ready_at: null
+      startup_duration: null
+      model_identity: {"expected": "", "observed": ""}
+      tensor_parallel_size: {"expected": 1, "observed": null}
+      boot_id: ""
+      service_invocation_id: ""
+      endpoint: ""
+      probe_note: "record created by role"
 
 # GPU 1 runs llama.cpp (SYCL) instead of a second vLLM worker: measured 4x faster decode on
-# the same model (76-79 vs ~18 tok/s) with warm prompt-cache reuse; vLLM stays on GPU 0.
+# the same model (76-79 vs ~18 tok/s) with warm prompt-cache reuse; vLLM has been retired on this host.
 llama_cpp_container_enabled: true
 llama_cpp_container_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
-llama_cpp_container_retired_services: [aihost-vllm-worker2.service]
 # Retired vLLM worker2 config plus the manual dual-worker experiment configs; all embed API keys.
 llama_cpp_container_retired_paths:
   - /etc/local-ai/vllm/worker2
@@ -153,6 +179,9 @@ llama_cpp_container_workers:
     model_file: Qwen3.5-27B-Q4_K_M.gguf
     served_name: Qwen3.5-27B-Q4_K_M
     context: 65536
+    # Design 02 L1 hard reasoning cap. 4096 is the interim containment value for the unbounded-reasoning defect
+    # (docs/defects/2026-10-07-unbounded-reasoning-deep-route.md); the production value comes from Q-BUDGET.
+    reasoning_budget: 4096
 
 # Scheduled lifecycle timers are OFF. The snapshot runner needs a deployed repo snapshot at /opt/local-ai
 # (absent), and the reconcile unit converges with site.yml, which would overwrite the live inference
@@ -167,25 +196,81 @@ boot_network_wait_optional_interfaces: [eno1]
 
 # Host metrics (loopback only until a Prometheus host exists).
 node_exporter_enabled: true
+# Ubuntu 26.04.1 / kernel 7 exposes an XFS `xpc` row the packaged 1.10.2 parser rejects;
+# this host has no thermal_zone sysfs entries. GPU thermals continue via the hwmon textfile collector.
+node_exporter_disabled_collectors: [xfs, thermal_zone]
 
 # TTY1 monitoring console (vllm-top, built from ~/Projects/vllm-top)
 vllm_top_console_enabled: true
 
 orchestrator_gateway_enabled: true
 orchestrator_gateway_port: 8010
+orchestrator_gateway_host: 127.0.0.1
+orchestrator_gateway_local_listener_mode: local
+orchestrator_gateway_remote_host: 10.0.8.5
+orchestrator_gateway_remote_port: 8443
+orchestrator_gateway_remote_client_cidrs: [10.0.8.95/32]
+orchestrator_gateway_tls_sans: [IP:10.0.8.5, DNS:ai-5820-01]
+orchestrator_gateway_tls_pki_dir: /home/mike/.local/share/aihost/pki/ai-5820-01
+orchestrator_gateway_tls_ca_key: /home/mike/.local/share/aihost/pki/ai-5820-01/gateway-ca.key
+orchestrator_gateway_tls_ca_cert: /home/mike/.local/share/aihost/pki/ai-5820-01/gateway-ca.crt
+orchestrator_gateway_tls_server_key: /home/mike/.local/share/aihost/pki/ai-5820-01/gateway-server.key
+orchestrator_gateway_tls_server_cert: /home/mike/.local/share/aihost/pki/ai-5820-01/gateway-server.crt
+orchestrator_gateway_tls_ca_fetch_dest: "{{ playbook_dir }}/../evidence/ai-5820-01/gateway-ca.crt"
+orchestrator_gateway_tls_server_fetch_dest: "{{ playbook_dir }}/../evidence/ai-5820-01/gateway-server.crt"
+orchestrator_gateway_tls_controller_trust_paths:
+  - /home/mike/.config/nexus/t5820-gateway-ca.crt
+  - /home/mike/.config/opencode/t5820-gateway-ca.crt
+inference_policy_reserved_port_ranges:
+  - "8000-8009"
+  - "8020-8029"
+inference_policy_remote_gateway_port: 8443
+inference_policy_gateway_client_cidrs: [10.0.8.95/32]
+inference_policy_enabled: true
+inference_origin_retire_onhost_tools: true
 orchestrator_gateway_release_id: t5820-gateway-b4051cc
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-b4051cc
-orchestrator_gateway_evidence_path: /var/lib/aihost/evidence/t5820-gateway-persistent.jsonl
+orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
 # Model routing. Pools: lead = Qwen3-Coder-30B (fast, best first-attempt), deep = Qwen3.5-27B (slower, best
 # validated accuracy; uniquely solves tasks the lead misses; best reviewer). Aliases bypass the rules.
+# Every route carries a finite output policy (Design 02 L2/L3): requests without max_tokens are bounded by it.
+# R3: a client's retry (X-AIHost-Attempt >= 2) or a request after a reported failure escalates to deep.
 orchestrator_gateway_routes:
-  - {id: deep-tasks, match: {task_class: [review, escalate, architecture, debug-hard]}, pool: deep, fallback: [lead]}
-  - {id: default, match: {}, pool: lead, fallback: [deep]}
+  - id: escalate-retry
+    match: {attempt_gte: 2}
+    pool: deep
+    fallback: [lead]
+    reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}
+  - id: escalate-after-failure
+    match: {previous_outcome: [fail]}
+    pool: deep
+    fallback: [lead]
+    reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}
+  - id: deep-tasks
+    match: {task_class: [review, escalate, architecture, debug-hard]}
+    pool: deep
+    fallback: [lead]
+    reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}
+  - id: default
+    match: {}
+    pool: lead
+    fallback: [deep]
+    reasoning: {mode: "off", answer_allowance: 8192}
 orchestrator_gateway_model_aliases:
-  engineering/lead: lead
-  engineering/deep: deep
+  engineering/lead: {pool: lead, reasoning: {mode: "off", answer_allowance: 8192}}
+  engineering/deep: {pool: deep, reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}}
+# R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
+orchestrator_gateway_clients:
+  - {client_id: nexus, scopes: [workload], legacy_token_file: /etc/local-ai/orchestrator/client-token}
+  - {client_id: opencode, scopes: [workload], legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token}
+  - {client_id: operator, scopes: [workload, qualification, monitoring]}
+  - {client_id: qualification, scopes: [qualification], default_priority: batch, max_priority: batch}
+  - {client_id: ansible-admin, scopes: [admin, monitoring]}
 orchestrator_gateway_workers:
   - worker_id: b0-live-llama-worker1
+    credential_name: worker-lead-token
+    credential_source: /etc/local-ai/llama/worker1/worker-api-key
+    token_file: worker-lead-token
     pool: lead
     engine: llama.cpp
     port: 8000
@@ -206,8 +291,11 @@ orchestrator_gateway_workers:
     measured_at: "2026-10-03T00:00:00+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://127.0.0.1:8000
-    token_file: /etc/local-ai/llama/worker1/worker-api-key
   - worker_id: b0-live-llama-deep-worker2
+    credential_name: worker-deep-token
+    credential_source: /etc/local-ai/llama/worker2/worker-api-key
+    token_file: worker-deep-token
+    reasoning_budget: 4096
     pool: deep
     engine: llama.cpp
     port: 8001
@@ -228,7 +316,135 @@ orchestrator_gateway_workers:
     measured_at: "2026-10-03T00:00:00+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://127.0.0.1:8001
-    token_file: /etc/local-ai/llama/worker2/worker-api-key
+
+# R4 qualification profiles. Revisions below are content-addressed from the host-verified GGUF SHA-256
+# (Flash-Next's manifest covers both shards). Candidate runs borrow one GPU and are reachable only through a
+# candidate/<name> alias for the qualification-scoped client. Budgets are overridable per run
+# (candidate_reasoning_budget) for Q-BUDGET; 4096 is the existing bounded-evidence baseline.
+llama_cpp_container_candidate_profiles:
+  qwen36-lead:
+    replaces: worker1
+    replaces_gateway_worker_id: b0-live-llama-worker1
+    reasoning_budget: 4096
+    worker:
+      worker_id: candidate-qwen36-lead
+      service_name: aihost-llama-candidate-qwen36.service
+      container_name: llama-candidate-qwen36
+      gpu: 0
+      port: 8002
+      config_dir: /etc/local-ai/llama/candidate/qwen36
+      model_file: qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+      served_name: Qwen3.6-35B-A3B-UD-Q4_K_M
+      context: 65536
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]
+    gateway_worker:
+      worker_id: candidate-qwen36-lead
+      credential_name: candidate-qwen36-token
+      credential_source: /etc/local-ai/llama/candidate/qwen36/worker-api-key
+      token_file: candidate-qwen36-token
+      pool: candidate-qwen36
+      engine: llama.cpp
+      port: 8002
+      public_model_id: candidate/qwen36-lead
+      model_id: Qwen3.6-35B-A3B-UD-Q4_K_M
+      revision: gguf-ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
+      artifact_digest: sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
+      runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
+      topology: llama-cpp-sycl
+      gpu_assignment: ["0"]
+      capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
+      context_limit: 65536
+      max_output_tokens: 16384
+      max_concurrency: 1
+      resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
+      evidence_ids: [eng-hard-b-q36-35b-a3b-q4km]
+      registry_version: 1
+      measured_at: "2026-10-07T12:21:00+00:00"
+      valid_until: "2026-12-31T00:00:00+00:00"
+      endpoint: http://127.0.0.1:8002
+
+  flashnext-deep:
+    replaces: worker2
+    replaces_gateway_worker_id: b0-live-llama-deep-worker2
+    reasoning_budget: 4096
+    worker:
+      worker_id: candidate-flashnext-deep
+      service_name: aihost-llama-candidate-flashnext.service
+      container_name: llama-candidate-flashnext
+      gpu: 1
+      port: 8003
+      config_dir: /etc/local-ai/llama/candidate/flashnext
+      model_file: flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+      served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
+      context: 65536
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+             "--lazy-mode", "on"]
+    gateway_worker:
+      worker_id: candidate-flashnext-deep
+      credential_name: candidate-flashnext-token
+      credential_source: /etc/local-ai/llama/candidate/flashnext/worker-api-key
+      token_file: candidate-flashnext-token
+      pool: candidate-flashnext
+      engine: llama.cpp
+      port: 8003
+      public_model_id: candidate/flashnext-deep
+      model_id: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
+      revision: gguf-935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
+      artifact_digest: sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
+      runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
+      topology: llama-cpp-sycl
+      gpu_assignment: ["1"]
+      capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
+      context_limit: 65536
+      max_output_tokens: 16384
+      max_concurrency: 1
+      resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
+      evidence_ids: [eng-hard-b-flashnext-gsq-64k]
+      registry_version: 1
+      measured_at: "2026-10-07T12:21:00+00:00"
+      valid_until: "2026-12-31T00:00:00+00:00"
+      endpoint: http://127.0.0.1:8003
+
+  qwen38-deep:
+    replaces: worker2
+    replaces_gateway_worker_id: b0-live-llama-deep-worker2
+    reasoning_budget: 4096
+    worker:
+      worker_id: candidate-qwen38-deep
+      service_name: aihost-llama-candidate-qwen38.service
+      container_name: llama-candidate-qwen38
+      gpu: 1
+      port: 8003
+      config_dir: /etc/local-ai/llama/candidate/qwen38
+      model_file: qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf
+      served_name: Qwen3.8-27B-UD-Q4_K_M
+      context: 65536
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]
+    gateway_worker:
+      worker_id: candidate-qwen38-deep
+      credential_name: candidate-qwen38-token
+      credential_source: /etc/local-ai/llama/candidate/qwen38/worker-api-key
+      token_file: candidate-qwen38-token
+      pool: candidate-qwen38
+      engine: llama.cpp
+      port: 8003
+      public_model_id: candidate/qwen38-deep
+      model_id: Qwen3.8-27B-UD-Q4_K_M
+      revision: gguf-322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+      artifact_digest: sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+      runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
+      topology: llama-cpp-sycl
+      gpu_assignment: ["1"]
+      capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
+      context_limit: 65536
+      max_output_tokens: 16384
+      max_concurrency: 1
+      resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
+      evidence_ids: [eng-hard-b-q38-27b-q4km]
+      registry_version: 1
+      measured_at: "2026-10-07T12:21:00+00:00"
+      valid_until: "2026-12-31T00:00:00+00:00"
+      endpoint: http://127.0.0.1:8003
 
 cluster:
   enabled: false

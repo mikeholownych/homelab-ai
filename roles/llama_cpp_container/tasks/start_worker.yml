@@ -1,17 +1,140 @@
 ---
-- name: "Ensure {{ llama_item.value.service_name }} is enabled and running"
+# R5 drain-and-swap: a worker whose unit changed (or that is being stopped for a candidate) is drained through the
+# gateway first, so no in-flight request is cut off. The admin calls go from the controller to the gateway's remote
+# listener; when the gateway is not reachable yet (first deployment) there is nothing to drain and the step is skipped.
+- name: "Decide the start action for {{ llama_item.key }}"
+  ansible.builtin.set_fact:
+    llama_cpp_container_unit_changed: >-
+      {{ llama_cpp_container_units.results | selectattr('item.key', 'equalto', llama_item.key)
+         | map(attribute='changed') | first | default(false) }}
+    llama_cpp_container_admin_base: >-
+      https://{{ orchestrator_gateway_remote_host | default('') }}:{{
+        orchestrator_gateway_remote_port | default(8443) }}/admin/workers
+    llama_cpp_container_target_state: "{{ llama_item.value.state | default('started') }}"
+    llama_cpp_container_drained: false
+
+- name: "Read the gateway admin credential for draining {{ llama_item.key }}"
+  ansible.builtin.slurp:
+    src: >-
+      {{ orchestrator_gateway_clients_dir | default('/etc/local-ai/orchestrator/clients') }}/{{
+         llama_cpp_container_admin_client }}.token
+  register: llama_cpp_container_admin_token
+  failed_when: false
+  no_log: true
+  when:
+    - llama_cpp_container_drain_via_gateway | bool
+    - orchestrator_gateway_remote_host | default('') | length > 0
+
+- name: "Drain through the gateway: {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ llama_cpp_container_admin_base }}/{{ llama_item.value.worker_id }}/drain"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
+    ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    status_code: [200]
+    timeout: 10
+  delegate_to: localhost
+  become: false
+  register: llama_cpp_container_drain
+  failed_when: false
+  no_log: true
+  when:
+    - llama_cpp_container_admin_token.content is defined
+    - llama_cpp_container_unit_changed | bool or llama_cpp_container_target_state == 'stopped'
+
+
+- name: "Record the drain result for {{ llama_item.key }}"
+  ansible.builtin.set_fact:
+    llama_cpp_container_drained: "{{ (llama_cpp_container_drain.status | default(0)) == 200 }}"
+
+- name: "Wait for in-flight work to finish on {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ llama_cpp_container_admin_base }}"
+    headers:
+      Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
+    ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    return_content: true
+  delegate_to: localhost
+  become: false
+  register: llama_cpp_container_admin_view
+  until: (llama_cpp_container_admin_view.json.workers[llama_item.value.worker_id].drain.inflight | default(1)) == 0
+  retries: "{{ (llama_cpp_container_drain_timeout_seconds | int / 10) | int }}"
+  delay: 10
+  no_log: true
+  when: llama_cpp_container_drained | bool
+
+- name: "Stop the worker whose GPU is lent to a candidate: {{ llama_item.value.service_name }}"
+  ansible.builtin.systemd_service:
+    name: "{{ llama_item.value.service_name }}"
+    daemon_reload: true
+    state: stopped
+  when: llama_cpp_container_target_state == 'stopped'
+
+- name: "Ensure the worker is enabled and running: {{ llama_item.value.service_name }}"
   ansible.builtin.systemd_service:
     name: "{{ llama_item.value.service_name }}"
     daemon_reload: true
     enabled: true
-    state: "{{ 'restarted' if (_llama_units.results | selectattr('item.key', 'equalto', llama_item.key) | map(attribute='changed') | first | default(false)) else 'started' }}"
+    state: "{{ 'restarted' if (llama_cpp_container_unit_changed | bool) else 'started' }}"
+  when: llama_cpp_container_target_state != 'stopped'
 
-- name: "Wait for {{ llama_item.key }} to report healthy"
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ llama_item.value.port }}/health"
-    status_code: 200
-    timeout: 10
-  register: _llama_health
-  until: _llama_health.status == 200
+- name: "Wait for a healthy report from {{ llama_item.key }}"
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - "{{ hostvars[inventory_hostname].orchestrator_gateway_user | default('aihost-gateway') }}"
+      - --
+      - curl
+      - --fail
+      - --silent
+      - --show-error
+      - --max-time
+      - "10"
+      - "http://127.0.0.1:{{ llama_item.value.port }}/health"
+  register: llama_cpp_container_health
+  changed_when: false
+  failed_when: false
+  # Worker ports accept only the gateway uid (docs/design/04). Run curl with that uid directly so
+  # Ansible does not need to create temporary module files readable by an unprivileged become_user.
+  no_log: true
+  until: llama_cpp_container_health.rc == 0
   retries: 90
   delay: 10
+  when: llama_cpp_container_target_state != 'stopped'
+
+- name: "Read the gateway's drain state for {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ llama_cpp_container_admin_base }}"
+    headers:
+      Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
+    ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    return_content: true
+  delegate_to: localhost
+  become: false
+  register: llama_cpp_container_drain_view
+  failed_when: false
+  no_log: true
+  when:
+    - llama_cpp_container_admin_token.content is defined
+    - llama_cpp_container_target_state != 'stopped'
+
+# Undrain whenever the gateway still holds this worker drained (this run drained it, or a candidate previously
+# borrowed its GPU), so a returning worker never stays out of rotation.
+- name: "Return to service: {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ llama_cpp_container_admin_base }}/{{ llama_item.value.worker_id }}/undrain"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
+    ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    status_code: [200]
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when:
+    - llama_cpp_container_target_state != 'stopped'
+    - >-
+      (llama_cpp_container_drain_view.json.workers[llama_item.value.worker_id].drain.state
+      | default('active')) == 'drained'

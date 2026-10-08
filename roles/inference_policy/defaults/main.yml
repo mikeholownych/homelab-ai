@@ -1,0 +1,10 @@
+---
+inference_policy_enabled: false
+inference_policy_worker_ports: []
+inference_policy_candidate_ports: []
+inference_policy_reserved_port_ranges: ["8000-8009", "8020-8029"]
+inference_policy_gateway_user: aihost-gateway
+inference_policy_gateway_uid: 0
+inference_policy_remote_gateway_port: 8443
+inference_policy_gateway_client_cidrs: []
+inference_policy_directory: /etc/aihost/nftables

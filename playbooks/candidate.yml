@@ -1,0 +1,65 @@
+---
+# R4 candidate lifecycle (docs/design/03): lend one GPU to a candidate model for qualification through the gateway.
+#
+#   ansible-playbook -i inventory/production playbooks/candidate.yml -e candidate=<profile>            # deploy
+#   ansible-playbook -i inventory/production playbooks/candidate.yml -e candidate=<profile> -e candidate_state=absent
+#
+# Deploy: the production worker named by the profile's `replaces` is drained through the gateway and stopped, the
+# candidate worker starts on that GPU, and the gateway registers it as role=candidate in its own pool, reachable only
+# through the qualification-scoped alias `candidate/<profile>`. Absent: the candidate is removed and the production
+# worker returns (and is undrained). Qualification itself runs from a remote client through the gateway; nothing here
+# sends inference work.
+- name: Lend a GPU to a candidate model (or return it)
+  hosts: inference
+  gather_facts: true
+  become: true
+  vars:
+    candidate_state: present
+    _candidate_profile: "{{ llama_cpp_container_candidate_profiles.get(candidate | default(''), {}) }}"
+    _candidate_reasoning_budget: >-
+      {{ candidate_reasoning_budget | default(_candidate_profile.reasoning_budget | default(4096)) | int }}
+  pre_tasks:
+    - name: Require a declared candidate profile
+      ansible.builtin.assert:
+        that:
+          - candidate is defined
+          - candidate in llama_cpp_container_candidate_profiles
+          - candidate_state in ['present', 'absent']
+          - _candidate_profile.replaces | default('') in llama_cpp_container_workers
+          - _candidate_profile.worker is defined
+          - _candidate_profile.gateway_worker is defined
+          - _candidate_reasoning_budget | int > 0
+          - _candidate_reasoning_budget | int <= 32768
+        fail_msg: "Unknown candidate profile; declared: {{ llama_cpp_container_candidate_profiles.keys() | list }}"
+
+    - name: Merge the candidate into the worker and gateway configuration
+      ansible.builtin.set_fact:
+        llama_cpp_container_workers: >-
+          {{ llama_cpp_container_workers
+             | combine({_candidate_profile.replaces:
+                          llama_cpp_container_workers[_candidate_profile.replaces] | combine({'state': 'stopped'}),
+                        'candidate-' ~ candidate:
+                          _candidate_profile.worker | combine({'reasoning_budget': _candidate_reasoning_budget})}) }}
+        orchestrator_gateway_workers: >-
+          {{ (orchestrator_gateway_workers
+             | selectattr('worker_id', 'equalto', _candidate_profile.replaces_gateway_worker_id)
+             | map('combine', {'state': 'stopped', 'status': 'stopped'})
+             | list)
+             + (orchestrator_gateway_workers
+                | rejectattr('worker_id', 'equalto', _candidate_profile.replaces_gateway_worker_id)
+                | list)
+             + [_candidate_profile.gateway_worker
+                | combine({'role': 'candidate', 'reasoning_budget': _candidate_reasoning_budget})] }}
+        orchestrator_gateway_model_aliases: >-
+          {{ orchestrator_gateway_model_aliases
+             | combine({'candidate/' ~ candidate: {
+                 'pool': _candidate_profile.gateway_worker.pool,
+                 'scope': 'qualification',
+                 'reasoning': {'mode': 'on', 'budget': _candidate_reasoning_budget, 'answer_allowance': 8192}
+               }}) }}
+      when: candidate_state == 'present'
+  roles:
+    - role: inference_policy
+      when: inference_policy_enabled | default(false) | bool
+    - role: llama_cpp_container
+    - role: orchestrator_gateway

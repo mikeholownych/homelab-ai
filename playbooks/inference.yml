@@ -1,18 +1,20 @@
 ---
-# Scoped convergence of the inference-serving stack only (vLLM workers and the
-# orchestrator gateway). Unlike site.yml this does not touch OS tuning, kernel,
-# users, SSH, or firewall state, so it is the safe way to apply serving changes.
+# Scoped convergence of inference serving, its service identities, and the
+# inventory-driven worker/gateway network policy.
 # Static role inclusion is used so --tags selects the roles' inner tasks too.
 - name: Converge inference serving stack
   hosts: inference
   gather_facts: true
   become: true
   roles:
-    - role: vllm_xpu
-      when:
-        - capabilities.gpu | default(false) | bool
-        - capabilities.inference | default(false) | bool
-      tags: [inference, runtime, vllm]
+    - role: users
+      tags: [inference, users]
+    - role: inference_origin
+      when: inference_origin_retire_onhost_tools | default(false) | bool
+      tags: [inference, security, inference_origin]
+    - role: inference_policy
+      when: inference_policy_enabled | default(false) | bool
+      tags: [inference, security, inference_policy]
     - role: xpu_smi_log_filter
       when: capabilities.gpu | default(false) | bool
       tags: [inference, logging, xpu_log]

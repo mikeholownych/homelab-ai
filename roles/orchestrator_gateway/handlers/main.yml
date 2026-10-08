@@ -10,3 +10,11 @@
     daemon_reload: true
     state: restarted
   when: not ansible_check_mode
+
+- name: Update controller CA trust store
+  ansible.builtin.command:
+    argv:
+      - update-ca-certificates
+  changed_when: true
+  delegate_to: localhost
+  become: true

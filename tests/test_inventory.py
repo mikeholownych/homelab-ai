@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import configparser
+import hashlib
 import json
 import os
 import shutil
@@ -209,6 +210,7 @@ class InventoryContractTests(unittest.TestCase):
         self.assertIn("cluster_defaults", hostvars)
         self.assertEqual("worker", hostvars["cluster"]["node_role"])
         self.assertEqual("unselected", hostvars["model_selection_controls"]["serving_model"]["selection_state"])
+        self.assertIsNone(hostvars["model_selection_controls"]["serving_model"]["model_id"])
         self.assertEqual("disabled", hostvars["model_selection_controls"]["benchmark_model"]["execution_state"])
         self.assertIsNone(hostvars["cluster"]["endpoints"]["api_base_url"])
 
@@ -222,6 +224,7 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual(False, hostvars_5820["features"]["distributed_vllm_enabled"])
         self.assertEqual("worker", hostvars_5820["cluster"]["node_role"])
         self.assertEqual("unselected", hostvars_5820["model_selection_controls"]["serving_model"]["selection_state"])
+        self.assertIsNone(hostvars_5820["model_selection_controls"]["serving_model"]["model_id"])
         self.assertEqual("disabled", hostvars_5820["model_selection_controls"]["benchmark_model"]["execution_state"])
         self.assertEqual(950, hostvars_5820["benchmarking_psu_capacity_watts"])
         self.assertEqual(200, hostvars_5820["benchmarking_gpu_tdp_watts"])
@@ -275,6 +278,8 @@ class InventoryContractTests(unittest.TestCase):
             None,
             inference_vars["model_selection_controls"]["serving_model"]["config_path"],
         )
+        self.assertIsNone(inference_vars["model_selection_controls"]["serving_model"]["model_id"])
+        self.assertIsNone(inference_vars["model_selection_controls"]["serving_model"]["tensor_parallel_size"])
         self.assertEqual(
             "unselected",
             inference_vars["model_selection_controls"]["benchmark_model"]["selection_state"],
@@ -288,6 +293,40 @@ class InventoryContractTests(unittest.TestCase):
         self.assertIn("sole exception", readme)
         self.assertIn("operator input", readme)
         self.assertIn("ansible_host", readme)
+
+    def test_gateway_access_policy_separates_identity_and_worker_credentials(self) -> None:
+        host_vars = load_yaml(PRODUCTION_HOST_VARS_5820)
+        users_defaults = load_yaml(REPO_ROOT / "roles/users/defaults/main.yml")
+        gateway_unit = (REPO_ROOT / "roles/orchestrator_gateway/templates/orchestrator-gateway.service.j2").read_text()
+        policy = (REPO_ROOT / "roles/inference_policy/templates/aihost-policy.nft.j2").read_text()
+
+        self.assertEqual("aihost-gateway", users_defaults["users_gateway_service_account"]["name"])
+        self.assertTrue(host_vars["inference_policy_enabled"])
+        self.assertNotIn("inference_policy_worker_ports", host_vars)
+        self.assertEqual([8000, 8001], [worker["port"] for worker in host_vars["orchestrator_gateway_workers"]])
+        self.assertEqual(["10.0.8.95/32"], host_vars["inference_policy_gateway_client_cidrs"])
+        self.assertEqual("local", host_vars["orchestrator_gateway_local_listener_mode"])
+        self.assertEqual("10.0.8.5", host_vars["orchestrator_gateway_remote_host"])
+        for worker in host_vars["orchestrator_gateway_workers"]:
+            self.assertTrue(worker["token_file"].startswith("worker-"))
+            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/llama/"))
+            self.assertNotEqual(worker["token_file"], worker["credential_source"])
+        self.assertIn("LoadCredential={{ worker.credential_name }}:{{ worker.credential_source }}", gateway_unit)
+        self.assertNotIn("SupplementaryGroups=", gateway_unit)
+        self.assertIn("meta skuid != @gateway_uids", policy)
+        self.assertIn("worker_remote_denied", policy)
+        self.assertIn("gateway_remote_denied", policy)
+
+    def test_onhost_evaluation_retirement_requires_the_pinned_evidence_archive(self) -> None:
+        host_vars = load_yaml(PRODUCTION_HOST_VARS_5820)
+        origin_defaults = load_yaml(REPO_ROOT / "roles/inference_origin/defaults/main.yml")
+        origin_tasks = (REPO_ROOT / "roles/inference_origin/tasks/main.yml").read_text()
+        self.assertTrue(host_vars["inference_origin_retire_onhost_tools"])
+        self.assertEqual(64, len(origin_defaults["inference_origin_evidence_sha256"]))
+        self.assertIn("inference_origin_archive_stat.stat.checksum == inference_origin_evidence_sha256", origin_tasks)
+        self.assertIn("Remove archived direct-worker evaluation checkout from the host", origin_tasks)
+        with (REPO_ROOT / "evaluations/engx/evidence/engx-evidence-2026-10-07.tar.gz").open("rb") as archive:
+            self.assertEqual(origin_defaults["inference_origin_evidence_sha256"], hashlib.sha256(archive.read()).hexdigest())
 
     def test_change_me_occurs_only_for_ansible_host(self) -> None:
         command = ["rg", "-n", "CHANGE_ME", "inventory"] if shutil.which("rg") else ["grep", "-rn", "CHANGE_ME", "inventory"]

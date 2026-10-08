@@ -1,0 +1,17 @@
+---
+inference_origin_retire_onhost_tools: false
+inference_origin_evidence_archive: "{{ playbook_dir }}/../evaluations/engx/evidence/engx-evidence-2026-10-07.tar.gz"
+inference_origin_evidence_sha256: 8fd2a213914e4e272a2e7831a7e69010d2397f4be2b133a06fc6c68bf71b6e07
+inference_origin_host_engx_dir: /home/mike/engx
+inference_origin_retired_units:
+  - aihost-benchmark.service
+  - aihost-benchmark.timer
+  - aihost-vllm-worker1.service
+  - aihost-vllm-worker2.service
+inference_origin_retired_services:
+  - aihost-vllm-worker1.service
+  - aihost-vllm-worker2.service
+inference_origin_retired_tools:
+  - /usr/local/libexec/local-ai-run-benchmark
+  - /usr/local/libexec/local-ai-validate-vllm
+  - /usr/local/libexec/local-ai-vllm-readiness

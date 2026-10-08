@@ -9,6 +9,9 @@
       - users_local_ai_service_account.name is match("^[a-z_][a-z0-9_-]*$")
       - users_local_ai_service_account.system | bool
       - users_local_ai_service_account.shell == "/usr/sbin/nologin"
+      - users_gateway_service_account.name is match("^[a-z_][a-z0-9_-]*$")
+      - users_gateway_service_account.system | bool
+      - users_gateway_service_account.shell == "/usr/sbin/nologin"
     fail_msg: >-
       users must declare a safe disabled-user policy, inventory-driven operator
       users, and a least-privilege local-ai service account.
@@ -119,6 +122,32 @@
   when:
     - users_manage_runtime | bool
     - not users_local_ai_service_account.enabled | default(true) | bool
+
+- name: Ensure gateway service account exists without runtime device groups
+  ansible.builtin.user:
+    name: "{{ users_gateway_service_account.name }}"
+    comment: "{{ users_gateway_service_account.comment }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: "{{ users_gateway_service_account.home }}"
+    create_home: "{{ users_gateway_service_account.create_home | default(true) }}"
+    groups: ""
+    append: false
+    state: present
+  when:
+    - users_manage_runtime | bool
+    - users_gateway_service_account.enabled | default(true) | bool
+
+- name: Secure gateway service account home
+  ansible.builtin.file:
+    path: "{{ users_gateway_service_account.home }}"
+    state: directory
+    owner: "{{ users_gateway_service_account.name }}"
+    group: "{{ users_gateway_service_account.name }}"
+    mode: "0750"
+  when:
+    - users_manage_runtime | bool
+    - users_gateway_service_account.enabled | default(true) | bool
 
 - name: Ensure enabled operator users exist
   ansible.builtin.user:

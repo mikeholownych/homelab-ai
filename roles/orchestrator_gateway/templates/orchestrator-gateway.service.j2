@@ -1,6 +1,7 @@
 [Unit]
 Description=T5820 authenticated engineering orchestrator gateway
-After=aihost-vllm-worker1.service aihost-vllm-worker2.service network-online.target
+After=aihost-inference-policy.service network-online.target
+Requires=aihost-inference-policy.service
 Wants=network-online.target
 StartLimitIntervalSec=300s
 StartLimitBurst=3
@@ -9,30 +10,42 @@ StartLimitBurst=3
 Type=simple
 User={{ orchestrator_gateway_user }}
 Group={{ orchestrator_gateway_group }}
-SupplementaryGroups={{ host_runtime_account.group }} video
 WorkingDirectory={{ orchestrator_gateway_release_dir }}
 EnvironmentFile={{ orchestrator_gateway_env_file }}
 Environment=PYTHONPATH={{ orchestrator_gateway_release_dir }}
 Environment=ORCHESTRATOR_CLIENT_TOKEN_FILE={{ orchestrator_gateway_client_token_file }}
 Environment=ORCHESTRATOR_CLIENT_TOKEN_EXTRA_FILE=%d/opencode-client-token
 Environment=PYTHONDONTWRITEBYTECODE=1
+{% if orchestrator_gateway_remote_host %}
+Environment=ORCHESTRATOR_TLS_KEY=%d/gateway-tls-key
+Environment=ORCHESTRATOR_TLS_CERT=%d/gateway-tls-cert
+{% endif %}
 ExecStartPre={{ orchestrator_gateway_readiness_path }}
 ExecStart=/usr/bin/python3 -m orchestrator_gateway
 Restart=on-failure
 RestartSec=10s
 RestartPreventExitStatus=78
 TimeoutStartSec=1300s
-TimeoutStopSec=30s
-KillMode=control-group
+TimeoutStopSec={{ orchestrator_gateway_shutdown_grace_seconds | int + 30 }}s
+KillMode=mixed
 SendSIGKILL=yes
 LimitNOFILE=65536
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/lib/aihost/evidence {{ orchestrator_gateway_release_dir }}
+StateDirectory=aihost-gateway
+StateDirectoryMode=0750
+ReadWritePaths={{ orchestrator_gateway_release_dir }}
 PrivateTmp=true
 NoNewPrivileges=true
 LoadCredential=client-token:{{ orchestrator_gateway_client_token_file }}
 LoadCredential=opencode-client-token:{{ orchestrator_gateway_client_token_extra_file }}
+{% for worker in orchestrator_gateway_workers %}
+LoadCredential={{ worker.credential_name }}:{{ worker.credential_source }}
+{% endfor %}
+{% if orchestrator_gateway_remote_host %}
+LoadCredential=gateway-tls-key:{{ orchestrator_gateway_tls_key }}
+LoadCredential=gateway-tls-cert:{{ orchestrator_gateway_tls_cert }}
+{% endif %}
 
 [Install]
 WantedBy=multi-user.target

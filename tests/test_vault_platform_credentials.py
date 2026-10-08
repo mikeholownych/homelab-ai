@@ -20,6 +20,16 @@ def load_script(name: str, module_name: str):
     return module
 
 
+def load_gateway_readiness(module_name: str):
+    path = ROOT / "roles" / "orchestrator_gateway" / "files" / "gateway-readiness.py"
+    loader = importlib.machinery.SourceFileLoader(module_name, str(path))
+    spec = importlib.util.spec_from_loader(module_name, loader)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
 class VaultPlatformCredentialContractTests(unittest.TestCase):
     def test_secret_paths_are_exact_and_limited_to_t5820_consumers(self):
         helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_apply")
@@ -61,7 +71,7 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o777, 0o400)
 
     def test_gateway_readiness_uses_per_worker_file_and_endpoint(self):
-        readiness = load_script("aihost-gateway-readiness", "vault_gateway_readiness")
+        readiness = load_gateway_readiness("vault_gateway_readiness")
         with tempfile.TemporaryDirectory() as directory:
             token_file = Path(directory) / "worker-api-key"
             token_file.write_text("fixture-worker-token\n")
@@ -87,6 +97,18 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
             self.assertEqual(captured["url"], "http://127.0.0.1:8001/v1/models")
             self.assertEqual(captured["authorization"], "Bearer fixture-worker-token")
             self.assertEqual(captured["timeout"], 5)
+
+    def test_gateway_readiness_ignores_workers_stopped_for_candidate_qualification(self):
+        readiness = load_gateway_readiness("vault_gateway_readiness_stopped")
+        specs = [
+            {"endpoint": "http://127.0.0.1:8000"},
+            {"endpoint": "http://127.0.0.1:8001", "state": "stopped"},
+            {"endpoint": "http://127.0.0.1:8003", "role": "candidate"},
+        ]
+        self.assertEqual(
+            readiness.required_specs(specs),
+            [specs[0], specs[2]],
+        )
 
     def test_operator_sync_helper_does_not_emit_secret_contents(self):
         helper = load_script("update-opencode-vault-credential.py", "vault_opencode_refresh")

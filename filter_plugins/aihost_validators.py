@@ -127,6 +127,37 @@ def path_is_strictly_within(value: object, allowed_root: object) -> bool:
     return stat.S_ISDIR(allowed_root_stat.st_mode)
 
 
+_CLIENT_SCOPES = {"workload", "qualification", "monitoring", "admin"}
+_PRIORITIES = {"interactive", "batch", "background"}
+
+
+def client_registry(clients: Iterable[dict], tokens: dict) -> dict:
+    """Gateway client registry (R6) from inventory clients and their tokens: digests only, never a token."""
+    import hashlib
+
+    entries = []
+    seen: set[str] = set()
+    for client in clients:
+        client_id = str(client["client_id"])
+        if client_id in seen:
+            raise ValueError(f"duplicate gateway client {client_id!r}")
+        seen.add(client_id)
+        scopes = list(client.get("scopes") or [])
+        if not scopes or set(scopes) - _CLIENT_SCOPES:
+            raise ValueError(f"gateway client {client_id!r}: scopes must be a non-empty subset of {sorted(_CLIENT_SCOPES)}")
+        default_priority = client.get("default_priority", "interactive")
+        max_priority = client.get("max_priority", default_priority)
+        if default_priority not in _PRIORITIES or max_priority not in _PRIORITIES:
+            raise ValueError(f"gateway client {client_id!r}: unknown priority class")
+        token = str(tokens[client_id])
+        entry = {"client_id": client_id, "token_sha256": hashlib.sha256(token.encode()).hexdigest(), "scopes": scopes,
+                 "default_priority": default_priority, "max_priority": max_priority}
+        if client.get("quota"):
+            entry["quota"] = dict(client["quota"])
+        entries.append(entry)
+    return {"clients": entries}
+
+
 class FilterModule:
     def filters(self) -> dict[str, object]:
         return {
@@ -140,6 +171,7 @@ class FilterModule:
             "aihost_catalog_invalid_entries": catalog_invalid_entries,
             "aihost_catalog_excess_variants": catalog_excess_variants,
             "aihost_drift_classify": drift_classify,
+            "aihost_client_registry": client_registry,
         }
 
     @staticmethod

@@ -24,10 +24,18 @@ def ready(spec):
         return False
 
 
+def required_specs(specs):
+    """Ignore inventory workers deliberately stopped for candidate qualification."""
+    return [spec for spec in specs if spec.get("state", "running") != "stopped"]
+
+
 def main():
     try:
         specs = json.loads(os.environ["ORCHESTRATOR_WORKER_SPECS"])
         if not isinstance(specs, list) or not specs:
+            return 78
+        specs = required_specs(specs)
+        if not specs:
             return 78
         timeout = int(os.environ.get("ORCHESTRATOR_GATEWAY_DEPENDENCY_TIMEOUT_SECONDS", "1200"))
     except (KeyError, TypeError, ValueError):

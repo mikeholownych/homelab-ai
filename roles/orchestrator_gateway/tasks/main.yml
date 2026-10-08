@@ -2,13 +2,24 @@
 - name: Validate T5820 gateway inputs
   ansible.builtin.assert:
     that:
-      - orchestrator_gateway_workers | length == 2
+      # exactly two production workers; candidates (R4) are additional
+      - >-
+        (orchestrator_gateway_workers | rejectattr('role', 'defined') | list | length)
+        + (orchestrator_gateway_workers | selectattr('role', 'defined') | selectattr('role', 'equalto', 'production')
+           | list | length) == 2
       - orchestrator_gateway_port == 8010
+      - orchestrator_gateway_local_listener_mode == "local"
+      - >-
+        orchestrator_gateway_workers | selectattr('credential_name', 'defined') | list | length
+        == orchestrator_gateway_workers | length
+      - >-
+        orchestrator_gateway_workers | selectattr('credential_source', 'defined') | list | length
+        == orchestrator_gateway_workers | length
       - orchestrator_gateway_release_id is string
       - orchestrator_gateway_release_dir is string
     fail_msg: >-
       The T5820 gateway requires exactly two declared TP=1 workers and a pinned
-      release directory.
+      release directory, isolated listener mode and systemd worker credentials.
   when: orchestrator_gateway_enabled | bool
 
 - name: Validate the model route table with the gateway's own router (fail before deploying)
@@ -49,25 +60,191 @@
     - /etc/local-ai/orchestrator
   when: orchestrator_gateway_enabled | bool
 
+- name: Create remote gateway certificate directory
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_tls_cert | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+  tags: [gateway_tls]
+
+- name: Create controller gateway PKI directory
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_tls_pki_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Generate or validate private gateway CA and server leaf on controller
+  ansible.builtin.command:
+    argv: >-
+      {{
+        [ansible_playbook_python, role_path ~ '/files/generate-gateway-pki.py',
+         '--pki-dir', orchestrator_gateway_tls_pki_dir,
+         '--ca-key', orchestrator_gateway_tls_ca_key,
+         '--ca-cert', orchestrator_gateway_tls_ca_cert,
+         '--server-key', orchestrator_gateway_tls_server_key,
+         '--server-cert', orchestrator_gateway_tls_server_cert,
+         '--subject', inventory_hostname,
+         '--sans', orchestrator_gateway_tls_sans | join(',')]
+        + (['--rotate-server'] if orchestrator_gateway_tls_rotate_server | bool else [])
+      }}
+  register: _orchestrator_gateway_pki
+  changed_when: "'PKI_CHANGED=1' in _orchestrator_gateway_pki.stdout"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Install gateway TLS private key
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_tls_server_key }}"
+    dest: "{{ orchestrator_gateway_tls_key }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  notify: Restart gateway service
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Install CA-signed gateway TLS server leaf
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_tls_server_cert }}"
+    dest: "{{ orchestrator_gateway_tls_cert }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart gateway service
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Ensure controller CA trust artifact directory exists
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_tls_ca_fetch_dest | dirname }}"
+    state: directory
+    mode: "0750"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - orchestrator_gateway_tls_ca_fetch_dest | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Ensure controller server certificate evidence directory exists
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_tls_server_fetch_dest | dirname }}"
+    state: directory
+    mode: "0750"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - orchestrator_gateway_tls_server_fetch_dest | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Publish public gateway CA certificate for client trust
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_tls_ca_cert }}"
+    dest: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - orchestrator_gateway_tls_ca_fetch_dest | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Publish public gateway server leaf as deployment evidence
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_tls_server_cert }}"
+    dest: "{{ orchestrator_gateway_tls_server_fetch_dest }}"
+    mode: "0644"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - orchestrator_gateway_tls_server_fetch_dest | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Install gateway CA in controller OS trust store
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_tls_ca_cert }}"
+    dest: /usr/local/share/ca-certificates/aihost-t5820-gateway-ca.crt
+    owner: root
+    group: root
+    mode: "0644"
+  delegate_to: localhost
+  become: true
+  notify: Update controller CA trust store
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - orchestrator_gateway_tls_controller_trust_store_enabled | bool
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
+- name: Install public gateway CA at configured controller client trust paths
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_tls_ca_cert }}"
+    dest: "{{ item }}"
+    mode: "0644"
+  loop: "{{ orchestrator_gateway_tls_controller_trust_paths }}"
+  delegate_to: localhost
+  become: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_remote_host | length > 0
+    - not ansible_check_mode
+  tags: [gateway_tls]
+
 - name: Preserve or generate gateway client credential
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
   block:
     - name: Read existing gateway client credential
       ansible.builtin.slurp:
         src: "{{ orchestrator_gateway_client_token_file }}"
-      register: _existing_gateway_client_token
+      register: _orchestrator_gateway_existing_client_token
       failed_when: false
       no_log: true
 
     - name: Set gateway client credential from protected file or generate one
       ansible.builtin.set_fact:
         orchestrator_gateway_client_token: >-
-          {{ (_existing_gateway_client_token.content | b64decode | trim)
-             if (_existing_gateway_client_token.content is defined and _existing_gateway_client_token.content | length > 0)
+          {{ (_orchestrator_gateway_existing_client_token.content | b64decode | trim)
+             if (_orchestrator_gateway_existing_client_token.content is defined
+                 and _orchestrator_gateway_existing_client_token.content | length > 0)
              else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=64') }}
       no_log: true
-  when:
-    - orchestrator_gateway_enabled | bool
-    - not ansible_check_mode
 
 - name: Install gateway client credential
   ansible.builtin.copy:
@@ -112,6 +289,15 @@
     mode: "0644"
   when: orchestrator_gateway_enabled | bool
 
+- name: Create private gateway evidence directory
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_evidence_path | dirname }}"
+    state: directory
+    owner: "{{ orchestrator_gateway_user }}"
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0750"
+  when: orchestrator_gateway_enabled | bool
+
 - name: Create gateway evidence chain owned by the service account
   ansible.builtin.file:
     path: "{{ orchestrator_gateway_evidence_path }}"
@@ -122,6 +308,72 @@
     group: "{{ orchestrator_gateway_group }}"
     mode: "0640"
   when: orchestrator_gateway_enabled | bool
+
+# R6: per-client identity. The gateway-readable registry holds only sha256 digests; plaintext tokens stay in
+# root-only files (an existing legacy token file keeps its token so current clients are not broken).
+- name: Create the root-only client token directory
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_clients_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: orchestrator_gateway_enabled | bool
+
+- name: Read existing client tokens
+  ansible.builtin.slurp:
+    src: "{{ item.legacy_token_file | default(orchestrator_gateway_clients_dir ~ '/' ~ item.client_id ~ '.token') }}"
+  loop: "{{ orchestrator_gateway_clients }}"
+  loop_control:
+    label: "{{ item.client_id }}"
+  register: _orchestrator_gateway_client_tokens
+  failed_when: false
+  no_log: true
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+
+- name: Keep existing client tokens and generate missing ones
+  ansible.builtin.set_fact:
+    _orchestrator_gateway_tokens: >-
+      {{ (_orchestrator_gateway_tokens | default({})) | combine({item.item.client_id:
+           ((item.content | b64decode | trim) if (item.content is defined and item.content | length > 0)
+            else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=64'))}) }}
+  loop: "{{ _orchestrator_gateway_client_tokens.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.client_id }}"
+  no_log: true
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+
+- name: Install root-only client token files for delivery to clients
+  ansible.builtin.copy:
+    content: "{{ _orchestrator_gateway_tokens[item.client_id] }}\n"
+    dest: "{{ orchestrator_gateway_clients_dir }}/{{ item.client_id }}.token"
+    owner: root
+    group: root
+    mode: "0400"
+  loop: "{{ orchestrator_gateway_clients }}"
+  loop_control:
+    label: "{{ item.client_id }}"
+  no_log: true
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+
+- name: Render the client registry (token digests only)
+  ansible.builtin.copy:
+    content: >
+      {{ orchestrator_gateway_clients | aihost_client_registry(_orchestrator_gateway_tokens) | to_nice_json }}
+    dest: "{{ orchestrator_gateway_clients_file }}"
+    owner: root
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0640"
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+  notify: Restart gateway service
 
 - name: Render gateway non-secret environment
   ansible.builtin.template:

@@ -1,0 +1,92 @@
+---
+- name: Verify the controller-side evaluation archive
+  ansible.builtin.stat:
+    path: "{{ inference_origin_evidence_archive }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  become: false
+  register: inference_origin_archive_stat
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Require the verified evidence archive before retiring host tools
+  ansible.builtin.assert:
+    that:
+      - inference_origin_archive_stat.stat.exists
+      - inference_origin_archive_stat.stat.checksum == inference_origin_evidence_sha256
+    fail_msg: The controller evidence archive is missing or has changed; refusing host cleanup.
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Inspect retired systemd unit files for idempotent cleanup
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ item }}"
+  loop: "{{ inference_origin_retired_units }}"
+  register: inference_origin_unit_stats
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Record installed retired unit names
+  ansible.builtin.set_fact:
+    inference_origin_installed_units: >-
+      {{
+        inference_origin_unit_stats.results
+        | selectattr('stat.exists')
+        | map(attribute='item')
+        | list
+      }}
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Stop and disable on-host benchmark timer
+  ansible.builtin.systemd_service:
+    name: aihost-benchmark.timer
+    state: stopped
+    enabled: false
+  when:
+    - inference_origin_retire_onhost_tools | bool
+    - not ansible_check_mode
+    - "'aihost-benchmark.timer' in inference_origin_installed_units"
+
+- name: Stop the static benchmark service if it is running
+  ansible.builtin.systemd_service:
+    name: aihost-benchmark.service
+    state: stopped
+  when:
+    - inference_origin_retire_onhost_tools | bool
+    - not ansible_check_mode
+    - "'aihost-benchmark.service' in inference_origin_installed_units"
+
+- name: Stop and disable retired vLLM worker units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  when:
+    - inference_origin_retire_onhost_tools | bool
+    - not ansible_check_mode
+    - item in inference_origin_installed_units
+  loop: "{{ inference_origin_retired_services }}"
+
+- name: Remove on-host benchmark and retired vLLM utilities
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ inference_origin_retired_tools }}"
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Remove on-host benchmark timer and service units
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item }}"
+    state: absent
+  loop: "{{ inference_origin_retired_units }}"
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Remove archived direct-worker evaluation checkout from the host
+  ansible.builtin.file:
+    path: "{{ inference_origin_host_engx_dir }}"
+    state: absent
+  when: inference_origin_retire_onhost_tools | bool
+
+- name: Reload systemd after removing workload originators
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when:
+    - inference_origin_retire_onhost_tools | bool
+    - not ansible_check_mode

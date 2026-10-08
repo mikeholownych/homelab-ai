@@ -24,6 +24,15 @@ users_local_ai_service_account:
   create_home: true
   preserved_groups: []
 
+users_gateway_service_account:
+  name: aihost-gateway
+  comment: Local AI orchestrator gateway
+  enabled: true
+  system: true
+  shell: /usr/sbin/nologin
+  home: /var/lib/aihost-gateway
+  create_home: true
+
 # Rootless-container provisioning for the runtime identity (subordinate ids,
 # linger, XDG_RUNTIME_DIR). Only meaningful when a rootless runtime is enabled.
 users_runtime_rootless_enabled: "{{ container_runtime_rootless_enabled | default(false) }}"

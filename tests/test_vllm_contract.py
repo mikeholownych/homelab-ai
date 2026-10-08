@@ -134,10 +134,12 @@ def test_vllm_tasks_invoke_validator_with_readiness_record():
     assert "--readiness-record" in tasks
     assert "vllm_xpu_readiness_record" in tasks
 
-def test_ai5820_vllm_is_lan_bound_and_authenticated():
+def test_ai5820_vllm_is_retired_and_loopback_bound():
     hostvars = load_yaml("inventory/production/host_vars/ai-5820-01.yml")
     assert isinstance(hostvars, dict)
-    assert hostvars["vllm_xpu_host"] == "0.0.0.0"
+    assert hostvars["vllm_xpu_host"] == "127.0.0.1"
+    assert hostvars["vllm_xpu_install_enabled"] is False
+    assert hostvars["vllm_xpu_service_enabled"] is False
     assert hostvars["vllm_xpu_api_key_required"] is True
     tasks = (REPO_ROOT / "roles/vllm_xpu/tasks/main.yml").read_text()
     assert "vllm_xpu_api_key_required" in tasks

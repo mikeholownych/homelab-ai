@@ -1,0 +1,29 @@
+table inet aihost_policy {
+  counter worker_direct_denied {}
+  counter worker_remote_denied {}
+  counter gateway_remote_denied {}
+  set worker_ports {
+    type inet_service
+    elements = { {{ inference_policy_all_ports | join(', ') }} }
+  }
+  set gateway_uids {
+    type uid
+    elements = { {{ inference_policy_gateway_uid }} }
+  }
+  set gateway_client_cidrs {
+    type ipv4_addr
+    flags interval
+    elements = { {{ inference_policy_gateway_client_cidrs | join(', ') }} }
+  }
+  chain output {
+    type filter hook output priority filter; policy accept;
+    oifname "lo" tcp dport @worker_ports meta skuid != @gateway_uids counter name worker_direct_denied reject with tcp reset
+  }
+  chain input {
+    type filter hook input priority filter; policy accept;
+    iifname != "lo" tcp dport @worker_ports counter name worker_remote_denied drop
+    iifname "lo" tcp dport {{ inference_policy_remote_gateway_port }} accept
+    tcp dport {{ inference_policy_remote_gateway_port }} ip saddr @gateway_client_cidrs accept
+    tcp dport {{ inference_policy_remote_gateway_port }} counter name gateway_remote_denied drop
+  }
+}

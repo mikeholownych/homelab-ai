@@ -1,6 +1,7 @@
 [Unit]
 Description=llama.cpp SYCL worker {{ llama_worker.worker_id }}
-After=network-online.target user-runtime-dir@{{ llama_cpp_container_uid }}.service
+After=aihost-inference-policy.service network-online.target user-runtime-dir@{{ llama_cpp_container_uid }}.service
+Requires=aihost-inference-policy.service
 Wants=network-online.target
 StartLimitIntervalSec=300s
 StartLimitBurst=3
@@ -25,6 +26,9 @@ ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
   -m /models/{{ llama_worker.model_file }} -c {{ llama_worker.context }} \
   --host {{ llama_cpp_container_host }} --port {{ llama_worker.port }} \
   --api-key-file /cfg/api-key --alias {{ llama_worker.served_name }} \
+{% if llama_worker.reasoning_budget is defined and llama_worker.reasoning_budget is not none %}
+  --reasoning-budget {{ llama_worker.reasoning_budget | int }} --reasoning-budget-message "{{ llama_cpp_container_reasoning_budget_message }}" \
+{% endif %}
   {{ (llama_worker.args | default(llama_cpp_container_default_args)) | join(' ') }}
 ExecStop=/usr/bin/podman stop -t 20 {{ llama_worker.container_name }}
 Restart=on-failure
