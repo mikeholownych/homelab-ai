@@ -1,7 +1,6 @@
 """Contract tests for LiveModelWorker connecting to OpenAI-Compatible Gateway."""
 from datetime import datetime, timezone
 from pathlib import Path
-import os
 import pytest
 
 from autonomous_engineering.artifacts.store import ArtifactStore
@@ -10,7 +9,6 @@ from autonomous_engineering.authority.tokens import CapabilityToken
 from autonomous_engineering.core.types import ArtifactType
 from autonomous_engineering.planning.models import TaskStepDefinition
 from autonomous_engineering.workers.live_adapter import LiveModelWorker, LiveWorkerError
-from orchestrator_contract.http import gateway_base_url
 
 
 @pytest.fixture
@@ -34,7 +32,7 @@ def test_live_adapter_contract_and_model_completion(tmp_path: Path, repo_fixture
         worker_id="live-worker-b65",
         profile_hash="profile-live-b65",
         artifact_store=store,
-        endpoint_url=f"{gateway_base_url()}/chat/completions",
+        endpoint_url="http://127.0.0.1:18010/v1/chat/completions",
         token_path=token_path,
         model_name="engineering/b0",
     )

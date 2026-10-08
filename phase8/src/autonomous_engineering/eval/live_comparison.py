@@ -1,6 +1,7 @@
 """Matched Live Operating Comparison Engine for Phase 5."""
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -61,7 +62,8 @@ class MatchedLiveOperatingComparison:
 
         for task_id in self.task_cohort:
             t_class = self.task_classes[task_id]
-            seed_val = hash(task_id) % 100
+            # Stable across processes: built-in str hash() is randomized per interpreter (PYTHONHASHSEED).
+            seed_val = int(hashlib.sha256(task_id.encode()).hexdigest(), 16) % 100
 
             # 1. Single Worker Control
             # Low complexity / defect repair tasks do well; complex multi-file/maintainability have slight risk

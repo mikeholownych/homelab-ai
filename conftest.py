@@ -29,6 +29,7 @@ TOKEN_DEPENDENT_TEST_NAMES = {
     "test_endpoint_health",
     "test_live_adapter_contract_and_model_completion",
     "test_controlled_live_execution_e2e",
+    "test_live_endpoint_qualification_check",
 }
 
 
@@ -70,6 +71,8 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
     # 3. Physical live endpoint token dependent tests
     if item.name in TOKEN_DEPENDENT_TEST_NAMES:
         if not os.environ.get("AIHOST_RUN_LIVE_TESTS"):
-            pytest.skip("Live gateway tests require AIHOST_RUN_LIVE_TESTS=1 and use the remote TLS gateway")
+            # Live tests send real work, which must come from a remote client through the gateway. Sealed phase
+            # baselines (phase1, phase4) keep their historical endpoint and are not edited to follow the cutover.
+            pytest.skip("Live endpoint tests run only when AIHOST_RUN_LIVE_TESTS=1")
         if not _has_client_token():
             pytest.skip("Physical client token (/home/mike/.config/opencode/t5820-client-token) not present on this host (physical qualification test)")

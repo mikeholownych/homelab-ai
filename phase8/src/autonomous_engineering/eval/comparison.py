@@ -1,6 +1,7 @@
 """3-Way Matched Comparison Engine: Homogeneous vs. Heterogeneous vs. Single-Worker."""
 from __future__ import annotations
 
+import hashlib
 import time
 from dataclasses import dataclass, asdict
 from enum import Enum
@@ -89,7 +90,8 @@ class MatchedComparisonEvaluator:
 
             # 1. Single Worker Control: No review step. If author makes mistake, fails directly or passes
             # Control author on typical task has ~75% first pass rate
-            seed_val = hash(task_id) % 100
+            # Stable across processes: built-in str hash() is randomized per interpreter (PYTHONHASHSEED).
+            seed_val = int(hashlib.sha256(task_id.encode()).hexdigest(), 16) % 100
             single_accepted = seed_val < 75
             single_run = ComparisonRunRecord(
                 run_id=f"run-single-{task_id}",

@@ -6,7 +6,9 @@ PIP := $(VENV_PYTHON) -m pip
 ANSIBLE_PLAYBOOK := $(VENV_DIR)/bin/ansible-playbook
 ANSIBLE_LINT := $(VENV_DIR)/bin/ansible-lint
 ANSIBLE_GALAXY := $(VENV_DIR)/bin/ansible-galaxy
-PYTEST := $(VENV_DIR)/bin/pytest
+# Sealed phase baselines (evidence manifests checksum their sources) derive synthetic outcomes from built-in str
+# hash(), which Python randomizes per process. A fixed seed makes their tests reproducible without editing sealed code.
+PYTEST := PYTHONHASHSEED=0 $(VENV_DIR)/bin/pytest
 YAMLLINT := $(VENV_DIR)/bin/yamllint
 # Harness budget (--timeout 590) plus its two 120 s cleanup calls and a margin, so the harness always cleans up first.
 DOCKER_HARNESS_TIMEOUT := timeout -k 10s 860s

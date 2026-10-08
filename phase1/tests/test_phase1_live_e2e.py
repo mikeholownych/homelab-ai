@@ -40,7 +40,6 @@ from autonomous_engineering.repair.controller import BoundedRepairController
 from autonomous_engineering.router.router import CapabilityRouter
 from autonomous_engineering.validator.independent import IndependentValidator
 from autonomous_engineering.workers.live_adapter import LiveModelWorker
-from orchestrator_contract.http import gateway_base_url
 from autonomous_engineering.workflow.engine import WorkflowEngine
 from autonomous_engineering.work_order.compiler import WorkOrderCompiler
 from autonomous_engineering.work_order.models import AcceptanceCriterion
@@ -108,7 +107,7 @@ def test_controlled_live_execution_e2e(tmp_path: Path, repo_fixture_path: Path):
         worker_id="worker-live-b65-0",
         profile_hash=prof_live.profile_hash,
         artifact_store=store,
-        endpoint_url=f"{gateway_base_url()}/chat/completions",
+        endpoint_url="http://127.0.0.1:18010/v1/chat/completions",
         token_path=token_path,
         model_name="engineering/b0",
     )
