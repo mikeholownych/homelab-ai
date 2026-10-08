@@ -1,2 +1,2 @@
 # Managed by Ansible (role node_exporter). Read by the packaged systemd unit as $ARGS.
-ARGS="--web.listen-address={{ node_exporter_listen_address }} --collector.textfile.directory={{ node_exporter_textfile_dir }} --collector.systemd --collector.systemd.unit-include={{ node_exporter_systemd_unit_include }}"
+ARGS="--web.listen-address={{ node_exporter_listen_address }} --collector.textfile.directory={{ node_exporter_textfile_dir }} --collector.systemd --collector.systemd.unit-include={{ node_exporter_systemd_unit_include }}{% for collector in node_exporter_disabled_collectors %} --no-collector.{{ collector }}{% endfor %}"

@@ -5,6 +5,7 @@
 #
 # Thresholds in the alert group are INITIAL DEFAULTS chosen from this host's observed behaviour, not SLOs;
 # revisit them once Prometheus holds a few weeks of history.
+---
 groups:
   - name: aihost_recording
     interval: 30s
@@ -34,7 +35,8 @@ groups:
             sum by (worker_id) (rate(aihost_inference_completions_total{outcome=~"failed|timed_out"}[5m]))
             or (0 * sum by (worker_id) (rate(aihost_inference_completions_total{outcome="completed"}[5m])))
           )
-          / (sum by (worker_id) (rate(aihost_inference_completions_total{outcome=~"completed|failed|timed_out"}[5m])) > 0)
+          / (sum by (worker_id) (
+              rate(aihost_inference_completions_total{outcome=~"completed|failed|timed_out"}[5m])) > 0)
       - record: aihost:inference_duration_seconds:p50_5m
         expr: histogram_quantile(0.5, sum by (pool, le) (rate(aihost_inference_duration_seconds_bucket[5m])))
       - record: aihost:inference_duration_seconds:p95_5m
@@ -47,7 +49,8 @@ groups:
             (sum(rate(aihost_inference_prompt_tokens_total{source="estimated"}[1h])) or vector(0))
             + (sum(rate(aihost_inference_completion_tokens_total{source="estimated"}[1h])) or vector(0))
           )
-          / ((sum(rate(aihost_inference_prompt_tokens_total[1h])) + sum(rate(aihost_inference_completion_tokens_total[1h]))) > 0)
+          / ((sum(rate(aihost_inference_prompt_tokens_total[1h]))
+              + sum(rate(aihost_inference_completion_tokens_total[1h]))) > 0)
 
       # ---- GPU ------------------------------------------------------------------------------------------
       - record: aihost:gpu_utilization_ratio:rate5m
@@ -58,7 +61,9 @@ groups:
       - record: aihost:joules_per_generated_token_incl_idle:rate15m
         # Whole-card energy over 15 minutes per generated token, idle time included: it falls as utilisation rises.
         expr: >-
-          sum by (worker_id) (rate(aihost_gpu_energy_joules_total{domain="card"}[15m]) * on (gpu) group_left (worker_id) aihost_worker_info)
+          sum by (worker_id) (
+            rate(aihost_gpu_energy_joules_total{domain="card"}[15m])
+            * on (gpu) group_left (worker_id) aihost_worker_info)
           / (sum by (worker_id) (rate(aihost_engine_generation_tokens_total[15m])) > 0)
       - record: aihost:gpu_temperature_headroom_celsius:min
         # Smallest gap between any sensor and its kernel-reported critical limit, per GPU.
@@ -83,7 +88,8 @@ groups:
         for: 5m
         labels: {severity: warning}
         annotations:
-          summary: "Host GPU metrics have not been refreshed for over 5 minutes (aihost-metrics.timer runs every minute)"
+          summary: >-
+            Host GPU metrics have not been refreshed for over 5 minutes (aihost-metrics.timer runs every minute)
       - alert: AihostWorkerUnhealthy
         expr: aihost_worker_health_status == 0
         for: 2m

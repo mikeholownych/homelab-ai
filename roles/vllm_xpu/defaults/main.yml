@@ -5,7 +5,7 @@ host_runtime_account:  # noqa var-naming[no-role-prefix]
   name: "aihost-runtime"
   group: "render"
   home: "/var/lib/aihost-runtime"
-host_runtime_uid: 999
+vllm_xpu_runtime_uid: 999
 vllm_xpu_install_enabled: false
 vllm_xpu_service_enabled: false
 vllm_xpu_version: "0.7.3"
@@ -82,3 +82,19 @@ vllm_xpu_workers_state: started
 # One-shot: discard the per-worker API keys and generate new ones (config and env are re-rendered from
 # them). Use with -e vllm_xpu_regenerate_worker_keys=true after a key exposure; never leave it enabled.
 vllm_xpu_regenerate_worker_keys: false
+# Initial readiness evidence record written before the prober's first activation (rendered as compact JSON).
+vllm_xpu_initial_readiness_record:
+  schema_version: "1.0.0"
+  service: "vllm_xpu"
+  readiness_state: "initialized"
+  process_started_at: ""
+  health_ready_at: null
+  model_ready_at: null
+  validation_ready_at: null
+  startup_duration: null
+  model_identity: {"expected": "", "observed": ""}
+  tensor_parallel_size: {"expected": 1, "observed": null}
+  boot_id: ""
+  service_invocation_id: ""
+  endpoint: ""
+  probe_note: "record created by role; prober overwrites on next activation"

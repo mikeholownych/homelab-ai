@@ -10,7 +10,8 @@
 
 - name: Create T5820 worker evidence records
   ansible.builtin.copy:
-    content: "{{ item.value.initial_recovery_record }}"
+    content: "{{ item.value.initial_recovery_record if item.value.initial_recovery_record is string
+                 else item.value.initial_recovery_record | to_json(separators=(',', ':')) }}"
     dest: "{{ item.value.recovery_record }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_user }}"
@@ -20,7 +21,8 @@
 
 - name: Create T5820 worker readiness records
   ansible.builtin.copy:
-    content: "{{ item.value.initial_readiness_record }}"
+    content: "{{ item.value.initial_readiness_record if item.value.initial_readiness_record is string
+                 else item.value.initial_readiness_record | to_json(separators=(',', ':')) }}"
     dest: "{{ item.value.readiness_record }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_user }}"
@@ -43,7 +45,7 @@
   loop: "{{ vllm_xpu_workers | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-  register: _vllm_worker_keys_existing
+  register: vllm_xpu_worker_keys_existing
   failed_when: false
   no_log: true
 
@@ -55,7 +57,7 @@
              ((item.content | b64decode | trim)
               if (item.content is defined and item.content | length > 0)
               else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43')) }) }}
-  loop: "{{ _vllm_worker_keys_existing.results }}"
+  loop: "{{ vllm_xpu_worker_keys_existing.results }}"
   loop_control:
     label: "{{ item.item.key }}"
   no_log: true
@@ -85,7 +87,7 @@
   loop: "{{ vllm_xpu_workers | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-  register: _vllm_worker_env
+  register: vllm_xpu_worker_env
   no_log: true
 
 - name: Render T5820 worker configuration
@@ -101,7 +103,7 @@
   loop: "{{ vllm_xpu_workers | dict2items }}"
   loop_control:
     label: "{{ item.key }}"
-  register: _vllm_worker_config
+  register: vllm_xpu_worker_config
   no_log: true
 
 - name: Install T5820 worker service units
@@ -114,7 +116,7 @@
   vars:
     vllm_xpu_worker: "{{ item.value }}"
   loop: "{{ vllm_xpu_workers | dict2items }}"
-  register: _vllm_worker_unit
+  register: vllm_xpu_worker_unit
   notify: Reload systemd daemon
 
 - name: Stop legacy single vLLM unit for T5820 dual-worker mode
@@ -137,7 +139,7 @@
   ansible.builtin.include_tasks: restart_worker.yml
   vars:
     vllm_xpu_changed_workers: >-
-      {{ (_vllm_worker_env.results + _vllm_worker_config.results + _vllm_worker_unit.results)
+      {{ (vllm_xpu_worker_env.results + vllm_xpu_worker_config.results + vllm_xpu_worker_unit.results)
          | selectattr('changed') | map(attribute='item.key') | unique | sort | list }}
   loop: "{{ vllm_xpu_changed_workers }}"
   loop_control:

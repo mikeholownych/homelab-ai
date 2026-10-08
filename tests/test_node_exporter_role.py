@@ -38,6 +38,17 @@ def test_arguments_wire_the_textfile_collector_and_a_safe_systemd_filter():
     assert not re.fullmatch(pattern, "ssh.service")
 
 
+def test_host_can_disable_only_named_collectors_without_replacing_other_arguments():
+    host = yaml.safe_load((ROOT / "inventory/production/host_vars/ai-5820-01.yml").read_text())
+    assert host["node_exporter_disabled_collectors"] == ["xfs", "thermal_zone"]
+    args = jinja2.Template((ROLE / "templates/prometheus-node-exporter.default.j2").read_text()).render(
+        **{**_defaults(), **host}
+    )
+    assert "--no-collector.xfs" in args
+    assert "--no-collector.thermal_zone" in args
+    assert "--collector.textfile.directory=" in args
+
+
 def test_the_guard_accepts_loopback_and_rejects_anything_else_unless_allowed():
     tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
     guard = tasks[0]["ansible.builtin.assert"]["that"][0]
@@ -47,6 +58,7 @@ def test_the_guard_accepts_loopback_and_rejects_anything_else_unless_allowed():
     for bad in ("0.0.0.0:9100", "10.0.8.5:9100", ":9100", "9100", "127.0.0.1.evil.com:9100"):
         assert not re.match(pattern, bad), bad
     assert "node_exporter_allow_non_loopback" in guard
+    assert "node_exporter_disabled_collectors" in yaml.safe_dump(tasks[0]["ansible.builtin.assert"]["that"])
 
 
 def test_the_scoped_playbook_includes_the_role_only_when_enabled():

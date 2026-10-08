@@ -17,9 +17,7 @@
             optional: true
       {% endfor %}
   when: boot_network_wait_optional_interfaces | length > 0
-  register: _boot_wait_netplan
+  notify: Regenerate netplan backend configuration (no apply)
 
-- name: Regenerate netplan backend configuration (no apply)
-  ansible.builtin.command: netplan generate
-  when: _boot_wait_netplan is changed
-  changed_when: true
+- name: Apply netplan regeneration before later roles depend on it
+  ansible.builtin.meta: flush_handlers

@@ -11,3 +11,6 @@ node_exporter_textfile_dir: /var/lib/local-ai/metrics
 # Unit-state series are limited to the inference stack (the pattern is anchored by node_exporter itself).
 # No backslashes, dollar signs or spaces: the value travels through systemd's EnvironmentFile unchanged.
 node_exporter_systemd_unit_include: "aihost-.*[.]service|llama-.*[.]service|vllm-top-console[.]service"
+# Some distro kernels expose collector formats/sensors unsupported by the packaged exporter. Hosts may disable only
+# those collectors; the rest of node_exporter and the textfile GPU telemetry remain enabled.
+node_exporter_disabled_collectors: []

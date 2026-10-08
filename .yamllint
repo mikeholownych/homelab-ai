@@ -5,6 +5,7 @@ ignore: |
   .git/
   .venv/
   .worktrees/
+  .claude/
   .ansible/
 
 rules:

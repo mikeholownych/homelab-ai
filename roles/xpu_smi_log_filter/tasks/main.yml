@@ -9,14 +9,14 @@
         owner: root
         group: root
         mode: "0644"
-      register: _xpu_log_filter
+      register: xpu_smi_log_filter_dropin
       notify: Restart rsyslog
 
     - name: Validate the complete rsyslog configuration
       ansible.builtin.command: rsyslogd -N1
       changed_when: false
       check_mode: false
-      when: _xpu_log_filter is changed and not ansible_check_mode
+      when: xpu_smi_log_filter_dropin is changed and not ansible_check_mode
   rescue:
     - name: Remove the drop-in if the configuration does not validate
       ansible.builtin.file:

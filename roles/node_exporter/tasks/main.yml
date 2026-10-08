@@ -2,8 +2,13 @@
 - name: Refuse a non-loopback listen address unless it was explicitly allowed
   ansible.builtin.assert:
     that:
-      - node_exporter_listen_address is match('^(127[.]0[.]0[.]1|localhost|\[::1\]):[0-9]+$') or (node_exporter_allow_non_loopback | bool)
+      - >-
+        node_exporter_listen_address is match('^(127[.]0[.]0[.]1|localhost|\[::1\]):[0-9]+$')
+        or (node_exporter_allow_non_loopback | bool)
       - node_exporter_systemd_unit_include is not search('[\\$ ]')
+      - >-
+        node_exporter_disabled_collectors | select('match', '^[a-z][a-z0-9_]*$') | list | length
+        == node_exporter_disabled_collectors | length
     fail_msg: >-
       node_exporter_listen_address must be loopback (set node_exporter_allow_non_loopback=true to publish it
       deliberately), and the systemd unit pattern must not contain backslashes, dollar signs or spaces.

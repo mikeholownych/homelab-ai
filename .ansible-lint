@@ -3,6 +3,7 @@ exclude_paths:
   - .git/
   - .venv/
   - .worktrees/
+  - .claude/
   - docs/
   - evidence/
   - tests/fixtures/

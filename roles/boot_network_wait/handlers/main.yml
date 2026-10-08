@@ -1,0 +1,4 @@
+---
+- name: Regenerate netplan backend configuration (no apply)
+  ansible.builtin.command: netplan generate
+  changed_when: true

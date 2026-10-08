@@ -1,6 +1,9 @@
 ---
 galaxy_info:
   author: aihost
-  description: Host metrics exporter (CPU, memory, disk, network, systemd units) plus the textfile collector for aihost GPU metrics.
+  description: >-
+    Host metrics exporter (CPU, memory, disk, network, systemd units) plus the textfile collector for aihost GPU
+    metrics.
   license: MIT
+  min_ansible_version: "2.19"
 dependencies: []

@@ -73,21 +73,6 @@
   tags: [inference, runtime, vllm]
 
 - name: Preserve or generate vLLM API key when Vault is disabled
-  block:
-    - name: Slurp existing vLLM configuration file
-      ansible.builtin.slurp:
-        src: "{{ vllm_xpu_config_file }}"
-      register: _existing_vllm_config
-      failed_when: false
-
-    - name: Set API key from existing configuration or generate fresh token
-      ansible.builtin.set_fact:
-        vllm_xpu_api_key: >-
-          {{
-            ((_existing_vllm_config.content | b64decode | from_yaml)['api-key'])
-            if (_existing_vllm_config is defined and _existing_vllm_config.content is defined and (_existing_vllm_config.content | length > 0) and ((_existing_vllm_config.content | b64decode | from_yaml)['api-key'] | default(none)))
-            else (lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43'))
-          }}
   when:
     - vllm_xpu_service_enabled | bool
     - vllm_xpu_install_enabled | bool
@@ -97,6 +82,23 @@
     - vllm_xpu_deployment_mode | default('single') != 'dual_tp1'
   no_log: true
   tags: [inference, runtime, vllm]
+  block:
+    - name: Slurp existing vLLM configuration file
+      ansible.builtin.slurp:
+        src: "{{ vllm_xpu_config_file }}"
+      register: vllm_xpu_existing_config
+      failed_when: false
+
+    - name: Set API key from existing configuration or generate fresh token
+      ansible.builtin.set_fact:
+        vllm_xpu_api_key: >-
+          {{
+            ((vllm_xpu_existing_config.content | b64decode | from_yaml)['api-key'])
+            if (vllm_xpu_existing_config is defined and vllm_xpu_existing_config.content is defined
+                and (vllm_xpu_existing_config.content | length > 0)
+                and ((vllm_xpu_existing_config.content | b64decode | from_yaml)['api-key'] | default(none)))
+            else (lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43'))
+          }}
 
 - name: Create vLLM service directories
   ansible.builtin.file:
@@ -164,8 +166,7 @@
 
 - name: Create vLLM readiness evidence record owned by the service account
   ansible.builtin.copy:
-    content: |
-      {"schema_version":"1.0.0","service":"vllm_xpu","readiness_state":"initialized","process_started_at":"","health_ready_at":null,"model_ready_at":null,"validation_ready_at":null,"startup_duration":null,"model_identity":{"expected":"","observed":""},"tensor_parallel_size":{"expected":1,"observed":null},"boot_id":"","service_invocation_id":"","endpoint":"","probe_note":"record created by role; prober overwrites on next activation"}
+    content: "{{ vllm_xpu_initial_readiness_record | to_json(separators=(',', ':')) }}\n"
     dest: "{{ vllm_xpu_readiness_record }}"
     owner: "{{ vllm_xpu_user }}"
     group: "{{ vllm_xpu_group }}"

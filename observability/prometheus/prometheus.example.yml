@@ -4,6 +4,7 @@
 # 127.0.0.1:9100). To scrape from another machine, either run Prometheus on the host, tunnel the two ports,
 # or widen a bind address deliberately (node_exporter_listen_address + node_exporter_allow_non_loopback, and a
 # reverse proxy / firewall rule for the gateway). Do not open them to the LAN by default.
+---
 global:
   scrape_interval: 15s
   evaluation_interval: 30s

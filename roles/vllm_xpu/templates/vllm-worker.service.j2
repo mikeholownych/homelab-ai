@@ -1,6 +1,6 @@
 [Unit]
 Description=T5820 vLLM TP=1 worker {{ vllm_xpu_worker.worker_id }}
-After=network-online.target user-runtime-dir@{{ host_runtime_uid }}.service
+After=network-online.target user-runtime-dir@{{ vllm_xpu_runtime_uid }}.service
 Wants=network-online.target
 StartLimitIntervalSec=300s
 StartLimitBurst=3
@@ -33,7 +33,7 @@ LimitMEMLOCK=infinity
 Delegate=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }} {{ host_runtime_account.home }} {{ vllm_xpu_evidence_dir }} /run/user/{{ host_runtime_uid }}
+ReadWritePaths={{ vllm_xpu_log_dir }} {{ vllm_xpu_model_cache_dir }} {{ host_runtime_account.home }} {{ vllm_xpu_evidence_dir }} /run/user/{{ vllm_xpu_runtime_uid }}
 PrivateTmp=true
 ProtectControlGroups=no
 StandardOutput=append:{{ vllm_xpu_log_dir }}/{{ vllm_xpu_worker.worker_id }}.log

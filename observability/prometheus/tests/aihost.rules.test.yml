@@ -1,5 +1,6 @@
 # promtool test rules observability/prometheus/tests/aihost.rules.test.yml
 # Every number below is derived by hand from the synthetic series, so a wrong expression fails loudly.
+---
 rule_files:
   - ../rules/aihost.rules.yml
 evaluation_interval: 1m
@@ -85,7 +86,8 @@ tests:
       - series: 'aihost_inference_duration_seconds_bucket{worker_id="w1",pool="lead",le="+Inf"}'
         values: '0+100x20'
     promql_expr_test:
-      - expr: round(aihost:inference_duration_seconds:p95_5m, 0.01)      # round() only to absorb float noise (5.999...98)
+      # round() only absorbs float noise (5.999...98)
+      - expr: round(aihost:inference_duration_seconds:p95_5m, 0.01)
         eval_time: 10m
         exp_samples:
           - labels: '{pool="lead"}'
