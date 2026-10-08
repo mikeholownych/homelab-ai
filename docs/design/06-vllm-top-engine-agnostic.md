@@ -7,10 +7,13 @@
   started before or after the console.
 - **Principle:** vllm-top observes and reports, including policy violations. It never acts on processes or servers.
 
-## Current state (vllm-top 0.9.2)
-- `discover.rs` finds candidates from systemd units and `/proc/*/cmdline` matching vLLM only, attributes sockets via
+## Current state (checked 2026-10-07; production and in-repository build source v0.10.2)
+- Gateway telemetry, per-worker engine-neutral statistics, pool/route counters, non-vLLM gateway instances, continuous discovery,
+  and expected-stopped worker handling are deployed from this repository. A separate legacy checkout at
+  `/home/mike/Projects/vllm-top` is v0.8.0 and is not the deployment source.
+- `discover.rs` finds local candidates from systemd units and `/proc/*/cmdline` matching vLLM only, attributes sockets via
   `/proc/net/tcp` + `/proc/<pid>/fd`, and validates with `/health`, `/metrics`, `/v1/models`.
-- Discovery runs once at startup (`config::resolve`).
+- Discovery runs once at startup (`config::resolve`); unregistered engines and policy violations are not yet discovered.
 - The gateway is read via `orchestrator.rs`, with workers as entries from the gateway `/health` engine_stats.
 - GPU stats come from sysfs (`gpu.rs`), engine-independent already.
 
@@ -52,6 +55,9 @@
      last-seen), `auth_required`, and `limited`.
    - New instances appear without restart. Gateway workers flip to `down` when the gateway reports them unhealthy or their socket
      disappears.
+   - A gateway worker with configured status `stopped` remains visible in gateway health as an expected stopped inventory entry,
+     but is excluded from scheduler health counts and vllm-top's inference-instance list. It must not render as `down` or degrade
+     the service summary. vllm-top reconciles this worker list on each gateway health poll, without a console restart.
 4. **Gateway dedupe and policy:**
    - The gateway `/health` lists workers with `endpoint` (port). A directly discovered socket whose port matches a
      gateway-registered worker endpoint is **merged** into that gateway worker entry: one row, source `gateway+direct`. Direct

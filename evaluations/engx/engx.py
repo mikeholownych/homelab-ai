@@ -5,6 +5,8 @@ hidden external tests - and how many attempts, how much time and how many tokens
   engx.py selfcheck
   engx.py run <label> <base_url> <keyfile|-> <model> [max_attempts=3] [task-id-prefix,...]
 
+Set ENGX_PYTHON to a client interpreter with pytest installed when the default system Python lacks pytest.
+
 Each attempt: the model replies with full replacement files; they are written into a throwaway copy of the repo
 (never tests/ or hidden/), then run under bubblewrap (no network, read-only system, scratch dir only) with pytest.
 Visible failures are fed back as in a normal agent loop; a hidden-test failure is reported like CI (failing test
@@ -35,11 +37,21 @@ def sandbox_pytest(root, target, timeout=90):
     """Run pytest on `target` inside `root` under bubblewrap. Returns (ok, output)."""
     mounts = (["--symlink", "usr/bin", "/bin", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64"]
               if os.path.islink("/bin") else ["--ro-bind", "/bin", "/bin", "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64"])
+    python = "python3"
+    override = os.environ.get("ENGX_PYTHON")
+    if override:
+        host_python = os.path.abspath(override)
+        venv = os.path.dirname(os.path.dirname(host_python))
+        if os.path.isfile(os.path.join(venv, "pyvenv.cfg")):
+            mounts += ["--ro-bind", venv, "/opt/engx-python"]
+            python = "/opt/engx-python/bin/" + os.path.basename(host_python)
+        else:
+            python = override
     cmd = ["bwrap", "--ro-bind", "/usr", "/usr", "--ro-bind", "/etc/alternatives", "/etc/alternatives", *mounts,
            "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--bind", root, root, "--chdir", root,
            "--unshare-all", "--die-with-parent", "--clearenv", "--setenv", "PATH", "/usr/bin:/bin", "--setenv", "HOME", "/tmp",
            "--setenv", "PYTHONPATH", root, "--setenv", "PYTHONDONTWRITEBYTECODE", "1",
-           "timeout", str(timeout), "python3", "-m", "pytest", "-q", "-x", "--no-header", "-p", "no:cacheprovider", "-rN", "--tb=short", target]
+           "timeout", str(timeout), python, "-m", "pytest", "-q", "-x", "--no-header", "-p", "no:cacheprovider", "-rN", "--tb=short", target]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout + 15)
         return r.returncode == 0, (r.stdout + r.stderr)
@@ -307,7 +319,9 @@ def run_meta(model, base, tasks, max_attempts, only):
 
 
 def run(label, base, keyfile, model, max_attempts=3, only=None):
-    key = subprocess.run(["sudo", "cat", keyfile], capture_output=True, text=True).stdout.strip() if keyfile != "-" else ""
+    # `-` reads a scoped client token from stdin so remote qualification can pipe it directly from
+    # the protected provisioner without writing it to a file, argv, or captured task output.
+    key = subprocess.run(["sudo", "cat", keyfile], capture_output=True, text=True).stdout.strip() if keyfile != "-" else sys.stdin.read().strip()
     headers = {"Content-Type": "application/json"}
     if key: headers["Authorization"] = "Bearer " + key
     tasks = [t for t in TASKS if not only or any(t["id"].startswith(p) for p in only)]

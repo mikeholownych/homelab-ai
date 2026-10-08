@@ -1,6 +1,6 @@
 # Model re-evaluation for llama.cpp workers (ai-5820-01)
 
-Status: PLAN — awaiting operator approval. Nothing deployed or downloaded.
+Status: EXECUTION AUTHORIZED (2026-10-07). Operator instruction: "continue with all of the remaining work in todo.md, only the work clearly marked as deferred should be left undone." This supersedes earlier approval uncertainty and "no production change without separate authorization" language below. Follow the recorded execution DAG; leave only `Future evolution` deferred.
 
 ## Why
 The current pools were chosen under constraints that no longer hold. Qwen3.8-27B was rejected in Phase 12
@@ -55,7 +55,7 @@ Incumbents (controls): Qwen3-Coder-30B-A3B Q4_K_M (lead), Qwen3.5-27B Q4_K_M (de
   one pool for the test window.
 - Downloads go to /var/lib/local-ai/models/gguf, ~150 GB worst case if every candidate is fetched.
   Fetch only after G0 passes.
-- Clean up the stale `model_selection_controls.serving_model` (qwen3.8, TP=2) in group_vars as a separate change.
+- [x] Cleaned stale `model_selection_controls.serving_model` (qwen3.8, TP=2) in group_vars; model and TP are now unset.
 
 ## engx bench (found 2026-10-06)
 - The harness was written in nexus-code session 5e99063d, in its /tmp scratchpad, and run from /tmp/evalx
@@ -138,19 +138,20 @@ Generalised: "Each layer observes what it doesn't control, exposes what it knows
 - vllm-top: observe and report, including policy violations; it does not act on processes or servers.
 - aihost: does not change clients (e.g. Nexus). Client-side changes are recorded as operator decisions.
 
-## Follow-up: vllm-top engine-agnostic discovery and monitoring (operator-approved 2026-10-06; not started)
+## Follow-up: vllm-top engine-agnostic discovery and monitoring (operator-approved 2026-10-06; partially implemented)
 TARGET END STATE (operator): whatever inference server is running (vLLM, llama.cpp, something else) is picked up and monitored
 automatically. That holds whether it is a gateway worker, a systemd unit or an ad-hoc process/container, and whether it started
 before or after the console.
 
 Found during the model evaluation: while candidates served on :8002/:8003 with both production workers stopped, the TTY1
 console showed nothing working.
-Causes:
-- llama.cpp is visible only through the gateway's /health engine_stats for registered workers.
-- The /proc scan in discover.rs matches only vLLM command lines.
-- Discovery runs once at startup.
+Progress in vllm-top 0.7.0–0.9.2: gateway worker telemetry is engine-neutral, per-worker health/pool/route data is shown,
+and gateway instances are supported independently of vLLM. The production binary and Ansible build source were verified at
+v0.9.2. A separate legacy checkout at `/home/mike/Projects/vllm-top` is v0.8.0 and is not used by the deployment role.
+The prior deployed candidate was v0.10.0. Expected-stopped handling was deployed as v0.10.1; dynamic worker-status
+reconciliation v0.10.2 was deployed via the `vllm_top_console` role on 2026-10-07.
 
-Design direction (to be confirmed in a design step before code):
+Accepted design (`docs/design/06-vllm-top-engine-agnostic.md`):
 - Discovery driven by listening sockets, not process names. Periodically walk /proc/net/tcp{,6} LISTEN sockets, then
   fingerprint each with bounded, read-only, no-inference GETs. Process cmdline/systemd stay as hints for attribution only.
 - Engine adapters behind one trait that normalises to a common model (model id, running/queued requests, prompt and decode
@@ -168,14 +169,22 @@ Design direction (to be confirmed in a design step before code):
 - Keep the discover.rs rules: never read other processes' config/env, never harvest credentials. Auth-protected endpoints show
   as "auth required", not blank.
 
-- [ ] Design doc and review (adapter trait, fingerprint rules, refresh cadence, dedupe with gateway)
-- [ ] Implement in vllm-top/ with per-engine fixture tests (recorded /metrics samples). Bump the version and
-      vllm_top_console_min_version. Deploy via the vllm_top_console role.
+- [x] Design doc and review (adapter trait, fingerprint rules, refresh cadence, dedupe with gateway; `docs/design/06-vllm-top-engine-agnostic.md`)
+- [x] Implement socket-driven discovery, engine fingerprints, periodic lifecycle, gateway dedupe and policy-violation display
+      in vllm-top/ with per-engine fixtures. Candidate v0.10.0; all 139 Rust tests pass and release build succeeds.
+- [x] Deploy v0.10.0 via the vllm_top_console role and verify the production version (service active; host reports v0.10.0).
+- [x] Deploy v0.10.1 expected-stopped semantics and verify host reports v0.10.1.
+- [x] Dynamically reconcile gateway worker state on each 5-second /health poll so stopped workers disappear and resumed
+      workers return without restarting the console. Regression coverage delivers stopped and healthy gateway snapshots to one
+      running App instance and verifies removal/reappearance; v0.10.2 deployed and live version verified.
 - [ ] Verify live on ai-5820-01:
-  - an ad-hoc llama-server started after the console appears;
-  - a stopped worker shows as down;
-  - gateway workers are not double-counted;
-  - an unrecognised OpenAI-compatible server shows with limited metrics.
+  - [ ] an ad-hoc llama-server started after the console appears;
+  - [x] an intentionally stopped worker remains in gateway inventory with `status=stopped`, does not degrade gateway health,
+        is not probed or assigned failure counters, and is omitted from vllm-top inference instances. Live: gateway healthy,
+        ready/can_route true, 2/2 serving workers, 3 configured/1 stopped; worker2 drained/inactive, 0 failures, no stats;
+        health/availability Prometheus gauges are 0; vllm-top --once exits 0 and lists only worker1 and candidate.
+  - [x] gateway workers are not double-counted in the live inventory (one row per gateway worker in `vllm-top --once`).
+  - [ ] an unrecognised OpenAI-compatible server shows with limited metrics.
 
 ## Policy: gateway-only access to inference workers (operator, 2026-10-06; end-state requirement)
 "Any change to the inference workers should mean the active worker is accessed via the gateway. No direct workload requests
@@ -194,7 +203,7 @@ Gaps:
 3. The external drop rule names :8000 only, not :8001 or future worker ports.
 4. Qualification/benchmark tooling (engx, cand.sh) targets worker ports directly, so the evaluation path is not the production path.
 
-- [ ] Design (review before implementing):
+- [x] Design (review before implementing): accepted in `docs/design/04-gateway-only-worker-access.md` (2026-10-07).
   - Run the gateway as its own uid.
   - nftables output rule on lo: tcp dport {worker ports, generated from llama_cpp_container_workers / orchestrator_gateway_workers}
     is accepted only for meta skuid <gateway uid>; everything else is dropped and counted.
@@ -202,14 +211,11 @@ Gaps:
   - Keys readable only by the gateway uid.
 - [ ] Candidate/qualification path through the gateway: register a candidate as a non-routable pool reachable only by explicit
       model alias (like engineering/deep). engx then points at the gateway. No more direct-port evaluation runs after this lands.
-- [ ] Enforce via Ansible (roles: llama_cpp_container, orchestrator_gateway, firewall). No manual host changes.
+- [x] Enforce via Ansible: inventory-derived nftables policy, atomic reload and syntax preflight are live; gateway runs as uid 995 with worker credentials handed through systemd; remote TLS listener is live at `10.0.8.5:8443`, allowed for `10.0.8.95/32`; both llama workers and gateway are active (2026-10-07).
 - [ ] Detection: vllm-top's engine-agnostic discovery flags any inference server NOT registered with the gateway as a policy
       violation. Health/metrics remain observable via the gateway's /health engine_stats.
-- [ ] Verify:
-  - a direct request to each worker port from mike, root-less shells and aihost-runtime processes other than the gateway is refused;
-  - gateway traffic works;
-  - drop counters increment;
-  - vllm-top shows the violation for an ad-hoc server.
+- [x] Verify direct worker-port connects to 8000 and 8001 are refused from `mike`, `root`, and `aihost-runtime`; gateway uid 995 connects; direct-denial counter increments; remote authenticated chat succeeds; local workload is refused with HTTP 403 (2026-10-07).
+- [ ] Verify vllm-top shows the violation for an ad-hoc server after W-VTOP.
 Note: the 2026-10-06 model evaluation (in progress) uses direct worker access. It predates this policy and is a one-off. The
 chosen model's final qualification will be re-run through the gateway once the path above exists.
 
@@ -223,7 +229,11 @@ Current state (checked 2026-10-06):
   SSH tunnel. Tunnelled traffic reaches the gateway FROM LOOPBACK and is indistinguishable from work started on the host.
 - The engx harness, cand.sh and runqueue.sh all ran ON the host today.
 
-- [ ] Design (review before implementing):
+Live state (checked 2026-10-07): OpenCode uses `https://10.0.8.5:8443/v1` and trusts the fetched gateway certificate; this
+client is allowlisted as `10.0.8.95/32`. The TLS gateway and nftables policy are active. A remote OpenCode request returned
+`OK`; a host-origin workload request returned 403. Local `/health` and `/metrics` return 200. The user SSH tunnel is disabled.
+
+- [x] Design (review before implementing): accepted in `docs/design/05-remote-origin-only.md` (2026-10-07).
   - The gateway listens on the host's VLAN address (eno1.2) behind nftables allowlisting the client subnet(s), with gateway auth
     (and TLS, or an mTLS/WireGuard decision).
   - The gateway refuses workload endpoints from local peers (127.0.0.0/8, ::1, the host's own addresses). /health and metrics
@@ -231,13 +241,12 @@ Current state (checked 2026-10-06):
   - SSH tunnels stop being a supported client path.
   - Inventory every host-side component that calls the gateway or workers (timers, gateway self-checks, smoke/validate plays)
     and convert workload-generating ones to remote execution or to non-inference probes.
+- [x] On-host originator retirement: archive verified byte-for-byte against all 115 non-cache files in the retired engx tree; Ansible removed that checkout, the disabled benchmark timer/service, retired vLLM unit files, and benchmark/vLLM helper binaries (2026-10-07).
 - [ ] Remote evaluation path: engx runs from a client machine (the bwrap sandbox runs on the client; give the client python
       pytest) against the gateway's candidate alias pool. Retire cand.sh/runqueue.sh as on-host tools. Candidate lifecycle
       (start/stop a candidate worker) is done by Ansible from the controller, not by scripts on the host.
-- [ ] Enforce via Ansible, then verify:
-  - a workload request from the host itself is refused (loopback and VLAN self-address);
-  - a remote client succeeds;
-  - vllm-top still shows health/metrics.
+- [x] Enforce via Ansible and verify the gateway path: remote TLS listener and nftables allowlist are live; remote authenticated chat returned HTTP 200; host-origin workload returned 403; loopback `/health` and `/metrics` return HTTP 200. The former OpenCode SSH tunnel is disabled (2026-10-07).
+- [ ] Verify vllm-top engine-agnostic discovery behavior after W-VTOP; the console service is active and the local health/metrics endpoints respond.
 Note: operator decision 2026-10-06: the full 2026-10-06 evaluation (Phase A AND Phase B thinking-on) completes as is, on-host,
 as a one-off exception that predates this policy. Skew review: quality/pass-fail is unaffected (same prompts, same llama.cpp flags).
 Speed is approximate (runs were sometimes parallel, with sandbox CPU contention), so watch H10's wall-clock limits.
@@ -421,12 +430,46 @@ New work made apparent (report section 6):
 - [x] Sequencing proposal: SUPERSEDED by the execution DAG in docs/closeout/00-reconciliation.md, informed by the above (next deliverable)
 
 ## Closeout workstream (operator brief 2026-10-07): complete all non-deferred authorized work
+Operator confirmation (2026-10-07): all remaining work in this file is authorized for completion, including production worker promotion and the required qualification/deployment/reboot/rollback checks. Only work explicitly marked deferred is excluded.
 Reconciliation, classification and execution DAG: docs/closeout/00-reconciliation.md. Designs (each with a review section):
 docs/design/01-06.
 New findings from the code review (folded into the workstreams):
-- [ ] N1 finish_reason overwritten (runtime.py:584 hides `length`) → W-REASON telemetry
-- [ ] N2 evidence hash chain resets on gateway restart → R11
-- [ ] N3 simulated streaming; client disconnect does not stop generation → R1/R7
-- [ ] N4 retired vLLM units/role/scripts still installed; vllm_xpu host 0.0.0.0 in inventory → W-CLEAN/W-ORIGIN
+- [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed in shared working tree; deployment remains part of W-REASON
+- [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification implemented in shared working tree; deployment remains in R11
+- [x] N3 simulated streaming; client disconnect does not stop generation → real upstream SSE and disconnect cancellation implemented in shared working tree; deployment remains in R1/R7
+- [x] N4 retired vLLM units/role/scripts still installed; vllm_xpu host 0.0.0.0 in inventory → loopback inventory binding, vLLM role removed from the inference play, and retired units/on-host originators removed via Ansible after archive verification; live service state checked
 - [ ] N5 hand-made ufw rules; inference port policy incomplete (8001) → W-ACCESS/W-ORIGIN
 - [ ] N6 inventory max_concurrency/context treated as authoritative; eligibility uses estimates → W-LIMITS
+
+## TLS client-compatibility defect (operator-directed 2026-10-07)
+The gateway URL is `https://10.0.8.5:8443/v1`; OpenCode config is `/home/mike/.config/opencode/opencode.jsonc`.
+Observed original server cert at `/etc/local-ai/orchestrator/tls/gateway.crt` (public copy
+`evidence/ai-5820-01/gateway-tls-original-selfsigned-ca-leaf.crt`): SHA-256 `33:BE:41:FD:26:DE:F5:18:57:5D:BD:19:32:52:56:A6:D0:77:AD:FC:53:08:E1:72:B0:EF:B7:0C:82:05:9F:77`;
+subject and issuer `CN=ai-5820-01`; Basic Constraints critical `CA:TRUE`; Key Usage and EKU absent; SAN `IP:10.0.8.5,DNS:ai-5820-01`;
+valid 2026-10-07 14:40:53Z to 2029-01-09 14:40:53Z. This is a self-signed CA used directly as the TLS server leaf (one certificate served).
+OpenCode uses the IP, which matches SAN. TCP and TLS negotiation work; default OS/OpenSSL chain verification fails with self-signed certificate.
+Hostname/IP checks and chain verification pass when explicitly given that certificate. The certificate was copied to application config paths,
+not installed into `/etc/ssl/certs`; OpenCode standalone ELF is Bun-based (BoringSSL markers), and its running process lacked
+`NODE_EXTRA_CA_CERTS`. OpenCode 1.18.35 is installed here (reported issue says 1.18.34). With explicit `NODE_EXTRA_CA_CERTS` using the copied
+certificate, OpenCode completed a real authenticated request, confirming additive trust support and locating the original failure at runtime
+trust configuration. No verification bypass was used.
+
+Correction deployed: controller-only CA key `/home/mike/.local/share/aihost/pki/ai-5820-01/gateway-ca.key` (mode 0600);
+public root `evidence/ai-5820-01/gateway-ca.crt`, SHA-256 `4D:28:6A:BD:F7:1E:86:42:95:4C:56:4F:06:8E:85:CE:8B:ED:2E:F7:C5:74:2B:AB:DF:04:06:DF:2E:32:C6:43`, valid 2026-10-07 through 2036-10-04,
+CA:TRUE pathlen 0, keyCertSign+cRLSign. Current leaf `evidence/ai-5820-01/gateway-server.crt` and host path `/etc/local-ai/orchestrator/tls/gateway.crt`,
+SHA-256 `35:2D:6F:20:12:91:20:56:D8:06:1E:F8:D6:07:DB:69:56:D4:8C:06:49:92:8D:CE:E3:4E:4F:7E:F5:3C:02:2B`, subject `CN=ai-5820-01`,
+issuer `CN=AIHost T5820 Gateway Root CA`, valid 2026-10-07 through 2029-01-09, CA:FALSE, digitalSignature+keyEncipherment,
+EKU TLS Web Server Authentication, SAN IP 10.0.8.5 and DNS ai-5820-01. Gateway serves the leaf only; the root is the trust anchor and no intermediate exists.
+Ansible installs the public root at `/usr/local/share/ca-certificates/aihost-t5820-gateway-ca.crt`, controller OS trust, and both OpenCode/Nexus client CA paths;
+`NODE_EXTRA_CA_CERTS` points to the Nexus CA copy. The original self-signed cert was preserved under an explicit superseded filename.
+
+- [x] Isolate original failure and reproduce diagnostic additive CA trust without disabling verification.
+- [x] Design correction: controller-held private CA, CA-signed server leaf with correct SAN, CA:FALSE and serverAuth EKU; CA key never leaves
+      the controller; documented in `docs/design/05-remote-origin-only.md`.
+- [x] Deploy and verify the generated private CA and leaf through Ansible; publish only the public CA trust anchor and public leaf evidence.
+- [x] Install/configure CA trust on the exact remote client and relaunch OpenCode with additive trust; verify OS and runtime trust separately.
+- [x] Prove untrusted failure (pre-fix OpenCode returned `self signed certificate`; untrusted Node TLS returns `UNABLE_TO_VERIFY_LEAF_SIGNATURE`);
+      configured trust; IP and DNS SAN verification; gateway auth (unauthenticated request 401); OpenAI completion; SSE (`text/event-stream`, events,
+      expected text and `[DONE]`); host-origin 403; and remote worker ports 8000/8001/8003 blocked.
+- [x] Rotate/redeploy the server leaf and prove trust remains with the unchanged CA; official OpenCode 1.18.34 release binary checksum verified
+      (`0f22479647226d1d2dd99595d20082ee7bda3870b62dc6a90b41efc1a71d7e9a`) and completed a real request after rotation. Reapplying Ansible was idempotent.

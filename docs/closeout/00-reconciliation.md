@@ -4,6 +4,7 @@
 - **Starting SHA:** `5ceabf9addd7ef7858fdb7ebd5dd58683307380d` (main == origin/main).
 - **Untracked at start:** `tasks/`, `evaluations/engx/`, `docs/defects/`.
 - **Out of scope:** Nexus development. The "Future evolution" section of todo.md stays DEFERRED.
+- **Execution authorization:** On 2026-10-07 the operator explicitly directed completion of all remaining `tasks/todo.md` work, leaving only clearly deferred work undone. This includes the qualification gates and production promotion after those gates pass; it supersedes earlier approval uncertainty and "no production change without separate authorization" wording in historical defect notes.
 
 Classification: ACTIVE_REQUIRED, SATISFIED_BY_EXISTING_EVIDENCE, SUPERSEDED, DEFERRED_EXPLICITLY, BLOCKED.
 Evidence references are to files in this repository or to `ai-5820-01` paths that were inspected on 2026-10-07.
@@ -19,13 +20,13 @@ Evidence references are to files in this repository or to `ai-5820-01` paths tha
 | 5 | G4 promotion via Ansible inventory | ACTIVE_REQUIRED (W-PROMOTE) | Operator authorized the target: lead Qwen3.6-35B-A3B, deep Flash-Next (fallback Qwen3.8-27B). |
 | 6 | Baseline incumbents on hard corpus | SATISFIED (stale checkbox) | `~/engx/results/eng-hard-lead-q3coder30b-q4km-nothink.json`, `eng-hard-deep-q35-27b-q4km-nothink.json` |
 | 7 | Wave-1 downloads | SATISFIED (stale checkbox) | `ai-5820-01:/var/lib/local-ai/models/gguf/{qwen3.8-27b,muse-glimmer-30b,qwen3.6-35b-a3b,glm-4.7-flash,flashnext-gsq-coder}/`; fetch log `~/engx/logs/fetch-wave1.log` ends with `== DONE` |
-| 8 | Execution note: clean up stale `model_selection_controls.serving_model` | ACTIVE_REQUIRED (W-CLEAN) | Still present: `inventory/production/group_vars/inference.yml` names qwen3.8-27b-instruct with TP=2. |
+| 8 | Execution note: clean up stale `model_selection_controls.serving_model` | SATISFIED_IN_WORKING_TREE | `inventory/production/group_vars/inference.yml` now leaves the unselected model and TP unset; inventory assertions were updated. |
 | 9 | engx note "results under /var/lib/aihost/evidence/engx" | SUPERSEDED | The remote-origin policy moves engx to the client side; results are kept client-side and in the repository (W-ORIGIN / Q-*). |
-| 10-12 | vllm-top: design, implement, verify | ACTIVE_REQUIRED (W-VTOP) | `vllm-top/src/discover.rs` still matches vLLM cmdlines only and discovers once at startup. |
-| 13-17 | Gateway-only access: design, candidate path, Ansible enforcement, detection, verify | ACTIVE_REQUIRED (W-ACCESS) | Gateway runs as `aihost-runtime` (unit template `User={{ orchestrator_gateway_user }}` = host_runtime_account); worker keys are 0400 aihost-runtime; ufw is hand-made (`8000/tcp DENY # AIHost-B0-temporary-api-block`), with no rule for 8001. |
-| 18-20 | No work initiated on the aihost: design, remote eval path, enforce + verify | ACTIVE_REQUIRED (W-ORIGIN) | Gateway binds 127.0.0.1:8010. The workstation reaches it through an SSH tunnel (workstation `127.0.0.1:18010` listening). On-host inference originators exist: `roles/benchmarking/files/run_benchmark.py`, `roles/vllm_xpu/files/validate_vllm.py` (`/usr/local/libexec/local-ai-validate-vllm`, `local-ai-run-benchmark`), `tools/t5820_stream_probe.py`, `~/engx/{cand.sh,runqueue.sh,engx.py}`. |
-| 21-23 | Dynamic limits: design, implement, remove max_output_tokens | ACTIVE_REQUIRED (W-LIMITS) | `runtime.py:438` estimate is chars/4 over content only; `:499` clamps only a supplied max_tokens; `server.py:155` /v1/models returns ids only. |
-| 24-35 | R1-R12 | ACTIVE_REQUIRED (W-R) | Operator approved all 12. None is implemented (code review 2026-10-07). |
+| 10-12 | vllm-top: design, implement, verify | ACTIVE_REQUIRED (W-VTOP; design accepted, partial implementation present) | v0.7.0–0.9.2 added engine-neutral gateway worker telemetry, pool/route display, and non-vLLM gateway instances. Production and the Ansible build source are v0.9.2; a separate legacy checkout is v0.8.0 and is not the deployment source. Local `discover.rs` still matches vLLM cmdlines only and discovers once at startup; unregistered-engine detection and policy-violation display remain open. |
+| 13-17 | Gateway-only access: design, candidate path, Ansible enforcement, detection, verify | ACTIVE_REQUIRED (W-ACCESS; enforcement verified) | Accepted design and live nftables enforcement. Gateway uid 995 is the sole process identity allowed to connect to worker ports 8000/8001; probes as mike, root, and aihost-runtime were refused on both ports, while uid 995 connected. Direct-denial counter incremented. Candidate lifecycle and vllm-top violation detection remain open. |
+| 18-20 | No work initiated on the aihost: design, remote eval path, enforce + verify | ACTIVE_REQUIRED (W-ORIGIN; remote entry path verified) | Ansible retired on-host engx, benchmark timer/service, vLLM units and helpers after verifying the archived files. TLS listener is live at `10.0.8.5:8443`; client `10.0.8.95/32` trusts the controller-held private CA root installed by Ansible, and OpenCode 1.18.34 completed an authenticated request. Host-origin workload is 403; local health/metrics return 200; SSH tunnel disabled. Candidate-based remote engx remains open. |
+| 21-23 | Dynamic limits: design, implement, remove max_output_tokens | ACTIVE_REQUIRED (implementation in progress) | The shared working tree adds engine `/props` observation, prompt rendering/tokenization, conservative fallback sizing, finite completion bounds, `/v1/models` limits/capabilities and `/v1/tokenize`. Focused tests pass; deployment, full-suite acceptance and live verification remain. |
+| 24-35 | R1-R12 | ACTIVE_REQUIRED (implementation in progress) | Shared working tree contains broad gateway/runtime changes for cancellation, scheduling, escalation, shadow/canary, drain, identity/quotas, deadlines/retries, reasoning, capability routing, outcomes, evidence and shutdown. `python3 -m compileall -q orchestrator_runtime orchestrator_gateway` passed; tests and live acceptance remain unverified. |
 | 36 | Defect remediation design | ACTIVE_REQUIRED (W-REASON) | `docs/defects/2026-10-07-unbounded-reasoning-deep-route.md`. Production deep worker has no `--reasoning-budget` (`llama_cpp_container_default_args`). |
 | 37 | Choose the budget from bounded data, adding points if needed | ACTIVE_REQUIRED (Q-BUDGET) | REPORT section 3.3: 4096 is binding for Qwen3.8/Qwen3.6/Flash-Next, so 2048 and 8192 points are needed. |
 | 38 | Awaiting: defect remediation authorization | SATISFIED (authorized by operator brief 2026-10-07 section 2) | n/a |
@@ -40,20 +41,34 @@ Evidence references are to files in this repository or to `ai-5820-01` paths tha
 | 47 | Capability fields (reasoning_controllable, reasoning_budget, output_contract_compliance) | ACTIVE_REQUIRED (W-LIMITS capabilities) | Not implemented. |
 | 48 | Sequencing proposal | SUPERSEDED by the execution DAG below | This document. |
 
-## B. Additional defects found during this reconciliation (code review 2026-10-07)
+## B. Live gateway cutover (2026-10-07)
+
+- OpenCode provider `t5820` uses `https://10.0.8.5:8443/v1`. The original self-signed CA:TRUE certificate was used directly as a leaf, copied only to app config paths, and absent from OS trust; the existing OpenCode process had no additive CA environment. Ansible now creates a controller-held private CA, installs a SAN/EKU-constrained leaf, and deploys only the public root to the gateway controller, OS trust and configured client paths. OpenCode 1.18.34 (official binary SHA-256 verified) completed a real authenticated request after a live leaf rotation; native SSE and trust-negative checks also passed. A dated backup of the prior client config remains in the user's config directory. The old user tunnel unit is disabled.
+- Ansible applied `users`, `inference_policy`, and `orchestrator` roles only. This avoided reapplying unrelated roles that would recreate scheduled benchmark units. Gateway uid is 995; the gateway and both llama worker services are active.
+- nftables allows remote gateway traffic from `10.0.8.95/32`, rejects local non-gateway connections to worker ports, drops non-loopback worker traffic, and counts denials. Probes as `mike`, `root`, and `aihost-runtime` to worker ports 8000 and 8001 were refused; a TCP connect as `aihost-gateway` succeeded.
+- Authenticated remote `/v1/models` and `/v1/chat/completions` returned HTTP 200; the chat response was `OK`. A host-origin authenticated chat request returned HTTP 403. Local `/health` and `/metrics` returned HTTP 200; the `vllm-top-console.service` is active.
+- Gateway evidence was moved to `/var/lib/aihost-gateway/t5820-gateway-persistent.jsonl` because the previous shared evidence directory was inaccessible to the isolated service identity. The migration preserves the full original file as a byte prefix and leaves source and intermediate copies intact. Verification reports preexisting `previous_hash` breaks beginning near line 4329; chain integrity remains unresolved.
+- Two rollout corrections were required: use Ansible's `regex_search` filter correctly, and load the TLS certificate through systemd credentials so the service does not traverse the protected `/etc/local-ai` tree. Focused tests, role lint, and playbook syntax validation pass after these corrections.
+
+## C. Additional defects found during this reconciliation (code review 2026-10-07)
+
+Gateway startup correction during the 2026-10-07 rollout:
+- The first restart failed because the service account could not traverse `/etc/local-ai` to read the new client registry. That parent is deliberately protected from the isolated gateway uid.
+- The registry contains token digests only; its Ansible destination is now `/var/lib/aihost-gateway/clients.json`, inside the service's private state directory. Plaintext client tokens remain root-only under `/etc/local-ai/orchestrator/clients/` and reach workers through systemd credentials.
+- Deployment is incomplete until Ansible is re-applied and remote TLS `/health`, authenticated `/v1/models`, and systemd readiness pass.
 
 These are added to todo.md and folded into the named workstream:
 
 | ID | Finding | Workstream |
 |---|---|---|
-| N1 | The gateway overwrites the provider finish_reason: `runtime.py:584` sets `normalized_finish_reason = "tool_calls" if tool_calls else "stop"`. An output-limit truncation (`length`) reaches the client as a normal stop, which hides budget exhaustion and truncation from clients and telemetry. | W-REASON (telemetry) |
-| N2 | Evidence hash chain resets on every gateway restart: `EvidenceStore` starts `previous=None` without reading the persisted file. The chain is not continuous across restarts. | R11 |
-| N3 | Streaming is simulated: the upstream call is non-streaming and the gateway emits SSE after completion. A client disconnect does not stop worker generation. | R1 / R7 |
-| N4 | Retired vLLM units `aihost-vllm-worker1/2` remain installed. `vllm_xpu` is still in `playbooks/inference.yml` with `vllm_xpu_service_enabled: true`, `vllm_xpu_host: 0.0.0.0`, plus on-host vLLM validate/benchmark scripts. Stale, and a latent direct-access path. | W-CLEAN / W-ORIGIN |
+| N1 | The gateway overwrote provider `finish_reason`; an output-limit truncation (`length`) reached the client as a normal stop. | W-REASON; shared working-tree change preserves `length`, covered by the new gateway platform fixture; deployment remains open. |
+| N2 | Evidence hash chain reset and permissive chain-break verification. | R11; shared working-tree changes resume the persisted head, require predecessor links, reject a later `chain_genesis`, and fail startup if an existing chain cannot be read. Restart/tamper tests pass; deployment remains open. |
+| N3 | Streaming was simulated and disconnects did not stop worker generation. | R1 / R7; upstream OpenAI-compatible SSE is now consumed and forwarded incrementally, and client disconnect closes the upstream socket. Gateway stream and cancellation tests pass; deployment remains open. |
+| N4 | Retired vLLM units `aihost-vllm-worker1/2` were installed. `vllm_xpu` was still in `playbooks/inference.yml`; on-host vLLM validate/benchmark scripts remained. Inventory now binds vLLM to loopback, the vLLM role is removed from the inference play, and Ansible removed the retired units and originators after archive verification. | W-CLEAN / W-ORIGIN |
 | N5 | The host firewall is hand-made ufw (temporary-block comments), not Ansible-managed. The inference port policy is incomplete (8001 open to RFC1918). | W-ACCESS / W-ORIGIN |
 | N6 | The gateway selection treats `max_concurrency` from inventory as authoritative, and `eligible()` uses the estimated context. | W-LIMITS |
 
-## C. Execution DAG (ACTIVE_REQUIRED)
+## D. Execution DAG (ACTIVE_REQUIRED)
 
 ```
 W1  commit evaluation artifacts + reconciliation ───────────────────────────────┐
