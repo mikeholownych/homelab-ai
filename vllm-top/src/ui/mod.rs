@@ -271,6 +271,26 @@ impl ServiceHealthSummary {
 /// The worst health across every monitored instance, plus the counts
 /// behind it — used by the header's "SVC" indicator so one dead instance
 /// among several is visible at a glance without switching tabs.
+/// Discovered inference servers that are not gateway-registered (named `!<port>` by discovery).
+fn policy_violations(app: &App) -> usize {
+    app.runtimes.iter().filter(|rt| rt.def.name.starts_with('!')).count()
+}
+
+/// GT activity above which a GPU counts as busy.
+const GPU_BUSY_PERCENT: f64 = 20.0;
+
+/// The busiest GPU's activity when some GPU is busy but no recognised inference server is up:
+/// work is happening that vllm-top cannot attribute to anything it monitors.
+fn unattributed_gpu_activity(gpus: &[crate::gpu::GpuStats], any_instance_up: bool) -> Option<f64> {
+    if any_instance_up {
+        return None;
+    }
+    gpus.iter()
+        .filter_map(|g| g.util_percent)
+        .filter(|&u| u > GPU_BUSY_PERCENT)
+        .max_by(f64::total_cmp)
+}
+
 fn overall_health(app: &App) -> ServiceHealthSummary {
     let (mut ok, mut stale, mut down) = (0, 0, 0);
     for rt in &app.runtimes {
@@ -330,6 +350,23 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(ratatui::style::Color::Black).bg(health_color(svc.worst)),
     ));
     spans.push(Span::raw(" "));
+
+    let violations = policy_violations(app);
+    if violations > 0 {
+        spans.push(Span::styled(
+            format!(" POLICY {violations} outside gateway "),
+            Style::default().fg(ratatui::style::Color::Black).bg(BAD).add_modifier(Modifier::BOLD),
+        ));
+        spans.push(Span::raw(" "));
+    }
+    let any_up = app.runtimes.iter().any(|rt| rt.snapshot.is_some() && rt.last_error.is_none());
+    if let Some(busy) = unattributed_gpu_activity(&app.gpu, any_up) {
+        spans.push(Span::styled(
+            format!(" GPU busy {busy:.0}%, no recognised server "),
+            Style::default().fg(ratatui::style::Color::Black).bg(WARN),
+        ));
+        spans.push(Span::raw(" "));
+    }
 
     // aggregate tab
     let agg_selected = app.view == View::Aggregate;
@@ -1152,18 +1189,24 @@ fn draw_instances(frame: &mut Frame, app: &App, area: Rect) {
                 .and_then(|s| s.model.clone())
                 .unwrap_or_else(|| "-".into());
             let d = &rt.derived;
+            let policy_violation = rt.def.name.starts_with('!');
             let style = if app.view == View::Instance(i) {
                 Style::default()
                     .fg(ACCENT)
                     .bg(ratatui::style::Color::Rgb(20, 30, 40))
                     .add_modifier(ratatui::style::Modifier::BOLD)
+            } else if policy_violation {
+                Style::default().fg(BAD).add_modifier(ratatui::style::Modifier::BOLD)
             } else {
                 Style::default()
             };
             Row::new([
                 Span::styled(format!("{}", i + 1), Style::default().fg(DIM)),
                 Span::styled(truncate(&rt.def.name, COL_NAME), style),
-                Span::styled(rt.def.kind.label(), Style::default().fg(DIM)),
+                Span::styled(
+                    if policy_violation { format!("{} !", rt.def.kind.label()) } else { rt.def.kind.label().to_string() },
+                    if policy_violation { Style::default().fg(BAD).add_modifier(ratatui::style::Modifier::BOLD) } else { Style::default().fg(DIM) },
+                ),
                 Span::styled(status_text, Style::default().fg(health_color(h))),
                 Span::styled(truncate(&util::short_url(&rt.def.url), COL_ENDPOINT), Style::default().fg(DIM)),
                 // The model column is the one field genuinely worth giving
@@ -1404,7 +1447,7 @@ fn draw_orchestrator_panel(frame: &mut Frame, app: &App, orch: &crate::orchestra
         ]),
     ];
     for (name, w) in &h.workers {
-        let color = if w.healthy { GOOD } else { BAD };
+        let color = if w.status == "stopped" { DIM } else if w.healthy { GOOD } else { BAD };
         let mut spans = vec![
             Span::styled(format!("  {} ", truncate(name, 28)), Style::default().fg(DIM)),
             Span::styled(w.status.clone(), Style::default().fg(color)),
@@ -1874,13 +1917,28 @@ pub fn render_text(app: &App, width: u16, height: u16) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn gpu_activity_is_unattributed_only_when_busy_and_nothing_is_up() {
+        use crate::gpu::GpuStats;
+        let gpus = [
+            GpuStats { index: 0, util_percent: Some(5.0), ..Default::default() },
+            GpuStats { index: 1, util_percent: Some(87.0), ..Default::default() },
+        ];
+        assert_eq!(super::unattributed_gpu_activity(&gpus, false), Some(87.0));
+        assert_eq!(super::unattributed_gpu_activity(&gpus, true), None, "a running server accounts for it");
+        let idle = [GpuStats { index: 0, util_percent: Some(20.0), ..Default::default() }];
+        assert_eq!(super::unattributed_gpu_activity(&idle, false), None, "20% is the threshold, not busy");
+        let unknown = [GpuStats { index: 0, util_percent: None, ..Default::default() }];
+        assert_eq!(super::unattributed_gpu_activity(&unknown, false), None, "unknown activity is not busy");
+    }
+
     use super::*;
     use crate::app;
     use crate::config::{InstanceDef, Settings};
     use std::time::Duration;
 
     fn single_instance_app() -> App {
-        let settings = Settings { poll: Duration::from_millis(200), history: 16 };
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
         let defs = vec![InstanceDef {
             name: "local".into(),
             kind: crate::config::SourceKind::Direct,
@@ -1891,6 +1949,26 @@ mod tests {
             confidence: Some(crate::discover::Confidence::UidAssociation),
         }];
         app::demo(&settings, defs).expect("demo app builds")
+    }
+
+    #[test]
+    fn header_counts_servers_outside_the_gateway() {
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
+        let def = |name: &str, port: u16| InstanceDef {
+            name: name.into(),
+            kind: crate::config::SourceKind::Limited,
+            url: format!("http://127.0.0.1:{port}"),
+            api_key: None,
+            discovered_via: Some(format!("listening socket uid 1000 port {port}")),
+            auth: None,
+            confidence: None,
+        };
+        let clean = app::demo(&settings, vec![def("worker1", 8000)]).expect("demo app builds");
+        assert!(!render_text(&clean, 160, 42).unwrap().contains("outside gateway"));
+        let app = app::demo(&settings, vec![def("worker1", 8000), def("!9090", 9090), def("!11434", 11434)])
+            .expect("demo app builds");
+        let header = render_text(&app, 160, 42).unwrap().lines().next().unwrap_or_default().to_string();
+        assert!(header.contains("POLICY 2 outside gateway"), "{header}");
     }
 
     /// Regression test for a real bug: `stat_line`'s `{label:<8}` padding
@@ -1984,7 +2062,7 @@ mod tests {
 
     #[test]
     fn stats_panel_omits_discovery_line_for_explicit_configuration() {
-        let settings = Settings { poll: Duration::from_millis(200), history: 16 };
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
         let defs = vec![InstanceDef {
             name: "explicit".into(),
             kind: crate::config::SourceKind::Direct,
@@ -2247,11 +2325,11 @@ mod tests {
         let mut workers = BTreeMap::new();
         workers.insert(
             "b0-live-tp1-worker1".to_string(),
-            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, engine_stats: None },
+            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, endpoint: None, engine_stats: None },
         );
         workers.insert(
             "b0-live-tp1-worker2".to_string(),
-            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, engine_stats: None },
+            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, endpoint: None, engine_stats: None },
         );
         Snapshot {
             health: Health {
@@ -2350,7 +2428,7 @@ mod tests {
 
     #[test]
     fn aggregate_view_shows_a_connection_rollup_for_multiple_instances() {
-        let settings = Settings { poll: Duration::from_millis(200), history: 16 };
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
         let defs = vec![
             InstanceDef {
                 name: "one".into(),
@@ -2381,7 +2459,7 @@ mod tests {
 
     #[test]
     fn empty_graph_history_shows_a_placeholder_not_a_panic_or_blank_chart() {
-        let settings = Settings { poll: Duration::from_millis(200), history: 16 };
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
         let defs = vec![InstanceDef {
             name: "fresh".into(),
             kind: crate::config::SourceKind::Direct,
@@ -2405,7 +2483,7 @@ mod tests {
     // -- instances table: wide-terminal column-stretching defect -----------
 
     fn multi_instance_app_with(names_urls: &[(&str, &str)]) -> App {
-        let settings = Settings { poll: Duration::from_millis(200), history: 16 };
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
         let defs = names_urls
             .iter()
             .map(|(name, url)| InstanceDef {
@@ -2636,7 +2714,7 @@ mod tests {
 
     #[test]
     fn instances_table_with_zero_instances_does_not_panic() {
-        let settings = Settings { poll: Duration::from_millis(200), history: 16 };
+        let settings = Settings { poll: Duration::from_millis(200), history: 16, auto_discover: false, rediscover: Duration::ZERO };
         let app = App::new(&settings, Vec::new()).expect("app builds with no instances");
         let text = render_text(&app, 240, 67).expect("renders");
         no_panel_row_is_corrupted(&text);

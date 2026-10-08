@@ -302,6 +302,12 @@ pub struct App {
     pub orch_worker_rates: std::collections::BTreeMap<String, orchestrator::EngineRates>,
     orch_rx: Option<Receiver<Option<orchestrator::Snapshot>>>,
     last_orch_poll: Instant,
+    auto_discover: bool,
+    gateway_inventory_enabled: bool,
+    discovery_rx: Option<Receiver<Vec<InstanceDef>>>,
+    last_discovery: Instant,
+    discovery_interval: Duration,
+    history_capacity: usize,
 }
 
 /// `xpu-smi` takes a few hundred ms per device; polling it every 1s tick
@@ -318,41 +324,11 @@ const ORCH_POLL_INTERVAL: Duration = Duration::from_secs(5);
 
 impl App {
     pub fn new(settings: &Settings, defs: Vec<InstanceDef>) -> Result<App> {
+        let gateway_inventory_enabled = settings.auto_discover
+            || defs.iter().any(|def| def.kind == crate::config::SourceKind::Gateway);
         let mut runtimes = Vec::with_capacity(defs.len());
         for def in defs {
-            let src = source::build(def.kind, &def.url, def.api_key.as_deref())?;
-            // Best-effort, one-time metadata — never re-fetched, never
-            // required. Only meaningful for a Direct-kind vLLM endpoint;
-            // a Prometheus server doesn't expose /version or /v1/models
-            // itself.
-            let (vllm_version, max_model_len) = match def.kind {
-                crate::config::SourceKind::Direct => {
-                    source::probe_direct_info(&def.url, def.api_key.as_deref())
-                }
-                crate::config::SourceKind::Prometheus | crate::config::SourceKind::Gateway => (None, None),
-            };
-            // Sender is created per poll round; the placeholder receiver just
-            // sits empty until the first fetch starts.
-            let (_tx, rx) = mpsc::channel::<FetchResult>();
-            runtimes.push(Runtime {
-                source: src,
-                def,
-                rx,
-                in_flight: false,
-                snapshot: None,
-                prev: None,
-                derived: Derived::default(),
-                hist: Histories::new(settings.history),
-                prefix_hit_rate: None,
-                last_error: None,
-                last_ok: None,
-                started: Instant::now(),
-                polls: 0,
-                last_rediscovery: None,
-                session: SessionTotals::default(),
-                vllm_version,
-                max_model_len,
-            });
+            runtimes.push(make_runtime(settings, def)?);
         }
         let view = if runtimes.len() == 1 {
             View::Instance(0)
@@ -389,6 +365,12 @@ impl App {
             orch_worker_rates: Default::default(),
             orch_rx: None,
             last_orch_poll: Instant::now() - ORCH_POLL_INTERVAL,
+            auto_discover: settings.auto_discover,
+            gateway_inventory_enabled,
+            discovery_rx: None,
+            last_discovery: Instant::now().checked_sub(settings.rediscover).unwrap_or_else(Instant::now),
+            discovery_interval: settings.rediscover,
+            history_capacity: settings.history,
         })
     }
 
@@ -461,6 +443,7 @@ impl App {
 
     /// Drain finished fetches, refresh the aggregate, maybe start new fetches.
     pub fn tick(&mut self) {
+        self.maybe_discover();
         let paused = self.paused;
         let poll = self.poll;
         let mut ingested = false;
@@ -498,6 +481,64 @@ impl App {
 
         self.maybe_poll_gpu();
         self.maybe_poll_orchestrator();
+    }
+
+    fn maybe_discover(&mut self) {
+        if !self.auto_discover {
+            return;
+        }
+        if let Some(rx) = &self.discovery_rx {
+            if let Ok(defs) = rx.try_recv() {
+                self.discovery_rx = None;
+                let registered = orchestrator::gateway_registered_endpoints(orchestrator::DEFAULT_URL);
+                self.runtimes.retain(|rt| {
+                    let is_placeholder = rt.def.discovered_via.is_none()
+                        && rt.def.url.trim_end_matches('/') == "http://localhost:8000"
+                        && rt.last_ok.is_none();
+                    let now_gateway_managed = rt.def.kind == crate::config::SourceKind::Direct
+                        && registered.contains(rt.def.url.trim_end_matches('/'));
+                    !(is_placeholder && !defs.is_empty()) && !now_gateway_managed
+                });
+                for def in defs {
+                    if self.runtimes.iter().any(|rt| rt.def.url.trim_end_matches('/') == def.url.trim_end_matches('/')) {
+                        continue;
+                    }
+                    if let Ok(rt) = make_runtime(&Settings { poll: self.poll, history: self.history_capacity, auto_discover: true, rediscover: Duration::ZERO }, def) {
+                        self.runtimes.push(rt);
+                    }
+                }
+                for (name, url) in orchestrator::gateway_worker_instances(orchestrator::DEFAULT_URL) {
+                    if self.runtimes.iter().any(|rt| rt.def.kind == crate::config::SourceKind::Gateway && rt.def.url == url) {
+                        continue;
+                    }
+                    let def = InstanceDef {
+                        name,
+                        kind: crate::config::SourceKind::Gateway,
+                        url,
+                        api_key: None,
+                        discovered_via: Some("orchestrator gateway".to_string()),
+                        auth: None,
+                        confidence: None,
+                    };
+                    if let Ok(rt) = make_runtime(&Settings { poll: self.poll, history: self.history_capacity, auto_discover: true, rediscover: Duration::ZERO }, def) {
+                        self.runtimes.push(rt);
+                    }
+                }
+            }
+        }
+        if self.discovery_rx.is_none()
+            && !self.discovery_interval.is_zero()
+            && self.last_discovery.elapsed() >= self.discovery_interval
+        {
+            self.last_discovery = Instant::now();
+            let (tx, rx) = mpsc::channel();
+            let key = std::env::var("VLLM_API_KEY").ok();
+            std::thread::spawn(move || {
+                let defs = crate::config::discover_local_instances(key.as_deref());
+                let _ = tx.send(defs);
+            });
+            self.discovery_rx = Some(rx);
+        }
     }
 
     fn start_poll(&mut self) {
@@ -590,6 +631,7 @@ impl App {
                         }
                         self.orch_prev = Some((snap.metrics.clone(), now));
                         self.update_engine_rates(snap);
+                        self.reconcile_gateway_workers(&snap.health);
                     }
                     self.orchestrator = snap;
                     self.orch_rx = None;
@@ -634,6 +676,57 @@ impl App {
                     self.orch_prev_engine.insert(name.clone(), cur.clone());
                 }
             }
+        }
+    }
+
+    /// Keep gateway-backed instance rows in sync with the most recent /health inventory.
+    /// This runs on every gateway poll so an intentionally stopped worker disappears from a
+    /// long-running console without requiring the console process to restart.
+    fn reconcile_gateway_workers(&mut self, health: &orchestrator::Health) {
+        if !self.gateway_inventory_enabled {
+            return;
+        }
+
+        let desired = orchestrator::gateway_worker_instances_from_health(orchestrator::DEFAULT_URL, health);
+        let desired_urls: std::collections::BTreeSet<String> = desired.iter().map(|(_, url)| url.clone()).collect();
+        let selected = match self.view {
+            View::Aggregate => None,
+            View::Instance(index) => self.runtimes.get(index).map(|rt| (rt.def.kind, rt.def.url.clone())),
+        };
+        let old_len = self.runtimes.len();
+        self.runtimes.retain(|rt| {
+            rt.def.kind != crate::config::SourceKind::Gateway || desired_urls.contains(&rt.def.url)
+        });
+        let mut changed = self.runtimes.len() != old_len;
+
+        for (name, url) in desired {
+            if self.runtimes.iter().any(|rt| rt.def.kind == crate::config::SourceKind::Gateway && rt.def.url == url) {
+                continue;
+            }
+            let def = InstanceDef {
+                name,
+                kind: crate::config::SourceKind::Gateway,
+                url,
+                api_key: None,
+                discovered_via: Some("orchestrator gateway".to_string()),
+                auth: None,
+                confidence: None,
+            };
+            if let Ok(rt) = make_runtime(
+                &Settings { poll: self.poll, history: self.history_capacity, auto_discover: true, rediscover: Duration::ZERO },
+                def,
+            ) {
+                self.runtimes.push(rt);
+                changed = true;
+            }
+        }
+
+        if changed {
+            self.agg.dirty = true;
+            self.view = selected
+                .and_then(|(kind, url)| self.runtimes.iter().position(|rt| rt.def.kind == kind && rt.def.url == url))
+                .map(View::Instance)
+                .unwrap_or(View::Aggregate);
         }
     }
 
@@ -735,6 +828,36 @@ impl App {
     pub fn uptime(&self) -> Duration {
         self.started.elapsed()
     }
+}
+
+fn make_runtime(settings: &Settings, def: InstanceDef) -> Result<Runtime> {
+    let src = source::build(def.kind, &def.url, def.api_key.as_deref())?;
+    let (vllm_version, max_model_len) = match def.kind {
+        crate::config::SourceKind::Direct => source::probe_direct_info(&def.url, def.api_key.as_deref()),
+        crate::config::SourceKind::Limited
+        | crate::config::SourceKind::Ollama
+        | crate::config::SourceKind::Prometheus | crate::config::SourceKind::Gateway => (None, None),
+    };
+    let (_tx, rx) = mpsc::channel::<FetchResult>();
+    Ok(Runtime {
+        source: src,
+        def,
+        rx,
+        in_flight: false,
+        snapshot: None,
+        prev: None,
+        derived: Derived::default(),
+        hist: Histories::new(settings.history),
+        prefix_hit_rate: None,
+        last_error: None,
+        last_ok: None,
+        started: Instant::now(),
+        polls: 0,
+        last_rediscovery: None,
+        session: SessionTotals::default(),
+        vllm_version,
+        max_model_len,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -864,4 +987,78 @@ vllm:inter_token_latency_seconds_count{{model_name=\"{model}\"}} 1000
         3.0 + idx as f64,
     );
     crate::promparse::parse(&text)
+}
+
+#[cfg(test)]
+mod gateway_lifecycle_tests {
+    use super::*;
+    use crate::config::SourceKind;
+
+    fn health(worker_status: &str, healthy: bool) -> orchestrator::Health {
+        let body = serde_json::json!({
+            "status": if healthy { "healthy" } else { "degraded" },
+            "ready": true,
+            "gateway": { "status": "alive", "uptime_seconds": 10.0 },
+            "scheduler": {
+                "ready": true,
+                "status": "ready",
+                "queued_work": 0,
+                "active_work": 0,
+                "available_workers": if healthy { 1 } else { 0 },
+                "total_workers": 1
+            },
+            "workers": {
+                "deep-worker": {
+                    "status": worker_status,
+                    "healthy": healthy,
+                    "pool": "deep",
+                    "engine": "llama.cpp",
+                    "engine_stats": if healthy { serde_json::json!({"requests_running": 0}) } else { serde_json::Value::Null }
+                }
+            }
+        });
+        serde_json::from_value(body).expect("health fixture parses")
+    }
+
+    fn deliver_health(app: &mut App, health: orchestrator::Health) {
+        let (tx, rx) = mpsc::channel();
+        tx.send(Some(orchestrator::Snapshot {
+            health,
+            metrics: orchestrator::MetricsTotals::default(),
+            fetch_latency: Duration::ZERO,
+        }))
+        .expect("snapshot receiver is live");
+        app.orch_rx = Some(rx);
+        app.last_orch_poll = Instant::now();
+        app.maybe_poll_orchestrator();
+    }
+
+    #[test]
+    fn gateway_worker_stop_and_recovery_are_reconciled_without_restarting_app() {
+        let settings = Settings { poll: Duration::from_secs(1), history: 16, auto_discover: false, rediscover: Duration::ZERO };
+        let mut app = App::new(
+            &settings,
+            vec![InstanceDef {
+                name: "deep-worker".into(),
+                kind: SourceKind::Gateway,
+                url: format!("{}#deep-worker", orchestrator::DEFAULT_URL),
+                api_key: None,
+                discovered_via: Some("orchestrator gateway".into()),
+                auth: None,
+                confidence: None,
+            }],
+        )
+        .expect("app builds");
+        app.view = View::Instance(0);
+
+        deliver_health(&mut app, health("stopped", false));
+        assert!(app.runtimes.is_empty(), "stopped gateway worker should leave the inference instance list");
+        assert_eq!(app.view, View::Aggregate, "removing the selected row returns to the aggregate view");
+        assert!(app.agg.dirty, "aggregate must refresh after its instance list changes");
+
+        deliver_health(&mut app, health("healthy", true));
+        assert_eq!(app.runtimes.len(), 1, "a worker that resumes should reappear dynamically");
+        assert_eq!(app.runtimes[0].def.name, "deep-worker");
+        assert_eq!(app.runtimes[0].def.kind, SourceKind::Gateway);
+    }
 }

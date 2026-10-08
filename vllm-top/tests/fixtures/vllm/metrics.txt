@@ -1,0 +1,3 @@
+# HELP vllm:num_requests_running Number of requests running.
+# TYPE vllm:num_requests_running gauge
+vllm:num_requests_running 0

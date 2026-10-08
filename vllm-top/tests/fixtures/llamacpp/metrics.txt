@@ -1,0 +1,2 @@
+# TYPE llamacpp:tokens_predicted_total counter
+llamacpp:tokens_predicted_total 42

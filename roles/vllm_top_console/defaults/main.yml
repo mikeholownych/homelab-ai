@@ -1,5 +1,6 @@
 ---
-# The binary is built on the controller from the in-repo vllm-top/ source (cargo build --release in vllm-top/) and installed root-owned, so the
+# The binary is built on the controller from the in-repo vllm-top/ source (cargo build --release in vllm-top/)
+# and installed root-owned, so the
 # console that runs on TTY1 cannot be modified by the account it runs as.
 vllm_top_console_enabled: false
 vllm_top_console_binary_src: "{{ playbook_dir }}/../vllm-top/target/release/vllm-top"
@@ -11,7 +12,11 @@ vllm_top_console_gateway_port: "{{ orchestrator_gateway_port | default(8010) }}"
 vllm_top_console_gateway_wait_seconds: 90
 vllm_top_console_service: vllm-top-console.service
 # Minimum acceptable version; the play fails rather than installing something older.
-vllm_top_console_min_version: "0.9.2"
+vllm_top_console_min_version: "1.0.0"
+# Listening ports discovery never probes. The gateway's remote TLS listener only accepts remote clients; a local
+# plain-HTTP probe of it would be counted as a refused local-origin request on every scan.
+vllm_top_console_ignore_ports:
+  - "{{ orchestrator_gateway_remote_port | default(8443) }}"
 # Per-user copies that sit earlier on PATH than the managed binary and would run an older version in
 # SSH sessions. Removed so `vllm-top` always resolves to vllm_top_console_binary_dest.
 vllm_top_console_shadow_paths:

@@ -19,6 +19,8 @@ pub fn build(kind: SourceKind, url: &str, api_key: Option<&str>) -> Result<Arc<d
             client,
             api_key,
         }),
+        SourceKind::Limited => Arc::new(LimitedSource { url: url.to_string(), client }),
+        SourceKind::Ollama => Arc::new(OllamaSource { url: url.to_string(), client }),
         SourceKind::Gateway => {
             let (base, worker) = url.split_once('#').unwrap_or((url, ""));
             Arc::new(GatewaySource { base: base.to_string(), worker: worker.to_string(), client })
@@ -29,6 +31,65 @@ pub fn build(kind: SourceKind, url: &str, api_key: Option<&str>) -> Result<Arc<d
             api_key,
         }),
     })
+}
+
+/// A discovered OpenAI-compatible server without a recognized metrics schema.
+/// Poll only its model-list endpoint and report liveness with all metrics absent.
+struct LimitedSource {
+    url: String,
+    client: reqwest::blocking::Client,
+}
+
+impl MetricsSource for LimitedSource {
+    fn fetch(&self) -> Result<Vec<Sample>> {
+        let endpoint = format!("{}/v1/models", self.url.trim_end_matches('/'));
+        let response = self.client.get(&endpoint).send().with_context(|| format!("GET {endpoint}"))?;
+        if response.status().is_success() || response.status().as_u16() == 401 || response.status().as_u16() == 403 {
+            return Ok(Vec::new());
+        }
+        response.error_for_status().with_context(|| format!("GET {endpoint}"))?;
+        Ok(Vec::new())
+    }
+}
+
+/// An Ollama server. `/api/ps` is the only live state it publishes: which models are loaded and
+/// how much of each sits in GPU memory. There are no request or token counters, so every rate stays
+/// absent (`n/a`), never zero.
+struct OllamaSource {
+    url: String,
+    client: reqwest::blocking::Client,
+}
+
+impl MetricsSource for OllamaSource {
+    fn fetch(&self) -> Result<Vec<Sample>> {
+        let endpoint = format!("{}/api/ps", self.url.trim_end_matches('/'));
+        let body: serde_json::Value = self
+            .client
+            .get(&endpoint)
+            .send()
+            .and_then(|r| r.error_for_status())
+            .with_context(|| format!("GET {endpoint}"))?
+            .json()
+            .with_context(|| format!("decode {endpoint}"))?;
+        Ok(samples_from_ollama_ps(&body))
+    }
+}
+
+pub fn samples_from_ollama_ps(body: &serde_json::Value) -> Vec<Sample> {
+    let mut out = Vec::new();
+    for model in body.get("models").and_then(serde_json::Value::as_array).into_iter().flatten() {
+        let Some(name) = model.get("name").or_else(|| model.get("model")).and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        let labels = std::collections::BTreeMap::from([("model_name".to_string(), name.to_string())]);
+        out.push(Sample { name: "ollama:model_loaded".into(), labels: labels.clone(), value: 1.0 });
+        for (field, series) in [("size", "ollama:model_size_bytes"), ("size_vram", "ollama:model_vram_bytes")] {
+            if let Some(value) = model.get(field).and_then(serde_json::Value::as_f64) {
+                out.push(Sample { name: series.into(), labels: labels.clone(), value });
+            }
+        }
+    }
+    out
 }
 
 /// One-time, best-effort metadata for a Direct-kind instance: vLLM's own
@@ -157,6 +218,11 @@ pub fn samples_from_gateway_health(body: &serde_json::Value, worker: &str) -> Re
         .get("workers")
         .and_then(|ws| ws.get(worker))
         .with_context(|| format!("gateway does not list worker {worker:?}"))?;
+    if w.get("status").and_then(|s| s.as_str()) == Some("stopped") {
+        // The registry entry is intentionally retained for configuration and
+        // routing identity, but it is not a running inference service.
+        return Ok(Vec::new());
+    }
     if w.get("healthy").and_then(|h| h.as_bool()) == Some(false) {
         bail!("gateway reports worker {worker:?} {}", w.get("status").and_then(|s| s.as_str()).unwrap_or("unhealthy"));
     }
@@ -395,6 +461,13 @@ mod gateway_tests {
         assert!(samples_from_gateway_health(&down, "w-llama").is_err(), "an unhealthy worker is not shown as live");
     }
 
+    #[test]
+    fn stopped_worker_is_not_a_metrics_failure_or_fake_live_instance() {
+        let body = health(r#"{"healthy":false,"status":"stopped","expected_state":"stopped","engine_stats":null}"#);
+        let samples = samples_from_gateway_health(&body, "w-llama").expect("intentional stop is not a scrape failure");
+        assert!(samples.is_empty(), "stopped worker must not publish fabricated metrics");
+    }
+
     const GATEWAY_METRICS: &str = r#"aihost_inference_completions_total{worker_id="w-llama",outcome="completed"} 418
 aihost_inference_completions_total{worker_id="w-llama",outcome="failed"} 1
 aihost_inference_completions_total{worker_id="other",outcome="completed"} 99
@@ -419,6 +492,17 @@ aihost_inference_duration_seconds_count{worker_id="other",model="m"} 7
         assert!((snap.cached_ratio().unwrap() - 9000.0 / 10_020.0).abs() < 1e-9);
         assert_eq!((snap.prefix_hits, snap.prefix_queries), (9000.0, 10_020.0));
         assert!(snap.has.kv && snap.has.prefix);
+    }
+
+    #[test]
+    fn ollama_loaded_models_name_the_instance_and_leave_rates_absent() {
+        let body: serde_json::Value = serde_json::from_str(include_str!("../tests/fixtures/ollama/ps.json")).unwrap();
+        let samples = samples_from_ollama_ps(&body);
+        let snap = crate::metrics::Snapshot::extract(&samples);
+        assert_eq!(snap.model.as_deref(), Some("qwen3:8b"));
+        assert!(samples.iter().any(|s| s.name == "ollama:model_vram_bytes" && s.value == 6_260_000_000.0));
+        assert!(samples.iter().all(|s| !s.name.starts_with("vllm:")), "no fabricated vLLM series");
+        assert!(samples_from_ollama_ps(&serde_json::json!({"models": []})).is_empty(), "nothing loaded is nothing");
     }
 
     #[test]

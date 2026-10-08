@@ -1,4 +1,4 @@
-//! Best-effort discovery of a locally running vLLM server.
+//! Best-effort discovery of local inference servers through their listening sockets.
 //!
 //! This never reads another process's config file or environment — those
 //! are frequently permission-restricted on hardened deployments (a vLLM
@@ -96,6 +96,8 @@ pub struct DiscoveredInstance {
     /// restarts (deliberately not PID-based: a restart may reuse a PID,
     /// and a real restart must not be mistaken for continuity).
     pub discovered_via: String,
+    /// Engine identity established by a bounded, read-only endpoint fingerprint.
+    pub engine: String,
 }
 
 /// Pick the single discovered instance matching `identity`, refusing to
@@ -117,6 +119,21 @@ pub fn resolve_unique<'a>(
     Ok(Some(first))
 }
 
+/// Ports never probed by the socket scan: well-known non-inference services (ssh, dns, cups,
+/// node_exporter) plus whatever the operator adds with `--ignore-port`.
+pub const DEFAULT_IGNORED_PORTS: [u16; 4] = [22, 53, 631, 9100];
+
+static EXTRA_IGNORED_PORTS: std::sync::OnceLock<Vec<u16>> = std::sync::OnceLock::new();
+
+/// Record the operator's extra ignored ports. Called once at startup; later calls are ignored.
+pub fn set_ignored_ports(extra: &[u16]) {
+    let _ = EXTRA_IGNORED_PORTS.set(extra.to_vec());
+}
+
+pub fn is_ignored_port(port: u16) -> bool {
+    DEFAULT_IGNORED_PORTS.contains(&port) || EXTRA_IGNORED_PORTS.get().is_some_and(|ports| ports.contains(&port))
+}
+
 #[cfg(target_os = "linux")]
 pub fn discover(configured_api_key: Option<&str>) -> Vec<DiscoveredInstance> {
     linux::discover(configured_api_key)
@@ -129,7 +146,7 @@ pub fn discover(_configured_api_key: Option<&str>) -> Vec<DiscoveredInstance> {
 
 #[cfg(target_os = "linux")]
 mod linux {
-    use super::{AuthState, Confidence, DiscoveredInstance};
+    use super::{is_ignored_port, AuthState, Confidence, DiscoveredInstance};
     use std::collections::HashSet;
     use std::fs;
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -207,6 +224,7 @@ mod linux {
         // single probe's timeout regardless of how many candidates exist.
         let mut seen = HashSet::new();
         let mut targets = Vec::new();
+        let mut scanned = Vec::new();
         for cand in &candidates {
             if cand.uid == u32::MAX {
                 continue;
@@ -223,6 +241,39 @@ mod linux {
             }
         }
 
+        // Socket ownership and process names are attribution hints only. Probe every remaining
+        // LISTEN socket (loopback, wildcard or a host address) so an ad-hoc server started after
+        // vllm-top can be found even when it is not a vLLM process or systemd unit. No config,
+        // environment, or credential is read from the owning process; generic fingerprints never
+        // receive a caller API key. A socket already classified within FINGERPRINT_TTL is not
+        // probed again; a closed socket (its inode gone) is forgotten immediately.
+        let live_inodes: HashSet<u64> = listen_table.iter().map(|sock| sock.inode).collect();
+        let mut cached = Vec::new();
+        {
+            let mut cache = fingerprint_cache().lock().unwrap_or_else(|e| e.into_inner());
+            cache.retain(|inode, (at, _)| live_inodes.contains(inode) && at.elapsed() < FINGERPRINT_TTL);
+            for sock in &listen_table {
+                if let Some((_, result)) = cache.get(&sock.inode) {
+                    if seen.insert((sock.addr, sock.port)) {
+                        cached.extend(result.clone());
+                    }
+                }
+            }
+        }
+        for sock in &listen_table {
+            if is_ignored_port(sock.port) {
+                continue;
+            }
+            if seen.insert((sock.addr, sock.port)) {
+                scanned.push((
+                    sock.inode,
+                    normalize_bind_addr(sock.addr),
+                    sock.port,
+                    format!("listening socket uid {} port {}", sock.uid, sock.port),
+                ));
+            }
+        }
+
         let key = configured_api_key.map(|s| s.to_string());
         let handles: Vec<_> = targets
             .into_iter()
@@ -233,11 +284,36 @@ mod linux {
                 })
             })
             .collect();
-
-        handles
+        let scan_handles: Vec<_> = scanned
             .into_iter()
-            .filter_map(|h| h.join().unwrap_or(None))
-            .collect()
+            .map(|(inode, addr, port, via)| {
+                let key = key.clone();
+                (inode, std::thread::spawn(move || {
+                    validate(&base_url(addr, port), key.as_deref(), &via, Confidence::UidAssociation)
+                }))
+            })
+            .collect();
+
+        let mut found: Vec<DiscoveredInstance> = handles.into_iter().filter_map(|h| h.join().unwrap_or(None)).collect();
+        let mut cache = fingerprint_cache().lock().unwrap_or_else(|e| e.into_inner());
+        for (inode, handle) in scan_handles {
+            let result = handle.join().unwrap_or(None);
+            cache.insert(inode, (std::time::Instant::now(), result.clone()));
+            found.extend(result);
+        }
+        found.extend(cached);
+        found
+    }
+
+    /// How long a scanned socket's classification (inference engine or not) is reused before it
+    /// is fingerprinted again.
+    const FINGERPRINT_TTL: Duration = Duration::from_secs(60);
+
+    type FingerprintCache = std::collections::HashMap<u64, (std::time::Instant, Option<DiscoveredInstance>)>;
+
+    fn fingerprint_cache() -> &'static std::sync::Mutex<FingerprintCache> {
+        static CACHE: std::sync::OnceLock<std::sync::Mutex<FingerprintCache>> = std::sync::OnceLock::new();
+        CACHE.get_or_init(Default::default)
     }
 
     /// The identity to report for a `UidAssociation` port owned by `uid`.
@@ -525,54 +601,115 @@ mod linux {
         let client = reqwest::blocking::Client::builder()
             .timeout(Duration::from_millis(1500))
             .connect_timeout(Duration::from_millis(1500))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .ok()?;
 
-        let health_ok = client
-            .get(format!("{base}/health"))
-            .send()
-            .map(|r| r.status().is_success())
-            .unwrap_or(false);
-        if !health_ok {
-            return None;
-        }
-
-        // `/health` returning success only proves *something* is
-        // listening and calls itself healthy — not that it's vLLM. Found
-        // live on a real deployment: an orchestrator gateway sharing the
-        // vLLM workers' uid exposes its own generic `/health` endpoint
-        // and would otherwise pass this check too, getting listed as a
-        // fake vLLM instance with garbage/empty data (uid-fallback
-        // attribution can't tell same-uid sockets apart — see
-        // `attribute_sockets` — so it was never excluded upstream
-        // either). vLLM always exposes at least one `vllm:`-prefixed
-        // Prometheus series on `/metrics` (unauthenticated, like
-        // `/health`); requiring that here is a real, minimal,
-        // vLLM-specific signal instead of "answered /health with 200."
-        let is_vllm = client
+        // Fingerprint only bounded, no-inference GET endpoints. Generic probes do not receive
+        // configured credentials; a caller key is attached only after a vLLM-specific fingerprint.
+        let metrics_body = client
             .get(format!("{base}/metrics"))
             .send()
             .ok()
             .filter(|r| r.status().is_success())
             .and_then(|r| r.text().ok())
-            .map(|body| looks_like_vllm_metrics(&body))
-            .unwrap_or(false);
-        if !is_vllm {
+            .unwrap_or_default();
+        let props: Option<serde_json::Value> = client
+            .get(format!("{base}/props"))
+            .send()
+            .ok()
+            .filter(|r| r.status().is_success())
+            .and_then(|r| r.json().ok());
+        let engine = fingerprint_engine(&metrics_body, props.as_ref(), &client, base);
+        let Some(engine) = engine else {
             return None;
-        }
+        };
 
         let mut req = client.get(format!("{base}/v1/models"));
-        if let Some(key) = api_key {
-            req = req.bearer_auth(key);
+        // The supplied credential is used only after a vLLM-specific fingerprint. It is never
+        // forwarded to an unrelated listener discovered by the socket scan.
+        let has_credential = engine == "vLLM" && api_key.is_some();
+        if engine == "vLLM" {
+            if let Some(key) = api_key {
+                req = req.bearer_auth(key);
+            }
         }
         let v1_status = req.send().ok().map(|r| r.status().as_u16());
 
         Some(DiscoveredInstance {
             url: base.to_string(),
-            auth: classify_auth(api_key.is_some(), v1_status),
+            auth: classify_auth(has_credential, v1_status),
             confidence,
             discovered_via: via.to_string(),
+            engine: engine.to_string(),
         })
+    }
+
+    fn fingerprint_engine(
+        metrics: &str,
+        props: Option<&serde_json::Value>,
+        client: &reqwest::blocking::Client,
+        base: &str,
+    ) -> Option<&'static str> {
+        let sglang_info = get_json(client, &format!("{base}/get_server_info")).is_some();
+        let ollama_version = get_json(client, &format!("{base}/api/version"))
+            .is_some_and(|v| v.get("version").is_some());
+        let tgi_info = get_json(client, &format!("{base}/info"))
+            .is_some_and(|v| v.get("model_id").is_some());
+        let models_status = client.get(format!("{base}/v1/models")).send().ok().and_then(|r| {
+            let status = r.status().as_u16();
+            let body: Option<serde_json::Value> = r.json().ok();
+            openai_models_shape(status, body.as_ref()).then_some(status)
+        });
+        classify_engine(metrics, props, sglang_info, ollama_version, tgi_info, models_status)
+    }
+
+    fn classify_engine(
+        metrics: &str,
+        props: Option<&serde_json::Value>,
+        sglang_info: bool,
+        ollama_version: bool,
+        tgi_info: bool,
+        models_status: Option<u16>,
+    ) -> Option<&'static str> {
+        if looks_like_vllm_metrics(metrics) {
+            return Some("vLLM");
+        }
+        let names: Vec<String> = crate::promparse::parse(metrics).into_iter().map(|s| s.name).collect();
+        if names.iter().any(|name| name.starts_with("llamacpp:"))
+            || props.is_some_and(|value| value.get("total_slots").is_some() || value.get("model_alias").is_some())
+        {
+            return Some("llama.cpp");
+        }
+        if names.iter().any(|name| name.starts_with("sglang:")) || sglang_info {
+            return Some("SGLang");
+        }
+        if ollama_version {
+            return Some("Ollama");
+        }
+        if tgi_info {
+            return Some("TGI");
+        }
+        // Unknown OpenAI-compatible servers remain visible with limited metrics.
+        if models_status.is_some_and(|status| (200..300).contains(&status) || status == 401 || status == 403) {
+            return Some("unknown engine, limited metrics");
+        }
+        None
+    }
+
+    /// A `/v1/models` answer counts as an inference endpoint only in the OpenAI shape: a model list
+    /// on success, or an OpenAI-style `error` object when authentication is required. Anything else
+    /// (a login page, a 404 handler that echoes 401, ...) is not evidence of an inference server.
+    pub(super) fn openai_models_shape(status: u16, body: Option<&serde_json::Value>) -> bool {
+        match status {
+            200..=299 => body.is_some_and(|b| b.get("data").is_some_and(serde_json::Value::is_array)),
+            401 | 403 => body.is_some_and(|b| b.get("error").is_some()),
+            _ => false,
+        }
+    }
+
+    fn get_json(client: &reqwest::blocking::Client, url: &str) -> Option<serde_json::Value> {
+        client.get(url).send().ok().filter(|r| r.status().is_success()).and_then(|r| r.json().ok())
     }
 
     pub(super) fn classify_auth(has_credential: bool, v1_models_status: Option<u16>) -> AuthState {
@@ -767,6 +904,57 @@ aihost_worker_health_status{worker_id=\"b0-live-tp1-worker1\"} 1
         }
 
         #[test]
+        fn fingerprints_recorded_engine_fixtures_and_unknown_openai_servers() {
+            let props: serde_json::Value = serde_json::from_str(include_str!("../tests/fixtures/llamacpp/props.json")).unwrap();
+            assert_eq!(classify_engine(
+                include_str!("../tests/fixtures/vllm/metrics.txt"), None, false, false, false, Some(200)),
+                Some("vLLM")
+            );
+            assert_eq!(classify_engine(
+                include_str!("../tests/fixtures/llamacpp/metrics.txt"), Some(&props), false, false, false, Some(200)),
+                Some("llama.cpp")
+            );
+            assert_eq!(classify_engine(
+                include_str!("../tests/fixtures/sglang/metrics.txt"), None, false, false, false, Some(200)),
+                Some("SGLang")
+            );
+            let ollama: serde_json::Value = serde_json::from_str(include_str!("../tests/fixtures/ollama/version.json")).unwrap();
+            let tgi: serde_json::Value = serde_json::from_str(include_str!("../tests/fixtures/tgi/info.json")).unwrap();
+            assert_eq!(ollama["version"], "0.6.0");
+            assert_eq!(tgi["model_id"], "test-model");
+            assert_eq!(classify_engine("", None, false, true, false, None), Some("Ollama"));
+            assert_eq!(classify_engine("", None, false, false, true, None), Some("TGI"));
+            assert_eq!(classify_engine(
+                include_str!("../tests/fixtures/openai/metrics.txt"), None, false, false, false, Some(401)),
+                Some("unknown engine, limited metrics")
+            );
+            assert_eq!(classify_engine("", None, false, false, false, Some(404)), None);
+        }
+
+        #[test]
+        fn only_openai_shaped_model_answers_count_as_inference() {
+            let list = serde_json::json!({"object": "list", "data": [{"id": "m"}]});
+            let auth_error = serde_json::json!({"error": {"message": "invalid api key", "type": "invalid_request_error"}});
+            let login_page = serde_json::json!({"message": "Unauthorized"});
+            assert!(openai_models_shape(200, Some(&list)));
+            assert!(openai_models_shape(401, Some(&auth_error)));
+            assert!(openai_models_shape(403, Some(&auth_error)));
+            assert!(!openai_models_shape(401, Some(&login_page)), "a non-OpenAI 401 is not an inference server");
+            assert!(!openai_models_shape(401, None), "a non-JSON 401 is not an inference server");
+            assert!(!openai_models_shape(200, Some(&login_page)), "a 200 without a model list is not one either");
+            assert!(!openai_models_shape(302, None));
+        }
+
+        #[test]
+        fn well_known_and_operator_ports_are_never_probed() {
+            super::super::set_ignored_ports(&[8443]);
+            for port in [22, 53, 631, 9100, 8443] {
+                assert!(super::super::is_ignored_port(port), "{port}");
+            }
+            assert!(!super::super::is_ignored_port(8000));
+        }
+
+        #[test]
         fn attribution_prefers_verified_when_fds_known() {
             let sockets = [
                 ListenSocket { addr: IpAddr::V4(Ipv4Addr::LOCALHOST), port: 8000, uid: 999, inode: 111 },
@@ -864,12 +1052,14 @@ aihost_worker_health_status{worker_id=\"b0-live-tp1-worker1\"} 1
                     auth: AuthState::NotRequired,
                     confidence: Confidence::UidAssociation,
                     discovered_via: "systemd vllm.service".into(),
+                    engine: "vLLM".into(),
                 },
                 DiscoveredInstance {
                     url: "http://127.0.0.1:8001".into(),
                     auth: AuthState::NotRequired,
                     confidence: Confidence::UidAssociation,
                     discovered_via: "systemd vllm.service".into(),
+                    engine: "vLLM".into(),
                 },
             ];
             assert!(super::super::resolve_unique(&candidates, "systemd vllm.service").is_err());
@@ -882,6 +1072,7 @@ aihost_worker_health_status{worker_id=\"b0-live-tp1-worker1\"} 1
                 auth: AuthState::NotRequired,
                 confidence: Confidence::Verified,
                 discovered_via: "systemd vllm.service".into(),
+                engine: "vLLM".into(),
             }];
             let found = super::super::resolve_unique(&candidates, "systemd vllm.service")
                 .expect("not ambiguous")

@@ -39,4 +39,14 @@ pub struct Cli {
     /// Render a single frame with synthetic data to stdout (UI preview)
     #[arg(long)]
     pub demo: bool,
+
+    /// Seconds between local rediscovery scans for inference servers that
+    /// appear or disappear while the console runs (0 disables rescanning).
+    #[arg(long, value_name = "SECS", default_value_t = 5)]
+    pub rediscover: u64,
+
+    /// Listening port the discovery scan never probes, in addition to the
+    /// built-in non-inference ports (22, 53, 631, 9100). Repeatable.
+    #[arg(long = "ignore-port", value_name = "PORT")]
+    pub ignore_ports: Vec<u16>,
 }

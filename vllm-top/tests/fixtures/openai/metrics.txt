@@ -1,0 +1,2 @@
+# TYPE process_resident_memory_bytes gauge
+process_resident_memory_bytes 1024

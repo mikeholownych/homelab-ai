@@ -23,6 +23,7 @@ fn main() -> Result<()> {
     }
 
     let cli = cli::Cli::parse();
+    discover::set_ignored_ports(&cli.ignore_ports);
     let (settings, defs) = config::resolve(&cli)?;
 
     if cli.demo {

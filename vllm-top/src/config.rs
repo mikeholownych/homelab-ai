@@ -13,6 +13,10 @@ use std::time::Duration;
 pub enum SourceKind {
     /// Scrape a vLLM server's own `/metrics` endpoint.
     Direct,
+    /// OpenAI-compatible endpoint that was discovered but has no known metrics schema.
+    Limited,
+    /// Ollama server: loaded models from `/api/ps`; Ollama publishes no token rates.
+    Ollama,
     /// Query a Prometheus server's `/api/v1/query`.
     Prometheus,
     /// One worker's engine statistics as republished by the orchestrator gateway (`GET /health`).
@@ -25,6 +29,8 @@ impl SourceKind {
     pub fn label(self) -> &'static str {
         match self {
             SourceKind::Direct => "direct",
+            SourceKind::Limited => "limited",
+            SourceKind::Ollama => "ollama",
             SourceKind::Prometheus => "prometheus",
             SourceKind::Gateway => "gateway",
         }
@@ -51,11 +57,56 @@ pub struct InstanceDef {
     pub confidence: Option<Confidence>,
 }
 
+/// Discover currently running local inference endpoints for the live refresh loop.
+/// Gateway registered endpoints are omitted so workers are represented only by gateway telemetry.
+pub fn discover_local_instances(api_key: Option<&str>) -> Vec<InstanceDef> {
+    let registered = crate::orchestrator::gateway_registered_endpoints(crate::orchestrator::DEFAULT_URL);
+    discover::discover(api_key)
+        .into_iter()
+        // The gateway is the control plane for workers, not an inference server itself. Its
+        // OpenAI-compatible /v1/models endpoint must never be reported as an unregistered server.
+        .filter(|inst| !is_gateway_control_endpoint(&inst.url))
+        .filter(|inst| !registered.contains(inst.url.trim_end_matches('/')))
+        .map(|inst| InstanceDef {
+            name: format!("!{}", inst.url.rsplit(':').next().unwrap_or("server")),
+            kind: match inst.engine.as_str() {
+                "unknown engine, limited metrics" => SourceKind::Limited,
+                "Ollama" => SourceKind::Ollama,
+                _ => SourceKind::Direct,
+            },
+            url: inst.url,
+            api_key: if inst.engine == "vLLM" { api_key.map(str::to_owned) } else { None },
+            discovered_via: Some(format!("{}; {}", inst.discovered_via, inst.engine)),
+            auth: Some(inst.auth),
+            confidence: Some(inst.confidence),
+        })
+        .collect()
+}
+
+fn is_gateway_control_endpoint(url: &str) -> bool {
+    url.trim_end_matches('/') == crate::orchestrator::DEFAULT_URL.trim_end_matches('/')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_gateway_control_endpoint;
+
+    #[test]
+    fn excludes_gateway_control_listener_from_local_inference_discovery() {
+        assert!(is_gateway_control_endpoint("http://127.0.0.1:8010/"));
+        assert!(!is_gateway_control_endpoint("http://127.0.0.1:8000"));
+    }
+}
+
 /// Runtime settings after merging CLI flags with the config file.
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub poll: Duration,
     pub history: usize,
+    /// Keep discovering local endpoints when the user did not supply instances.
+    pub auto_discover: bool,
+    /// Interval between rediscovery scans; zero disables them.
+    pub rediscover: Duration,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -79,6 +130,7 @@ struct FileInstance {
 /// Merge CLI flags and the config file into a concrete instance list.
 pub fn resolve(cli: &Cli) -> Result<(Settings, Vec<InstanceDef>)> {
     let file = load_file(cli.config.as_deref())?;
+    let auto_discover = cli.urls.is_empty() && file.instances.is_empty();
 
     // The credential for the local vLLM instance: an explicit --api-key
     // wins, otherwise the same VLLM_API_KEY environment variable vLLM
@@ -114,7 +166,7 @@ pub fn resolve(cli: &Cli) -> Result<(Settings, Vec<InstanceDef>)> {
     }
 
     if defs.is_empty() {
-        let discovered = discover::discover(configured_api_key.as_deref());
+        let discovered = discover_local_instances(configured_api_key.as_deref());
         if discovered.is_empty() {
             defs.push(InstanceDef {
                 name: String::new(),
@@ -135,15 +187,7 @@ pub fn resolve(cli: &Cli) -> Result<(Settings, Vec<InstanceDef>)> {
             // place that *does* need to refuse an ambiguous pick (runtime
             // reconnection, in app.rs).
             for inst in discovered {
-                defs.push(InstanceDef {
-                    name: String::new(),
-                    kind: SourceKind::Direct,
-                    url: inst.url,
-                    api_key: configured_api_key.clone(),
-                    discovered_via: Some(inst.discovered_via),
-                    auth: Some(inst.auth),
-                    confidence: Some(inst.confidence),
-                });
+                defs.push(inst);
             }
         }
         // Workers behind a local orchestrator gateway that are not vLLM (vLLM workers are monitored
@@ -204,6 +248,8 @@ pub fn resolve(cli: &Cli) -> Result<(Settings, Vec<InstanceDef>)> {
         Settings {
             poll: Duration::from_millis(poll_ms),
             history,
+            auto_discover,
+            rediscover: Duration::from_secs(cli.rediscover),
         },
         defs,
     ))

@@ -1,0 +1,2 @@
+# TYPE sglang:num_requests_running gauge
+sglang:num_requests_running 1

@@ -77,6 +77,9 @@ pub struct WorkerHealth {
     /// Inference engine behind the worker (`vllm`, `llama.cpp`, ...). Absent on older gateways.
     #[serde(default)]
     pub engine: Option<String>,
+    /// Loopback endpoint registered by the gateway, used to deduplicate local socket discovery.
+    #[serde(default)]
+    pub endpoint: Option<String>,
     /// Engine statistics the *gateway* collected and republished in a neutral shape — vllm-top never
     /// talks to workers (or needs their credentials) for this. `None` when unknown or stale.
     #[serde(default)]
@@ -203,17 +206,31 @@ pub struct Snapshot {
     pub fetch_latency: Duration,
 }
 
-/// Gateway workers that publish engine statistics and are not vLLM (vLLM workers are scraped directly),
-/// as `(worker-id, "http://host:port#worker-id")` pairs. Empty when no gateway answers.
+/// Active non-vLLM gateway workers as `(worker-id, "http://host:port#worker-id")` pairs.
+/// Intentionally stopped inventory entries remain visible in gateway health, but are not inference
+/// instances in vllm-top and therefore cannot create a false service-down alert.
 pub fn gateway_worker_instances(base_url: &str) -> Vec<(String, String)> {
     let Some(snap) = probe(base_url) else { return Vec::new() };
+    gateway_worker_instances_from_health(base_url, &snap.health)
+}
+
+pub fn gateway_worker_instances_from_health(base_url: &str, health: &Health) -> Vec<(String, String)> {
     let base = base_url.trim_end_matches('/');
-    snap.health
+    health
         .workers
         .iter()
-        .filter(|(_, w)| w.engine_stats.is_some() && w.engine.as_deref() != Some("vllm"))
+        .filter(|(_, w)| w.status != "stopped")
+        .filter(|(_, w)| w.engine.as_deref().is_some_and(|engine| engine != "vllm") || w.engine_stats.is_some())
         .map(|(name, _)| (name.clone(), format!("{base}#{name}")))
         .collect()
+}
+
+/// Endpoints already registered with the gateway. Matching local listeners are monitored through
+/// the gateway and must not be shown as unregistered-server policy violations.
+pub fn gateway_registered_endpoints(base_url: &str) -> std::collections::BTreeSet<String> {
+    let Some(snap) = probe(base_url) else { return std::collections::BTreeSet::new() };
+    snap.health.workers.values().filter_map(|worker| worker.endpoint.as_deref())
+        .map(|url| url.trim_end_matches('/').to_string()).collect()
 }
 
 /// Best-effort probe: `None` on any failure (unreachable, timeout,
@@ -366,6 +383,23 @@ aihost_authority_validations_total{outcome="accepted"} 2
         let s = w.engine_stats.as_ref().expect("stats");
         assert_eq!(s.kv_cache_usage, Some(0.125));
         assert_eq!(s.prefix_cache_hit_ratio, None, "an engine that does not report it stays unknown, not 0%");
+    }
+
+    #[test]
+    fn stopped_gateway_worker_is_not_discovered_as_an_inference_instance() {
+        let health: Health = serde_json::from_str(r#"{
+            "status":"healthy","ready":true,"can_route":true,
+            "gateway":{"status":"alive","uptime_seconds":1},
+            "scheduler":{"ready":true,"status":"ready","queued_work":0,"active_work":0,"available_workers":1,"total_workers":1},
+            "workers":{
+                "deep-worker":{"status":"stopped","healthy":false,"expected_state":"stopped","engine":"llama.cpp","engine_stats":null},
+                "lead-worker":{"status":"healthy","healthy":true,"engine":"llama.cpp","engine_stats":{"requests_running":0}}
+            }
+        }"#).expect("health payload parses");
+
+        let instances = gateway_worker_instances_from_health("http://127.0.0.1:8010/", &health);
+        assert_eq!(instances, vec![("lead-worker".into(), "http://127.0.0.1:8010#lead-worker".into())]);
+        assert!(health.workers["deep-worker"].engine_stats.is_none());
     }
 
     #[test]
