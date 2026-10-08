@@ -228,7 +228,7 @@ inference_policy_remote_gateway_port: 8443
 inference_policy_gateway_client_cidrs: [10.0.8.95/32]
 inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
-orchestrator_gateway_release_id: t5820-gateway-b4051cc
+orchestrator_gateway_release_id: t5820-gateway-f31218c
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-b4051cc
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
 # Model routing. Pools: lead = Qwen3-Coder-30B (fast, best first-attempt), deep = Qwen3.5-27B (slower, best

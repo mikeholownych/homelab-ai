@@ -6,6 +6,26 @@
   hosts: inference
   gather_facts: true
   become: true
+  pre_tasks:
+    # A live R4 candidate is owned by playbooks/candidate.yml. This play would drop it from the gateway (or, with the
+    # llama role, stop it mid-qualification) without saying so; refuse and name the command that keeps or ends it.
+    - name: Read service states
+      ansible.builtin.service_facts:
+      tags: [inference, runtime, llama, orchestrator, security, inference_policy]
+
+    - name: Refuse to change serving while a candidate holds a GPU
+      vars:
+        inference_active_candidates: >-
+          {{ ansible_facts.services | dict2items
+             | selectattr('key', 'match', '^aihost-llama-candidate-.*[.]service$')
+             | selectattr('value.state', 'equalto', 'running') | map(attribute='key') | list }}
+      ansible.builtin.assert:
+        that: inference_active_candidates | length == 0
+        fail_msg: >-
+          Active candidate {{ inference_active_candidates }}.
+          Re-apply it with playbooks/candidate.yml -e candidate=<profile>, or end it with
+          -e candidate_state=absent, before converging serving with this play.
+      tags: [inference, runtime, llama, orchestrator, security, inference_policy]
   roles:
     - role: users
       tags: [inference, users]

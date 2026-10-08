@@ -490,6 +490,16 @@ impl App {
         if let Some(rx) = &self.discovery_rx {
             if let Ok(defs) = rx.try_recv() {
                 self.discovery_rx = None;
+                let selected = match self.view {
+                    View::Instance(i) => self.runtimes.get(i).map(|rt| (rt.def.kind, rt.def.url.clone())),
+                    View::Aggregate => None,
+                };
+                let old_len = self.runtimes.len();
+                let now = Instant::now();
+                self.runtimes.retain(|rt| {
+                    let present = defs.iter().any(|d| d.url.trim_end_matches('/') == rt.def.url.trim_end_matches('/'));
+                    !discovered_instance_expired(rt, present, now)
+                });
                 let registered = orchestrator::gateway_registered_endpoints(orchestrator::DEFAULT_URL);
                 self.runtimes.retain(|rt| {
                     let is_placeholder = rt.def.discovered_via.is_none()
@@ -523,6 +533,13 @@ impl App {
                     if let Ok(rt) = make_runtime(&Settings { poll: self.poll, history: self.history_capacity, auto_discover: true, rediscover: Duration::ZERO }, def) {
                         self.runtimes.push(rt);
                     }
+                }
+                if self.runtimes.len() != old_len {
+                    self.agg.dirty = true;
+                    self.view = selected
+                        .and_then(|(kind, url)| self.runtimes.iter().position(|rt| rt.def.kind == kind && rt.def.url == url))
+                        .map(View::Instance)
+                        .unwrap_or(View::Aggregate);
                 }
             }
         }
@@ -830,6 +847,20 @@ impl App {
     }
 }
 
+/// How long a locally discovered server stays visible (as down) after it stops being found.
+const DISCOVERED_DOWN_RETENTION: Duration = Duration::from_secs(300);
+
+/// A socket-discovered server (named `!<port>`) that the latest scan no longer finds is kept, shown down,
+/// until it has been unseen for DISCOVERED_DOWN_RETENTION; then it is dropped so it stops counting as a
+/// live policy violation. Gateway workers and configured endpoints never expire this way.
+fn discovered_instance_expired(rt: &Runtime, present: bool, now: Instant) -> bool {
+    if present || !rt.def.name.starts_with('!') {
+        return false;
+    }
+    let last_seen = rt.last_ok.unwrap_or(rt.started);
+    now.saturating_duration_since(last_seen) >= DISCOVERED_DOWN_RETENTION
+}
+
 fn make_runtime(settings: &Settings, def: InstanceDef) -> Result<Runtime> {
     let src = source::build(def.kind, &def.url, def.api_key.as_deref())?;
     let (vllm_version, max_model_len) = match def.kind {
@@ -993,6 +1024,57 @@ vllm:inter_token_latency_seconds_count{{model_name=\"{model}\"}} 1000
 mod gateway_lifecycle_tests {
     use super::*;
     use crate::config::SourceKind;
+
+    fn adhoc(name: &str, port: u16) -> InstanceDef {
+        InstanceDef {
+            name: name.into(),
+            kind: SourceKind::Limited,
+            url: format!("http://127.0.0.1:{port}"),
+            api_key: None,
+            discovered_via: Some(format!("listening socket uid 1000 port {port}")),
+            auth: None,
+            confidence: None,
+        }
+    }
+
+    fn deliver_discovery(app: &mut App, defs: Vec<InstanceDef>) {
+        let (tx, rx) = mpsc::channel();
+        tx.send(defs).expect("discovery receiver is live");
+        app.discovery_rx = Some(rx);
+        app.maybe_discover();
+    }
+
+    #[test]
+    fn a_vanished_discovered_server_stays_down_for_the_retention_then_expires() {
+        let settings = Settings { poll: Duration::from_secs(1), history: 16, auto_discover: false, rediscover: Duration::ZERO };
+        let mut app = App::new(&settings, vec![adhoc("!18080", 18080), adhoc("!18081", 18081)]).expect("app builds");
+        app.auto_discover = true;
+        app.view = View::Instance(1);
+        let long_ago = Instant::now().checked_sub(DISCOVERED_DOWN_RETENTION + Duration::from_secs(1)).expect("clock");
+        app.runtimes[0].started = long_ago;
+        app.runtimes[0].last_ok = Some(long_ago);
+        app.runtimes[1].started = long_ago;
+
+        // Still found by the scan: kept however old its last successful poll is.
+        deliver_discovery(&mut app, vec![adhoc("!18080", 18080), adhoc("!18081", 18081)]);
+        assert_eq!(app.runtimes.len(), 2);
+
+        // Recently seen but gone from the scan: kept (shown down) until the retention passes.
+        app.runtimes[1].last_ok = Some(Instant::now());
+        deliver_discovery(&mut app, Vec::new());
+        let names: Vec<_> = app.runtimes.iter().map(|rt| rt.def.name.as_str()).collect();
+        assert_eq!(names, ["!18081"], "the long-unseen server expires; the recent one stays");
+        assert_eq!(app.view, View::Instance(0), "the selected instance stays selected across removal");
+    }
+
+    #[test]
+    fn only_socket_discovered_servers_expire() {
+        let settings = Settings { poll: Duration::from_secs(1), history: 16, auto_discover: false, rediscover: Duration::ZERO };
+        let mut app = App::new(&settings, vec![adhoc("configured", 9000)]).expect("app builds");
+        let long_ago = Instant::now().checked_sub(DISCOVERED_DOWN_RETENTION * 2).expect("clock");
+        app.runtimes[0].started = long_ago;
+        assert!(!discovered_instance_expired(&app.runtimes[0], false, Instant::now()), "configured endpoints never expire");
+    }
 
     fn health(worker_status: &str, healthy: bool) -> orchestrator::Health {
         let body = serde_json::json!({

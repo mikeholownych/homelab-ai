@@ -130,8 +130,17 @@ pub fn set_ignored_ports(extra: &[u16]) {
     let _ = EXTRA_IGNORED_PORTS.set(extra.to_vec());
 }
 
+/// The gateway's monitoring listener is read through its own `/health` and `/metrics`, never fingerprinted:
+/// its workload endpoints refuse local callers, so every probe there would be recorded as a refused
+/// local-origin request.
+fn gateway_monitoring_port() -> Option<u16> {
+    crate::orchestrator::DEFAULT_URL.trim_end_matches('/').rsplit(':').next()?.parse().ok()
+}
+
 pub fn is_ignored_port(port: u16) -> bool {
-    DEFAULT_IGNORED_PORTS.contains(&port) || EXTRA_IGNORED_PORTS.get().is_some_and(|ports| ports.contains(&port))
+    DEFAULT_IGNORED_PORTS.contains(&port)
+        || gateway_monitoring_port() == Some(port)
+        || EXTRA_IGNORED_PORTS.get().is_some_and(|ports| ports.contains(&port))
 }
 
 #[cfg(target_os = "linux")]
@@ -230,6 +239,9 @@ mod linux {
                 continue;
             }
             for (sock, confidence) in attribute_sockets(cand, &listen_table) {
+                if is_ignored_port(sock.port) {
+                    continue;
+                }
                 if !seen.insert((sock.addr, sock.port)) {
                     continue;
                 }
@@ -951,6 +963,7 @@ aihost_worker_health_status{worker_id=\"b0-live-tp1-worker1\"} 1
             for port in [22, 53, 631, 9100, 8443] {
                 assert!(super::super::is_ignored_port(port), "{port}");
             }
+            assert!(super::super::is_ignored_port(8010), "the gateway monitoring port is never fingerprinted");
             assert!(!super::super::is_ignored_port(8000));
         }
 

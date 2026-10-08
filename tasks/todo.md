@@ -178,13 +178,18 @@ Accepted design (`docs/design/06-vllm-top-engine-agnostic.md`):
       workers return without restarting the console. Regression coverage delivers stopped and healthy gateway snapshots to one
       running App instance and verifies removal/reappearance; v0.10.2 deployed and live version verified.
 - [ ] Verify live on ai-5820-01:
-  - [ ] an ad-hoc llama-server started after the console appears;
+  - [x] an ad-hoc llama.cpp server started after the console appears (2026-10-08, v1.0.2, read from tty1 via /dev/vcs1):
+        a stand-in serving the recorded b11347 `/props` and `/metrics` fixtures on 127.0.0.1:18080 appeared in the running
+        console within one 5 s scan, flagged `!`; no GGUF was fetched to the host for this check, so it is not a real
+        llama-server process. Real llama.cpp fingerprinting is covered by the recorded-fixture tests.
   - [x] an intentionally stopped worker remains in gateway inventory with `status=stopped`, does not degrade gateway health,
         is not probed or assigned failure counters, and is omitted from vllm-top inference instances. Live: gateway healthy,
         ready/can_route true, 2/2 serving workers, 3 configured/1 stopped; worker2 drained/inactive, 0 failures, no stats;
         health/availability Prometheus gauges are 0; vllm-top --once exits 0 and lists only worker1 and candidate.
   - [x] gateway workers are not double-counted in the live inventory (one row per gateway worker in `vllm-top --once`).
-  - [ ] an unrecognised OpenAI-compatible server shows with limited metrics.
+  - [x] an unrecognised OpenAI-compatible server shows with limited metrics (127.0.0.1:18081/18082 rendered `limited !`;
+        after exit it showed down with `tcp connect error`, then expired after the 5-minute retention: header back to
+        `SVC 2/2 ok` with no POLICY badge).
 
 ## Policy: gateway-only access to inference workers (operator, 2026-10-06; end-state requirement)
 "Any change to the inference workers should mean the active worker is accessed via the gateway. No direct workload requests
@@ -215,7 +220,8 @@ Gaps:
 - [ ] Detection: vllm-top's engine-agnostic discovery flags any inference server NOT registered with the gateway as a policy
       violation. Health/metrics remain observable via the gateway's /health engine_stats.
 - [x] Verify direct worker-port connects to 8000 and 8001 are refused from `mike`, `root`, and `aihost-runtime`; gateway uid 995 connects; direct-denial counter increments; remote authenticated chat succeeds; local workload is refused with HTTP 403 (2026-10-07).
-- [ ] Verify vllm-top shows the violation for an ad-hoc server after W-VTOP.
+- [x] Verify vllm-top shows the violation for an ad-hoc server after W-VTOP: header `POLICY 2 outside gateway` with both
+      ad-hoc servers running (2026-10-08, v1.0.2).
 Note: the 2026-10-06 model evaluation (in progress) uses direct worker access. It predates this policy and is a one-off. The
 chosen model's final qualification will be re-run through the gateway once the path above exists.
 
@@ -246,7 +252,9 @@ client is allowlisted as `10.0.8.95/32`. The TLS gateway and nftables policy are
       pytest) against the gateway's candidate alias pool. Retire cand.sh/runqueue.sh as on-host tools. Candidate lifecycle
       (start/stop a candidate worker) is done by Ansible from the controller, not by scripts on the host.
 - [x] Enforce via Ansible and verify the gateway path: remote TLS listener and nftables allowlist are live; remote authenticated chat returned HTTP 200; host-origin workload returned 403; loopback `/health` and `/metrics` return HTTP 200. The former OpenCode SSH tunnel is disabled (2026-10-07).
-- [ ] Verify vllm-top engine-agnostic discovery behavior after W-VTOP; the console service is active and the local health/metrics endpoints respond.
+- [x] Verify vllm-top engine-agnostic discovery behavior after W-VTOP (2026-10-08, v1.0.2): ad-hoc servers are found after console
+      start, flagged and expired; the console no longer probes the gateway monitoring port (local_origin_refused_total flat at 90
+      across a running console and an extra scan, where it previously rose by 6 per scan).
 Note: operator decision 2026-10-06: the full 2026-10-06 evaluation (Phase A AND Phase B thinking-on) completes as is, on-host,
 as a one-off exception that predates this policy. Skew review: quality/pass-fail is unaffected (same prompts, same llama.cpp flags).
 Speed is approximate (runs were sometimes parallel, with sandbox CPU contention), so watch H10's wall-clock limits.

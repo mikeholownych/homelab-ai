@@ -7,15 +7,13 @@
   started before or after the console.
 - **Principle:** vllm-top observes and reports, including policy violations. It never acts on processes or servers.
 
-## Current state (checked 2026-10-07; production and in-repository build source v0.10.2)
-- Gateway telemetry, per-worker engine-neutral statistics, pool/route counters, non-vLLM gateway instances, continuous discovery,
-  and expected-stopped worker handling are deployed from this repository. A separate legacy checkout at
+## Current state (2026-10-08; production and in-repository build source v1.0.2)
+- Implemented and deployed as designed below, through the `vllm_top_console` role. A separate legacy checkout at
   `/home/mike/Projects/vllm-top` is v0.8.0 and is not the deployment source.
-- `discover.rs` finds local candidates from systemd units and `/proc/*/cmdline` matching vLLM only, attributes sockets via
-  `/proc/net/tcp` + `/proc/<pid>/fd`, and validates with `/health`, `/metrics`, `/v1/models`.
-- Discovery runs once at startup (`config::resolve`); unregistered engines and policy violations are not yet discovered.
-- The gateway is read via `orchestrator.rs`, with workers as entries from the gateway `/health` engine_stats.
-- GPU stats come from sysfs (`gpu.rs`), engine-independent already.
+- Live-verified: ad-hoc servers started after the console appear within one scan, are flagged `POLICY: outside gateway`,
+  show down when they exit and expire after 5 minutes. The gateway monitoring port and its TLS listener are never probed.
+- Recorded deviations: the console unit passes the gateway's TLS port as `--ignore-port` (a local probe of it would be
+  counted as a refused local-origin request). The llama.cpp live check used a stand-in serving the recorded b11347 fixtures.
 
 ## Design
 1. **Socket-driven discovery** (`discover.rs` rework, keeping its no-harvest rules):

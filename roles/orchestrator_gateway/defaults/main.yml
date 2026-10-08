@@ -22,7 +22,7 @@ orchestrator_gateway_tls_rotate_server: false
 orchestrator_gateway_tls_controller_trust_paths: []
 orchestrator_gateway_tls_controller_trust_store_enabled: true
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-af6aa94
-orchestrator_gateway_release_id: t5820-gateway-af6aa94
+orchestrator_gateway_release_id: t5820-gateway-f31218c
 # R11: the new chain (starts with chain_genesis naming the sealed legacy chain) and the sealed legacy chain.
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
 # Earlier chains sealed by the new chain's genesis record (sha256 taken by the gateway when the new chain starts).
