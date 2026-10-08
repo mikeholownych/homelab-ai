@@ -1,9 +1,16 @@
 FROM ubuntu@sha256:889d056d5c6c0bfb55789ff3710681d68e50713cb562d2196dc07110599c7a6f
 
 ENV DEBIAN_FRONTEND=noninteractive
+# The package pins below are resolved against a dated archive snapshot (snapshot.ubuntu.com): the live archive drops
+# superseded versions after each update, so exact pins against it stop resolving (sudo was the first to go).
+ARG UBUNTU_SNAPSHOT=20260929T020000Z
 
+# The base image has no CA store and the snapshot service is HTTPS-only, so CA certificates are bootstrapped from the
+# signed archive first; the pinned set (including the pinned ca-certificates) then replaces them from the snapshot.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && apt-get update --snapshot "${UBUNTU_SNAPSHOT}" \
+    && apt-get install --snapshot "${UBUNTU_SNAPSHOT}" -y --no-install-recommends --allow-downgrades \
         ansible-core=2.20.1-1 \
         auditd=1:4.1.2-1ubuntu0.1 \
         libaudit1=1:4.1.2-1ubuntu0.1 \

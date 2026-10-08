@@ -10,8 +10,9 @@ ANSIBLE_GALAXY := $(VENV_DIR)/bin/ansible-galaxy
 # hash(), which Python randomizes per process. A fixed seed makes their tests reproducible without editing sealed code.
 PYTEST := PYTHONHASHSEED=0 $(VENV_DIR)/bin/pytest
 YAMLLINT := $(VENV_DIR)/bin/yamllint
-# Harness budget (--timeout 590) plus its two 120 s cleanup calls and a margin, so the harness always cleans up first.
-DOCKER_HARNESS_TIMEOUT := timeout -k 10s 860s
+# Harness budget (--timeout 900: a cold image build plus four convergence runs, measured 444 s with a cached image)
+# plus its two 120 s cleanup calls and a margin, so the harness always cleans up first.
+DOCKER_HARNESS_TIMEOUT := timeout -k 10s 1170s
 BASELINE_CONTAINER_HARNESS := tests/integration/baseline_container_harness.py
 
 PLAYBOOKS := \
@@ -58,7 +59,7 @@ tuning-idempotency: tuning-smoke
 	scripts/check-tuning-idempotency
 
 idempotency: bootstrap-tools
-	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --release noble --mode idempotency --timeout 590
-	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --release resolute --mode idempotency --timeout 590
+	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --release noble --mode idempotency --timeout 900
+	$(DOCKER_HARNESS_TIMEOUT) $(VENV_PYTHON) $(BASELINE_CONTAINER_HARNESS) --release resolute --mode idempotency --timeout 900
 
 quality: lint test syntax check idempotency tuning-idempotency

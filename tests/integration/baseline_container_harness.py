@@ -35,7 +35,8 @@ RELEASE_CONFIGS = {
     },
 }
 BUILD_TIMEOUT_SECONDS = 300
-RUN_TIMEOUT_SECONDS = 300
+# One playbook run. A cold resolute initial convergence exceeded 300 s under load (a single useradd took ~50 s).
+RUN_TIMEOUT_SECONDS = 600
 # Removing a privileged container can outlast dockerd's 10 s kill grace (it then escalates to SIGKILL and tears
 # down the overlay); 30 s was observed to be too short under load and left containers behind.
 CLEANUP_TIMEOUT_SECONDS = 120
