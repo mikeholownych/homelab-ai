@@ -8,7 +8,8 @@ ANSIBLE_LINT := $(VENV_DIR)/bin/ansible-lint
 ANSIBLE_GALAXY := $(VENV_DIR)/bin/ansible-galaxy
 PYTEST := $(VENV_DIR)/bin/pytest
 YAMLLINT := $(VENV_DIR)/bin/yamllint
-DOCKER_HARNESS_TIMEOUT := timeout -k 10s 600s
+# Harness budget (--timeout 590) plus its two 120 s cleanup calls and a margin, so the harness always cleans up first.
+DOCKER_HARNESS_TIMEOUT := timeout -k 10s 860s
 BASELINE_CONTAINER_HARNESS := tests/integration/baseline_container_harness.py
 
 PLAYBOOKS := \

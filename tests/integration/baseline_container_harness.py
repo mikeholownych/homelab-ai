@@ -36,7 +36,9 @@ RELEASE_CONFIGS = {
 }
 BUILD_TIMEOUT_SECONDS = 300
 RUN_TIMEOUT_SECONDS = 300
-CLEANUP_TIMEOUT_SECONDS = 30
+# Removing a privileged container can outlast dockerd's 10 s kill grace (it then escalates to SIGKILL and tears
+# down the overlay); 30 s was observed to be too short under load and left containers behind.
+CLEANUP_TIMEOUT_SECONDS = 120
 
 
 class HarnessError(RuntimeError):

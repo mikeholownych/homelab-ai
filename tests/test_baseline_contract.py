@@ -2240,12 +2240,14 @@ class BaselineContractTests(unittest.TestCase):
         self.assertTrue(script_path.exists(), "Expected Docker baseline harness script to exist")
         self.assertIsNotNone(shutil.which("docker"), "Docker is required for container-backed baseline transition probes")
         result = subprocess.run(
-            [sys.executable, str(script_path), "--mode", "users-groups-transition"],
+            [sys.executable, str(script_path), "--mode", "users-groups-transition", "--timeout", "590"],
             cwd=REPO_ROOT,
             check=False,
             capture_output=True,
             text=True,
-            timeout=300,
+            # Above the harness's own budget plus its two cleanup calls, so the harness's deadline and container
+            # cleanup always run before this outer kill (a SIGKILL here skips cleanup and leaks the container).
+            timeout=590 + 2 * 120 + 30,
         )
         self.assertEqual(0, result.returncode, msg=result.stdout + result.stderr)
 
@@ -2258,7 +2260,7 @@ class BaselineContractTests(unittest.TestCase):
         harness_text = read_text(harness_path)
         self.assertIn(str(harness_path.relative_to(REPO_ROOT)), makefile)
         self.assertNotIn("baseline_idempotency.yml", makefile)
-        self.assertIn("timeout -k 10s 600s", makefile)
+        self.assertIn("timeout -k 10s 860s", makefile)
         self.assertTrue(dockerfile_path.exists(), "Expected pinned Ubuntu Dockerfile for baseline harness to exist")
         dockerfile_text = read_text(dockerfile_path)
         self.assertIn("FROM ubuntu@sha256:019e8eb29a85e74d64925745884f2ec79aa27e3feab36353d24656f4d6b89467", dockerfile_text)
