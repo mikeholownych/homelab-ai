@@ -337,7 +337,9 @@
   ansible.builtin.set_fact:
     _orchestrator_gateway_tokens: >-
       {{ (_orchestrator_gateway_tokens | default({})) | combine({item.item.client_id:
-           ((item.content | b64decode | trim) if (item.content is defined and item.content | length > 0)
+           ((item.content | b64decode | trim)
+            if (item.content is defined and item.content | length > 0
+                and item.item.client_id not in orchestrator_gateway_rotate_client_tokens)
             else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=64'))}) }}
   loop: "{{ _orchestrator_gateway_client_tokens.results | default([]) }}"
   loop_control:
