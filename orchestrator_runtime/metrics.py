@@ -201,6 +201,41 @@ class Histogram:
             _, count, sum_val = self._data[key]
             return (count, sum_val)
 
+    def get_distribution(self, **labels: str) -> dict[str, Any]:
+        """Return full distribution (count, sum, avg, buckets) for the given label values."""
+        key = tuple(str(labels.get(k, "")) for k in self.label_names)
+        with self._lock:
+            if key not in self._data:
+                bucket_dict = {str(b): 0 for b in self.buckets}
+                bucket_dict["+Inf"] = 0
+                return {"count": 0, "sum": 0.0, "avg": None, "buckets": bucket_dict}
+            counts, count, sum_val = self._data[key]
+            bucket_dict = {str(b): counts[i] for i, b in enumerate(self.buckets)}
+            bucket_dict["+Inf"] = count
+            avg = (sum_val / count) if count > 0 else None
+            return {
+                "count": count,
+                "sum": round(sum_val, 6),
+                "avg": round(avg, 6) if avg is not None else None,
+                "buckets": bucket_dict,
+            }
+
+    def get_all_distributions(self) -> dict[tuple[str, ...], dict[str, Any]]:
+        """Return distributions for all observed label keys."""
+        with self._lock:
+            res = {}
+            for key, (counts, count, sum_val) in self._data.items():
+                bucket_dict = {str(b): counts[i] for i, b in enumerate(self.buckets)}
+                bucket_dict["+Inf"] = count
+                avg = (sum_val / count) if count > 0 else None
+                res[key] = {
+                    "count": count,
+                    "sum": round(sum_val, 6),
+                    "avg": round(avg, 6) if avg is not None else None,
+                    "buckets": bucket_dict,
+                }
+            return res
+
     def collect(self) -> list[str]:
         with self._lock:
             items = sorted(self._data.items(), key=lambda kv: kv[0])

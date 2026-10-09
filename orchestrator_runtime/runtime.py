@@ -30,6 +30,7 @@ from .evidence import EvidenceStore, scrub
 from .health import HealthManager
 from .metrics import MetricsRegistry
 from .routing import RouteDecision, Router
+from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
 
 # Tokens kept free between prompt + completion and the context window (template/stop tokens the count may not see).
 SAFETY_MARGIN_TOKENS = 16
@@ -694,6 +695,8 @@ class OrchestratorRuntime:
         self._outcome_index: OrderedDict[str, dict[str, Any]] = OrderedDict()
         self._outcome_totals: dict[tuple[str, str, str], dict[str, int]] = {}
         self._outcome_lock = threading.Lock()
+        self.telemetry = RequestTelemetryBuffer(max_size=10_000)
+        self.telemetry_service = TelemetryService(self, self.telemetry)
         self.metrics.evidence_chain_valid.set(1.0 if getattr(self.evidence, "chain_valid", True) else 0.0)
         self._load_state()
         self.refresh_capacity()
@@ -982,6 +985,37 @@ class OrchestratorRuntime:
                              failure_class="context_length_exceeded", worker_id=reject.worker_id,
                              prompt_tokens=reject.prompt_tokens, token_source=reject.token_source,
                              context_length=reject.context_length, available_completion=reject.available)
+        if hasattr(self, "telemetry"):
+            try:
+                worker_rec = self.registry.record(reject.worker_id)
+                self.telemetry.record(RequestTelemetryRecord(
+                    request_id=request_id,
+                    client_id=client_id,
+                    worker_id=reject.worker_id,
+                    pool=getattr(worker_rec, "pool", "unknown") if worker_rec else "unknown",
+                    model=getattr(worker_rec, "public_model_id", "unknown") if worker_rec else "unknown",
+                    model_id=getattr(worker_rec, "model_id", "unknown") if worker_rec else "unknown",
+                    artifact_digest=getattr(worker_rec, "artifact_digest", "unknown") if worker_rec else "unknown",
+                    stream=False,
+                    priority="unknown",
+                    status="rejected",
+                    termination="output_limit",
+                    finish_reason="length",
+                    prompt_tokens=reject.prompt_tokens,
+                    completion_tokens=0,
+                    cached_prompt_tokens=None,
+                    queue_duration_seconds=0.0,
+                    ttft_seconds=None,
+                    ttft_provenance=None,
+                    inter_token_latency_seconds=None,
+                    itl_provenance=None,
+                    duration_seconds=0.0,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    error_message="context_length_exceeded",
+                    details={"context_length": reject.context_length, "available_completion": reject.available},
+                ))
+            except Exception:
+                pass
         return {
             "status": "rejected", "failure_class": "context_length_exceeded", "request_id": request_id, "http_status": 400,
             "message": (f"Prompt is {reject.prompt_tokens} tokens ({reject.token_source}); the model context limit is "
@@ -1011,6 +1045,7 @@ class OrchestratorRuntime:
         cancel: threading.Event | None = None,
         on_stream_start: Callable[[dict[str, Any]], None] | None = None,
         on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
+        stream_timing: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         timeout = self.upstream_timeout if timeout is None else timeout
         request_id = request.get("request_id") or str(uuid.uuid4())
@@ -1160,7 +1195,8 @@ class OrchestratorRuntime:
                 plan = replanned
             route_now = {**route, "pool": pool if pool is not None else worker.pool, "fallback_used": index > 0 and not route.get("canary")}
             outcome = self._dispatch(request_id, plan, route_now, client, client_id, priority, timeout, cancel, entry,
-                                     clamped_fields, deadline, decision, request, on_stream_start, on_stream_chunk)
+                                     clamped_fields, deadline, decision, request, on_stream_start, on_stream_chunk,
+                                     ticket=ticket, stream_timing=stream_timing)
             if outcome.get("status") == "retry" and not retried:
                 retried = True
                 excluded.add(worker.worker_id)
@@ -1209,6 +1245,35 @@ class OrchestratorRuntime:
         self.metrics.requests_cancelled_total.inc(reason=reason, pool=str(pool))
         self.evidence.append("request_cancelled", request_id=request_id, client_id=client_id, reason=reason,
                              stage="queued" if queued else "in_flight", route_pool=pool)
+        if hasattr(self, "telemetry"):
+            try:
+                self.telemetry.record(RequestTelemetryRecord(
+                    request_id=request_id,
+                    client_id=client_id,
+                    worker_id="none",
+                    pool=str(pool),
+                    model="none",
+                    model_id="none",
+                    artifact_digest="none",
+                    stream=False,
+                    priority="unknown",
+                    status="cancelled",
+                    termination=None,
+                    finish_reason=None,
+                    prompt_tokens=0,
+                    completion_tokens=0,
+                    cached_prompt_tokens=None,
+                    queue_duration_seconds=None,
+                    ttft_seconds=None,
+                    ttft_provenance=None,
+                    inter_token_latency_seconds=None,
+                    itl_provenance=None,
+                    duration_seconds=0.0,
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    error_message=reason,
+                ))
+            except Exception:
+                pass
         if reason == "gateway_shutdown":
             return {"status": "unavailable", "failure_class": "gateway_restarting", "request_id": request_id,
                     "http_status": 503, "retry_after": 15, "message": "gateway is restarting; retry shortly"}
@@ -1221,7 +1286,8 @@ class OrchestratorRuntime:
                   priority: str, timeout: float, cancel: threading.Event, entry: dict[str, Any],
                   clamped_fields: list[str], deadline: float | None, decision: RouteDecision | None,
                   original: dict[str, Any], on_stream_start: Callable[[dict[str, Any]], None] | None = None,
-                  on_stream_chunk: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+                  on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
+                  ticket: Any = None, stream_timing: dict[str, Any] | None = None) -> dict[str, Any]:
         worker = plan.worker
         clamped = tuple(clamped_fields) + plan.clamped
         for name in clamped:
@@ -1298,6 +1364,22 @@ class OrchestratorRuntime:
         except TimeoutError:
             call_duration = time.monotonic() - started
             release(False, distress=True)
+            if hasattr(self, "telemetry"):
+                try:
+                    self.telemetry.record(RequestTelemetryRecord(
+                        request_id=request_id, client_id=client_id, worker_id=worker.worker_id,
+                        pool=str(route.get("pool") or worker.pool), model=worker.public_model_id,
+                        model_id=worker.model_id, artifact_digest=worker.artifact_digest,
+                        stream=bool(original.get("stream")), priority=priority, status="timed_out",
+                        termination=None, finish_reason=None, prompt_tokens=plan.prompt_tokens,
+                        completion_tokens=0, cached_prompt_tokens=None,
+                        queue_duration_seconds=round(ticket.wait_seconds, 6) if ticket else 0.0,
+                        ttft_seconds=None, ttft_provenance=None, inter_token_latency_seconds=None,
+                        itl_provenance=None, duration_seconds=round(call_duration, 6),
+                        timestamp=datetime.now(timezone.utc).isoformat(), error_message="timeout",
+                    ))
+                except Exception:
+                    pass
             if deadline is not None and time.monotonic() >= deadline - 0.05:
                 return self._cancelled(request_id, client_id, route["pool"], "deadline", queued=False)
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="timed_out", failure_class="timeout")
@@ -1322,6 +1404,22 @@ class OrchestratorRuntime:
                     message = json.loads(error.body)["error"]["message"]
                 except (ValueError, KeyError, TypeError):
                     pass
+                if hasattr(self, "telemetry"):
+                    try:
+                        self.telemetry.record(RequestTelemetryRecord(
+                            request_id=request_id, client_id=client_id, worker_id=worker.worker_id,
+                            pool=str(route.get("pool") or worker.pool), model=worker.public_model_id,
+                            model_id=worker.model_id, artifact_digest=worker.artifact_digest,
+                            stream=bool(original.get("stream")), priority=priority,
+                            status="rejected", termination=None, finish_reason=None,
+                            prompt_tokens=plan.prompt_tokens, completion_tokens=0, cached_prompt_tokens=None,
+                            queue_duration_seconds=round(ticket.wait_seconds, 6) if ticket else 0.0,
+                            ttft_seconds=None, ttft_provenance=None, inter_token_latency_seconds=None,
+                            itl_provenance=None, duration_seconds=round(call_duration, 6),
+                            timestamp=datetime.now(timezone.utc).isoformat(), error_message=str(message)[:200],
+                        ))
+                    except Exception:
+                        pass
                 return {"status": "rejected", "failure_class": failure_class, "request_id": request_id, "message": str(message)[:1000]}
             release(False, distress=True)
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="provider")
@@ -1329,6 +1427,22 @@ class OrchestratorRuntime:
             self.evidence.append("execution_failed", request_id=request_id, client_id=client_id, worker_id=worker.worker_id,
                                  failure_class="provider", error=type(error).__name__,
                                  detail=scrub(str(error)[:512], self.prompt_policy), pre_generation=error.pre_generation)
+            if hasattr(self, "telemetry"):
+                try:
+                    self.telemetry.record(RequestTelemetryRecord(
+                        request_id=request_id, client_id=client_id, worker_id=worker.worker_id,
+                        pool=str(route.get("pool") or worker.pool), model=worker.public_model_id,
+                        model_id=worker.model_id, artifact_digest=worker.artifact_digest,
+                        stream=bool(original.get("stream")), priority=priority,
+                        status="failed", termination=None, finish_reason=None,
+                        prompt_tokens=plan.prompt_tokens, completion_tokens=0, cached_prompt_tokens=None,
+                        queue_duration_seconds=round(ticket.wait_seconds, 6) if ticket else 0.0,
+                        ttft_seconds=None, ttft_provenance=None, inter_token_latency_seconds=None,
+                        itl_provenance=None, duration_seconds=round(call_duration, 6),
+                        timestamp=datetime.now(timezone.utc).isoformat(), error_message=str(error)[:200],
+                    ))
+                except Exception:
+                    pass
             if error.pre_generation:
                 # Nothing was generated and nothing was sent to the client: a retry elsewhere is safe (R7).
                 return {"status": "retry", "failure_class": "pre_generation", "request_id": request_id}
@@ -1365,9 +1479,9 @@ class OrchestratorRuntime:
         self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="completed", failure_class="none")
 
         timings = output.get("timings")
-        if isinstance(timings, dict):
+        if not original.get("stream") and isinstance(timings, dict):
             prompt_ms = timings.get("prompt_ms")
-            if prompt_ms is not None and isinstance(prompt_ms, (int, float)) and prompt_ms > 0:
+            if prompt_ms is not None and isinstance(prompt_ms, (int, float)) and prompt_ms >= 0:
                 self.metrics.inference_ttft_seconds.observe(prompt_ms / 1000.0, worker_id=worker.worker_id)
             pred_per_token_ms = timings.get("predicted_per_token_ms")
             if pred_per_token_ms is not None and isinstance(pred_per_token_ms, (int, float)) and pred_per_token_ms > 0:
@@ -1431,6 +1545,64 @@ class OrchestratorRuntime:
         self._remember(request_id, {"client_id": client_id, "rule": str(route["rule_id"]), "pool": pool_label,
                                     "model": worker.model_id, "worker_id": worker.worker_id,
                                     "artifact": worker.artifact_digest, "outcome": None})
+        ttft = None
+        ttft_provenance = None
+        itl = None
+        itl_provenance = None
+        if stream_timing and stream_timing.get("ttft") is not None:
+            ttft = stream_timing["ttft"]
+            ttft_provenance = "streaming_first_chunk"
+            if stream_timing.get("avg_itl") is not None:
+                itl = stream_timing["avg_itl"]
+                itl_provenance = "streaming_delta_intervals"
+        elif isinstance(timings, dict):
+            prompt_ms = timings.get("prompt_ms")
+            if prompt_ms is not None and isinstance(prompt_ms, (int, float)) and prompt_ms >= 0:
+                ttft = prompt_ms / 1000.0
+                ttft_provenance = "engine_reported_timings"
+            pred_per_token_ms = timings.get("predicted_per_token_ms")
+            if not pred_per_token_ms and timings.get("predicted_ms") and timings.get("predicted_n"):
+                n = timings["predicted_n"]
+                if isinstance(n, (int, float)) and n > 0:
+                    pred_per_token_ms = timings["predicted_ms"] / n
+            if pred_per_token_ms is not None and isinstance(pred_per_token_ms, (int, float)) and pred_per_token_ms > 0:
+                itl = pred_per_token_ms / 1000.0
+                itl_provenance = "engine_reported_timings"
+
+        cached_prompt_tokens = None
+        if isinstance(output.get("usage"), dict):
+            cached_prompt_tokens = output["usage"].get("prompt_tokens_details", {}).get("cached_tokens")
+        if cached_prompt_tokens is None and isinstance(timings, dict):
+            cached_prompt_tokens = timings.get("cache_n")
+
+        if hasattr(self, "telemetry"):
+            try:
+                self.telemetry.record(RequestTelemetryRecord(
+                    request_id=request_id,
+                    client_id=client_id,
+                    worker_id=worker.worker_id,
+                    pool=pool_label,
+                    model=worker.public_model_id,
+                    model_id=worker.model_id,
+                    artifact_digest=worker.artifact_digest,
+                    stream=bool(original.get("stream")),
+                    priority=priority,
+                    status="completed",
+                    termination=termination,
+                    finish_reason=finish_reason,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    cached_prompt_tokens=int(cached_prompt_tokens) if cached_prompt_tokens is not None else None,
+                    queue_duration_seconds=round(ticket.wait_seconds, 6) if ticket else 0.0,
+                    ttft_seconds=round(ttft, 6) if ttft is not None else None,
+                    ttft_provenance=ttft_provenance,
+                    inter_token_latency_seconds=round(itl, 6) if itl is not None else None,
+                    itl_provenance=itl_provenance,
+                    duration_seconds=round(total_duration, 6),
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                ))
+            except Exception:
+                pass  # Telemetry failure must never disrupt completion response
         headers = _completion_headers(plan, worker)
         headers["X-AIHost-Termination"] = termination + (";reasoning_budget_exhausted" if exhausted else "")
         if clamped:

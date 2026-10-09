@@ -44,6 +44,8 @@ class Ticket:
     deadline: float | None = None  # time.monotonic() value
     seq: int = 0
     enqueued_at: float = field(default_factory=time.monotonic)
+    granted_at: float | None = None
+    wait_seconds: float = 0.0
     cancelled: threading.Event = field(default_factory=threading.Event)
 
 
@@ -173,6 +175,8 @@ class AdmissionController:
                                 slot.inflight += 1
                                 self._served[(ticket.pool, ticket.client_id)] = self._served.get((ticket.pool, ticket.client_id), 0) + 1
                                 wait_seconds = max(0.0, time.monotonic() - ticket.enqueued_at)
+                                ticket.wait_seconds = wait_seconds
+                                ticket.granted_at = time.monotonic()
                                 if self.metrics is not None and hasattr(self.metrics, "scheduler_queue_wait_seconds"):
                                     self.metrics.scheduler_queue_wait_seconds.observe(wait_seconds, worker_id=worker_id)
                                 return worker_id

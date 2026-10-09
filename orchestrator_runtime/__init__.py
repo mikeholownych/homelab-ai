@@ -20,6 +20,7 @@ from .runtime import (
     TaskGraph,
     WorkerRecord,
 )
+from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
 
 __all__ = [
     "AdmissionCancelled",
@@ -52,7 +53,10 @@ __all__ = [
     "OpenAIProviderAdapter",
     "OrchestratorRuntime",
     "ProviderError",
+    "RequestTelemetryBuffer",
+    "RequestTelemetryRecord",
     "TaskGraph",
+    "TelemetryService",
     "WorkerHealthState",
     "WorkerRecord",
 ]

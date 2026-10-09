@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-SCOPES = ("workload", "qualification", "monitoring", "admin")
+SCOPES = ("workload", "qualification", "monitoring", "admin", "telemetry")
 
 
 def token_digest(token: str) -> str:

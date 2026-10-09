@@ -17,7 +17,7 @@ from orchestrator_runtime import OrchestratorRuntime
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 
 # Endpoints that only read gateway state (allowed on the loopback monitoring listener).
-MONITORING_ROUTES = {"health", "metrics"}
+MONITORING_ROUTES = {"health", "metrics", "v1_telemetry_capabilities", "v1_telemetry_inference"}
 # HTTP status for each runtime result status when the runtime did not pick one.
 _STATUS = {"rejected": HTTPStatus.BAD_REQUEST, "unsupported": HTTPStatus.UNPROCESSABLE_ENTITY,
            "forbidden": HTTPStatus.FORBIDDEN, "limited": HTTPStatus.TOO_MANY_REQUESTS,
@@ -210,7 +210,9 @@ def create_gateway(
             parsed = urllib.parse.urlsplit(self.path)
             path = parsed.path
             route = {"/health": "health", "/metrics": "metrics", "/v1/models": "v1_models", "/v1/routes": "v1_routes",
-                     "/v1/outcomes/summary": "v1_outcomes_summary", "/admin/workers": "admin_workers"}.get(path, "unsupported")
+                     "/v1/outcomes/summary": "v1_outcomes_summary", "/admin/workers": "admin_workers",
+                     "/v1/telemetry/capabilities": "v1_telemetry_capabilities",
+                     "/v1/telemetry/inference": "v1_telemetry_inference"}.get(path, "unsupported")
             runtime.metrics.http_requests_in_flight.inc(route=route)
             status_code = HTTPStatus.OK
             try:
@@ -255,9 +257,55 @@ def create_gateway(
                     self._send(HTTPStatus.OK, {"workers": {w["worker_id"]: runtime.worker_detail(w["worker_id"])
                                                            for w in runtime.registry.snapshot()}}, request_id)
                     return
-                if not client.scopes & {"workload", "qualification", "monitoring"}:
-                    status_code = self._forbidden(request_id, "workload, qualification or monitoring scope required")
+                if not client.scopes & {"workload", "qualification", "monitoring", "telemetry", "admin"}:
+                    status_code = self._forbidden(request_id, "workload, qualification, monitoring, telemetry or admin scope required")
                     return
+                if route == "v1_telemetry_capabilities":
+                    if hasattr(runtime, "telemetry_service"):
+                        caps = runtime.telemetry_service.capabilities(client)
+                        self._send(HTTPStatus.OK, caps, request_id)
+                    else:
+                        self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": {"message": "telemetry service unavailable", "type": "service_unavailable"}}, request_id)
+                    return
+                if route == "v1_telemetry_inference":
+                    if not hasattr(runtime, "telemetry_service"):
+                        self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"error": {"message": "telemetry service unavailable", "type": "service_unavailable"}}, request_id)
+                        return
+                    query = urllib.parse.parse_qs(parsed.query)
+                    scope = query.get("scope", [None])[0]
+                    req_id = query.get("request_id", [None])[0]
+                    worker_id = query.get("worker_id", [None])[0]
+                    model = query.get("model", [None])[0]
+                    metric = query.get("metric", [None])[0]
+                    limit_raw = query.get("limit", ["10"])[0]
+                    try:
+                        limit = int(limit_raw)
+                        if limit < 1 or limit > 100:
+                            status_code = HTTPStatus.BAD_REQUEST
+                            self._send(status_code, {"error": {"message": "limit must be between 1 and 100", "type": "invalid_request_error"}}, request_id)
+                            return
+                    except (ValueError, TypeError):
+                        status_code = HTTPStatus.BAD_REQUEST
+                        self._send(status_code, {"error": {"message": "invalid limit parameter", "type": "invalid_request_error"}}, request_id)
+                        return
+                    try:
+                        telemetry_data = runtime.telemetry_service.inference_telemetry(
+                            client, scope=scope, request_id=req_id, worker_id=worker_id,
+                            model=model, metric=metric, limit=limit
+                        )
+                        self._send(HTTPStatus.OK, telemetry_data, request_id)
+                        return
+                    except PermissionError as err:
+                        status_code = self._forbidden(request_id, str(err))
+                        return
+                    except KeyError as err:
+                        status_code = HTTPStatus.NOT_FOUND
+                        self._send(status_code, {"error": {"message": str(err).strip("'"), "type": "not_found"}}, request_id)
+                        return
+                    except ValueError as err:
+                        status_code = HTTPStatus.BAD_REQUEST
+                        self._send(status_code, {"error": {"message": str(err), "type": "invalid_request_error"}}, request_id)
+                        return
                 if route == "v1_routes":
                     pools: dict[str, list[dict[str, Any]]] = {}
                     for worker in runtime.registry.snapshot():
@@ -359,6 +407,7 @@ def create_gateway(
             cancel = threading.Event()
             done = threading.Event()
             stream_state: dict[str, Any] = {}
+            stream_timing: dict[str, Any] = {}
 
             def begin_stream(meta: dict[str, Any]) -> None:
                 headers = {**_route_headers(meta.get("route")), **meta.get("headers", {})}
@@ -386,13 +435,22 @@ def create_gateway(
 
                 if not stream_state.get("first_token_observed") and choices:
                     stream_state["first_token_observed"] = True
+                    ttft = max(0.0, now - t0)
+                    stream_timing["ttft"] = ttft
                     if worker_id:
-                        runtime.metrics.inference_ttft_seconds.observe(max(0.0, now - t0), worker_id=worker_id)
+                        runtime.metrics.inference_ttft_seconds.observe(ttft, worker_id=worker_id)
                     stream_state["last_chunk_time"] = now
+                    stream_state["itl_sum"] = 0.0
+                    stream_state["itl_count"] = 0
                 elif stream_state.get("first_token_observed") and choices:
                     last_time = stream_state.get("last_chunk_time")
-                    if last_time is not None and worker_id:
-                        runtime.metrics.inference_inter_token_latency_seconds.observe(max(0.0, now - last_time), worker_id=worker_id)
+                    if last_time is not None:
+                        delta = max(0.0, now - last_time)
+                        stream_state["itl_sum"] = stream_state.get("itl_sum", 0.0) + delta
+                        stream_state["itl_count"] = stream_state.get("itl_count", 0) + 1
+                        stream_timing["avg_itl"] = stream_state["itl_sum"] / stream_state["itl_count"]
+                        if worker_id:
+                            runtime.metrics.inference_inter_token_latency_seconds.observe(delta, worker_id=worker_id)
                     stream_state["last_chunk_time"] = now
 
                 chunk = {"id": meta["id"], "object": "chat.completion.chunk", "created": meta["created"],
@@ -420,6 +478,7 @@ def create_gateway(
                     reasoning_profile=self.headers.get("X-AIHost-Reasoning"), cancel=cancel,
                     on_stream_start=begin_stream if request.get("stream") else None,
                     on_stream_chunk=send_stream_delta if request.get("stream") else None,
+                    stream_timing=stream_timing if request.get("stream") else None,
                 )
             except OSError:
                 runtime.metrics.evidence_verification_failures_total.inc()

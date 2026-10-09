@@ -127,7 +127,7 @@ def path_is_strictly_within(value: object, allowed_root: object) -> bool:
     return stat.S_ISDIR(allowed_root_stat.st_mode)
 
 
-_CLIENT_SCOPES = {"workload", "qualification", "monitoring", "admin"}
+_CLIENT_SCOPES = {"workload", "qualification", "monitoring", "admin", "telemetry"}
 _PRIORITIES = {"interactive", "batch", "background"}
 
 
