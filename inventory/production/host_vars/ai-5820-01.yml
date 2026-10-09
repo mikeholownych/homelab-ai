@@ -166,9 +166,11 @@ llama_cpp_container_workers:
     gpu: 0
     port: 8000
     config_dir: /etc/local-ai/llama/worker1
-    model_file: Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf
-    served_name: Qwen3-Coder-30B-A3B-Instruct-Q4_K_M
+    model_file: qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+    served_name: Qwen3.6-35B-A3B-UD-Q4_K_M
     context: 65536
+    # Q-BUDGET selected 8192 under the authorized quality-over-speed policy.
+    reasoning_budget: 8192
   worker2:
     worker_id: b0-live-llama-deep-worker2
     service_name: aihost-llama-worker2.service
@@ -176,11 +178,11 @@ llama_cpp_container_workers:
     gpu: 1
     port: 8001
     config_dir: /etc/local-ai/llama/worker2
-    model_file: Qwen3.5-27B-Q4_K_M.gguf
-    served_name: Qwen3.5-27B-Q4_K_M
+    model_file: flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+    served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
     context: 65536
-    # Design 02 L1 hard reasoning cap. 4096 is the interim containment value for the unbounded-reasoning defect
-    # (docs/defects/2026-10-07-unbounded-reasoning-deep-route.md); the production value comes from Q-BUDGET.
+    args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+           "--lazy-mode", "on"]
     reasoning_budget: 4096
 
 # Scheduled lifecycle timers are OFF. The snapshot runner needs a deployed repo snapshot at /opt/local-ai
@@ -231,8 +233,59 @@ inference_origin_retire_onhost_tools: true
 orchestrator_gateway_release_id: t5820-gateway-f31218c
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-b4051cc
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
-# Model routing. Pools: lead = Qwen3-Coder-30B (fast, best first-attempt), deep = Qwen3.5-27B (slower, best
-# validated accuracy; uniquely solves tasks the lead misses; best reviewer). Aliases bypass the rules.
+orchestrator_gateway_capability_evidence:
+  "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2":
+    tools:
+      result: pass
+      evidence_id: qualify-tools-flashnext-deep-bounded-4096-2026-10-08
+      date: "2026-10-08"
+    parallel_tool_calls:
+      result: pass
+      evidence_id: qualify-tools-flashnext-deep-bounded-4096-2026-10-08
+      date: "2026-10-08"
+    structured_output:
+      result: pass
+      evidence_id: qualify-tools-flashnext-deep-bounded-4096-2026-10-08
+      date: "2026-10-08"
+    streaming:
+      result: pass
+      evidence_id: qualify-tools-flashnext-deep-bounded-4096-2026-10-08
+      date: "2026-10-08"
+    output_contract_compliance:
+      result: pass
+      evidence_id: qualification-flashnext-2026-10-08
+      date: "2026-10-08"
+    reasoning_controllable:
+      result: pass
+      evidence_id: reasoning-profile-probe-flashnext-2026-10-09
+      date: "2026-10-09"
+  "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61":
+    tools:
+      result: pass
+      evidence_id: qualify-tools-qwen36-lead-bounded-8192-2026-10-09
+      date: "2026-10-09"
+    parallel_tool_calls:
+      result: pass
+      evidence_id: qualify-tools-qwen36-lead-bounded-8192-2026-10-09
+      date: "2026-10-09"
+    structured_output:
+      result: pass
+      evidence_id: qualify-tools-qwen36-lead-bounded-8192-2026-10-09
+      date: "2026-10-09"
+    streaming:
+      result: pass
+      evidence_id: qualify-tools-qwen36-lead-bounded-8192-2026-10-09
+      date: "2026-10-09"
+    reasoning_controllable:
+      result: pass
+      evidence_id: reasoning-profile-probe-qwen36-2026-10-09
+      date: "2026-10-09"
+    output_contract_compliance:
+      result: pass
+      evidence_id: qualification-qwen36-2026-10-09
+      date: "2026-10-09"
+# Model routing. Pools: lead = Qwen3.6-35B-A3B, deep = Flash-Next (best validated accuracy in the bounded
+# engineering benchmark at the selected budgets). Aliases bypass the rules.
 # Every route carries a finite output policy (Design 02 L2/L3): requests without max_tokens are bounded by it.
 # R3: a client's retry (X-AIHost-Attempt >= 2) or a request after a reported failure escalates to deep.
 orchestrator_gateway_routes:
@@ -273,11 +326,12 @@ orchestrator_gateway_workers:
     token_file: worker-lead-token
     pool: lead
     engine: llama.cpp
+    reasoning_budget: 8192
     port: 8000
     public_model_id: engineering/b0
-    model_id: Qwen3-Coder-30B-A3B-Instruct-Q4_K_M
-    revision: gguf-fadc3e5f8d42
-    artifact_digest: sha256:fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad
+    model_id: Qwen3.6-35B-A3B-UD-Q4_K_M
+    revision: gguf-ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
+    artifact_digest: sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
     runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
     topology: llama-cpp-sycl
     gpu_assignment: ["0"]
@@ -286,9 +340,9 @@ orchestrator_gateway_workers:
     max_output_tokens: 1024
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-    evidence_ids: [llama-sycl-bench-20261002, engx-engineering-bench-20261003]
+    evidence_ids: [qbudget-qwen36-stageb-2026-10-09, qualification-qwen36-2026-10-09]
     registry_version: 1
-    measured_at: "2026-10-03T00:00:00+00:00"
+    measured_at: "2026-10-09T06:07:12+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://127.0.0.1:8000
   - worker_id: b0-live-llama-deep-worker2
@@ -300,9 +354,9 @@ orchestrator_gateway_workers:
     engine: llama.cpp
     port: 8001
     public_model_id: engineering/deep
-    model_id: Qwen3.5-27B-Q4_K_M
-    revision: gguf-84b5f7f11215
-    artifact_digest: sha256:84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806
+    model_id: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
+    revision: gguf-935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
+    artifact_digest: sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
     runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
     topology: llama-cpp-sycl
     gpu_assignment: ["1"]
@@ -311,21 +365,21 @@ orchestrator_gateway_workers:
     max_output_tokens: 1024
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-    evidence_ids: [llama-sycl-bench-20261002, engx-engineering-bench-20261003]
+    evidence_ids: [qbudget-flashnext-2026-10-08, qualification-flashnext-2026-10-08]
     registry_version: 1
-    measured_at: "2026-10-03T00:00:00+00:00"
+    measured_at: "2026-10-08T19:03:31+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://127.0.0.1:8001
 
 # R4 qualification profiles. Revisions below are content-addressed from the host-verified GGUF SHA-256
 # (Flash-Next's manifest covers both shards). Candidate runs borrow one GPU and are reachable only through a
 # candidate/<name> alias for the qualification-scoped client. Budgets are overridable per run
-# (candidate_reasoning_budget) for Q-BUDGET; 4096 is the existing bounded-evidence baseline.
+# (candidate_reasoning_budget) for Q-BUDGET; Qwen3.6's evidence-backed lead value is 8192.
 llama_cpp_container_candidate_profiles:
   qwen36-lead:
     replaces: worker1
     replaces_gateway_worker_id: b0-live-llama-worker1
-    reasoning_budget: 4096
+    reasoning_budget: 8192
     worker:
       worker_id: candidate-qwen36-lead
       service_name: aihost-llama-candidate-qwen36.service
@@ -357,9 +411,9 @@ llama_cpp_container_candidate_profiles:
       max_output_tokens: 16384
       max_concurrency: 1
       resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-      evidence_ids: [eng-hard-b-q36-35b-a3b-q4km]
+      evidence_ids: [qbudget-qwen36-stageb-2026-10-09, qualification-qwen36-2026-10-09]
       registry_version: 1
-      measured_at: "2026-10-07T12:21:00+00:00"
+      measured_at: "2026-10-09T06:07:12+00:00"
       valid_until: "2026-12-31T00:00:00+00:00"
       endpoint: http://127.0.0.1:8002
 
@@ -399,9 +453,9 @@ llama_cpp_container_candidate_profiles:
       max_output_tokens: 16384
       max_concurrency: 1
       resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-      evidence_ids: [eng-hard-b-flashnext-gsq-64k]
+      evidence_ids: [qbudget-flashnext-2026-10-08, qualification-flashnext-2026-10-08]
       registry_version: 1
-      measured_at: "2026-10-07T12:21:00+00:00"
+      measured_at: "2026-10-08T19:03:31+00:00"
       valid_until: "2026-12-31T00:00:00+00:00"
       endpoint: http://127.0.0.1:8003
 
