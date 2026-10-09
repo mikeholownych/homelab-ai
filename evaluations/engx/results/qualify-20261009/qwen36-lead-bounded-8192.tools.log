@@ -1,0 +1,42 @@
+tool_call_single trial=1 PASS secs=4.36
+tool_call_single trial=2 PASS secs=3.12
+tool_call_single trial=3 PASS secs=3.19
+tool_choice_none trial=1 PASS secs=10.86
+tool_choice_none trial=2 PASS secs=11.0
+tool_choice_none trial=3 PASS secs=10.65
+tool_choice_named trial=1 PASS secs=1.28
+tool_choice_named trial=2 PASS secs=1.13
+tool_choice_named trial=3 PASS secs=1.11
+parallel_tool_calls trial=1 PASS secs=2.42
+parallel_tool_calls trial=2 PASS secs=2.29
+parallel_tool_calls trial=3 PASS secs=2.22
+streaming_tool_calls trial=1 PASS secs=3.38
+streaming_tool_calls trial=2 PASS secs=3.15
+streaming_tool_calls trial=3 PASS secs=3.1
+structured_output trial=1 PASS secs=45.82
+structured_output trial=2 PASS secs=45.64
+structured_output trial=3 PASS secs=45.54
+agent_loop trial=1 PASS secs=8.9
+agent_loop trial=2 PASS secs=8.8
+agent_loop trial=3 PASS secs=8.5
+nexus_replay b21a5eefec4c@2 PASS calls=['file_tree', 'run_command'] secs=7.16
+nexus_replay c56d6a6d75f3@8 PASS calls=['read_file', 'read_file', 'read_file'] secs=8.94
+nexus_replay 439420aca6a7@46 PASS calls=['write_file'] secs=19.85
+nexus_replay df3f030420c0@46 PASS calls=['run_command'] secs=17.28
+nexus_replay 8dc30944151a@16 PASS calls=['edit_file', 'edit_file', 'edit_file'] secs=17.03
+nexus_replay e5d7df4f4883@36 PASS calls=['task_completed'] secs=17.59
+nexus_replay 2f185a278285@10 PASS calls=['write_file'] secs=158.64
+nexus_replay 101548744778@26 PASS calls=['run_command'] secs=13.64
+nexus_replay 5667ff01683e@26 PASS calls=['run_command'] secs=9.86
+nexus_replay 08b291f470d3@6 PASS calls=['read_file'] secs=5.91
+nexus_replay 8dc30944151a@34 PASS calls=['run_command'] secs=3.37
+nexus_replay 862ac09202ec@12 PASS calls=['edit_file'] secs=11.84
+nexus_replay 439420aca6a7@48 PASS calls=['write_file'] secs=8.27
+nexus_replay f5de5b8a9a01@5 PASS calls=['read_file', 'read_file', 'read_file'] secs=16.43
+nexus_replay df3f030420c0@20 PASS calls=['run_command'] secs=5.77
+nexus_replay 395d997a569e@18 PASS calls=['run_command'] secs=11.06
+nexus_replay 6f850683972a@10 PASS calls=['read_file'] secs=14.89
+nexus_replay 17e89baafe81@18 PASS calls=['run_command'] secs=17.75
+nexus_replay 1b09369b0cfa@30 PASS calls=['read_file'] secs=10.1
+nexus_replay c9ed5185b73d@18 PASS calls=['run_command'] secs=8.57
+RESULT qwen36-lead-bounded-8192 {"tool_call_single": 1.0, "tool_choice_none": 1.0, "tool_choice_named": 1.0, "parallel_tool_calls": 1.0, "streaming_tool_calls": 1.0, "structured_output": 1.0, "agent_loop": 1.0, "nexus_replay": 1.0} -> /home/mike/Projects/aihost/evaluations/engx/results/qualify-20261009/qualify-tools-qwen36-lead-bounded-8192-2026-10-09.json

@@ -1,0 +1,6 @@
+== 2026-10-08T18:25:18Z deploy flashnext-deep budget=4096
+== 2026-10-08T18:28:34Z tools flashnext-deep-bounded-4096
+RESULT flashnext-deep-bounded-4096 {"tool_call_single": 1.0, "tool_choice_none": 1.0, "tool_choice_named": 1.0, "parallel_tool_calls": 1.0, "streaming_tool_calls": 1.0, "structured_output": 1.0, "agent_loop": 1.0, "nexus_replay": 1.0} -> /home/mike/Projects/aihost/evaluations/engx/results/qualify-20261008/qualify-tools-flashnext-deep-bounded-4096-2026-10-08.json
+== 2026-10-08T18:48:53Z longctx flashnext-deep-bounded-4096
+RESULT flashnext-deep-bounded-4096 {"needle": 1.0, "over_context": 1.0} -> /home/mike/Projects/aihost/evaluations/engx/results/qualify-20261008/qualify-longctx-flashnext-deep-bounded-4096-2026-10-08.json
+== 2026-10-08T19:03:32Z done

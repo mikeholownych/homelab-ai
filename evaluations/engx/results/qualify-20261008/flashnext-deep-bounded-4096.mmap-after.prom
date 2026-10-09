@@ -1,0 +1,15 @@
+2026-10-08T19:03:32Z
+aihost_llama_worker_major_faults_total{port="8000"} 120
+aihost_llama_worker_major_faults_total{port="8003"} 91
+aihost_llama_worker_resident_file_bytes{port="8000"} 575700992
+aihost_llama_worker_resident_file_bytes{port="8003"} 4123668480
+aihost_llama_model_file_size_bytes{port="8000",file="Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"} 18556689568
+aihost_llama_model_file_size_bytes{port="8003",file="Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf"} 29608446496
+aihost_llama_model_file_size_bytes{port="8003",file="Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf"} 28800138432
+aihost_llama_model_file_cached_bytes{port="8000",file="Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf"} 3751940096
+aihost_llama_model_file_cached_bytes{port="8003",file="Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf"} 29608448000
+aihost_llama_model_file_cached_bytes{port="8003",file="Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00002-of-00002.gguf"} 2329202688
+node_memory_Cached_bytes 4.26131456e+10
+node_memory_MemAvailable_bytes 4.5461372928e+10
+node_memory_MemTotal_bytes 6.5739214848e+10
+node_vmstat_pgmajfault 120899

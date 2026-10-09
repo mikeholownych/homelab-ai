@@ -1,0 +1,35 @@
+{
+  "evidence_id": "reasoning-profile-probe-flashnext-2026-10-09",
+  "date": "2026-10-09",
+  "model": "candidate/flashnext-deep",
+  "served_model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+  "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+  "base_url": "https://10.0.8.5:8443",
+  "results": [
+    {
+      "profile": "off",
+      "http_status": 200,
+      "api_response_id": "chatcmpl-ebfe84f714b14a7a84a4f12f",
+      "gateway_request_id": "ebfe84f7-14b1-4a7a-84a4-f12fc87aaf33",
+      "worker_id": "candidate-flashnext-deep",
+      "thinking": false,
+      "reasoning_budget": 0,
+      "reasoning_content_present": false,
+      "finish": "stop",
+      "termination": "stop"
+    },
+    {
+      "profile": "low",
+      "http_status": 200,
+      "api_response_id": "chatcmpl-f09db1fc489f4a659ea15697",
+      "gateway_request_id": "f09db1fc-489f-4a65-9ea1-5697aa966daf",
+      "worker_id": "candidate-flashnext-deep",
+      "thinking": true,
+      "reasoning_budget": 1024,
+      "reasoning_content_present": true,
+      "finish": "stop",
+      "termination": "stop"
+    }
+  ],
+  "conclusion": "The remote gateway profile can disable Flash-Next reasoning and re-enable it at the route-scaled 1024-token low profile. Only response metadata is retained; model reasoning text is omitted."
+}

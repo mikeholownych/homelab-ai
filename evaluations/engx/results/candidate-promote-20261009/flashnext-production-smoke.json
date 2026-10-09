@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "id": "chatcmpl-971e97f920284232801c1dd1",
+  "model": "engineering/deep",
+  "finish_reason": "stop",
+  "content": "READY",
+  "served_model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+  "artifact_digest": null
+}

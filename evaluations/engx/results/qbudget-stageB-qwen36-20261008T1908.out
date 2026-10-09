@@ -1,0 +1,103 @@
+== 2026-10-08T19:08:29Z deploy qwen36-lead budget=4096
+   gateway reports for candidate/qwen36-lead: {"budget": 4096, "mode": "on"}
+== 2026-10-08T19:13:26Z run qwen36-lead-bounded-4096
+qwen36-lead-bounded-4096 rep1 H01-semver-range         PASS attempts=1 wall=108.7s tokens=6771
+qwen36-lead-bounded-4096 rep1 H02-cron-next            PASS attempts=1 wall=96.8s tokens=6302
+qwen36-lead-bounded-4096 rep1 H03-json-patch           PASS attempts=3 wall=293.3s tokens=26803
+qwen36-lead-bounded-4096 rep1 H04-build-order          FAIL attempts=3 wall=526.5s tokens=18428
+qwen36-lead-bounded-4096 rep1 H05-retry                PASS attempts=1 wall=81.4s tokens=5677
+qwen36-lead-bounded-4096 rep1 H06-allocate             PASS attempts=1 wall=80.0s tokens=5150
+qwen36-lead-bounded-4096 rep1 H07-sqlite-rebuild       PASS attempts=2 wall=161.3s tokens=11260
+qwen36-lead-bounded-4096 rep1 H08-glob                 FAIL attempts=3 wall=262.9s tokens=20143
+qwen36-lead-bounded-4096 rep1 H09-ledger-root-cause    PASS attempts=2 wall=177.0s tokens=13377
+qwen36-lead-bounded-4096 rep1 H10-perf-report          PASS attempts=1 wall=80.5s tokens=5535
+qwen36-lead-bounded-4096 rep2 H01-semver-range         PASS attempts=2 wall=203.0s tokens=14982
+qwen36-lead-bounded-4096 rep2 H02-cron-next            FAIL attempts=3 wall=246.6s tokens=21311
+qwen36-lead-bounded-4096 rep2 H03-json-patch           FAIL attempts=3 wall=353.4s tokens=30314
+qwen36-lead-bounded-4096 rep2 H04-build-order          PASS attempts=1 wall=83.5s tokens=5320
+qwen36-lead-bounded-4096 rep2 H05-retry                PASS attempts=2 wall=162.2s tokens=12046
+qwen36-lead-bounded-4096 rep2 H06-allocate             PASS attempts=1 wall=80.7s tokens=5184
+qwen36-lead-bounded-4096 rep2 H07-sqlite-rebuild       PASS attempts=3 wall=184.5s tokens=14727
+qwen36-lead-bounded-4096 rep2 H08-glob                 FAIL attempts=3 wall=289.0s tokens=23591
+qwen36-lead-bounded-4096 rep2 H09-ledger-root-cause    PASS attempts=1 wall=88.2s tokens=6224
+qwen36-lead-bounded-4096 rep2 H10-perf-report          PASS attempts=1 wall=80.6s tokens=5528
+qwen36-lead-bounded-4096 rep3 H01-semver-range         PASS attempts=2 wall=206.8s tokens=15261
+qwen36-lead-bounded-4096 rep3 H02-cron-next            FAIL attempts=3 wall=289.6s tokens=23648
+qwen36-lead-bounded-4096 rep3 H03-json-patch           FAIL attempts=3 wall=368.2s tokens=31860
+qwen36-lead-bounded-4096 rep3 H04-build-order          PASS attempts=2 wall=170.5s tokens=11655
+qwen36-lead-bounded-4096 rep3 H05-retry                PASS attempts=2 wall=161.8s tokens=11878
+qwen36-lead-bounded-4096 rep3 H06-allocate             PASS attempts=1 wall=80.0s tokens=5134
+qwen36-lead-bounded-4096 rep3 H07-sqlite-rebuild       PASS attempts=3 wall=188.0s tokens=14940
+qwen36-lead-bounded-4096 rep3 H08-glob                 FAIL attempts=3 wall=261.3s tokens=20427
+qwen36-lead-bounded-4096 rep3 H09-ledger-root-cause    PASS attempts=1 wall=88.0s tokens=6213
+qwen36-lead-bounded-4096 rep3 H10-perf-report          FAIL attempts=3 wall=236.5s tokens=17884
+RESULT qwen36-lead-bounded-4096 {"reps": 3, "tasks": 10, "validated_rate": 70.0, "validated_per_rep": [8, 7, 6], "first_attempt_rate": 36.7, "median_secs_to_validated": 108.7, "mean_secs_per_task": 189.7, "mean_tokens_per_task": 13919, "per_task_pass": {"H01-semver-range": "3/3", "H02-cron-next": "1/3", "H03-json-patch": "1/3", "H04-build-order": "2/3", "H05-retry": "3/3", "H06-allocate": "3/3", "H07-sqlite-rebuild": "3/3", "H08-glob": "0/3", "H09-ledger-root-cause": "3/3", "H10-perf-report": "2/3"}, "always_fail": ["H08-glob"], "flaky": ["H02-cron-next", "H03-json-patch", "H04-build-order", "H10-perf-report"]}
+== 2026-10-08T20:49:01Z deploy qwen36-lead budget=2048
+   gateway reports for candidate/qwen36-lead: {"budget": 2048, "mode": "on"}
+== 2026-10-08T20:53:44Z run qwen36-lead-bounded-2048
+qwen36-lead-bounded-2048 rep1 H01-semver-range         FAIL attempts=3 wall=201.7s tokens=18564
+qwen36-lead-bounded-2048 rep1 H02-cron-next            PASS attempts=3 wall=186.8s tokens=17849
+qwen36-lead-bounded-2048 rep1 H03-json-patch           FAIL attempts=3 wall=269.4s tokens=26338
+qwen36-lead-bounded-2048 rep1 H04-build-order          FAIL attempts=3 wall=234.6s tokens=11727
+qwen36-lead-bounded-2048 rep1 H05-retry                PASS attempts=2 wall=92.2s tokens=7827
+qwen36-lead-bounded-2048 rep1 H06-allocate             PASS attempts=1 wall=46.1s tokens=3141
+qwen36-lead-bounded-2048 rep1 H07-sqlite-rebuild       FAIL attempts=3 wall=136.6s tokens=11432
+qwen36-lead-bounded-2048 rep1 H08-glob                 FAIL attempts=3 wall=200.1s tokens=19366
+qwen36-lead-bounded-2048 rep1 H09-ledger-root-cause    PASS attempts=2 wall=105.9s tokens=9249
+qwen36-lead-bounded-2048 rep1 H10-perf-report          FAIL attempts=3 wall=130.3s tokens=11749
+qwen36-lead-bounded-2048 rep2 H01-semver-range         PASS attempts=1 wall=67.0s tokens=4640
+qwen36-lead-bounded-2048 rep2 H02-cron-next            FAIL attempts=3 wall=182.0s tokens=17628
+qwen36-lead-bounded-2048 rep2 H03-json-patch           PASS attempts=2 wall=193.3s tokens=15915
+qwen36-lead-bounded-2048 rep2 H04-build-order          PASS attempts=1 wall=50.3s tokens=3404
+qwen36-lead-bounded-2048 rep2 H05-retry                PASS attempts=2 wall=89.9s tokens=7827
+qwen36-lead-bounded-2048 rep2 H06-allocate             PASS attempts=2 wall=92.2s tokens=6937
+qwen36-lead-bounded-2048 rep2 H07-sqlite-rebuild       FAIL attempts=3 wall=134.5s tokens=11440
+qwen36-lead-bounded-2048 rep2 H08-glob                 FAIL attempts=3 wall=160.7s tokens=14554
+qwen36-lead-bounded-2048 rep2 H09-ledger-root-cause    PASS attempts=2 wall=106.1s tokens=9236
+qwen36-lead-bounded-2048 rep2 H10-perf-report          FAIL attempts=3 wall=131.7s tokens=11800
+qwen36-lead-bounded-2048 rep3 H01-semver-range         FAIL attempts=3 wall=205.7s tokens=19692
+qwen36-lead-bounded-2048 rep3 H02-cron-next            FAIL attempts=3 wall=174.7s tokens=16457
+qwen36-lead-bounded-2048 rep3 H03-json-patch           FAIL attempts=3 wall=290.8s tokens=28620
+qwen36-lead-bounded-2048 rep3 H04-build-order          FAIL attempts=3 wall=153.2s tokens=12650
+qwen36-lead-bounded-2048 rep3 H05-retry                PASS attempts=1 wall=45.9s tokens=3614
+qwen36-lead-bounded-2048 rep3 H06-allocate             PASS attempts=2 wall=89.8s tokens=6709
+qwen36-lead-bounded-2048 rep3 H07-sqlite-rebuild       FAIL attempts=3 wall=134.3s tokens=11461
+qwen36-lead-bounded-2048 rep3 H08-glob                 FAIL attempts=3 wall=170.1s tokens=15774
+qwen36-lead-bounded-2048 rep3 H09-ledger-root-cause    PASS attempts=2 wall=106.7s tokens=9291
+qwen36-lead-bounded-2048 rep3 H10-perf-report          PASS attempts=1 wall=46.1s tokens=3485
+RESULT qwen36-lead-bounded-2048 {"reps": 3, "tasks": 10, "validated_rate": 46.7, "validated_per_rep": [4, 6, 4], "first_attempt_rate": 16.7, "median_secs_to_validated": 91.1, "mean_secs_per_task": 141.0, "mean_tokens_per_task": 12279, "per_task_pass": {"H01-semver-range": "1/3", "H02-cron-next": "1/3", "H03-json-patch": "1/3", "H04-build-order": "1/3", "H05-retry": "3/3", "H06-allocate": "3/3", "H07-sqlite-rebuild": "0/3", "H08-glob": "0/3", "H09-ledger-root-cause": "3/3", "H10-perf-report": "1/3"}, "always_fail": ["H07-sqlite-rebuild", "H08-glob"], "flaky": ["H01-semver-range", "H02-cron-next", "H03-json-patch", "H04-build-order", "H10-perf-report"]}
+== 2026-10-08T22:04:58Z deploy qwen36-lead budget=8192
+   gateway reports for candidate/qwen36-lead: {"budget": 8192, "mode": "on"}
+== 2026-10-08T22:09:40Z run qwen36-lead-bounded-8192
+qwen36-lead-bounded-8192 rep1 H01-semver-range         PASS attempts=1 wall=174.5s tokens=10627
+qwen36-lead-bounded-8192 rep1 H02-cron-next            PASS attempts=1 wall=175.0s tokens=9985
+qwen36-lead-bounded-8192 rep1 H03-json-patch           FAIL attempts=3 wall=412.6s tokens=32857
+qwen36-lead-bounded-8192 rep1 H04-build-order          PASS attempts=1 wall=153.8s tokens=9392
+qwen36-lead-bounded-8192 rep1 H05-retry                PASS attempts=1 wall=127.3s tokens=8310
+qwen36-lead-bounded-8192 rep1 H06-allocate             PASS attempts=1 wall=151.9s tokens=9295
+qwen36-lead-bounded-8192 rep1 H07-sqlite-rebuild       FAIL attempts=3 wall=396.8s tokens=26148
+qwen36-lead-bounded-8192 rep1 H08-glob                 FAIL attempts=3 wall=618.9s tokens=40548
+qwen36-lead-bounded-8192 rep1 H09-ledger-root-cause    PASS attempts=1 wall=159.5s tokens=10290
+qwen36-lead-bounded-8192 rep1 H10-perf-report          PASS attempts=1 wall=132.7s tokens=8488
+qwen36-lead-bounded-8192 rep2 H01-semver-range         PASS attempts=1 wall=165.2s tokens=10299
+qwen36-lead-bounded-8192 rep2 H02-cron-next            PASS attempts=2 wall=340.4s tokens=21396
+qwen36-lead-bounded-8192 rep2 H03-json-patch           FAIL attempts=3 wall=396.1s tokens=31907
+qwen36-lead-bounded-8192 rep2 H04-build-order          PASS attempts=1 wall=155.8s tokens=9428
+qwen36-lead-bounded-8192 rep2 H05-retry                PASS attempts=3 wall=425.9s tokens=29220
+qwen36-lead-bounded-8192 rep2 H06-allocate             PASS attempts=1 wall=151.6s tokens=9245
+qwen36-lead-bounded-8192 rep2 H07-sqlite-rebuild       PASS attempts=1 wall=144.7s tokens=9028
+qwen36-lead-bounded-8192 rep2 H08-glob                 FAIL attempts=3 wall=424.4s tokens=29191
+qwen36-lead-bounded-8192 rep2 H09-ledger-root-cause    PASS attempts=1 wall=161.3s tokens=10386
+qwen36-lead-bounded-8192 rep2 H10-perf-report          PASS attempts=1 wall=121.6s tokens=7872
+qwen36-lead-bounded-8192 rep3 H01-semver-range         PASS attempts=2 wall=300.6s tokens=20475
+qwen36-lead-bounded-8192 rep3 H02-cron-next            PASS attempts=1 wall=179.9s tokens=10258
+qwen36-lead-bounded-8192 rep3 H03-json-patch           PASS attempts=3 wall=535.6s tokens=40709
+qwen36-lead-bounded-8192 rep3 H04-build-order          PASS attempts=1 wall=153.5s tokens=9375
+qwen36-lead-bounded-8192 rep3 H05-retry                PASS attempts=1 wall=131.6s tokens=8582
+qwen36-lead-bounded-8192 rep3 H06-allocate             PASS attempts=1 wall=148.4s tokens=9114
+qwen36-lead-bounded-8192 rep3 H07-sqlite-rebuild       FAIL attempts=3 wall=410.3s tokens=26927
+qwen36-lead-bounded-8192 rep3 H08-glob                 FAIL attempts=3 wall=487.4s tokens=33462
+qwen36-lead-bounded-8192 rep3 H09-ledger-root-cause    PASS attempts=1 wall=159.5s tokens=10308
+qwen36-lead-bounded-8192 rep3 H10-perf-report          PASS attempts=1 wall=119.0s tokens=7753
+RESULT qwen36-lead-bounded-8192 {"reps": 3, "tasks": 10, "validated_rate": 76.7, "validated_per_rep": [7, 8, 8], "first_attempt_rate": 63.3, "median_secs_to_validated": 155.8, "mean_secs_per_task": 253.9, "mean_tokens_per_task": 17029, "per_task_pass": {"H01-semver-range": "3/3", "H02-cron-next": "3/3", "H03-json-patch": "1/3", "H04-build-order": "3/3", "H05-retry": "3/3", "H06-allocate": "3/3", "H07-sqlite-rebuild": "1/3", "H08-glob": "0/3", "H09-ledger-root-cause": "3/3", "H10-perf-report": "3/3"}, "always_fail": ["H08-glob"], "flaky": ["H03-json-patch", "H07-sqlite-rebuild"]}
+== 2026-10-09T00:17:19Z done

@@ -178,7 +178,7 @@ Accepted design (`docs/design/06-vllm-top-engine-agnostic.md`):
 - [x] Dynamically reconcile gateway worker state on each 5-second /health poll so stopped workers disappear and resumed
       workers return without restarting the console. Regression coverage delivers stopped and healthy gateway snapshots to one
       running App instance and verifies removal/reappearance; v0.10.2 deployed and live version verified.
-- [ ] Verify live on ai-5820-01:
+- [x] Verify live on ai-5820-01:
   - [x] an ad-hoc llama.cpp server started after the console appears (2026-10-08, v1.0.2, read from tty1 via /dev/vcs1):
         a stand-in serving the recorded b11347 `/props` and `/metrics` fixtures on 127.0.0.1:18080 appeared in the running
         console within one 5 s scan, flagged `!`; no GGUF was fetched to the host for this check, so it is not a real
@@ -340,7 +340,7 @@ Client-facing gaps found 2026-10-06 while reviewing Nexus context handling (Nexu
 - [x] Remove max_output_tokens and the ORCHESTRATOR_MAX_OUTPUT_TOKENS=512 default once dynamic sizing lands.
       Dynamic sizing is implemented; the obsolete record/config field was removed from runtime, production inventory and tests.
 
-## Gateway: smart-routing capabilities (operator approved all 12, 2026-10-06; not started)
+## Gateway: smart-routing capabilities (operator approved all 12, 2026-10-06; implemented and deployed)
 Already present: deterministic first-match route table (model alias, task_class, has_tools, prompt size) with fallback pools;
 X-Session-ID affinity hashing for warm prompt caches; bearer auth; streaming with tool-call index repair; health with failure
 counting; evidence log; metrics.
@@ -398,10 +398,11 @@ Topics to shape when it is picked up:
 - Principle check: the gateway/scheduler owns placement and admission; it reports queue/placement state; clients own their intent
   (class, deadline). The scheduler never guesses intent it cannot know.
 
-## DEFECT (open 2026-10-07): unbounded reasoning on the deep route. See docs/defects/2026-10-07-unbounded-reasoning-deep-route.md
-- [ ] Remediation design: evaluate (1) worker hard budget, (2) client-selected route/profile policy enforced server-side,
+## DEFECT (remediated 2026-10-09): unbounded reasoning on the deep route. See docs/defects/2026-10-07-unbounded-reasoning-deep-route.md
+- [x] Remediation design: evaluate (1) worker hard budget, (2) client-selected route/profile policy enforced server-side,
       (3) gateway total generation bounds including a default when max_tokens is absent, (4) distinct telemetry for budget
-      exhaustion. Fail closed. No production change without separate authorization.
+      exhaustion. Fail closed. Design 02 reviews the selected controls; production authorization is captured in this file's
+      closeout authorization above.
 - [x] Choose the budget from Phase B BOUNDED data (4096 is the first point only); add budget points if the distributions require it. Q-BUDGET Stage B measured Qwen3.6 at 2048/4096/8192 via gateway and selects 8192 (76.7%, vs 70.0% and 46.7%); see `evaluations/engx/QBUDGET-2026-10-08.md`.
 
 ## Phase B redesign (operator-approved 2026-10-07)
@@ -455,9 +456,9 @@ docs/design/01-06.
       aggregation still reports 22 checks as `NOT_TESTED`; direct production checks and exact remaining limits are in
       `evaluations/engx/QUALIFICATION-QFINAL-2026-10-09.md`.
 New findings from the code review (folded into the workstreams):
-- [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed in shared working tree; deployment remains part of W-REASON
-- [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification implemented in shared working tree; deployment remains in R11
-- [x] N3 simulated streaming; client disconnect does not stop generation → real upstream SSE and disconnect cancellation implemented in shared working tree; deployment remains in R1/R7
+- [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed, tested and deployed in gateway release `f31218c`
+- [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification tested and deployed in R11
+- [x] N3 simulated streaming; client disconnect does not stop generation → real upstream SSE and disconnect cancellation tested and deployed in R1/R7
 - [x] N4 retired vLLM units/role/scripts still installed; vllm_xpu host 0.0.0.0 in inventory → loopback inventory binding, vLLM role removed from the inference play, and retired units/on-host originators removed via Ansible after archive verification; live service state checked
 - [x] N5 hand-made ufw rules; inference port policy incomplete (8001) → W-ACCESS/W-ORIGIN; Ansible nftables policy now
       derives worker/candidate ports from inventory, and live checks refused non-gateway connections to 8000/8001/8003.

@@ -1,0 +1,13 @@
+2026-10-09T05:59:08Z
+aihost_llama_worker_major_faults_total{port="8001"} 6
+aihost_llama_worker_major_faults_total{port="8002"} 127
+aihost_llama_worker_resident_file_bytes{port="8001"} 217825280
+aihost_llama_worker_resident_file_bytes{port="8002"} 938409984
+aihost_llama_model_file_size_bytes{port="8001",file="Qwen3.5-27B-Q4_K_M.gguf"} 16740812704
+aihost_llama_model_file_size_bytes{port="8002",file="Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"} 22134528992
+aihost_llama_model_file_cached_bytes{port="8001",file="Qwen3.5-27B-Q4_K_M.gguf"} 16740814848
+aihost_llama_model_file_cached_bytes{port="8002",file="Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"} 22134530048
+node_memory_Cached_bytes 5.1654070272e+10
+node_memory_MemAvailable_bytes 5.2005883904e+10
+node_memory_MemTotal_bytes 6.5739214848e+10
+node_vmstat_pgmajfault 128981

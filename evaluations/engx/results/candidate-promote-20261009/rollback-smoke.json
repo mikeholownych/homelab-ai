@@ -1,0 +1,194 @@
+{
+  "rollback_commit": "ede7da5b19893e2f460a8df5f45bab66c8da2cc1",
+  "compat_commit": "e4de76bce2aa7c017359fed19f5cf5eb525a06cf",
+  "models": {
+    "engineering/b0": {
+      "id": "engineering/b0",
+      "object": "model",
+      "owned_by": "aihost-orchestrator",
+      "context_length": 65536,
+      "max_model_len": 65536,
+      "max_completion_tokens": 8192,
+      "limits_version": "fe10dd1e509f2272",
+      "reasoning": {
+        "budget": 0,
+        "mode": "default"
+      },
+      "serving": [
+        {
+          "worker_id": "b0-live-llama-worker1",
+          "pool": "lead",
+          "role": "production",
+          "model_id": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M",
+          "artifact_digest": "sha256:fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad",
+          "quantization": "Q4_K - Medium",
+          "engine": "llama.cpp",
+          "engine_version": "b11347-5fc4f3c8c",
+          "capacity_source": "observed"
+        }
+      ],
+      "capabilities": {
+        "tools": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "engine"
+          ]
+        },
+        "parallel_tool_calls": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "engine"
+          ]
+        },
+        "structured_output": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "engine"
+          ]
+        },
+        "vision": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "reasoning": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "reasoning_controllable": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "streaming": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "gateway"
+          ]
+        },
+        "output_contract_compliance": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "fim": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "embeddings": {
+          "available": false,
+          "provenance": "unavailable"
+        }
+      }
+    },
+    "engineering/deep": {
+      "id": "engineering/deep",
+      "object": "model",
+      "owned_by": "aihost-orchestrator",
+      "context_length": 65536,
+      "max_model_len": 65536,
+      "max_completion_tokens": 12288,
+      "limits_version": "1f273a4687b818bb",
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "serving": [
+        {
+          "worker_id": "b0-live-llama-deep-worker2",
+          "pool": "deep",
+          "role": "production",
+          "model_id": "Qwen3.5-27B-Q4_K_M",
+          "artifact_digest": "sha256:84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806",
+          "quantization": "Q4_K - Medium",
+          "engine": "llama.cpp",
+          "engine_version": "b11347-5fc4f3c8c",
+          "capacity_source": "observed"
+        }
+      ],
+      "capabilities": {
+        "tools": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "engine"
+          ]
+        },
+        "parallel_tool_calls": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "engine"
+          ]
+        },
+        "structured_output": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "engine"
+          ]
+        },
+        "vision": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "reasoning": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "reasoning_controllable": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "streaming": {
+          "available": true,
+          "provenance": "declared",
+          "evidence": [
+            "gateway"
+          ]
+        },
+        "output_contract_compliance": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "fim": {
+          "available": false,
+          "provenance": "unavailable"
+        },
+        "embeddings": {
+          "available": false,
+          "provenance": "unavailable"
+        }
+      }
+    }
+  },
+  "requests": [
+    {
+      "alias": "engineering/b0",
+      "reasoning_profile": "default",
+      "status": 200,
+      "finish_reason": "stop",
+      "content": "READY",
+      "served_model": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M"
+    },
+    {
+      "alias": "engineering/deep",
+      "reasoning_profile": "default",
+      "status": 422,
+      "error_code": "capability_unsupported",
+      "missing_capabilities": [
+        "reasoning"
+      ]
+    },
+    {
+      "alias": "engineering/deep",
+      "reasoning_profile": "off",
+      "status": 200,
+      "finish_reason": "stop",
+      "content": "READY",
+      "served_model": "Qwen3.5-27B-Q4_K_M"
+    }
+  ],
+  "candidate_alias_absent": true
+}

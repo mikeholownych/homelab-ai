@@ -48,7 +48,6 @@
     - name: Reboot and wait for node return
       ansible.builtin.reboot:
         reboot_timeout: 900
-        max_wait: 1200
         test_command: systemctl is-active ssh || true
       when: not ansible_check_mode
 

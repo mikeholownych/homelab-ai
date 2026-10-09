@@ -1,0 +1,345 @@
+
+PLAY [Controlled reboot and post-boot verification] ****************************
+
+TASK [Record kernel expectation before rebooting] ******************************
+ok: [ai-5820-01] => 
+    msg: 'Expected kernel after reboot: '
+
+TASK [Verify pinned kernel artifact exists before committing to reboot] ********
+skipping: [ai-5820-01]
+
+TASK [Fail closed when the pinned kernel is not installed] *********************
+skipping: [ai-5820-01]
+
+TASK [Reboot and wait for node return] *****************************************
+changed: [ai-5820-01]
+
+TASK [Refresh facts after reconnect] *******************************************
+ok: [ai-5820-01]
+
+TASK [Verify the running kernel matches the declared expectation] **************
+skipping: [ai-5820-01]
+
+TASK [Re-run hardware discovery as the single source of GPU truth] *************
+included: hardware_inventory for ai-5820-01
+
+TASK [hardware_inventory : Ensure hardware inventory working directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Ensure hardware collector install directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Install read-only hardware collector] ***************
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Collect required hardware sources without mutation] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Persist observed hardware snapshot] *****************
+changed: [ai-5820-01]
+
+TASK [Confirm both GPUs enumerate after reboot via collected evidence] *********
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+PLAY [Independently validate host state] ***************************************
+
+TASK [hardware_inventory : Ensure hardware inventory working directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Ensure hardware collector install directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Install read-only hardware collector] ***************
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Collect required hardware sources without mutation] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Persist observed hardware snapshot] *****************
+changed: [ai-5820-01]
+
+TASK [hardware_validation : Load version-controlled expected hardware profile] ***
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Ensure hardware classifier install directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Install pure hardware classifier] ******************
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Ensure hardware evidence directory exists] *********
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Materialize expected profile for pure comparison] ***
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Classify observed hardware and write structured evidence] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Run tuning input and profile assertions] *********************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/assert_inputs.yml for ai-5820-01
+
+TASK [os_tuning : Validate os_tuning inputs] ***********************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Load version-controlled OS tuning profile] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate loaded OS tuning profile structure] *****************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Validate tuning values against host allowlists] **************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Set resolved tuning facts] ***********************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Discover live OS tuning state without mutation] **************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/discovery.yml for ai-5820-01
+
+TASK [os_tuning : Ensure os_tuning work directory exists] **********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Ensure tuning helper install directory exists] ***************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Ensure tuning evidence directory exists] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Install read-only OS tuning telemetry collector] *************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Install CPU power enforcement helper] ************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Collect OS tuning telemetry without mutation] ****************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Parse collected telemetry snapshot] **************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Persist tuning evidence documents] ***************************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/persist_evidence.yml for ai-5820-01
+
+TASK [os_tuning : Persist tuning evidence documents] ***************************
+ok: [ai-5820-01] => (item=numa.json)
+ok: [ai-5820-01] => (item=interrupts.json)
+ok: [ai-5820-01] => (item=cpu-power.json)
+ok: [ai-5820-01] => (item=memory-policy.json)
+ok: [ai-5820-01] => (item=hugepages.json)
+ok: [ai-5820-01] => (item=io.json)
+ok: [ai-5820-01] => (item=kernel.json)
+
+TASK [os_tuning : Persist resolved tuning profile as machine-readable evidence] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Record active profile state for validation and drift classification] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Enforce tuning safety gates before any mutation] *************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/safety_gates.yml for ai-5820-01
+
+TASK [os_tuning : Validate hugepages capacity safety] **************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified IRQ affinity changes] *********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified NUMA runtime binding] *********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified custom kernel deployment] *****************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Validate declared custom kernel artifact reference] **********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Install NUMA discovery packages when enabled] ****************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Compute managed sysctl mapping from the profile] *************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute managed kernel command-line parameters] **************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate managed kernel command-line parameters against allowlist] ***
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply memory sysctls owned by the tuning profile] ************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_memory.yml for ai-5820-01
+
+TASK [os_tuning : Apply managed memory sysctl values] **************************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove stale managed sysctl keys no longer in the profile] ***
+skipping: [ai-5820-01] => (item=vm.swappiness (absent)) 
+skipping: [ai-5820-01] => (item=vm.dirty_ratio (absent)) 
+skipping: [ai-5820-01] => (item=vm.dirty_background_ratio (absent)) 
+skipping: [ai-5820-01] => (item=vm.zone_reclaim_mode (absent)) 
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Verify active sysctl values match the tuning profile] ********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Compute drifted NVMe queue lists for I/O enforcement] ********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply I/O settings owned by the tuning profile] **************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_io.yml for ai-5820-01
+
+TASK [os_tuning : Render NVMe I/O udev rule] ***********************************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove NVMe I/O udev rule when nothing is managed] ***********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime NVMe scheduler on drifted devices] *************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime NVMe read-ahead on drifted devices] ************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply CPU power settings owned by the tuning profile] ********
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_cpu_power.yml for ai-5820-01
+
+TASK [os_tuning : Install aihost-cpu-power oneshot service] ********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove aihost-cpu-power service when nothing is managed] *****
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Enable aihost-cpu-power boot persistence] ********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply CPU governor and energy-performance preference at runtime] ***
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Validate active CPU power state matches the profile] *********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply transparent hugepage settings owned by the tuning profile] ***
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_thp.yml for ai-5820-01
+
+TASK [os_tuning : Render tuning kernel command-line drop-in] *******************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove tuning command-line drop-in when nothing is managed] ***
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime transparent hugepage mode] *********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime transparent hugepage defrag mode] **************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Detect kernel drift against the declared expectation] ********
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/kernel_drift.yml for ai-5820-01
+
+TASK [os_tuning : Compare running kernel against declared expectation] *********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Install checksummed custom kernel artifact] ******************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Inspect previous NUMA topology fingerprint] ******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Read previous NUMA topology fingerprint] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute current NUMA topology fingerprint] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compare NUMA topology against previous observation] **********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Write current NUMA topology fingerprint] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Emit independent tuning validation checks] *******************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/emit_checks.yml for ai-5820-01
+
+TASK [os_tuning : Derive tuning validation checks from observed state] *********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Persist tuning validation check fragment] ********************
+ok: [ai-5820-01]
+
+TASK [Run independent validation aggregation after tuning discovery] ***********
+included: validation for ai-5820-01
+
+TASK [validation : Ensure evidence directory exists for validation] ************
+ok: [ai-5820-01]
+
+TASK [validation : Load expected hardware profile for harness value derivation] ***
+ok: [ai-5820-01]
+
+TASK [validation : Materialize expected hardware profile for the aggregator] ***
+ok: [ai-5820-01]
+
+TASK [validation : Install validation aggregator on the managed node] **********
+ok: [ai-5820-01]
+
+TASK [validation : Run independent validation aggregator] **********************
+ok: [ai-5820-01]
+
+TASK [validation : Read the generated summary from the managed node] ***********
+ok: [ai-5820-01]
+
+TASK [validation : Display validation summary] *********************************
+ok: [ai-5820-01] => 
+    msg: |
+      Validation Status: NOT_TESTED (incomplete)
+      Node: ai-5820-01 (production)
+      Hardware Profile: d5820_dual_b65
+      Simulated: False
+      Blocking Failures: 0
+      Failed Checks: 0
+      Not Tested: 22
+
+      Checks:
+        - [NOT_TESTED] cpu (expected: Intel(R) Xeon(R) W-2123, observed: not observed)
+        - [NOT_TESTED] machine_model (expected: Precision 5820 Tower, observed: not observed)
+        - [NOT_TESTED] gpu_count (expected: 2 GPU(s), observed: not observed)
+        - [NOT_TESTED] gpu_model (expected: Intel Arc Pro B65, observed: not observed)
+        - [NOT_TESTED] gpu_vram (expected: 32.0 GiB per GPU, observed: not observed)
+        - [NOT_TESTED] level_zero (expected: 2 Level Zero devices, observed: not observed)
+        - [NOT_TESTED] pytorch_xpu (expected: 2 PyTorch XPU devices, observed: not observed)
+        - [NOT_TESTED] pcie_topology (expected: Gen3 Link, observed: not observed)
+        - [NOT_TESTED] rebar (expected: Resizable BAR Enabled, observed: not observed)
+        - [NOT_TESTED] vllm_service (expected: vLLM service healthy, observed: not observed)
+        - [NOT_TESTED] single_gpu_inference (expected: Single-GPU inference passes, observed: not observed)
+        - [NOT_TESTED] dual_gpu_inference (expected: Dual-GPU inference passes, observed: not observed)
+        - [NOT_TESTED] llama_cpp_fallback (expected: llama.cpp fallback passes, observed: not observed)
+        - [NOT_TESTED] required_services (expected: Required services active, observed: not observed)
+        - [NOT_TESTED] scheduled_reconciliation (expected: Reconciliation enabled, observed: not observed)
+        - [NOT_TESTED] vault_access (expected: Vault access succeeds, observed: not observed)
+        - [PASS] os_tuning_profile (expected: Active tuning profile, observed: converged profile)
+        - [NOT_TESTED] os_tuning_governor (expected: CPU governor, observed: active scaling_governor)
+        - [NOT_TESTED] os_tuning_thp (expected: THP mode, observed: active THP mode)
+        - [NOT_TESTED] os_tuning_hugepages (expected: HugeTLB pages, observed: HugePages_Total)
+        - [NOT_TESTED] os_tuning_sysctl (expected: Managed sysctl keys active, observed: verified against /proc/sys)
+        - [NOT_TESTED] running_kernel (expected: Running kernel release, observed: uname -r)
+        - [PASS] numa_topology (expected: NUMA topology unchanged since first recording, observed: fingerprint comparison)
+        - [NOT_TESTED] intel_gpu_stack_status (expected: B65 stack status, observed: not observed)
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=68   changed=3    unreachable=0    failed=0    skipped=24   rescued=0    ignored=0   
+

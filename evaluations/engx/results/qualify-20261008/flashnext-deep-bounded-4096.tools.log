@@ -1,0 +1,42 @@
+tool_call_single trial=1 PASS secs=3.93
+tool_call_single trial=2 PASS secs=3.63
+tool_call_single trial=3 PASS secs=3.62
+tool_choice_none trial=1 PASS secs=10.54
+tool_choice_none trial=2 PASS secs=10.12
+tool_choice_none trial=3 PASS secs=10.11
+tool_choice_named trial=1 PASS secs=2.58
+tool_choice_named trial=2 PASS secs=2.2
+tool_choice_named trial=3 PASS secs=2.19
+parallel_tool_calls trial=1 PASS secs=6.35
+parallel_tool_calls trial=2 PASS secs=5.8
+parallel_tool_calls trial=3 PASS secs=5.8
+streaming_tool_calls trial=1 PASS secs=4.06
+streaming_tool_calls trial=2 PASS secs=3.61
+streaming_tool_calls trial=3 PASS secs=3.63
+structured_output trial=1 PASS secs=30.1
+structured_output trial=2 PASS secs=28.62
+structured_output trial=3 PASS secs=28.64
+agent_loop trial=1 PASS secs=20.6
+agent_loop trial=2 PASS secs=20.9
+agent_loop trial=3 PASS secs=20.9
+nexus_replay b21a5eefec4c@2 PASS calls=['file_tree', 'run_command'] secs=11.73
+nexus_replay c56d6a6d75f3@8 PASS calls=['run_command'] secs=16.17
+nexus_replay 439420aca6a7@46 PASS calls=['write_file'] secs=48.93
+nexus_replay df3f030420c0@46 PASS calls=['write_file'] secs=138.73
+nexus_replay 8dc30944151a@16 PASS calls=['edit_file'] secs=50.8
+nexus_replay e5d7df4f4883@36 PASS calls=['run_command'] secs=45.23
+nexus_replay 2f185a278285@10 PASS calls=['read_file'] secs=13.39
+nexus_replay 101548744778@26 PASS calls=['run_command'] secs=29.2
+nexus_replay 5667ff01683e@26 PASS calls=['write_file'] secs=94.04
+nexus_replay 08b291f470d3@6 PASS calls=['read_file'] secs=14.41
+nexus_replay 8dc30944151a@34 PASS calls=['run_command'] secs=13.04
+nexus_replay 862ac09202ec@12 PASS calls=['run_command'] secs=14.67
+nexus_replay 439420aca6a7@48 PASS calls=['run_command'] secs=18.24
+nexus_replay f5de5b8a9a01@5 PASS calls=['read_file'] secs=30.08
+nexus_replay df3f030420c0@20 PASS calls=['write_file'] secs=99.86
+nexus_replay 395d997a569e@18 PASS calls=['run_command'] secs=160.74
+nexus_replay 6f850683972a@10 PASS calls=['read_file'] secs=31.67
+nexus_replay 17e89baafe81@18 PASS calls=['run_command'] secs=88.21
+nexus_replay 1b09369b0cfa@30 PASS calls=['read_file'] secs=26.37
+nexus_replay c9ed5185b73d@18 PASS calls=['run_command'] secs=36.51
+RESULT flashnext-deep-bounded-4096 {"tool_call_single": 1.0, "tool_choice_none": 1.0, "tool_choice_named": 1.0, "parallel_tool_calls": 1.0, "streaming_tool_calls": 1.0, "structured_output": 1.0, "agent_loop": 1.0, "nexus_replay": 1.0} -> /home/mike/Projects/aihost/evaluations/engx/results/qualify-20261008/qualify-tools-flashnext-deep-bounded-4096-2026-10-08.json

@@ -1,0 +1,486 @@
+
+PLAY [Lend a GPU to a candidate model (or return it)] **************************
+
+TASK [Require a declared candidate profile] ************************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [Merge the candidate into the worker and gateway configuration] ***********
+skipping: [ai-5820-01]
+
+TASK [inference_policy : Derive inference ports from the declared engine and gateway workers] ***
+ok: [ai-5820-01]
+
+TASK [inference_policy : Validate inference network policy inputs] *************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [inference_policy : Install nftables policy engine] ***********************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Create inference policy directory] ********************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Resolve the gateway service uid for nftables socket-owner matching] ***
+ok: [ai-5820-01]
+
+TASK [inference_policy : Require a real gateway uid outside Ansible check mode] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [inference_policy : Record gateway service uid] ***************************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Initialize reserved inference ports] ******************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Add inventory-reserved ports to the enforcement set] ***
+ok: [ai-5820-01] => (item=8000-8009)
+ok: [ai-5820-01] => (item=8020-8029)
+
+TASK [inference_policy : Add every declared inventory worker and candidate port] ***
+ok: [ai-5820-01] => (item=8000)
+ok: [ai-5820-01] => (item=8001)
+
+TASK [inference_policy : Render gateway-only inference policy] *****************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Validate rendered nftables policy before it can be activated] ***
+ok: [ai-5820-01]
+
+TASK [inference_policy : Install inference policy loader] **********************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Install inference policy systemd unit] ****************
+ok: [ai-5820-01]
+
+TASK [inference_policy : Establish inference policy before any worker starts] ***
+ok: [ai-5820-01]
+
+TASK [inference_policy : Apply pending policy changes before later worker roles run] ***
+
+TASK [inference_policy : Read current UFW rules before retiring temporary inference denies] ***
+ok: [ai-5820-01]
+
+TASK [inference_policy : Remove superseded temporary worker-port deny rules] ***
+skipping: [ai-5820-01] => (item={'port': '8000', 'pattern': '8000/tcp'}) 
+skipping: [ai-5820-01] => (item={'port': '4096:4099', 'pattern': '4096:4099/tcp'}) 
+skipping: [ai-5820-01]
+
+TASK [inference_policy : Allow the declared remote gateway clients through UFW] ***
+ok: [ai-5820-01] => (item=10.0.8.95/32)
+
+TASK [llama_cpp_container : Validate llama.cpp container inputs] ***************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [llama_cpp_container : Verify the declared model files exist] *************
+ok: [ai-5820-01] => (item=worker1)
+ok: [ai-5820-01] => (item=worker2)
+
+TASK [llama_cpp_container : Require the model files before starting any worker] ***
+ok: [ai-5820-01] => (item=worker1) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      ansible_loop_var: item
+      changed: false
+      failed: false
+      item:
+        key: worker1
+        value:
+          config_dir: /etc/local-ai/llama/worker1
+          container_name: llama-sycl-worker1
+          context: 65536
+          gpu: 0
+          model_file: qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+          port: 8000
+          reasoning_budget: 8192
+          served_name: Qwen3.6-35B-A3B-UD-Q4_K_M
+          service_name: aihost-llama-worker1.service
+          worker_id: b0-live-llama-worker1
+      stat:
+        atime: 1791486564.0890017
+        attr_flags: ''
+        attributes: []
+        block_size: 4096
+        blocks: 43231504
+        charset: binary
+        checksum: 6f419439a4d76cbf549724e772ef37adc05b7a7d
+        ctime: 1791280497.881725
+        dev: 64516
+        device_type: 0
+        disk_usage_bytes: 22134530048
+        executable: false
+        exists: true
+        gid: 1000
+        gr_name: mike
+        inode: 813691532
+        isblk: false
+        ischr: false
+        isdir: false
+        isfifo: false
+        isgid: false
+        islnk: false
+        isreg: true
+        issock: false
+        isuid: false
+        mimetype: application/octet-stream
+        mode: '0664'
+        mtime: 1791280497.8408742
+        nlink: 1
+        path: /var/lib/local-ai/models/gguf/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+        pw_name: mike
+        readable: true
+        rgrp: true
+        roth: true
+        rusr: true
+        size: 22134528992
+        uid: 1000
+        version: '155906849'
+        wgrp: true
+        woth: false
+        writeable: true
+        wusr: true
+        xgrp: false
+        xoth: false
+        xusr: false
+    msg: All assertions passed
+ok: [ai-5820-01] => (item=worker2) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      ansible_loop_var: item
+      changed: false
+      failed: false
+      item:
+        key: worker2
+        value:
+          args:
+          - -ngl
+          - '99'
+          - --jinja
+          - -np
+          - '1'
+          - -fa
+          - 'on'
+          - -b
+          - '4096'
+          - -ub
+          - '2048'
+          - --metrics
+          - --lazy-mode
+          - 'on'
+          config_dir: /etc/local-ai/llama/worker2
+          container_name: llama-sycl-worker2
+          context: 65536
+          gpu: 1
+          model_file: flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+          port: 8001
+          reasoning_budget: 4096
+          served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
+          service_name: aihost-llama-worker2.service
+          worker_id: b0-live-llama-deep-worker2
+      stat:
+        atime: 1791482792.7984598
+        attr_flags: ''
+        attributes: []
+        block_size: 4096
+        blocks: 57829000
+        charset: binary
+        checksum: 472b91692d00d5b2a0538cbeb8e3cd396fc4ce6b
+        ctime: 1791281116.501912
+        dev: 64516
+        device_type: 0
+        disk_usage_bytes: 29608448000
+        executable: false
+        exists: true
+        gid: 1000
+        gr_name: mike
+        inode: 1342205807
+        isblk: false
+        ischr: false
+        isdir: false
+        isfifo: false
+        isgid: false
+        islnk: false
+        isreg: true
+        issock: false
+        isuid: false
+        mimetype: application/octet-stream
+        mode: '0664'
+        mtime: 1791281116.4996905
+        nlink: 1
+        path: /var/lib/local-ai/models/gguf/flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf
+        pw_name: mike
+        readable: true
+        rgrp: true
+        roth: true
+        rusr: true
+        size: 29608446496
+        uid: 1000
+        version: '2355286112'
+        wgrp: true
+        woth: false
+        writeable: true
+        wusr: true
+        xgrp: false
+        xoth: false
+        xusr: false
+    msg: All assertions passed
+
+TASK [llama_cpp_container : Create the runtime account's image-copy temp directory] ***
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Check whether the pinned image is already in the runtime account's store] ***
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Pre-pull the pinned image (large; done here so unit start is not delayed)] ***
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Create llama.cpp directories] **********************
+ok: [ai-5820-01] => (item=/var/log/local-ai/llama)
+ok: [ai-5820-01] => (item=/etc/local-ai/llama)
+ok: [ai-5820-01] => (item=/etc/local-ai/llama/worker1)
+ok: [ai-5820-01] => (item=/etc/local-ai/llama/worker2)
+
+TASK [llama_cpp_container : Read existing per-worker API credentials] **********
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [llama_cpp_container : Set per-worker API credentials (preserve existing, otherwise generate)] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [llama_cpp_container : Install per-worker API credential files] ***********
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [llama_cpp_container : Install llama.cpp worker service units] ************
+ok: [ai-5820-01] => (item=worker1)
+changed: [ai-5820-01] => (item=worker2)
+
+TASK [llama_cpp_container : Stop and disable superseded services] **************
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Remove superseded systemd unit files] **************
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Reload systemd after retiring unit files] **********
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Remove credential-bearing configuration of superseded services] ***
+ok: [ai-5820-01] => (item=/etc/local-ai/vllm/worker2)
+ok: [ai-5820-01] => (item=/etc/local-ai/t5820-dual-worker)
+ok: [ai-5820-01] => (item=/etc/local-ai/t5820-dual-worker-attempt2)
+
+TASK [llama_cpp_container : Find candidate units that are no longer active (R4 lifecycle)] ***
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Stop retired candidate workers before their GPU returns to production] ***
+ok: [ai-5820-01] => (item=aihost-llama-candidate-qwen36.service)
+changed: [ai-5820-01] => (item=aihost-llama-candidate-flashnext.service)
+ok: [ai-5820-01] => (item=aihost-llama-candidate-qwen38.service)
+
+TASK [llama_cpp_container : Remove retired candidate worker units] *************
+ok: [ai-5820-01] => (item=aihost-llama-candidate-qwen36.service)
+changed: [ai-5820-01] => (item=aihost-llama-candidate-flashnext.service)
+ok: [ai-5820-01] => (item=aihost-llama-candidate-qwen38.service)
+
+TASK [llama_cpp_container : Start llama.cpp workers (restart one at a time only when their unit changed)] ***
+included: /home/mike/Projects/aihost/roles/llama_cpp_container/tasks/start_worker.yml for ai-5820-01 => (item=worker1)
+included: /home/mike/Projects/aihost/roles/llama_cpp_container/tasks/start_worker.yml for ai-5820-01 => (item=worker2)
+
+TASK [llama_cpp_container : Decide the start action for worker1] ***************
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Read the gateway admin credential for draining worker1] ***
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Drain through the gateway: worker1] ****************
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Record the drain result for worker1] ***************
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Wait for in-flight work to finish on worker1] ******
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Stop the worker whose GPU is lent to a candidate: aihost-llama-worker1.service] ***
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Ensure the worker is enabled and running: aihost-llama-worker1.service] ***
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Wait for a healthy report from worker1] ************
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Read the gateway's drain state for worker1] ********
+ok: [ai-5820-01 -> localhost]
+
+TASK [llama_cpp_container : Return to service: worker1] ************************
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Decide the start action for worker2] ***************
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Read the gateway admin credential for draining worker2] ***
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Drain through the gateway: worker2] ****************
+ok: [ai-5820-01 -> localhost]
+
+TASK [llama_cpp_container : Record the drain result for worker2] ***************
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Wait for in-flight work to finish on worker2] ******
+ok: [ai-5820-01 -> localhost]
+
+TASK [llama_cpp_container : Stop the worker whose GPU is lent to a candidate: aihost-llama-worker2.service] ***
+skipping: [ai-5820-01]
+
+TASK [llama_cpp_container : Ensure the worker is enabled and running: aihost-llama-worker2.service] ***
+changed: [ai-5820-01]
+
+TASK [llama_cpp_container : Wait for a healthy report from worker2] ************
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (89 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (88 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (87 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (86 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (85 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (84 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (83 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (82 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (81 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (80 retries left).
+FAILED - RETRYING: [ai-5820-01]: llama_cpp_container : Wait for a healthy report from worker2 (79 retries left).
+ok: [ai-5820-01]
+
+TASK [llama_cpp_container : Read the gateway's drain state for worker2] ********
+ok: [ai-5820-01 -> localhost]
+
+TASK [llama_cpp_container : Return to service: worker2] ************************
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Validate T5820 gateway inputs] ********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Validate the model route table with the gateway's own router (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Create gateway directories] ***********************
+ok: [ai-5820-01] => (item=/var/lib/aihost/releases/t5820-gateway-b4051cc)
+ok: [ai-5820-01] => (item=/etc/local-ai/orchestrator)
+
+TASK [orchestrator_gateway : Create remote gateway certificate directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create controller gateway PKI directory] **********
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Generate or validate private gateway CA and server leaf on controller] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install gateway TLS private key] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install CA-signed gateway TLS server leaf] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Ensure controller CA trust artifact directory exists] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Ensure controller server certificate evidence directory exists] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Publish public gateway CA certificate for client trust] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Publish public gateway server leaf as deployment evidence] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install gateway CA in controller OS trust store] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install public gateway CA at configured controller client trust paths] ***
+ok: [ai-5820-01 -> localhost] => (item=/home/mike/.config/nexus/t5820-gateway-ca.crt)
+ok: [ai-5820-01 -> localhost] => (item=/home/mike/.config/opencode/t5820-gateway-ca.crt)
+
+TASK [orchestrator_gateway : Read existing gateway client credential] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Set gateway client credential from protected file or generate one] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway client credential] ****************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Remove obsolete manual gateway drop-ins] **********
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/10-t5820-opencode-client.conf)
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/15-release.conf)
+
+TASK [orchestrator_gateway : Install gateway source release] *******************
+ok: [ai-5820-01] => (item=orchestrator_gateway)
+ok: [ai-5820-01] => (item=orchestrator_runtime)
+ok: [ai-5820-01] => (item=orchestrator_contract)
+
+TASK [orchestrator_gateway : Record gateway release identity] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create private gateway evidence directory] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create gateway evidence chain owned by the service account] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create the root-only client token directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Read existing client tokens] **********************
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Keep existing client tokens and generate missing ones] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Install root-only client token files for delivery to clients] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Render the client registry (token digests only)] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Render gateway non-secret environment] ************
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway readiness probe] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway systemd unit] *********************
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Establish persistent gateway state] ***************
+ok: [ai-5820-01]
+
+RUNNING HANDLER [orchestrator_gateway : Restart gateway service] ***************
+changed: [ai-5820-01]
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=82   changed=7    unreachable=0    failed=0    skipped=10   rescued=0    ignored=0   
+

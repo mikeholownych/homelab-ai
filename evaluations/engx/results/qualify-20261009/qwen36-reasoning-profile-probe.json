@@ -1,0 +1,35 @@
+{
+  "evidence_id": "reasoning-profile-probe-qwen36-2026-10-09",
+  "date": "2026-10-09",
+  "model": "candidate/qwen36-lead",
+  "served_model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+  "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+  "base_url": "https://10.0.8.5:8443",
+  "results": [
+    {
+      "profile": "off",
+      "http_status": 200,
+      "api_response_id": "chatcmpl-c805551a18084b22ab468cd6",
+      "gateway_request_id": "c805551a-1808-4b22-ab46-8cd68d0066e6",
+      "worker_id": "candidate-qwen36-lead",
+      "thinking": false,
+      "reasoning_budget": 0,
+      "reasoning_content_present": false,
+      "finish": "stop",
+      "termination": "stop"
+    },
+    {
+      "profile": "low",
+      "http_status": 200,
+      "api_response_id": "chatcmpl-805586a6f1414412a22ad176",
+      "gateway_request_id": "805586a6-f141-4412-a2a2-d176b62de2db",
+      "worker_id": "candidate-qwen36-lead",
+      "thinking": true,
+      "reasoning_budget": 2048,
+      "reasoning_content_present": true,
+      "finish": "stop",
+      "termination": "stop"
+    }
+  ],
+  "conclusion": "The remote gateway profile can disable Qwen3.6 reasoning and can re-enable it at the route-scaled 2048-token low profile. Only metadata is retained; model reasoning text is omitted."
+}
