@@ -7,8 +7,9 @@ ANSIBLE_PLAYBOOK := $(VENV_DIR)/bin/ansible-playbook
 ANSIBLE_LINT := $(VENV_DIR)/bin/ansible-lint
 ANSIBLE_GALAXY := $(VENV_DIR)/bin/ansible-galaxy
 # Sealed phase baselines (evidence manifests checksum their sources) derive synthetic outcomes from built-in str
-# hash(), which Python randomizes per process. A fixed seed makes their tests reproducible without editing sealed code.
-PYTEST := PYTHONHASHSEED=0 $(VENV_DIR)/bin/pytest
+# hash(), which Python randomizes per process, and some match plain pytest text from a subprocess. A fixed seed and no
+# forced colour (an inherited FORCE_COLOR adds ANSI codes) make the verdict independent of the caller's environment.
+PYTEST := PYTHONHASHSEED=0 PY_COLORS=0 $(VENV_DIR)/bin/pytest
 YAMLLINT := $(VENV_DIR)/bin/yamllint
 # Harness budget (--timeout 900: a cold image build plus four convergence runs, measured 444 s with a cached image)
 # plus its two 120 s cleanup calls and a margin, so the harness always cleans up first.
