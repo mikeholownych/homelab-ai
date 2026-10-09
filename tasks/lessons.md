@@ -32,3 +32,9 @@
   qualification runs overlapped (shared single slot, same result file) and had to be discarded.
 - Rule: liveness checks before any relaunch use `rtk proxy ps` (or `pgrep -a` with a bracketed pattern) and the
   relaunch is refused if anything matches. Long runs are started with `setsid -f` so they are not tied to a tool shell.
+
+## Check where a dependency runs before judging its health
+- I reported "Vault is inactive" from `systemctl is-active vault` on the inference appliance; Vault runs on a separate
+  host, so a local unit says nothing about Vault access (operator correction, 2026-10-09).
+- Rule: for any external dependency, first establish where it runs and how this host reaches it (inventory address,
+  client config, credentials), then test that path. A missing local service is evidence only for local services.
