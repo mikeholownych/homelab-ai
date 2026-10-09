@@ -373,14 +373,30 @@ def create_gateway(
                 self.close_connection = True
                 stream_state["meta"] = meta
                 stream_state["started"] = True
-                runtime.metrics.inference_ttft_seconds.observe(time.monotonic() - t0, worker_id=meta["worker_id"])
+                stream_state["last_chunk_time"] = None
+                stream_state["first_token_observed"] = False
 
             def send_stream_delta(event: dict[str, Any]) -> None:
                 meta = stream_state.get("meta")
                 if meta is None:
                     raise OSError("upstream sent a delta before stream headers")
+                now = time.monotonic()
+                worker_id = meta.get("worker_id")
+                choices = event.get("choices", [])
+
+                if not stream_state.get("first_token_observed") and choices:
+                    stream_state["first_token_observed"] = True
+                    if worker_id:
+                        runtime.metrics.inference_ttft_seconds.observe(max(0.0, now - t0), worker_id=worker_id)
+                    stream_state["last_chunk_time"] = now
+                elif stream_state.get("first_token_observed") and choices:
+                    last_time = stream_state.get("last_chunk_time")
+                    if last_time is not None and worker_id:
+                        runtime.metrics.inference_inter_token_latency_seconds.observe(max(0.0, now - last_time), worker_id=worker_id)
+                    stream_state["last_chunk_time"] = now
+
                 chunk = {"id": meta["id"], "object": "chat.completion.chunk", "created": meta["created"],
-                         "model": meta["model"], "choices": event.get("choices", [])}
+                         "model": meta["model"], "choices": choices}
                 try:
                     self.wfile.write(f"data: {json.dumps(chunk, separators=(',', ':'))}\n\n".encode())
                     self.wfile.flush()

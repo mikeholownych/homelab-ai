@@ -25,11 +25,10 @@ NODE_METRICS = {
     "node_cpu_seconds_total", "node_memory_MemAvailable_bytes", "node_memory_MemTotal_bytes",
     "node_filesystem_avail_bytes", "node_filesystem_size_bytes", "node_systemd_unit_state",
 }
-# Declared in the gateway registry but never emitted today (non-streaming upstream, unused paths): a panel on
+# Declared in the gateway registry but never emitted today (unused paths): a panel on
 # these would be permanently empty, which looks like "no problem" instead of "no data".
 NEVER_EMITTED = {
-    "aihost_inference_ttft_seconds", "aihost_inference_streaming_requests_total",
-    "aihost_scheduler_queue_wait_seconds",
+    "aihost_inference_streaming_requests_total",
 }
 
 

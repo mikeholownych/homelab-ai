@@ -1364,6 +1364,21 @@ class OrchestratorRuntime:
         self.metrics.inference_duration_seconds.observe(total_duration, worker_id=worker.worker_id, model=worker.public_model_id, pool=pool_label)
         self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="completed", failure_class="none")
 
+        timings = output.get("timings")
+        if isinstance(timings, dict):
+            prompt_ms = timings.get("prompt_ms")
+            if prompt_ms is not None and isinstance(prompt_ms, (int, float)) and prompt_ms > 0:
+                self.metrics.inference_ttft_seconds.observe(prompt_ms / 1000.0, worker_id=worker.worker_id)
+            pred_per_token_ms = timings.get("predicted_per_token_ms")
+            if pred_per_token_ms is not None and isinstance(pred_per_token_ms, (int, float)) and pred_per_token_ms > 0:
+                self.metrics.inference_inter_token_latency_seconds.observe(pred_per_token_ms / 1000.0, worker_id=worker.worker_id)
+            elif timings.get("predicted_ms") and timings.get("predicted_n"):
+                n = timings["predicted_n"]
+                if isinstance(n, (int, float)) and n > 0:
+                    pred_ms = timings["predicted_ms"]
+                    if isinstance(pred_ms, (int, float)) and pred_ms > 0:
+                        self.metrics.inference_inter_token_latency_seconds.observe((pred_ms / n) / 1000.0, worker_id=worker.worker_id)
+
         prompt_tokens, completion_tokens, usage_source = _token_counts(output, plan.prompt_tokens)
         self.metrics.inference_prompt_tokens_total.inc(prompt_tokens, worker_id=worker.worker_id, model=worker.public_model_id, source=usage_source[0])
         self.metrics.inference_completion_tokens_total.inc(completion_tokens, worker_id=worker.worker_id, model=worker.public_model_id, source=usage_source[1])

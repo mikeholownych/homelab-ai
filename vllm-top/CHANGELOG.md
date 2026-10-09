@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.3
+
+**Added** — Ingestion of universal gateway telemetry for Time To First Token (TTFT), scheduler queue wait duration, and Inter-Token Latency (ITL). Maps `aihost_inference_ttft_seconds`, `aihost_scheduler_queue_wait_seconds`, and `aihost_inference_inter_token_latency_seconds` onto `vllm-top`'s internal latency model, enabling complete latency quantiles (p50, p99, avg) across all engine types (including llama.cpp workers).
+
 ## 0.7.1
 
 **Fixed** — GPU polling no longer rediscovers devices every 5s. `gpu::probe` ran `xpu-smi discovery -j`

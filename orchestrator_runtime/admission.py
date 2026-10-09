@@ -172,6 +172,9 @@ class AdmissionController:
                             if slot.inflight < slot.limit:
                                 slot.inflight += 1
                                 self._served[(ticket.pool, ticket.client_id)] = self._served.get((ticket.pool, ticket.client_id), 0) + 1
+                                wait_seconds = max(0.0, time.monotonic() - ticket.enqueued_at)
+                                if self.metrics is not None and hasattr(self.metrics, "scheduler_queue_wait_seconds"):
+                                    self.metrics.scheduler_queue_wait_seconds.observe(wait_seconds, worker_id=worker_id)
                                 return worker_id
                     self._cond.wait(0.25)
             finally:

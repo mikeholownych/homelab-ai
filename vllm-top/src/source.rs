@@ -263,8 +263,7 @@ pub fn samples_from_gateway_health(body: &serde_json::Value, worker: &str) -> Re
 }
 
 /// The gateway's own per-worker request metrics, renamed onto the series vllm-top already understands:
-/// end-to-end latency (time the gateway spent on the worker call) and completed requests. These are
-/// gateway-side measurements; TTFT, queue time and inter-token latency are not observable there.
+/// end-to-end latency, time to first token, scheduler queue wait, inter-token latency, and completed requests.
 pub fn samples_from_gateway_metrics(samples: &[Sample], worker: &str) -> Vec<Sample> {
     let mut out = Vec::new();
     for s in samples.iter().filter(|s| s.label("worker_id") == Some(worker)) {
@@ -272,6 +271,15 @@ pub fn samples_from_gateway_metrics(samples: &[Sample], worker: &str) -> Vec<Sam
             "aihost_inference_duration_seconds_bucket" => Some("vllm:e2e_request_latency_seconds_bucket"),
             "aihost_inference_duration_seconds_sum" => Some("vllm:e2e_request_latency_seconds_sum"),
             "aihost_inference_duration_seconds_count" => Some("vllm:e2e_request_latency_seconds_count"),
+            "aihost_inference_ttft_seconds_bucket" => Some("vllm:time_to_first_token_seconds_bucket"),
+            "aihost_inference_ttft_seconds_sum" => Some("vllm:time_to_first_token_seconds_sum"),
+            "aihost_inference_ttft_seconds_count" => Some("vllm:time_to_first_token_seconds_count"),
+            "aihost_scheduler_queue_wait_seconds_bucket" => Some("vllm:request_queue_time_seconds_bucket"),
+            "aihost_scheduler_queue_wait_seconds_sum" => Some("vllm:request_queue_time_seconds_sum"),
+            "aihost_scheduler_queue_wait_seconds_count" => Some("vllm:request_queue_time_seconds_count"),
+            "aihost_inference_inter_token_latency_seconds_bucket" => Some("vllm:inter_token_latency_seconds_bucket"),
+            "aihost_inference_inter_token_latency_seconds_sum" => Some("vllm:inter_token_latency_seconds_sum"),
+            "aihost_inference_inter_token_latency_seconds_count" => Some("vllm:inter_token_latency_seconds_count"),
             "aihost_inference_completions_total" if s.label("outcome") == Some("completed") => Some("vllm:request_success_total"),
             _ => None,
         };
@@ -520,11 +528,35 @@ aihost_inference_duration_seconds_count{worker_id="other",model="m"} 7
     fn gateway_request_metrics_become_e2e_latency_and_completions_for_one_worker_only() {
         let samples = samples_from_gateway_metrics(&promparse::parse(GATEWAY_METRICS), "w-llama");
         let snap = Snapshot::extract(&samples);
-        assert!(snap.has.e2e && !snap.has.ttft && !snap.has.queue && !snap.has.itl, "only e2e is measurable at the gateway");
+        assert!(snap.has.e2e && !snap.has.ttft && !snap.has.queue && !snap.has.itl, "only e2e is present in standard GATEWAY_METRICS");
         assert_eq!(snap.e2e.count, 418.0);
         assert!((snap.e2e.avg - 5.0).abs() < 1e-9, "avg = sum/count = 2090/418");
         assert!(snap.e2e.p99 > 1.0, "p99 comes from the real bucket layout incl. +Inf, got {}", snap.e2e.p99);
         assert_eq!(snap.success_total, 418.0, "only outcome=completed counts as a success");
         assert!(samples_from_gateway_metrics(&promparse::parse(GATEWAY_METRICS), "nobody").is_empty());
+    }
+
+    #[test]
+    fn gateway_request_metrics_map_ttft_queue_and_itl_when_present() {
+        const EXTENDED: &str = r#"
+aihost_inference_ttft_seconds_bucket{worker_id="w-llama",le="0.1"} 10
+aihost_inference_ttft_seconds_bucket{worker_id="w-llama",le="+Inf"} 10
+aihost_inference_ttft_seconds_sum{worker_id="w-llama"} 0.5
+aihost_inference_ttft_seconds_count{worker_id="w-llama"} 10
+aihost_scheduler_queue_wait_seconds_bucket{worker_id="w-llama",le="0.05"} 10
+aihost_scheduler_queue_wait_seconds_bucket{worker_id="w-llama",le="+Inf"} 10
+aihost_scheduler_queue_wait_seconds_sum{worker_id="w-llama"} 0.2
+aihost_scheduler_queue_wait_seconds_count{worker_id="w-llama"} 10
+aihost_inference_inter_token_latency_seconds_bucket{worker_id="w-llama",le="0.02"} 50
+aihost_inference_inter_token_latency_seconds_bucket{worker_id="w-llama",le="+Inf"} 50
+aihost_inference_inter_token_latency_seconds_sum{worker_id="w-llama"} 0.8
+aihost_inference_inter_token_latency_seconds_count{worker_id="w-llama"} 50
+"#;
+        let samples = samples_from_gateway_metrics(&promparse::parse(EXTENDED), "w-llama");
+        let snap = Snapshot::extract(&samples);
+        assert!(snap.has.ttft && snap.has.queue && snap.has.itl);
+        assert_eq!(snap.ttft.count, 10.0);
+        assert_eq!(snap.queue.count, 10.0);
+        assert_eq!(snap.itl.count, 50.0);
     }
 }

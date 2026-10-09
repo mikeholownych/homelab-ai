@@ -307,10 +307,15 @@ class MetricsRegistry:
         )
         self.inference_ttft_seconds = self._register_histogram(
             "aihost_inference_ttft_seconds",
-            "Time to first token in seconds. Only observed for streaming upstream calls; the gateway currently "
-            "calls workers without streaming, so this family has no samples.",
+            "Time to first token in seconds across streaming deltas and non-streaming prefill timings.",
             ("worker_id",),
             (0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        )
+        self.inference_inter_token_latency_seconds = self._register_histogram(
+            "aihost_inference_inter_token_latency_seconds",
+            "Inter-token latency (time per output token) in seconds across streaming deltas and completed requests.",
+            ("worker_id",),
+            (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
         )
         self.inference_prompt_tokens_total = self._register_counter(
             "aihost_inference_prompt_tokens_total",
@@ -389,7 +394,7 @@ class MetricsRegistry:
             "aihost_scheduler_queue_wait_seconds",
             "Time work waited in the gateway scheduler's own queue, in seconds. Engine-side queueing is not "
             "included; see aihost_engine_requests_waiting and aihost_worker_inflight.",
-            (),
+            ("worker_id",),
             (0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 15.0, 30.0, 60.0),
         )
         self.scheduler_dispatch_decisions_total = self._register_counter(
