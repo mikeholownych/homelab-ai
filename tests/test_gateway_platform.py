@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import signal
 import subprocess
 import sys
 import threading
@@ -576,3 +577,67 @@ def test_origin_classification():
     assert _is_local("127.0.0.1", local) and _is_local("::1", local) and _is_local("10.0.8.5", local)
     assert _is_local("::ffff:10.0.8.5", local)
     assert not _is_local("10.0.8.95", local)
+
+
+# ============================================================ process signals (R12 graceful stop)
+_SERVE_SCRIPT = """
+import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from orchestrator_gateway.__main__ import serve_until_stopped
+
+class Ok(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200); self.end_headers()
+    def log_message(self, *args):
+        pass
+
+servers = [ThreadingHTTPServer(("127.0.0.1", 0), Ok) for _ in range(2)]
+print(servers[0].server_address[1], servers[1].server_address[1], flush=True)
+def stop():
+    for server in servers:
+        server.shutdown()
+    print("stop-sequence-ran", flush=True)
+
+serve_until_stopped(servers, stop, poll_seconds=0.1)
+print("exited", flush=True)
+"""
+
+
+def _serving_process():
+    proc = subprocess.Popen([sys.executable, "-c", _SERVE_SCRIPT], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    ports = [int(p) for p in proc.stdout.readline().split()]
+    deadline = time.monotonic() + 10
+    for port in ports:  # both listeners answer, so the handlers are installed and the threads are serving
+        while True:
+            try:
+                conn = HTTPConnection("127.0.0.1", port, timeout=1)
+                conn.request("GET", "/")
+                assert conn.getresponse().status == 200
+                break
+            except OSError:
+                assert time.monotonic() < deadline, "listener never came up"
+                time.sleep(0.05)
+    return proc
+
+
+def test_sigterm_runs_the_stop_sequence_and_exits_promptly_every_time():
+    # 2026-10-09: a production stop hung until systemd's SIGKILL (10.5 min) with the listeners still serving; the old
+    # handler started a thread inside the signal handler. The handler now only records the signal.
+    for _ in range(5):
+        proc = _serving_process()
+        proc.send_signal(signal.SIGTERM)
+        out, _err = proc.communicate(timeout=10)
+        assert proc.returncode == 0
+        assert out.splitlines()[-2:] == ["stop-sequence-ran", "exited"]
+
+
+def test_sigusr1_dumps_every_thread_stack_without_stopping():
+    proc = _serving_process()
+    try:
+        proc.send_signal(signal.SIGUSR1)
+        time.sleep(0.5)
+        assert proc.poll() is None
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        _out, err = proc.communicate(timeout=10)
+    assert "serve_forever" in err and proc.returncode == 0

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import faulthandler
 import hashlib
 import json
 import os
@@ -7,6 +8,7 @@ import signal
 import ssl
 import sys
 import threading
+import time
 from pathlib import Path
 
 from orchestrator_gateway import GatewayServer, create_gateway
@@ -217,37 +219,42 @@ def main() -> None:
         servers.append(remote)
 
     grace = float(os.environ.get("ORCHESTRATOR_SHUTDOWN_GRACE_SECONDS", "600"))
-    stopped = threading.Event()
 
-    def graceful_stop(signum, frame) -> None:  # R12
-        if stopped.is_set():
-            return
-        stopped.set()
+    def stop_sequence() -> None:  # R12
+        runtime.begin_shutdown()
+        for server in servers:
+            server.shutdown()  # stop accepting; in-flight handler threads continue
+        drained = runtime.wait_idle(grace)
+        runtime.save_state()
+        if runtime.clients is not None:
+            runtime.clients.save_state()
+        evidence.append("gateway_stopped", graceful=drained, inflight_at_exit=runtime.inflight_count())
+        health.stop()
 
-        def run() -> None:
-            runtime.begin_shutdown()
-            for server in servers:
-                server.shutdown()  # stop accepting; in-flight handler threads continue
-            drained = runtime.wait_idle(grace)
-            runtime.save_state()
-            if runtime.clients is not None:
-                runtime.clients.save_state()
-            evidence.append("gateway_stopped", graceful=drained, inflight_at_exit=runtime.inflight_count())
-            health.stop()
+    serve_until_stopped(servers, stop_sequence)
+    sys.exit(0)
 
-        threading.Thread(target=run, name="graceful-stop").start()
 
-    signal.signal(signal.SIGTERM, graceful_stop)
-    signal.signal(signal.SIGINT, graceful_stop)
+def serve_until_stopped(servers: list, stop_sequence, poll_seconds: float = 0.5) -> None:
+    """Run every listener until SIGTERM/SIGINT, then run ``stop_sequence`` on the main thread.
+
+    The signal handler only records the signal: starting a thread (or touching any lock) inside a handler can deadlock
+    when the signal interrupts the main thread while it holds a threading lock, which once left a stop hanging until
+    systemd's SIGKILL (2026-10-09). The main thread waits in bounded steps, so a pending handler always runs promptly.
+    SIGUSR1 dumps every thread's stack to stderr (the journal) for diagnosing a stuck process."""
+    received: list[int] = []
+    signal.signal(signal.SIGTERM, lambda signum, frame: received.append(signum))
+    signal.signal(signal.SIGINT, lambda signum, frame: received.append(signum))
+    faulthandler.register(signal.SIGUSR1, all_threads=True)
     threads = [threading.Thread(target=s.serve_forever, name=f"listener-{i}") for i, s in enumerate(servers)]
     for thread in threads:
         thread.start()
+    while not received and any(thread.is_alive() for thread in threads):
+        time.sleep(poll_seconds)
+    if received:
+        stop_sequence()
     for thread in threads:
         thread.join()
-    for thread in threading.enumerate():
-        if thread.name == "graceful-stop":
-            thread.join()
-    sys.exit(0)
 
 
 if __name__ == "__main__":
