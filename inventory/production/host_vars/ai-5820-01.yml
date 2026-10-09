@@ -337,7 +337,6 @@ orchestrator_gateway_workers:
     gpu_assignment: ["0"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal]
     context_limit: 65536
-    max_output_tokens: 1024
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
     evidence_ids: [qbudget-qwen36-stageb-2026-10-09, qualification-qwen36-2026-10-09]
@@ -362,7 +361,6 @@ orchestrator_gateway_workers:
     gpu_assignment: ["1"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
     context_limit: 65536
-    max_output_tokens: 1024
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
     evidence_ids: [qbudget-flashnext-2026-10-08, qualification-flashnext-2026-10-08]
@@ -408,7 +406,6 @@ llama_cpp_container_candidate_profiles:
       gpu_assignment: ["0"]
       capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
       context_limit: 65536
-      max_output_tokens: 16384
       max_concurrency: 1
       resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
       evidence_ids: [qbudget-qwen36-stageb-2026-10-09, qualification-qwen36-2026-10-09]
@@ -450,7 +447,6 @@ llama_cpp_container_candidate_profiles:
       gpu_assignment: ["1"]
       capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
       context_limit: 65536
-      max_output_tokens: 16384
       max_concurrency: 1
       resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
       evidence_ids: [qbudget-flashnext-2026-10-08, qualification-flashnext-2026-10-08]
@@ -491,7 +487,6 @@ llama_cpp_container_candidate_profiles:
       gpu_assignment: ["1"]
       capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
       context_limit: 65536
-      max_output_tokens: 16384
       max_concurrency: 1
       resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
       evidence_ids: [eng-hard-b-q38-27b-q4km]

@@ -47,8 +47,9 @@ Incumbents (controls): Qwen3-Coder-30B-A3B Q4_K_M (lead), Qwen3.5-27B Q4_K_M (de
       A candidate must not regress decode tok/s for its pool by more than an agreed threshold (TBD with operator).
 - [x] G3 Quality (SATISFIED: evaluations/engx/REPORT-2026-10-07.md): the same engx engineering bench that justified the current routes, on the same tasks and seeds,
       with incumbents re-run in the same window.
-- [ ] G4 Promotion (ACTIVE: W-PROMOTE): Ansible inventory change only (`llama_cpp_container_workers` and `orchestrator_gateway_workers`
-      digest, revision and evidence_ids). Rollback = revert the commit and re-converge.
+- [x] G4 Promotion (W-PROMOTE): Ansible inventory promotes Qwen3.6 lead and Flash-Next deep with pinned digest, revision,
+      evidence IDs and capability evidence; commit `998189a`. Rollback/re-convergence evidence is in
+      `evaluations/engx/QUALIFICATION-QFINAL-2026-10-09.md`.
 
 ## Execution notes
 - Test one GPU at a time. The gateway fallback keeps serving on the other pool, so production runs on
@@ -214,10 +215,13 @@ Gaps:
     is accepted only for meta skuid <gateway uid>; everything else is dropped and counted.
   - Alternative to weigh: workers on unix sockets readable only by the gateway.
   - Keys readable only by the gateway uid.
-- [ ] Candidate/qualification path through the gateway: register a candidate as a non-routable pool reachable only by explicit
+- [x] Candidate/qualification path through the gateway: register a candidate as a non-routable pool reachable only by explicit
       model alias (like engineering/deep). engx then points at the gateway. No more direct-port evaluation runs after this lands.
+      Verified during Q-BUDGET/Q-TOOLS/Q-LONGCTX and Q-FINAL: candidate aliases were reached from the remote client through
+      the TLS gateway; candidate workers were inventory-managed and removed after qualification. Evidence is under
+      evaluations/engx/results/ and in QUALIFICATION-QFINAL-2026-10-09.md.
 - [x] Enforce via Ansible: inventory-derived nftables policy, atomic reload and syntax preflight are live; gateway runs as uid 995 with worker credentials handed through systemd; remote TLS listener is live at `10.0.8.5:8443`, allowed for `10.0.8.95/32`; both llama workers and gateway are active (2026-10-07).
-- [ ] Detection: vllm-top's engine-agnostic discovery flags any inference server NOT registered with the gateway as a policy
+- [x] Detection: vllm-top's engine-agnostic discovery flags any inference server NOT registered with the gateway as a policy
       violation. Health/metrics remain observable via the gateway's /health engine_stats.
 - [x] Verify direct worker-port connects to 8000 and 8001 are refused from `mike`, `root`, and `aihost-runtime`; gateway uid 995 connects; direct-denial counter increments; remote authenticated chat succeeds; local workload is refused with HTTP 403 (2026-10-07).
 - [x] Verify vllm-top shows the violation for an ad-hoc server after W-VTOP: header `POLICY 2 outside gateway` with both
@@ -248,9 +252,10 @@ client is allowlisted as `10.0.8.95/32`. The TLS gateway and nftables policy are
   - Inventory every host-side component that calls the gateway or workers (timers, gateway self-checks, smoke/validate plays)
     and convert workload-generating ones to remote execution or to non-inference probes.
 - [x] On-host originator retirement: archive verified byte-for-byte against all 115 non-cache files in the retired engx tree; Ansible removed that checkout, the disabled benchmark timer/service, retired vLLM unit files, and benchmark/vLLM helper binaries (2026-10-07).
-- [ ] Remote evaluation path: engx runs from a client machine (the bwrap sandbox runs on the client; give the client python
+- [x] Remote evaluation path: engx runs from a client machine (the bwrap sandbox runs on the client; give the client python
       pytest) against the gateway's candidate alias pool. Retire cand.sh/runqueue.sh as on-host tools. Candidate lifecycle
       (start/stop a candidate worker) is done by Ansible from the controller, not by scripts on the host.
+      Verified by Q-BUDGET, Q-TOOLS, Q-LONGCTX and Q-FINAL from the controller; candidate lifecycle used playbooks/candidate.yml.
 - [x] Enforce via Ansible and verify the gateway path: remote TLS listener and nftables allowlist are live; remote authenticated chat returned HTTP 200; host-origin workload returned 403; loopback `/health` and `/metrics` return HTTP 200. The former OpenCode SSH tunnel is disabled (2026-10-07).
 - [x] Verify vllm-top engine-agnostic discovery behavior after W-VTOP (2026-10-08, v1.0.2): ad-hoc servers are found after console
       start, flagged and expired; the console no longer probes the gateway monitoring port (local_origin_refused_total flat at 90
@@ -324,15 +329,16 @@ Client-facing gaps found 2026-10-06 while reviewing Nexus context handling (Nexu
       value), so the worker generates until its context is full. Apply a route/worker default completion budget (including
       a reasoning budget, see R8) when the client omits it.
    d. Offer a token-count endpoint through the gateway (e.g. /tokenize per alias) so clients can budget exactly.
-- [ ] Design doc and review (per-engine adapter contract; tokenizer strategy; admission/queue/429 semantics; adaptive
+- [x] Design doc and review (per-engine adapter contract; tokenizer strategy; admission/queue/429 semantics; adaptive
       algorithm and bounds; interaction with routing/fallback and the gateway-only policy)
-- [ ] Implement with tests:
+- [x] Implement with tests:
   - model swap with different n_ctx/slots is picked up without config edits;
   - exact-token clamping at the context boundary;
   - saturation gives queueing/429 rather than worker overload;
   - concurrency adapts under induced slowdown and recovers;
   - mismatch alerting.
-- [ ] Remove max_output_tokens and the ORCHESTRATOR_MAX_OUTPUT_TOKENS=512 default once dynamic sizing lands.
+- [x] Remove max_output_tokens and the ORCHESTRATOR_MAX_OUTPUT_TOKENS=512 default once dynamic sizing lands.
+      Dynamic sizing is implemented; the obsolete record/config field was removed from runtime, production inventory and tests.
 
 ## Gateway: smart-routing capabilities (operator approved all 12, 2026-10-06; not started)
 Already present: deterministic first-match route table (model alias, task_class, has_tools, prompt size) with fallback pools;
@@ -340,30 +346,30 @@ X-Session-ID affinity hashing for warm prompt caches; bearer auth; streaming wit
 counting; evidence log; metrics.
 Each item gets a short design note and review before code, ships via Ansible, and has tests. Suggested first batch: R1, R2, R3, R5
 (small, and each fixes a problem that will hit soon with one slot per pool).
-- [ ] R1 Cancellation: when a client disconnects or times out, abort generation on the worker and free the slot (llama.cpp and
+- [x] R1 Cancellation: when a client disconnects or times out, abort generation on the worker and free the slot (llama.cpp and
       vLLM both stop on connection close; verify per engine). Evidence and metrics record cancellations.
-- [ ] R2 Priority and fairness: interactive / batch / background classes (header + per-client default). Interactive goes first;
+- [x] R2 Priority and fairness: interactive / batch / background classes (header + per-client default). Interactive goes first;
       fair share between clients. Ties into R6 and the dynamic admission queue.
-- [ ] R3 Deterministic escalation: rules like "attempt >= 2 -> deep" (X-Attempt header) or client-reported failure -> deep pool,
+- [x] R3 Deterministic escalation: rules like "attempt >= 2 -> deep" (X-Attempt header) or client-reported failure -> deep pool,
       recorded in evidence. No LLM-based router.
-- [ ] R4 Shadow and canary routing: mirror N% of a route to a candidate pool (outputs compared and logged, never returned) or send
+- [x] R4 Shadow and canary routing: mirror N% of a route to a candidate pool (outputs compared and logged, never returned) or send
       it a small live share. This becomes THE qualification path under the gateway-only and remote-origin policies, replacing
       on-host engx runs.
-- [ ] R5 Drain and safe swap: per-worker drain state (no new admissions, in-flight completes, then restart or swap); Ansible model
+- [x] R5 Drain and safe swap: per-worker drain state (no new admissions, in-flight completes, then restart or swap); Ansible model
       swaps drain first; drain state visible in /health and vllm-top.
-- [ ] R6 Per-client identity, quotas and budgets: a key per client; client id on every evidence record; per-client token budgets
+- [x] R6 Per-client identity, quotas and budgets: a key per client; client id on every evidence record; per-client token budgets
       and rate limits that return 429 with Retry-After.
-- [ ] R7 Deadlines and safe retries: client deadline header; queued requests expire at the deadline; retry/fallback only BEFORE
+- [x] R7 Deadlines and safe retries: client deadline header; queued requests expire at the deadline; retry/fallback only BEFORE
       the first streamed token, never mid-stream.
-- [ ] R8 Reasoning control per route: route-level enable_thinking and reasoning-token budget; reasoning_content presented the same
+- [x] R8 Reasoning control per route: route-level enable_thinking and reasoning-token budget; reasoning_content presented the same
       way across engines. Defaults are set from Phase B (thinking-on) evaluation evidence.
-- [ ] R9 Capability-checked routing: detect requirements (response_format/json_schema, tools, vision, long context) and route only
+- [x] R9 Capability-checked routing: detect requirements (response_format/json_schema, tools, vision, long context) and route only
       to capable workers (capabilities discovered with the dynamic limits). Clean rejection otherwise.
-- [ ] R10 Outcome feedback loop: an endpoint where clients report pass/fail per request id; success rate per route and pool from
+- [x] R10 Outcome feedback loop: an endpoint where clients report pass/fail per request id; success rate per route and pool from
       production data; route-table changes cite this evidence.
-- [ ] R11 Evidence integrity and data handling: hash-chained, tamper-evident evidence log; explicit prompt policy (store / redact /
+- [x] R11 Evidence integrity and data handling: hash-chained, tamper-evident evidence log; explicit prompt policy (store / redact /
       hash only), default hash-only plus metadata, because prompts may contain secrets.
-- [ ] R12 Graceful gateway restart: drain the gateway itself (stop accepting, finish in-flight streams) on restart/redeploy;
+- [x] R12 Graceful gateway restart: drain the gateway itself (stop accepting, finish in-flight streams) on restart/redeploy;
       systemd stop timeout sized to it.
 Deliberately excluded for now: an LLM-based prompt classifier in the router (breaks deterministic/auditable routing; R3 covers
 most of the value), on-demand model loading per request (30-90 s load), embeddings/rerank endpoints until a client needs them.
@@ -396,7 +402,7 @@ Topics to shape when it is picked up:
 - [ ] Remediation design: evaluate (1) worker hard budget, (2) client-selected route/profile policy enforced server-side,
       (3) gateway total generation bounds including a default when max_tokens is absent, (4) distinct telemetry for budget
       exhaustion. Fail closed. No production change without separate authorization.
-- [ ] Choose the budget from Phase B BOUNDED data (4096 is the first point only); add budget points if the distributions require it.
+- [x] Choose the budget from Phase B BOUNDED data (4096 is the first point only); add budget points if the distributions require it. Q-BUDGET Stage B measured Qwen3.6 at 2048/4096/8192 via gateway and selects 8192 (76.7%, vs 70.0% and 46.7%); see `evaluations/engx/QBUDGET-2026-10-08.md`.
 
 ## Phase B redesign (operator-approved 2026-10-07)
 - UNBOUNDED_REASONING runs terminated 2026-10-07 ~04:00Z. Evidence preserved unchanged in ~/engx/evidence/UNBOUNDED_REASONING/:
@@ -429,25 +435,34 @@ Awaiting operator decisions:
 - [x] Deep-pool choice DECIDED: Flash-Next, with Qwen3.8-27B as fallback if operational qualification fails (operator brief section 1); execution in Q-*/W-PROMOTE
 - [x] Glimmer: DROPPED (operator brief 2026-10-07)
 New work made apparent (report section 6):
-- [ ] Reasoning-budget sweep 2048/8192 (+12288 if needed)
-- [ ] Long-context qualification (32-60K real transcripts); mandatory for Flash-Next (64K fit unverified by llama.cpp)
-- [ ] Tool-calling / multi-turn agentic qualification (replay Nexus sessions)
-- [ ] Flash-Next mmap n-gram table: page-cache residency and major-fault monitoring
-- [ ] Re-qualify the chosen models through the gateway from a remote client (depends on R4 candidate alias pool)
-- [ ] Capability fields: reasoning_controllable, reasoning_budget, output_contract_compliance (verified)
+- [x] Reasoning-budget sweep 2048/8192 (+12288 if needed): Flash-Next 2048/4096/8192 and Qwen3.6 2048/4096/8192 completed; see `evaluations/engx/QBUDGET-2026-10-08.md`. Qwen3.6 selects 8192 under quality-over-speed; no additional point required by Q-BUDGET.
+- [x] Long-context qualification (32-60K real transcripts); mandatory for Flash-Next (64K fit unverified by llama.cpp). Flash-Next and Qwen3.6 candidate probes passed via the remote gateway; see `evaluations/engx/QUALIFICATION-FLASHNEXT-2026-10-08.md` and `evaluations/engx/QUALIFICATION-QWEN36-2026-10-09.md`.
+- [x] Tool-calling / multi-turn agentic qualification (replay Nexus sessions). Both selected models passed the synthetic checks and 20 recorded replay cut points; see the qualification reports above.
+- [x] Flash-Next mmap n-gram table: page-cache residency and major-fault monitoring. Before/after snapshots are retained in `evaluations/engx/results/qmmap-20261008/`; see `evaluations/engx/QUALIFICATION-FLASHNEXT-2026-10-08.md`.
+- [x] Re-qualify the chosen models through the gateway from a remote client (depends on R4 candidate alias pool). Q-TOOLS and Q-LONGCTX completed through TLS gateway candidate aliases for both selected models; see the qualification reports above.
+- [x] Capability fields: reasoning_controllable, reasoning_budget, output_contract_compliance (verified) for both selected artifacts;
+      production `/v1/models` and evidence IDs are captured in `evaluations/engx/QUALIFICATION-QFINAL-2026-10-09.md`.
 - [x] Sequencing proposal: SUPERSEDED by the execution DAG in docs/closeout/00-reconciliation.md, informed by the above (next deliverable)
 
 ## Closeout workstream (operator brief 2026-10-07): complete all non-deferred authorized work
 Operator confirmation (2026-10-07): all remaining work in this file is authorized for completion, including production worker promotion and the required qualification/deployment/reboot/rollback checks. Only work explicitly marked deferred is excluded.
 Reconciliation, classification and execution DAG: docs/closeout/00-reconciliation.md. Designs (each with a review section):
 docs/design/01-06.
+- [x] Q-FINAL: production aliases pass remote inference after reboot; both workers load after boot with zero restarts and
+      both B65 PCI devices enumerate. The first reboot exposed a missing systemd dependency, which is fixed and verified by a
+      second reboot. Rollback/re-convergence passed with a recorded limitation: pre-promotion Qwen3.5 cannot satisfy the default
+      `reasoning` capability route and returns 422 unless the client explicitly selects reasoning off. The generic `validate.yml`
+      aggregation still reports 22 checks as `NOT_TESTED`; direct production checks and exact remaining limits are in
+      `evaluations/engx/QUALIFICATION-QFINAL-2026-10-09.md`.
 New findings from the code review (folded into the workstreams):
 - [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed in shared working tree; deployment remains part of W-REASON
 - [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification implemented in shared working tree; deployment remains in R11
 - [x] N3 simulated streaming; client disconnect does not stop generation → real upstream SSE and disconnect cancellation implemented in shared working tree; deployment remains in R1/R7
 - [x] N4 retired vLLM units/role/scripts still installed; vllm_xpu host 0.0.0.0 in inventory → loopback inventory binding, vLLM role removed from the inference play, and retired units/on-host originators removed via Ansible after archive verification; live service state checked
-- [ ] N5 hand-made ufw rules; inference port policy incomplete (8001) → W-ACCESS/W-ORIGIN
-- [ ] N6 inventory max_concurrency/context treated as authoritative; eligibility uses estimates → W-LIMITS
+- [x] N5 hand-made ufw rules; inference port policy incomplete (8001) → W-ACCESS/W-ORIGIN; Ansible nftables policy now
+      derives worker/candidate ports from inventory, and live checks refused non-gateway connections to 8000/8001/8003.
+- [x] N6 inventory max_concurrency/context treated as authoritative; eligibility uses estimates → W-LIMITS; observed capacity,
+      fit checking, mismatch evidence, queue limits and AIMD are covered by gateway tests and the deployed f31218c release.
 
 ## TLS client-compatibility defect (operator-directed 2026-10-07)
 The gateway URL is `https://10.0.8.5:8443/v1`; OpenCode config is `/home/mike/.config/opencode/opencode.jsonc`.

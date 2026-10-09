@@ -95,7 +95,6 @@ class WorkerRecord:
     gpu_assignment: tuple[str, ...]
     capabilities: frozenset[str]
     context_limit: int
-    max_output_tokens: int
     max_concurrency: int
     resource_envelope: dict[str, Any]
     evidence_ids: tuple[str, ...]

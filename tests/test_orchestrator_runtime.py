@@ -30,7 +30,6 @@ def worker(worker_id: str, *, capabilities=("navigation",), status="measured"):
         gpu_assignment=(worker_id,),
         capabilities=frozenset(capabilities),
         context_limit=16_384,
-        max_output_tokens=512,
         max_concurrency=2,
         resource_envelope={"memory_reserve_gib": 32},
         evidence_ids=(f"evidence-{worker_id}",),

@@ -62,7 +62,8 @@ Behaviour:
 - **Fit-checked selection:** a worker is eligible for a request only if `prompt_tokens + min_completion + margin <= ctx_per_slot`.
   Counting needs a worker (each engine has its own tokenizer), so selection counts on the first candidate and re-counts on a
   fallback candidate if its `model_identity` differs.
-- Remove `WorkerRecord.max_output_tokens` and the `ORCHESTRATOR_MAX_OUTPUT_TOKENS=512` default once this lands (todo item).
+- `WorkerRecord.max_output_tokens`, inventory `max_output_tokens`, and the `ORCHESTRATOR_MAX_OUTPUT_TOKENS=512` default are
+  removed now that live capacity and route-level finite completion bounds are implemented.
 
 ## 4. Capabilities with provenance (`orchestrator_runtime/capabilities.py`)
 Capability names:
