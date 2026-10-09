@@ -230,8 +230,8 @@ inference_policy_remote_gateway_port: 8443
 inference_policy_gateway_client_cidrs: [10.0.8.95/32]
 inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
-orchestrator_gateway_release_id: t5820-gateway-c74ebaf
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-c74ebaf
+orchestrator_gateway_release_id: t5820-gateway-b41eaa1
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-b41eaa1
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
 orchestrator_gateway_capability_evidence:
   # Rollback target (pre-promotion deep model, Qwen3.5-27B). Its chat template sets neither llama.cpp reasoning flag,
@@ -325,11 +325,11 @@ orchestrator_gateway_model_aliases:
   engineering/deep: {pool: deep, reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}}
 # R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
 orchestrator_gateway_clients:
-  - {client_id: nexus, scopes: [workload], legacy_token_file: /etc/local-ai/orchestrator/client-token}
-  - {client_id: opencode, scopes: [workload], legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token}
-  - {client_id: operator, scopes: [workload, qualification, monitoring]}
+  - {client_id: nexus, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/client-token}
+  - {client_id: opencode, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token}
+  - {client_id: operator, scopes: [workload, qualification, monitoring, telemetry]}
   - {client_id: qualification, scopes: [qualification], default_priority: batch, max_priority: batch}
-  - {client_id: ansible-admin, scopes: [admin, monitoring]}
+  - {client_id: ansible-admin, scopes: [admin, monitoring, telemetry]}
 orchestrator_gateway_workers:
   - worker_id: b0-live-llama-worker1
     credential_name: worker-lead-token
