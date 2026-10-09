@@ -1,0 +1,90 @@
+{
+ "label": "rollback",
+ "at": "2026-10-09T12:13:35Z",
+ "models": {
+  "engineering/b0": {
+   "serving": [
+    [
+     "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M",
+     "sha256:fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad"
+    ]
+   ],
+   "reasoning": {
+    "budget": 0,
+    "mode": "off"
+   },
+   "reasoning_capability": {
+    "available": false,
+    "provenance": "unavailable"
+   }
+  },
+  "engineering/deep": {
+   "serving": [
+    [
+     "Qwen3.5-27B-Q4_K_M",
+     "sha256:84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806"
+    ]
+   ],
+   "reasoning": {
+    "budget": 4096,
+    "mode": "on"
+   },
+   "reasoning_capability": {
+    "available": true,
+    "provenance": "verified",
+    "evidence": [
+     "eng-hard-b-q35-27b-q4km"
+    ],
+    "verified_at": "2026-10-07"
+   }
+  },
+  "engineering/lead": {
+   "serving": [
+    [
+     "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M",
+     "sha256:fadc3e5f8d42bf7e894a785b05082e47daee4df26680389817e2093056f088ad"
+    ]
+   ],
+   "reasoning": {
+    "budget": 0,
+    "mode": "off"
+   },
+   "reasoning_capability": {
+    "available": false,
+    "provenance": "unavailable"
+   }
+  }
+ },
+ "requests": [
+  {
+   "alias": "engineering/deep",
+   "reasoning_profile": "default",
+   "status": 200,
+   "finish": "stop",
+   "content": "READY",
+   "reasoning_present": true,
+   "served_model": "Qwen3.5-27B-Q4_K_M",
+   "route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false"
+  },
+  {
+   "alias": "engineering/deep",
+   "reasoning_profile": "off",
+   "status": 200,
+   "finish": "stop",
+   "content": "READY",
+   "reasoning_present": false,
+   "served_model": "Qwen3.5-27B-Q4_K_M",
+   "route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false"
+  },
+  {
+   "alias": "engineering/b0",
+   "reasoning_profile": "default",
+   "status": 200,
+   "finish": "stop",
+   "content": "READY",
+   "reasoning_present": false,
+   "served_model": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M",
+   "route": "rule=default;pool=lead;worker=b0-live-llama-worker1;fallback=false"
+  }
+ ]
+}

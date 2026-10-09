@@ -1,0 +1,129 @@
+
+PLAY [Converge inference serving stack] ****************************************
+
+TASK [Read service states] *****************************************************
+ok: [ai-5820-01]
+
+TASK [Refuse to change serving while a candidate holds a GPU] ******************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Validate T5820 gateway inputs] ********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Validate the model route table with the gateway's own router (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Create gateway directories] ***********************
+ok: [ai-5820-01] => (item=/var/lib/aihost/releases/t5820-gateway-3d9dea9)
+ok: [ai-5820-01] => (item=/etc/local-ai/orchestrator)
+
+TASK [orchestrator_gateway : Create remote gateway certificate directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create controller gateway PKI directory] **********
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Generate or validate private gateway CA and server leaf on controller] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install gateway TLS private key] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install CA-signed gateway TLS server leaf] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Ensure controller CA trust artifact directory exists] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Ensure controller server certificate evidence directory exists] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Publish public gateway CA certificate for client trust] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Publish public gateway server leaf as deployment evidence] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install gateway CA in controller OS trust store] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install public gateway CA at configured controller client trust paths] ***
+ok: [ai-5820-01 -> localhost] => (item=/home/mike/.config/nexus/t5820-gateway-ca.crt)
+ok: [ai-5820-01 -> localhost] => (item=/home/mike/.config/opencode/t5820-gateway-ca.crt)
+
+TASK [orchestrator_gateway : Read existing gateway client credential] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Set gateway client credential from protected file or generate one] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway client credential] ****************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Remove obsolete manual gateway drop-ins] **********
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/10-t5820-opencode-client.conf)
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/15-release.conf)
+
+TASK [orchestrator_gateway : Install gateway source release] *******************
+ok: [ai-5820-01] => (item=orchestrator_gateway)
+ok: [ai-5820-01] => (item=orchestrator_runtime)
+ok: [ai-5820-01] => (item=orchestrator_contract)
+
+TASK [orchestrator_gateway : Record gateway release identity] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create private gateway evidence directory] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create gateway evidence chain owned by the service account] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create the root-only client token directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Read existing client tokens] **********************
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Keep existing client tokens and generate missing ones] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Install root-only client token files for delivery to clients] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+changed: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Render the client registry (token digests only)] ***
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Render gateway non-secret environment] ************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway readiness probe] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway systemd unit] *********************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Establish persistent gateway state] ***************
+ok: [ai-5820-01]
+
+RUNNING HANDLER [orchestrator_gateway : Restart gateway service] ***************
+changed: [ai-5820-01]
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=34   changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+

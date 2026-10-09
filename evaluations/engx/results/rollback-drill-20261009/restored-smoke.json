@@ -1,0 +1,95 @@
+{
+ "label": "restored-promoted",
+ "at": "2026-10-09T12:24:31Z",
+ "models": {
+  "engineering/b0": {
+   "serving": [
+    [
+     "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61"
+    ]
+   ],
+   "reasoning": {
+    "budget": 8192,
+    "mode": "off"
+   },
+   "reasoning_capability": {
+    "available": true,
+    "provenance": "declared",
+    "evidence": [
+     "engine"
+    ]
+   }
+  },
+  "engineering/deep": {
+   "serving": [
+    [
+     "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2"
+    ]
+   ],
+   "reasoning": {
+    "budget": 4096,
+    "mode": "on"
+   },
+   "reasoning_capability": {
+    "available": true,
+    "provenance": "declared",
+    "evidence": [
+     "engine"
+    ]
+   }
+  },
+  "engineering/lead": {
+   "serving": [
+    [
+     "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61"
+    ]
+   ],
+   "reasoning": {
+    "budget": 8192,
+    "mode": "off"
+   },
+   "reasoning_capability": {
+    "available": true,
+    "provenance": "declared",
+    "evidence": [
+     "engine"
+    ]
+   }
+  }
+ },
+ "requests": [
+  {
+   "alias": "engineering/deep",
+   "reasoning_profile": "default",
+   "status": 200,
+   "finish": "stop",
+   "content": "READY",
+   "reasoning_present": true,
+   "served_model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+   "route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false"
+  },
+  {
+   "alias": "engineering/deep",
+   "reasoning_profile": "off",
+   "status": 200,
+   "finish": "stop",
+   "content": "READY",
+   "reasoning_present": false,
+   "served_model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+   "route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false"
+  },
+  {
+   "alias": "engineering/b0",
+   "reasoning_profile": "default",
+   "status": 200,
+   "finish": "stop",
+   "content": "READY",
+   "reasoning_present": false,
+   "served_model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+   "route": "rule=default;pool=lead;worker=b0-live-llama-worker1;fallback=false"
+  }
+ ]
+}
