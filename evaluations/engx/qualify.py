@@ -3,6 +3,7 @@
 
   qualify.py tools   <label> <base_url> <keyfile|-> <model> [sessions_dir]
   qualify.py longctx <label> <base_url> <keyfile|-> <model> [sessions_dir]
+  qualify.py contract <label> <base_url> <keyfile|-> <model>
 
 Everything goes through the gateway: requests, token counts (/v1/tokenize with the worker's own tokenizer) and the
 alias's advertised limits (/v1/models). Nothing here contacts a worker or runs on the inference host.
@@ -413,6 +414,62 @@ def filler_text(sessions, need_chars):
     raise SystemExit("not enough replay text for the long-context sizes")
 
 
+# Output contract (capability `output_contract_compliance`): under the served configuration a completion ends normally with
+# a final answer in the requested format; reasoning stays in reasoning_content and no reasoning or template markup leaks
+# into content. This is the property the unbounded-reasoning defect broke (REPORT-2026-10-07 section 6).
+CONTRACT_LEAKS = ("<think>", "</think>", "<|im_start|>", "<|im_end|>", "<|endoftext|>", "<tool_call>", "<|channel|>",
+                  "Reasoning budget exhausted")
+CONTRACT_PROMPTS = {
+    "plain_line": ("A train leaves at 09:47 and the trip takes 2 h 38 min. Reply with exactly one line: ARRIVAL=<HH:MM>.",
+                   lambda text: text.strip() == "ARRIVAL=12:25"),
+    "json_object": ("Return a JSON object with keys \"sum\" (the sum of 17, 25 and 58) and \"even\" (whether that sum is even). "
+                    "Return only the JSON object.",
+                    lambda text: (lambda d: isinstance(d, dict) and d.get("sum") == 100 and d.get("even") is True)(_json_or_none(text))),
+    "file_blocks": ("Write a Python module that defines clamp(x, lo, hi) returning x limited to [lo, hi]. Reply with the file "
+                    "introduced by a line `### FILE: clamp.py` followed by one fenced python code block, and nothing else.",
+                    lambda text: "### FILE: clamp.py" in text and "```" in text and "def clamp(" in text),
+}
+
+
+def _json_or_none(text):
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`").removeprefix("json").strip()
+    try:
+        return json.loads(text)
+    except ValueError:
+        return None
+
+
+def check_contract(gw, name):
+    prompt, satisfied = CONTRACT_PROMPTS[name]
+    extra = {"response_format": {"type": "json_object"}} if name == "json_object" else {}
+    status, r, hdrs, secs = gw.chat([{"role": "user", "content": prompt}], **extra)
+    s = summary(status, r, secs, hdrs)
+    if status != 200:
+        s["pass"] = False
+        return s
+    m = r["choices"][0]["message"]
+    content, usage = m.get("content") or "", r.get("usage") or {}
+    s.update({"leaks": [x for x in CONTRACT_LEAKS if x in content], "format_ok": bool(satisfied(content)),
+              "reasoning_chars": len(m.get("reasoning_content") or "")})
+    s["pass"] = (s["finish"] == "stop" and not s["leaks"] and s["format_ok"] and not tool_calls(m)
+                 and isinstance(usage.get("completion_tokens"), int) and usage["completion_tokens"] > 0)
+    return s
+
+
+def run_contract(gw):
+    results = {}
+    for name in CONTRACT_PROMPTS:
+        results[f"contract_{name}"] = []
+        for trial in range(1, TRIALS + 1):
+            r = check_contract(gw, name); r["trial"] = trial
+            results[f"contract_{name}"].append(r)
+            print(f"contract_{name} trial={trial} {'PASS' if r['pass'] else 'FAIL'} finish={r.get('finish')} "
+                  f"leaks={r.get('leaks')} format_ok={r.get('format_ok')} secs={r.get('secs')}", flush=True)
+    return results
+
+
 def run_tools(gw, sessions_dir):
     checks = {"tool_call_single": check_single, "tool_choice_none": check_choice_none, "tool_choice_named": check_choice_named,
               "parallel_tool_calls": check_parallel, "streaming_tool_calls": check_stream, "structured_output": check_structured,
@@ -467,9 +524,11 @@ def rate(rows):
 
 def capability_evidence(kind, results, evidence_id, date):
     """Verdicts the gateway can serve as VERIFIED. A capability passes only if every trial passed."""
+    verdict = lambda *names: "pass" if all(results[n] and rate(results[n]) == 1.0 for n in names) else "fail"
+    if kind == "contract":
+        return {"output_contract_compliance": {"result": verdict(*results), "evidence_id": evidence_id, "date": date}}
     if kind != "tools":
         return {}
-    verdict = lambda *names: "pass" if all(results[n] and rate(results[n]) == 1.0 for n in names) else "fail"
     return {cap: {"result": verdict(*checks), "evidence_id": evidence_id, "date": date} for cap, checks in {
         "tools": ("tool_call_single", "tool_choice_none", "tool_choice_named", "agent_loop"),
         "parallel_tool_calls": ("parallel_tool_calls",),
@@ -478,21 +537,26 @@ def capability_evidence(kind, results, evidence_id, date):
 
 
 def main(argv):
-    if len(argv) < 5 or argv[0] not in ("tools", "longctx"):
+    if len(argv) < 5 or argv[0] not in ("tools", "longctx", "contract"):
         raise SystemExit(__doc__)
     kind, label, base, keyfile, model = argv[:5]
     sessions_dir = argv[5] if len(argv) > 5 else SESSIONS_DIR
     key = sys.stdin.read().strip() if keyfile == "-" else open(keyfile).read().strip()
     gw = Gateway(base, key, model)
+    # Routing signals (e.g. X-Task-Class, X-AIHost-Worker) to qualify a path a plain request does not take; recorded.
+    extra_headers = json.loads(os.environ.get("QUALIFY_HEADERS", "{}"))
+    gw.headers.update(extra_headers)
     alias = gw.describe()
     expected = os.environ.get("QUALIFY_EXPECT_BUDGET")
     if expected is not None and (alias.get("reasoning") or {}).get("budget") != int(expected):
         raise SystemExit(f"the gateway reports {alias.get('reasoning')} for {model}, not budget {expected}; refusing to qualify")
     started = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    results = run_tools(gw, sessions_dir) if kind == "tools" else run_longctx(gw, sessions_dir, alias)
+    results = {"tools": lambda: run_tools(gw, sessions_dir), "longctx": lambda: run_longctx(gw, sessions_dir, alias),
+               "contract": lambda: run_contract(gw)}[kind]()
     evidence_id = f"qualify-{kind}-{label}-{started[:10]}"
     out = {"kind": kind, "label": label, "model": model, "base_url": base, "started": started,
            "finished": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "trials": TRIALS, "max_tokens": MAX_TOKENS,
+           "request_headers": extra_headers,
            "alias": {k: alias.get(k) for k in ("context_length", "max_completion_tokens", "limits_version", "reasoning", "serving")},
            "pass_rates": {name: round(rate(rows), 3) for name, rows in results.items()}, "results": results}
     digests = {s["artifact_digest"] for s in alias.get("serving") or [] if s.get("artifact_digest")}

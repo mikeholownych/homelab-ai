@@ -1,0 +1,274 @@
+{
+ "kind": "contract",
+ "label": "qwen36-reasoning-on-pinned",
+ "model": "engineering/b0",
+ "base_url": "https://10.0.8.5:8443",
+ "started": "2026-10-09T11:14:18Z",
+ "finished": "2026-10-09T11:15:38Z",
+ "trials": 3,
+ "max_tokens": 12288,
+ "request_headers": {
+  "X-Task-Class": "review",
+  "X-AIHost-Worker": "b0-live-llama-worker1"
+ },
+ "alias": {
+  "context_length": 65536,
+  "max_completion_tokens": 16384,
+  "limits_version": "a3c2fcbc2f2b977c",
+  "reasoning": {
+   "budget": 8192,
+   "mode": "default"
+  },
+  "serving": [
+   {
+    "worker_id": "b0-live-llama-worker1",
+    "pool": "lead",
+    "role": "production",
+    "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+    "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+    "quantization": "Q4_K - Medium",
+    "engine": "llama.cpp",
+    "engine_version": "b11347-5fc4f3c8c",
+    "capacity_source": "observed"
+   }
+  ]
+ },
+ "pass_rates": {
+  "contract_plain_line": 1.0,
+  "contract_json_object": 1.0,
+  "contract_file_blocks": 1.0
+ },
+ "results": {
+  "contract_plain_line": [
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 7.01,
+    "prompt_tokens": 45,
+    "completion_tokens": 402,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "45",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65491",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 941,
+    "pass": true,
+    "trial": 1
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 6.92,
+    "prompt_tokens": 45,
+    "completion_tokens": 402,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "45",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65491",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 941,
+    "pass": true,
+    "trial": 2
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 6.73,
+    "prompt_tokens": 45,
+    "completion_tokens": 402,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "45",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65491",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 941,
+    "pass": true,
+    "trial": 3
+   }
+  ],
+  "contract_json_object": [
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 11.54,
+    "prompt_tokens": 52,
+    "completion_tokens": 686,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "52",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65484",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 1953,
+    "pass": true,
+    "trial": 1
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 11.61,
+    "prompt_tokens": 52,
+    "completion_tokens": 686,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "52",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65484",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 1953,
+    "pass": true,
+    "trial": 2
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 11.6,
+    "prompt_tokens": 52,
+    "completion_tokens": 686,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "52",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65484",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 1953,
+    "pass": true,
+    "trial": 3
+   }
+  ],
+  "contract_file_blocks": [
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 8.23,
+    "prompt_tokens": 59,
+    "completion_tokens": 489,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "59",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65477",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 1455,
+    "pass": true,
+    "trial": 1
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 8.28,
+    "prompt_tokens": 59,
+    "completion_tokens": 489,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "59",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65477",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 1455,
+    "pass": true,
+    "trial": 2
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 8.16,
+    "prompt_tokens": 59,
+    "completion_tokens": 489,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=pinned;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "59",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65477",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "15ce8141d79a3260",
+     "X-AIHost-Served-Model": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 1455,
+    "pass": true,
+    "trial": 3
+   }
+  ]
+ },
+ "capability_evidence": {
+  "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61": {
+   "output_contract_compliance": {
+    "result": "pass",
+    "evidence_id": "qualify-contract-qwen36-reasoning-on-pinned-2026-10-09",
+    "date": "2026-10-09"
+   }
+  }
+ }
+}

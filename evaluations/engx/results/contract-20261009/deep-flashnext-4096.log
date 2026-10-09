@@ -1,0 +1,10 @@
+contract_plain_line trial=1 PASS finish=stop leaks=[] format_ok=True secs=5.45
+contract_plain_line trial=2 PASS finish=stop leaks=[] format_ok=True secs=4.96
+contract_plain_line trial=3 PASS finish=stop leaks=[] format_ok=True secs=4.74
+contract_json_object trial=1 PASS finish=stop leaks=[] format_ok=True secs=6.04
+contract_json_object trial=2 PASS finish=stop leaks=[] format_ok=True secs=5.49
+contract_json_object trial=3 PASS finish=stop leaks=[] format_ok=True secs=5.27
+contract_file_blocks trial=1 PASS finish=stop leaks=[] format_ok=True secs=11.34
+contract_file_blocks trial=2 PASS finish=stop leaks=[] format_ok=True secs=10.7
+contract_file_blocks trial=3 PASS finish=stop leaks=[] format_ok=True secs=10.47
+RESULT deep-flashnext-4096 {"contract_plain_line": 1.0, "contract_json_object": 1.0, "contract_file_blocks": 1.0} -> /home/mike/Projects/aihost/evaluations/engx/results/contract-20261009/qualify-contract-deep-flashnext-4096-2026-10-09.json

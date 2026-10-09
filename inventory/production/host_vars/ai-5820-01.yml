@@ -234,6 +234,14 @@ orchestrator_gateway_release_id: t5820-gateway-159898f
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-159898f
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
 orchestrator_gateway_capability_evidence:
+  # Rollback target (pre-promotion deep model, Qwen3.5-27B). Its chat template sets neither llama.cpp reasoning flag,
+  # so the engine cannot declare reasoning; the bounded Phase B run on this exact file (sha256 re-verified on the
+  # host 2026-10-09) reasoned on 61 of 61 attempts (evaluations/engx/evidence/engx-evidence-2026-10-07.tar.gz).
+  "sha256:84b5f7f112156d63836a01a69dc3f11a6ba63b10a23b8ca7a7efaf52d5a2d806":
+    reasoning:
+      result: pass
+      evidence_id: eng-hard-b-q35-27b-q4km
+      date: "2026-10-07"
   "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2":
     tools:
       result: pass
@@ -252,9 +260,10 @@ orchestrator_gateway_capability_evidence:
       evidence_id: qualify-tools-flashnext-deep-bounded-4096-2026-10-08
       date: "2026-10-08"
     output_contract_compliance:
+      # qualify.py contract (finish=stop, requested format, no reasoning/template leakage), production deep alias
       result: pass
-      evidence_id: qualification-flashnext-2026-10-08
-      date: "2026-10-08"
+      evidence_id: qualify-contract-deep-flashnext-4096-2026-10-09
+      date: "2026-10-09"
     reasoning_controllable:
       result: pass
       evidence_id: reasoning-profile-probe-flashnext-2026-10-09
@@ -281,8 +290,10 @@ orchestrator_gateway_capability_evidence:
       evidence_id: reasoning-profile-probe-qwen36-2026-10-09
       date: "2026-10-09"
     output_contract_compliance:
+      # qualify.py contract on both paths Qwen3.6 serves: reasoning on (deep-task fallback, pinned) and off
+      # (qualify-contract-lead-qwen36-off-2026-10-09); the reasoning-on run is the binding one
       result: pass
-      evidence_id: qualification-qwen36-2026-10-09
+      evidence_id: qualify-contract-qwen36-reasoning-on-pinned-2026-10-09
       date: "2026-10-09"
 # Model routing. Pools: lead = Qwen3.6-35B-A3B, deep = Flash-Next (best validated accuracy in the bounded
 # engineering benchmark at the selected budgets). Aliases bypass the rules.

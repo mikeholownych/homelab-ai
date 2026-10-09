@@ -1,0 +1,10 @@
+contract_plain_line trial=1 PASS finish=stop leaks=[] format_ok=True secs=0.25
+contract_plain_line trial=2 PASS finish=stop leaks=[] format_ok=True secs=0.22
+contract_plain_line trial=3 PASS finish=stop leaks=[] format_ok=True secs=0.22
+contract_json_object trial=1 PASS finish=stop leaks=[] format_ok=True secs=0.41
+contract_json_object trial=2 PASS finish=stop leaks=[] format_ok=True secs=0.31
+contract_json_object trial=3 PASS finish=stop leaks=[] format_ok=True secs=0.31
+contract_file_blocks trial=1 PASS finish=stop leaks=[] format_ok=True secs=1.27
+contract_file_blocks trial=2 PASS finish=stop leaks=[] format_ok=True secs=1.24
+contract_file_blocks trial=3 PASS finish=stop leaks=[] format_ok=True secs=1.15
+RESULT lead-qwen36-off {"contract_plain_line": 1.0, "contract_json_object": 1.0, "contract_file_blocks": 1.0} -> /home/mike/Projects/aihost/evaluations/engx/results/contract-20261009/qualify-contract-lead-qwen36-off-2026-10-09.json

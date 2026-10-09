@@ -1,0 +1,270 @@
+{
+ "kind": "contract",
+ "label": "deep-flashnext-4096",
+ "model": "engineering/deep",
+ "base_url": "https://10.0.8.5:8443",
+ "started": "2026-10-09T11:10:15Z",
+ "finished": "2026-10-09T11:11:20Z",
+ "trials": 3,
+ "max_tokens": 12288,
+ "alias": {
+  "context_length": 65536,
+  "max_completion_tokens": 12288,
+  "limits_version": "84ddc710d57e76ca",
+  "reasoning": {
+   "budget": 4096,
+   "mode": "on"
+  },
+  "serving": [
+   {
+    "worker_id": "b0-live-llama-deep-worker2",
+    "pool": "deep",
+    "role": "production",
+    "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+    "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+    "quantization": "IQ1_M - 1.75 bpw",
+    "engine": "llama.cpp",
+    "engine_version": "b11347-5fc4f3c8c",
+    "capacity_source": "observed"
+   }
+  ]
+ },
+ "pass_rates": {
+  "contract_plain_line": 1.0,
+  "contract_json_object": 1.0,
+  "contract_file_blocks": 1.0
+ },
+ "results": {
+  "contract_plain_line": [
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 5.45,
+    "prompt_tokens": 87,
+    "completion_tokens": 91,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "87",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65449",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 164,
+    "pass": true,
+    "trial": 1
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 4.96,
+    "prompt_tokens": 87,
+    "completion_tokens": 91,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "87",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65449",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 164,
+    "pass": true,
+    "trial": 2
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 4.74,
+    "prompt_tokens": 87,
+    "completion_tokens": 91,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "87",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65449",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 164,
+    "pass": true,
+    "trial": 3
+   }
+  ],
+  "contract_json_object": [
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 6.04,
+    "prompt_tokens": 94,
+    "completion_tokens": 101,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "94",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65442",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 251,
+    "pass": true,
+    "trial": 1
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 5.49,
+    "prompt_tokens": 94,
+    "completion_tokens": 101,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "94",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65442",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 251,
+    "pass": true,
+    "trial": 2
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 5.27,
+    "prompt_tokens": 94,
+    "completion_tokens": 101,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "94",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65442",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 251,
+    "pass": true,
+    "trial": 3
+   }
+  ],
+  "contract_file_blocks": [
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 11.34,
+    "prompt_tokens": 101,
+    "completion_tokens": 205,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "101",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65435",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 666,
+    "pass": true,
+    "trial": 1
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 10.7,
+    "prompt_tokens": 101,
+    "completion_tokens": 205,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "101",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65435",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 666,
+    "pass": true,
+    "trial": 2
+   },
+   {
+    "http_status": 200,
+    "finish": "stop",
+    "secs": 10.47,
+    "prompt_tokens": 101,
+    "completion_tokens": 205,
+    "tool_calls": [],
+    "gateway": {
+     "X-AIHost-Route": "rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false",
+     "X-AIHost-Context-Limit": "65536",
+     "X-AIHost-Prompt-Tokens": "101",
+     "X-AIHost-Prompt-Tokens-Source": "exact",
+     "X-AIHost-Context-Remaining": "65435",
+     "X-AIHost-Max-Completion": "12288",
+     "X-AIHost-Limits-Version": "4eda239b7caad4b2",
+     "X-AIHost-Served-Model": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+     "X-AIHost-Termination": "stop"
+    },
+    "leaks": [],
+    "format_ok": true,
+    "reasoning_chars": 666,
+    "pass": true,
+    "trial": 3
+   }
+  ]
+ },
+ "capability_evidence": {
+  "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2": {
+   "output_contract_compliance": {
+    "result": "pass",
+    "evidence_id": "qualify-contract-deep-flashnext-4096-2026-10-09",
+    "date": "2026-10-09"
+   }
+  }
+ }
+}
