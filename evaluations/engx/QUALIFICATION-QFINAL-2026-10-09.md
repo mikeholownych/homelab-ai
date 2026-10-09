@@ -59,8 +59,27 @@ both outcomes, is in `results/candidate-promote-20261009/rollback-smoke.json`.
 The promoted inventory was then re-converged (`85 ok, 5 changed, 0 failed`). The final `/health` snapshot showed 2/2 healthy,
 routable workers; all three service restart counters were zero. Both production aliases passed another authenticated request.
 
+## Validation review and second rollback drill (2026-10-09)
+
+The rollback limitation above was a missing evidence record, not a model limit. The gateway's R9 gate counts `reasoning` only
+from the engine declaration or verified evidence, and Qwen3.5's chat template sets neither llama.cpp reasoning flag. Its bounded
+Phase B run on the same file (sha256 `84b5f7f1...`, re-hashed on the host) reasoned on 61 of 61 attempts. That run is now the
+digest-keyed verified `reasoning` record. A second drill (revert `c04d678` over `b7ef53d`; release `t5820-gateway-3d9dea9`)
+converged with 82 ok / 9 changed / 0 failed. A default `engineering/deep` request returned 200 from Qwen3.5 with reasoning, and
+`/v1/models` reported reasoning `verified`. The promoted config was restored (85 ok / 6 changed / 0 failed). Both aliases
+returned 200 on the promoted artifacts, 2/2 workers, evidence chain valid, zero restarts. Evidence:
+`results/rollback-drill-20261009/`.
+
+Deploy incident during the review: stopping the gateway for release `t5820-gateway-c241229` hung until systemd's SIGKILL
+(11:49:11-11:59:41 UTC, 10.5 min without a serving gateway). Both listeners were still serving, the main thread was parked, and
+there was no stop thread or traceback. The SIGTERM handler started a thread from signal context. Release `3d9dea9` records the
+signal in the handler and stops on the main thread, with a SIGUSR1 stack dump. Its own stop is tested in a subprocess (and 10/10
+under Python 3.14), and the next deploy stopped in under a second.
+
+`output_contract_compliance` is now machine-verified (`qualify.py contract`) on every production path, replacing the prose
+citations; see `results/contract-20261009/`.
+
 ## Disposition
 
-Q-FINAL is **satisfied with recorded limitations**: promotion, post-reboot operation, and rollback/re-convergence were exercised.
-The selected production configuration is restored and live. Remaining limits are the 22 generic checks above and the pre-promotion
-deep model's unavailable default reasoning capability during rollback.
+Q-FINAL is **satisfied**: promotion, post-reboot operation, and rollback/re-convergence (including the default deep route) are
+proven. The 22 generic `validate.yml` checks above remain `NOT_TESTED` by that aggregation and are listed in the closeout report.

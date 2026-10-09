@@ -53,6 +53,8 @@
       - "{{ validation_summary_path }}"
       - --hardware-profile-json
       - "{{ validation_profile_json_path }}"
+      - --evidence-dir
+      - "{{ validation_evidence_dir }}"
   register: validation_run
   changed_when: false
   failed_when:

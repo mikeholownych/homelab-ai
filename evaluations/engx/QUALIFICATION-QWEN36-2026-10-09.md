@@ -18,7 +18,7 @@ Stage B used the hard 10-task corpus, three repeats per budget, temperature 0, a
 | 4,096 | 70.0% | 8/7/6 | 36.7% | 108.7 | 189.7 | 13,919 | H08 |
 | **8,192** | **76.7%** | 7/8/8 | 63.3% | 155.8 | 253.9 | 17,029 | H08 |
 
-8192 gained two validated task-runs over 4096 (76.7% vs 70.0%) at 1.34x mean time and 1.22x mean tokens. 2048 had substantially lower quality. H08 failed at all three points. Under the operator's quality-over-speed rule, 8192 is selected among the required measured points. Raw results are `results/qbudget-20261008/eng-hard-qwen36-lead-bounded-{2048,4096,8192}.json`.
+At 8192 the budget still bound: 66% of attempts used all of it and one answer hit the output limit, so the 12,288 point required by the Q-BUDGET rule ("adding points if needed") is run; see QBUDGET-2026-10-08.md. 8192 gained two validated task-runs over 4096 (76.7% vs 70.0%) at 1.34x mean time and 1.22x mean tokens. 2048 had substantially lower quality. H08 failed at all three points. Under the operator's quality-over-speed rule, 8192 is selected among the required measured points. Raw results are `results/qbudget-20261008/eng-hard-qwen36-lead-bounded-{2048,4096,8192}.json`.
 
 ## Reasoning control and budget report
 
@@ -34,7 +34,7 @@ This verifies per-model reasoning control for the `off` and `low` profiles and t
 
 All seven synthetic categories passed all three trials: single tool call, `tool_choice=none`, named tool choice, parallel calls, streaming calls, structured output, and agent loop. All 20 recorded Nexus replay cut points passed. Evidence: `results/qualify-20261009/qualify-tools-qwen36-lead-bounded-8192-2026-10-09.json`.
 
-The artifact-digest capability evidence verifies `tools`, `parallel_tool_calls`, `structured_output`, and `streaming`. The output-contract evidence is recorded in this qualification report and the Q-LONGCTX result.
+The artifact-digest capability evidence verifies `tools`, `parallel_tool_calls`, `structured_output`, and `streaming`. `output_contract_compliance` is verified by `qualify.py contract` (2026-10-09): 9/9 with reasoning on (deep-task fallback path, pinned) and 9/9 with reasoning off (lead alias and b0); see `results/contract-20261009/`.
 
 ## Q-LONGCTX and Q-MMAP
 

@@ -500,7 +500,7 @@ class DataContractTests(unittest.TestCase):
         schema = load_json(SCHEMA_DIR / "validation.schema.json")
         self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED"], schema["properties"]["status"]["enum"])
         check_status_enum = schema["properties"]["checks"]["items"]["properties"]["status"]["enum"]
-        self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED"], check_status_enum)
+        self.assertEqual(["PASS", "FAIL", "BLOCKED", "NOT_TESTED", "NOT_APPLICABLE"], check_status_enum)
 
     def test_benchmark_schema_requires_duration_and_model_split_parameters(self) -> None:
         schema = load_json(SCHEMA_DIR / "benchmark.schema.json")

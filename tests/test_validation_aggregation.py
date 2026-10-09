@@ -162,3 +162,102 @@ def test_aggregator_cli_accepts_hardware_profile_json(tmp_path):
     by_id = {check["id"]: check for check in doc["checks"]}
     assert by_id["machine_model"]["expected"]["value"] == "Precision 5820 Tower"
     assert by_id["gpu_count"]["expected"]["value"] == 2
+
+
+def test_not_applicable_checks_do_not_block_healthy_status():
+    mod = load_aggregator()
+    schema = load_schema()
+
+    checks_data = {
+        check_id: {"status": "PASS", "expected": "PASS", "observed": "PASS"}
+        for check_id in mod.REQUIRED_CHECKS_SPEC
+    }
+    # Set unmanaged/retired checks to NOT_APPLICABLE
+    checks_data["vllm_service"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+    checks_data["dual_gpu_inference"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+    checks_data["os_tuning_governor"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+    checks_data["os_tuning_thp"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+    checks_data["os_tuning_hugepages"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+    checks_data["os_tuning_sysctl"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+    checks_data["running_kernel"] = {"status": "NOT_APPLICABLE", "expected": "unmanaged", "observed": "NOT_APPLICABLE"}
+
+    doc = mod.build_validation_document(
+        node_id="ai-5820-01",
+        environment="production",
+        hardware_profile="d5820_dual_b65",
+        git_sha="0123456789abcdef0123456789abcdef01234567",
+        simulated=False,
+        checks_data=checks_data,
+        hardware_profile_spec=_load_d5820_profile(),
+    )
+
+    jsonschema.validate(instance=doc, schema=schema)
+    assert doc["status"] == "PASS"
+    assert doc["summary"]["classification"] == "healthy"
+    assert doc["summary"]["not_tested"] == 0
+    assert doc["summary"]["not_applicable"] == 7
+    assert doc["summary"]["blocking_failures"] == 0
+    assert doc["summary"]["failed_checks"] == 0
+
+
+def test_evidence_dir_auto_discovery(tmp_path):
+    mod = load_aggregator()
+    schema = load_schema()
+
+    # Create mock hardware.json and pci.json and xpu-validation.json
+    hw_file = tmp_path / "hardware.json"
+    hw_file.write_text(json.dumps({
+        "status": "pass",
+        "checks": [
+            {"rule": "machine_model", "status": "pass", "expected": "Precision 5820 Tower", "observed": "Precision 5820 Tower"},
+            {"rule": "cpu_model", "status": "pass", "expected": "Intel(R) Xeon(R) W-2123", "observed": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz"},
+            {"rule": "gpu_count", "status": "pass", "expected": 2, "observed": ["0000:51:00.0", "0000:93:00.0"]},
+            {"rule": "gpu_model_match", "status": "pass", "expected": "Intel Arc Pro B65", "observed": "Intel Arc Pro B65"},
+            {"rule": "gpu_memory", "status": "pass", "expected": 32.0, "observed": [32.0, 32.0]},
+            {"rule": "level_zero_detected", "status": "pass", "expected": 2, "observed": [{"uuid": "uuid1"}, {"uuid": "uuid2"}]},
+        ]
+    }))
+
+    pci_file = tmp_path / "pci.json"
+    pci_file.write_text(json.dumps({
+        "status": "pass",
+        "checks": [
+            {"rule": "pcie_link_health", "status": "pass", "expected": "Gen3 Link", "observed": []},
+            {"rule": "resizable_bar_enabled", "status": "pass", "expected": True, "observed": [True, True]},
+        ]
+    }))
+
+    xpu_file = tmp_path / "xpu-validation.json"
+    xpu_file.write_text(json.dumps({
+        "status": "PASS",
+        "device_count": 2,
+        "torch_version": "2.12.1+xpu",
+    }))
+
+    profile_path = tmp_path / "d5820.json"
+    profile_path.write_text(json.dumps(_load_d5820_profile()))
+
+    # Run aggregator CLI with --evidence-dir
+    process = subprocess.run(
+        [str(AGGREGATOR_PATH), "--node-id", "ai-5820-01", "--hardware-profile",
+         "d5820_dual_b65", "--git-sha", "0123456789abcdef0123456789abcdef01234567",
+         "--simulated", "--hardware-profile-json", str(profile_path),
+         "--evidence-dir", str(tmp_path)],
+        check=False, capture_output=True, text=True,
+    )
+    assert process.returncode == 0, process.stderr
+    doc = json.loads(process.stdout)
+    jsonschema.validate(instance=doc, schema=schema)
+    by_id = {check["id"]: check for check in doc["checks"]}
+    assert by_id["machine_model"]["status"] == "PASS"
+    assert by_id["cpu"]["status"] == "PASS"
+    assert by_id["gpu_count"]["status"] == "PASS"
+    assert by_id["gpu_model"]["status"] == "PASS"
+    assert by_id["gpu_vram"]["status"] == "PASS"
+    assert by_id["level_zero"]["status"] == "PASS"
+    assert by_id["pytorch_xpu"]["status"] == "PASS"
+    assert by_id["pcie_topology"]["status"] == "PASS"
+    assert by_id["rebar"]["status"] == "PASS"
+    assert by_id["vllm_service"]["status"] == "NOT_APPLICABLE"
+    assert by_id["dual_gpu_inference"]["status"] == "NOT_APPLICABLE"
+

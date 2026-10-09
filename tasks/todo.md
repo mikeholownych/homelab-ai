@@ -436,13 +436,19 @@ Awaiting operator decisions:
 - [x] Deep-pool choice DECIDED: Flash-Next, with Qwen3.8-27B as fallback if operational qualification fails (operator brief section 1); execution in Q-*/W-PROMOTE
 - [x] Glimmer: DROPPED (operator brief 2026-10-07)
 New work made apparent (report section 6):
-- [x] Reasoning-budget sweep 2048/8192 (+12288 if needed): Flash-Next 2048/4096/8192 and Qwen3.6 2048/4096/8192 completed; see `evaluations/engx/QBUDGET-2026-10-08.md`. Qwen3.6 selects 8192 under quality-over-speed; no additional point required by Q-BUDGET.
+- [ ] Reasoning-budget sweep 2048/8192 (+12288 if needed): Flash-Next 2048/4096/8192 complete (4096 selected; 8192 adds
+      nothing). Qwen3.6 2048/4096/8192 complete, and 12288 IS needed: at 8192 the budget still bound 66% of attempts, one
+      answer hit the output limit, and quality was still rising (46.7 -> 70.0 -> 76.7%). Reopened 2026-10-09 by the
+      validation review; the 12288 run follows. See `evaluations/engx/QBUDGET-2026-10-08.md`.
 - [x] Long-context qualification (32-60K real transcripts); mandatory for Flash-Next (64K fit unverified by llama.cpp). Flash-Next and Qwen3.6 candidate probes passed via the remote gateway; see `evaluations/engx/QUALIFICATION-FLASHNEXT-2026-10-08.md` and `evaluations/engx/QUALIFICATION-QWEN36-2026-10-09.md`.
 - [x] Tool-calling / multi-turn agentic qualification (replay Nexus sessions). Both selected models passed the synthetic checks and 20 recorded replay cut points; see the qualification reports above.
 - [x] Flash-Next mmap n-gram table: page-cache residency and major-fault monitoring. Before/after snapshots are retained in `evaluations/engx/results/qmmap-20261008/`; see `evaluations/engx/QUALIFICATION-FLASHNEXT-2026-10-08.md`.
 - [x] Re-qualify the chosen models through the gateway from a remote client (depends on R4 candidate alias pool). Q-TOOLS and Q-LONGCTX completed through TLS gateway candidate aliases for both selected models; see the qualification reports above.
 - [x] Capability fields: reasoning_controllable, reasoning_budget, output_contract_compliance (verified) for both selected artifacts;
       production `/v1/models` and evidence IDs are captured in `evaluations/engx/QUALIFICATION-QFINAL-2026-10-09.md`.
+      Corrected 2026-10-09: output_contract_compliance had cited prose reports; it is now verified by `qualify.py contract`
+      (finish=stop, requested format, no reasoning/template leakage) on every production path, 36/36 checks
+      (`evaluations/engx/results/contract-20261009/`).
 - [x] Sequencing proposal: SUPERSEDED by the execution DAG in docs/closeout/00-reconciliation.md, informed by the above (next deliverable)
 
 ## Closeout workstream (operator brief 2026-10-07): complete all non-deferred authorized work
@@ -451,10 +457,24 @@ Reconciliation, classification and execution DAG: docs/closeout/00-reconciliatio
 docs/design/01-06.
 - [x] Q-FINAL: production aliases pass remote inference after reboot; both workers load after boot with zero restarts and
       both B65 PCI devices enumerate. The first reboot exposed a missing systemd dependency, which is fixed and verified by a
-      second reboot. Rollback/re-convergence passed with a recorded limitation: pre-promotion Qwen3.5 cannot satisfy the default
-      `reasoning` capability route and returns 422 unless the client explicitly selects reasoning off. The generic `validate.yml`
+      second reboot. Rollback/re-convergence passed. The first drill's limitation (pre-promotion Qwen3.5 returned 422 on the default
+      deep route: its chat template declares no reasoning) is resolved by digest-keyed verified reasoning evidence and
+      re-proven by a second drill on 2026-10-09 (`evaluations/engx/results/rollback-drill-20261009/`). The generic `validate.yml`
       aggregation still reports 22 checks as `NOT_TESTED`; direct production checks and exact remaining limits are in
       `evaluations/engx/QUALIFICATION-QFINAL-2026-10-09.md`.
+Findings from the 2026-10-09 validation review (fixed, tested and deployed unless stated):
+- [x] V1 /v1/models reported engineering/b0 as reasoning mode "default" while the default rule served it with reasoning off;
+      the view now reports the rule table's decision for a plain request (`c241229`).
+- [x] V2 gateway stop hung 10.5 min until systemd SIGKILL during a deploy (11:49:11-11:59:41 UTC): the SIGTERM handler
+      started a thread in signal context. The handler now only records the signal; the main thread stops; SIGUSR1 dumps
+      stacks (`3d9dea9`, release `t5820-gateway-3d9dea9`).
+- [x] V3 the qualification client token was printed in a session transcript; rotated through Ansible
+      (`orchestrator_gateway_rotate_client_tokens`, `d10ad5b`); the old token is refused (401).
+- [x] V4 a sealed phase4 test failed under an inherited FORCE_COLOR; the Makefile pins PY_COLORS=0 (`fb8c2bb`).
+- [ ] V5 OPERATOR DECISION: no production route reasons on Qwen3.6 except the deep-task fallback (capped at 4096). The
+      default rule and engineering/lead are reasoning off, so the selected Qwen3.6 budget governs no plain request.
+      Qwen3.6 scored 70.0% off vs 76.7% bounded at 8192 (2-3x time per task). Whether lead routes should reason is a
+      routing-policy choice for the operator; not changed here.
 New findings from the code review (folded into the workstreams):
 - [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed, tested and deployed in gateway release `f31218c`
 - [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification tested and deployed in R11
