@@ -451,6 +451,42 @@ def test_capability_routing_rejects_with_missing_names_and_alias_view_reports_pr
     assert view["serving"][0]["engine_version"] == "b1-test" and view["serving"][0]["quantization"]
 
 
+def test_reasoning_the_template_does_not_declare_is_routable_only_with_verified_evidence(fakes, tmp_path):
+    # Rollback case (Q-FINAL 2026-10-09): Qwen3.5's chat template sets neither reasoning flag, so llama.cpp cannot
+    # declare reasoning, although the model reasons. A server-side budget is configuration, not proof: the gate refuses
+    # until qualification evidence for the artifact says it reasons, and the bound still applies either way.
+    undeclared = fakes(reasoning=False)
+    routes = [{"id": "d", "match": {}, "pool": "lead", "reasoning": {"mode": "on", "budget": 512, "answer_allowance": 1024}}]
+    pair = [(llama_worker("w1", undeclared, reasoning_budget=512), undeclared)]
+    refused = build(tmp_path / "a", pair, routes=routes).complete(chat())
+    assert refused["http_status"] == 422 and refused["missing_capabilities"] == ["reasoning"]
+
+    evidence = {"sha256:" + "b" * 64: {"reasoning": {"result": "pass", "evidence_id": "eng-hard-b-q35", "date": "2026-10-07"}}}
+    runtime = build(tmp_path / "b", pair, routes=routes, capability_evidence=evidence)
+    served = runtime.complete(chat())
+    assert served["status"] == "ok"
+    assert undeclared.requests[-1]["thinking_budget_tokens"] == 512
+    assert undeclared.requests[-1]["chat_template_kwargs"]["enable_thinking"] is True
+    caps = {m["id"]: m for m in runtime.alias_view()}["engineering/lead"]["capabilities"]
+    assert caps["reasoning"] == {"available": True, "provenance": "verified", "evidence": ["eng-hard-b-q35"], "verified_at": "2026-10-07"}
+
+
+def test_models_view_reports_the_policy_a_plain_request_actually_gets(fakes, tmp_path):
+    # A worker's own model id is not an alias, so requests for it go through the rule table; /v1/models must report
+    # that rule's policy, not a blank default (engineering/b0 was advertised as reasoning while served with it off).
+    fake = fakes()
+    routes = [{"id": "hard", "match": {"task_class": ["review"]}, "pool": "lead", "reasoning": {"mode": "on", "budget": 512}},
+              {"id": "default", "match": {}, "pool": "lead", "reasoning": {"mode": "off", "answer_allowance": 1024}}]
+    aliases = {"engineering/think": {"pool": "lead", "reasoning": {"mode": "on", "budget": 256, "answer_allowance": 1024}}}
+    runtime = build(tmp_path, [(llama_worker("w1", fake, reasoning_budget=512), fake)], routes=routes, aliases=aliases)
+    view = {m["id"]: m for m in runtime.alias_view()}
+    assert view["engineering/lead"]["reasoning"] == {"budget": 512, "mode": "off"}
+    assert view["engineering/lead"]["max_completion_tokens"] == 1024
+    assert view["engineering/think"]["reasoning"] == {"budget": 256, "mode": "on"}
+    served = runtime.complete(chat())
+    assert served["status"] == "ok" and fake.requests[-1]["chat_template_kwargs"]["enable_thinking"] is False
+
+
 def test_tokenize_endpoint_counts_exactly(fakes, tmp_path):
     fake = fakes()
     runtime = build(tmp_path, [(llama_worker("w1", fake), fake)])

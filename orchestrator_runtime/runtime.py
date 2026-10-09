@@ -879,7 +879,11 @@ class OrchestratorRuntime:
         states = [self.capacity.state(w["worker_id"]) for w in workers]
         known = [s for s in states if s is not None]
         context = min((s.ctx_per_slot for s in known), default=0)
-        policy = self.router.alias_specs[name].policy if self.router and name in self.router.alias_specs else reasoning_policy.RoutePolicy()
+        # The policy a plain request for this model gets: an alias's own policy, else the rule table's decision for a
+        # first attempt with no task class (what the client receives unless it sends routing signals). Reporting a
+        # blank "default" here once told clients engineering/b0 reasoned while the default rule turned it off.
+        policy = (self.router.decide(model=name, task_class=None, has_tools=False, prompt_tokens=0).policy
+                  if self.router else reasoning_policy.RoutePolicy())
         caps = intersect(self.capacity.capabilities(w["worker_id"]) for w in workers)
         budgets = [w.get("reasoning_budget") for w in workers if w.get("reasoning_budget")]
         reasoning_budget = min(budgets) if budgets and len(budgets) == len(workers) else 0
@@ -941,6 +945,9 @@ class OrchestratorRuntime:
     def _plan(self, request: dict[str, Any], worker: WorkerRecord, policy: reasoning_policy.RoutePolicy,
               profile: str | None) -> _Plan | _ContextReject:
         caps = self.capacity.capabilities(worker.worker_id)
+        # Deliberately wider than the capability gate: a worker configured with a server budget may reason, so it is
+        # bounded (fail closed). Routing a reasoning requirement to it still needs the engine's declaration or
+        # verified evidence; configuration is not proof the model reasons.
         worker_reasons = worker.reasoning_budget is not None or bool(caps.get("reasoning") and caps["reasoning"].available)
         applied = reasoning_policy.apply(request, policy, worker_cap=worker.reasoning_budget,
                                          worker_reasons=worker_reasons, profile=profile)
