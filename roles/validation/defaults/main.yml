@@ -18,3 +18,8 @@ validation_required_units: []
 validation_reconcile_stamp: ""
 validation_reconcile_max_age_hours: 2
 validation_vault_config: ""
+# Production workers that must show validated completions in the gateway evidence chain (the host never originates
+# inference itself), and whether to evaluate the B65 stack acceptance checklist (docs/intel-gpu.md).
+validation_inference_workers: []
+validation_gateway_evidence: ""
+validation_gpu_stack_gate: false

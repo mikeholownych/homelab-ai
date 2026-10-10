@@ -64,7 +64,10 @@
          + (validation_required_units | map('regex_replace', '^', '--required-unit=') | list)
          + (['--reconcile-stamp=' ~ validation_reconcile_stamp,
              '--reconcile-max-age-hours=' ~ validation_reconcile_max_age_hours] if validation_reconcile_stamp else [])
-         + (['--vault-config=' ~ validation_vault_config] if validation_vault_config else []) }}
+         + (['--vault-config=' ~ validation_vault_config] if validation_vault_config else [])
+         + (validation_inference_workers | map('regex_replace', '^', '--inference-worker=') | list)
+         + (['--gateway-evidence=' ~ validation_gateway_evidence] if validation_gateway_evidence else [])
+         + (['--gpu-stack-gate'] if validation_gpu_stack_gate | bool else []) }}
   ansible.builtin.command:
     argv: "{{ validation_aggregator_argv + validation_extra_argv }}"
   register: validation_run

@@ -343,3 +343,38 @@ def test_vault_access_is_an_actual_login(tmp_path, monkeypatch):
     result = mod._vault_login(config)
     assert result["status"] == "PASS"
     assert calls == ["https://vault.invalid:8200/v1/auth/approle/login", "https://vault.invalid:8200/v1/auth/token/revoke-self"]
+
+
+def test_single_gpu_inference_is_observed_from_gateway_completions(tmp_path):
+    import datetime as dt
+    mod = load_aggregator()
+    chain = tmp_path / "evidence-chain.jsonl"
+    rows = [
+        {"event": "response_validated", "worker_id": "w1", "termination": "tool_calls", "recorded_at": "2026-10-10T20:00:00+00:00"},
+        {"event": "response_validated", "worker_id": "w2", "termination": "stop", "recorded_at": "2026-10-09T01:00:00+00:00"},
+        {"event": "response_validated", "worker_id": "w2", "termination": "output_limit", "recorded_at": "2026-10-10T21:00:00+00:00"},
+    ]
+    chain.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    now = dt.datetime(2026, 10, 10, 22, 0, tzinfo=dt.timezone.utc)
+    result = mod._inference_check(chain, ["w1", "w2"], 24, now)
+    assert result["status"] == "NOT_TESTED"  # w2: only a stale success and a truncated reply; idle is not a failure
+    assert result["observed"]["value"] == "w1 2026-10-10T20:00:00Z; no validated completion: w2"
+    chain.write_text(chain.read_text() + json.dumps({"event": "response_validated", "worker_id": "w2", "termination": "stop",
+                                                     "recorded_at": "2026-10-10T21:30:00+00:00"}) + "\n")
+    assert mod._inference_check(chain, ["w1", "w2"], 24, now)["status"] == "PASS"
+
+
+def test_gpu_stack_gate_evaluates_each_checklist_item_from_observations(tmp_path, monkeypatch):
+    mod = load_aggregator()
+    passing = {c: {"status": "PASS"} for c in ("gpu_count", "gpu_model", "level_zero", "pytorch_xpu")}
+    os_release = tmp_path / "os-release"
+    monkeypatch.setattr(mod.os, "uname", lambda: type("U", (), {"release": "7.0.0-38-generic"})())
+    os_release.write_text('VERSION_ID="26.04"\nVERSION="26.04.1 LTS (Resolute Raccoon)"\n')
+    result = mod._gpu_stack_check(passing, os_release)
+    assert result["status"] == "PASS" and "Ubuntu 26.04.1, kernel 7.0.0-38-generic" in result["observed"]["value"]
+    os_release.write_text('VERSION_ID="24.04"\nVERSION="24.04.3 LTS (Noble Numbat)"\n')
+    assert mod._gpu_stack_check(passing, os_release)["status"] == "FAIL"  # below the 24.04.4 minimum
+    os_release.write_text('VERSION_ID="24.04"\nVERSION="24.04.4 LTS (Noble Numbat)"\n')
+    assert mod._gpu_stack_check(passing, os_release)["status"] == "PASS"
+    assert mod._gpu_stack_check({**passing, "pytorch_xpu": {"status": "NOT_TESTED"}}, os_release)["status"] == "NOT_TESTED"
+    assert mod._gpu_stack_check({**passing, "level_zero": {"status": "FAIL"}}, os_release)["status"] == "FAIL"

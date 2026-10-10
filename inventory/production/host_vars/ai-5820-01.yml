@@ -40,6 +40,7 @@ features:
 validation_not_applicable:
   vllm_service: "vLLM retired; two independent llama.cpp SYCL workers serve inference"
   dual_gpu_inference: "no tensor parallelism: two independent TP=1 workers, one per GPU"
+  llama_cpp_fallback: "llama.cpp is the primary engine on both GPUs; there is no fallback path to exercise"
 validation_required_units:
   - aihost-llama-worker1.service
   - aihost-llama-worker2.service
@@ -50,6 +51,9 @@ validation_required_units:
 # Reconciliation runs hourly from the controller (roles/reconcile_controller); the appliance holds no CA key.
 validation_reconcile_stamp: /var/lib/local-ai/evidence/reconcile-last.json
 validation_vault_config: /etc/aihost/vault/platform-credentials.json
+validation_inference_workers: [b0-live-llama-worker1, b0-live-llama-deep-worker2]
+validation_gateway_evidence: /var/lib/aihost-gateway/evidence-chain.jsonl
+validation_gpu_stack_gate: true
 
 network_endpoints:
   primary_bind_address: null

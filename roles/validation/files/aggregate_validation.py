@@ -6,6 +6,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import ssl
 import subprocess
 import sys
@@ -342,6 +343,85 @@ def _reconcile_check(stamp: Path, max_age_hours: float, now: datetime.datetime) 
             "evidence_refs": refs}
 
 
+def _tail_lines(path: Path, max_bytes: int = 4 * 1024 * 1024) -> list[str]:
+    with path.open("rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        handle.seek(max(0, size - max_bytes))
+        data = handle.read().decode("utf-8", errors="replace").splitlines()
+    return data[1:] if size > max_bytes else data  # the first line may be partial
+
+
+def _inference_check(evidence: Path, workers: list[str], window_hours: float, now: datetime.datetime) -> Dict[str, Any]:
+    """Each production worker served a validated completion recently, observed in the gateway's evidence chain (the host
+    may not originate inference itself). No traffic is NOT_TESTED, not a failure."""
+    expected = wrap_summary_value(f"validated completion on each of {len(workers)} workers within {window_hours:g} h")
+    refs = [str(evidence)]
+    try:
+        lines = _tail_lines(evidence)
+    except OSError as error:
+        return {"status": "NOT_TESTED", "expected": expected,
+                "observed": wrap_summary_value(f"gateway evidence unreadable: {type(error).__name__}"), "evidence_refs": refs}
+    cutoff = now - datetime.timedelta(hours=window_hours)
+    last: Dict[str, str] = {}
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        if record.get("event") != "response_validated" or record.get("termination") not in ("stop", "tool_calls"):
+            continue
+        worker, at = record.get("worker_id"), str(record.get("recorded_at", ""))
+        try:
+            when = datetime.datetime.fromisoformat(at)
+        except ValueError:
+            continue
+        if worker in workers and when >= cutoff and at > last.get(worker, ""):
+            last[worker] = at
+    missing = [w for w in workers if w not in last]
+    observed = ", ".join(f"{w} {last[w][:19]}Z" for w in workers if w in last)
+    if missing:
+        observed = (observed + "; " if observed else "") + "no validated completion: " + ", ".join(missing)
+    return {"status": "NOT_TESTED" if missing else "PASS", "expected": expected,
+            "observed": wrap_summary_value(observed), "evidence_refs": refs}
+
+
+def _version_at_least(value: str, minimum: tuple[int, ...]) -> bool | None:
+    parts = re.findall(r"\d+", value)
+    return tuple(int(p) for p in parts[:len(minimum)]) >= minimum if parts else None
+
+
+def _gpu_stack_check(checks_data: Dict[str, Dict[str, Any]], os_release: Path) -> Dict[str, Any]:
+    """The B65 stack acceptance checklist (docs/intel-gpu.md), item by item, from observations only."""
+    try:
+        release = dict(line.split("=", 1) for line in os_release.read_text(encoding="utf-8").splitlines() if "=" in line)
+        # VERSION carries the point release ("26.04.1 LTS (...)"); VERSION_ID only "26.04".
+        version_id = (re.match(r"\d+(\.\d+)*", release.get("VERSION", "").strip('"'))
+                      or re.match(r"\d+(\.\d+)*", release.get("VERSION_ID", "").strip('"')))
+        version_id = version_id.group(0) if version_id else ""
+    except OSError:
+        version_id = ""
+    kernel = os.uname().release
+    def from_check(check_id: str) -> str:
+        return checks_data.get(check_id, {}).get("status", "NOT_TESTED")
+    release_ok = _version_at_least(version_id if version_id.count(".") >= 2 else version_id + ".0", (24, 4, 4)) \
+        if version_id else None
+    items = {
+        "ubuntu>=24.04.4": "NOT_TESTED" if release_ok is None else ("PASS" if release_ok else "FAIL"),
+        "kernel>=6.17": {None: "NOT_TESTED", True: "PASS", False: "FAIL"}[_version_at_least(kernel, (6, 17))],
+        "two_b65_enumerated": from_check("gpu_count"),
+        "b65_classified": from_check("gpu_model"),
+        "level_zero_and_pytorch_xpu": ("PASS" if from_check("level_zero") == from_check("pytorch_xpu") == "PASS"
+                                       else ("FAIL" if "FAIL" in (from_check("level_zero"), from_check("pytorch_xpu"))
+                                             else "NOT_TESTED")),
+    }
+    status = "FAIL" if "FAIL" in items.values() else ("PASS" if set(items.values()) == {"PASS"} else "NOT_TESTED")
+    return {"status": status, "expected": wrap_summary_value("acceptance checklist passes in place"),
+            "observed": wrap_summary_value(f"Ubuntu {version_id or '?'}, kernel {kernel}; "
+                                           + ", ".join(f"{k} {v}" for k, v in items.items())),
+            "evidence_refs": ["/etc/os-release", "uname -r", "gpu_count", "gpu_model", "level_zero", "pytorch_xpu"]}
+
+
 def observe_live_checks(
     checks_data: Dict[str, Dict[str, Any]],
     *,
@@ -350,6 +430,11 @@ def observe_live_checks(
     vault_config: str | None,
     reconcile_max_age_hours: float = 2.0,
     now: datetime.datetime | None = None,
+    inference_workers: list[str] | None = None,
+    gateway_evidence: str | None = None,
+    inference_window_hours: float = 24.0,
+    gpu_stack_gate: bool = False,
+    os_release: str = "/etc/os-release",
 ) -> Dict[str, Dict[str, Any]]:
     """Checks the aggregator observes itself on the managed node (it runs there as root). A check whose input is not
     configured stays NOT_TESTED; an observed problem is a FAIL with the observed state, never a PASS."""
@@ -366,6 +451,11 @@ def observe_live_checks(
                                                                    now or datetime.datetime.now(datetime.timezone.utc))
     if vault_config and "vault_access" not in checks_data:
         checks_data["vault_access"] = _vault_login(Path(vault_config))
+    if inference_workers and gateway_evidence and "single_gpu_inference" not in checks_data:
+        checks_data["single_gpu_inference"] = _inference_check(Path(gateway_evidence), inference_workers, inference_window_hours,
+                                                               now or datetime.datetime.now(datetime.timezone.utc))
+    if gpu_stack_gate and "intel_gpu_stack_status" not in checks_data:
+        checks_data["intel_gpu_stack_status"] = _gpu_stack_check(checks_data, Path(os_release))
     return checks_data
 
 
@@ -395,6 +485,9 @@ def main() -> int:
     parser.add_argument("--reconcile-stamp", default=None, help="Stamp the controller-side reconciliation writes on success")
     parser.add_argument("--reconcile-max-age-hours", type=float, default=2.0, help="Oldest acceptable reconciliation stamp")
     parser.add_argument("--vault-config", default=None, help="Vault client config (platform-credentials.json) to test")
+    parser.add_argument("--inference-worker", action="append", default=[], help="Worker that must serve validated completions")
+    parser.add_argument("--gateway-evidence", default=None, help="Gateway evidence chain (JSONL) to read completions from")
+    parser.add_argument("--gpu-stack-gate", action="store_true", help="Evaluate the B65 stack acceptance checklist")
     parser.add_argument("--not-applicable", action="append", default=[], metavar="CHECK=REASON",
                         help="Declare a check not applicable to this host's configuration (repeatable)")
     parser.add_argument("--output", default=None, help="Path to write validation.json")
@@ -423,7 +516,9 @@ def main() -> int:
     checks_data = apply_not_applicable(checks_data, args.not_applicable)
     checks_data = observe_live_checks(checks_data, required_units=args.required_unit,
                                       reconcile_stamp=args.reconcile_stamp, vault_config=args.vault_config,
-                                      reconcile_max_age_hours=args.reconcile_max_age_hours)
+                                      reconcile_max_age_hours=args.reconcile_max_age_hours,
+                                      inference_workers=args.inference_worker, gateway_evidence=args.gateway_evidence,
+                                      gpu_stack_gate=args.gpu_stack_gate)
 
     doc = build_validation_document(
         node_id=args.node_id,
