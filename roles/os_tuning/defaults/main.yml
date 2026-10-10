@@ -24,7 +24,7 @@ os_tuning_cpu_power_helper_path: /usr/local/libexec/local-ai-set-cpu-power
 # Evidence and state output locations.
 os_tuning_evidence_dir: >-
   {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR') |
-     default('/var/lib/aihost/evidence/manual', true) }}
+     default((local_ai_evidence_dir | default('/var/lib/local-ai/evidence')) ~ '/manual', true) }}
 os_tuning_work_dir: /var/lib/aihost/tuning
 
 # Subsystem file ownership (distinct from base_os drop-ins on purpose).

@@ -69,7 +69,7 @@ def subsystem_deltas(candidate: dict, baseline: dict) -> list[str]:
 class TuningProfileContractTests(unittest.TestCase):
     def test_expected_profile_set_exists(self) -> None:
         self.assertEqual(
-            ["baseline", "custom_kernel_candidate", "inference_candidate_01", "inference_candidate_02"],
+            ["baseline", "custom_kernel_candidate", "d5820_dual_b65", "inference_candidate_01", "inference_candidate_02"],
             profile_names(),
         )
 

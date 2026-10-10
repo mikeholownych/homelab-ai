@@ -468,6 +468,17 @@ def create_gateway(
                         cancel.set()
                         return
 
+            raw_effort = self.headers.get("X-AIHost-Reasoning-Effort") or request.get("reasoning_effort")
+            body_profile = None
+            if isinstance(raw_effort, str) and raw_effort.strip():
+                lowered = raw_effort.strip().lower()
+                body_profile = {"medium": "standard", "high": "max", "none": "off"}.get(lowered, lowered)
+
+            reasoning_profile = (
+                self.headers.get("X-AIHost-Reasoning")
+                or body_profile
+            )
+
             threading.Thread(target=watch, daemon=True, name="client-watch").start()
             try:
                 result = runtime.complete(
@@ -475,7 +486,7 @@ def create_gateway(
                     task_class=self.headers.get("X-Task-Class"), client=client,
                     priority=self.headers.get("X-AIHost-Priority"), deadline_ms=header_int("X-AIHost-Deadline-Ms"),
                     attempt=header_int("X-AIHost-Attempt") or 1, previous_request=self.headers.get("X-AIHost-Previous-Request"),
-                    reasoning_profile=self.headers.get("X-AIHost-Reasoning"), cancel=cancel,
+                    reasoning_profile=reasoning_profile, cancel=cancel,
                     on_stream_start=begin_stream if request.get("stream") else None,
                     on_stream_chunk=send_stream_delta if request.get("stream") else None,
                     stream_timing=stream_timing if request.get("stream") else None,

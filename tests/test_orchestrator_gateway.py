@@ -207,3 +207,38 @@ def test_gateway_stream_gives_parallel_tool_calls_distinct_indexes(tmp_path):
     finally:
         server.shutdown()
         thread.join(timeout=2)
+
+
+def test_gateway_reasoning_effort_mapping(tmp_path):
+    class CaptureAdapter:
+        def __init__(self):
+            self.last_request = None
+
+        def complete(self, request, timeout, cancel=None, on_stream_start=None, on_stream_chunk=None):
+            self.last_request = request
+            return {"content": "ok", "tool_calls": []}
+
+    adapter = CaptureAdapter()
+    runtime = OrchestratorRuntime(CapabilityRegistry([worker("ready")]), {"ready": adapter}, EvidenceStore(tmp_path / "evidence.jsonl"))
+    server = GatewayServer(("127.0.0.1", 0), create_gateway(runtime, "client-secret"))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        conn = HTTPConnection(host, port)
+        body = json.dumps({"model": "engineering/ready", "messages": [{"role": "user", "content": "hi"}], "reasoning_effort": "low"})
+        conn.request("POST", "/v1/chat/completions", body=body, headers={"Authorization": "Bearer client-secret", "Content-Type": "application/json"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        conn.close()
+
+        conn = HTTPConnection(host, port)
+        body = json.dumps({"model": "engineering/ready", "messages": [{"role": "user", "content": "hi"}]})
+        conn.request("POST", "/v1/chat/completions", body=body, headers={"Authorization": "Bearer client-secret", "Content-Type": "application/json", "X-AIHost-Reasoning-Effort": "medium"})
+        resp = conn.getresponse()
+        assert resp.status == 200
+        conn.close()
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+

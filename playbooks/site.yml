@@ -50,6 +50,7 @@
       tags: [site, tuning, performance]
       when:
         - capabilities.inference | default(false) | bool
+        - not (features.os_tuning | default(false) | bool)
         - not ansible_check_mode
       block:
         - name: Install cpufrequtils for CPU frequency scaling management

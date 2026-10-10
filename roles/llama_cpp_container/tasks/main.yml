@@ -72,7 +72,7 @@
     group: "{{ llama_cpp_container_user }}"
     mode: "0750"
   loop: >-
-    {{ [llama_cpp_container_log_dir, llama_cpp_container_config_root]
+    {{ [llama_cpp_container_log_dir, llama_cpp_container_config_root, llama_cpp_container_home ~ '/.sycl_cache']
        + (llama_cpp_container_workers.values() | map(attribute='config_dir') | list) }}
   when: llama_cpp_container_enabled | bool
 

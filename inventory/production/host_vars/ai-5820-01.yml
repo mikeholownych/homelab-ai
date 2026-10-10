@@ -9,7 +9,8 @@ node_metadata:
   environment: production
   hostname: ai-5820-01
 hardware_profile: d5820_dual_b65
-os_tuning_profile: baseline
+os_tuning_profile: d5820_dual_b65
+os_tuning_state: accepted
 
 node_roles:
   inference: true
@@ -326,7 +327,9 @@ orchestrator_gateway_model_aliases:
 # R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
 orchestrator_gateway_clients:
   - {client_id: nexus, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/client-token}
-  - {client_id: opencode, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token}
+  - client_id: opencode
+    scopes: [workload, telemetry]
+    legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token
   - {client_id: operator, scopes: [workload, qualification, monitoring, telemetry]}
   - {client_id: qualification, scopes: [qualification], default_priority: batch, max_priority: batch}
   - {client_id: ansible-admin, scopes: [admin, monitoring, telemetry]}
