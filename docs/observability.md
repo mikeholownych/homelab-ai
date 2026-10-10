@@ -21,6 +21,7 @@ Target architecture agreed for this host:
 | Grafana | dashboards over VM datasources | **role provided, hash-pinned** (`13.2.0`) - install gated at commissioning |
 | Grafana Image Renderer | standalone headless Chrome image rendering service on port 8081 for panel PNG snapshots | **role provided, hash-pinned** (`4.1.5`) - install gated at commissioning |
 | Loki | local log aggregation fed by Alloy | **role provided, hash-pinned** (`v3.7.6`) - install gated at commissioning |
+| Tempo | distributed tracing backend for OTLP spans and Grafana Traces Drilldown | **role provided, hash-pinned** (`v3.1.0`) - install gated at commissioning |
 | xpumd / Level Zero telemetry | GPU utilisation, VRAM, clocks, thermals into textfile dir | **pending hardware** |
 | vLLM metrics endpoint | already exposed by the service; scraped by Alloy once deployed | available when service runs |
 | Prometheus textfile collector dir | offline-provable bridge today | **implemented below** |
@@ -96,7 +97,7 @@ check is recorded in `observability_verification_checklist`; host-level series
 4. VM `/api/v1/status/active_tsdb` returns after first scrape cycle; Alloy `/metrics` shows textfile series.
 5. Recording rule output `aihost:gpu_temperature_celsius:peak` present in VM.
 
-Install all components together (Alloy, VictoriaMetrics, vmalert, Loki,
+Install all components together (Alloy, VictoriaMetrics, vmalert, Loki, Tempo,
 Grafana, Grafana Image Renderer) or prune individual ones via `observability_*_enabled` flags before
 launch. In check mode the role is fully inert: it renders every config/unit
 template and records `observability_validation_status: NOT_TESTED`, but never

@@ -10,6 +10,7 @@
       - observability_vmalert_enabled is boolean
       - observability_grafana_enabled is boolean
       - observability_loki_enabled is boolean
+      - observability_tempo_enabled is boolean
       - observability_alloy_version is string
       - observability_alloy_sha256 | length == 64
       - observability_vm_version is string
@@ -21,6 +22,9 @@
       - observability_grafana_image_renderer_sha256 | length == 64
       - observability_loki_version is string
       - observability_loki_sha256 | length == 64
+      - observability_tempo_version is string
+      - observability_tempo_sha256 | length == 64
+      - observability_tempo_binary_inner_sha256 | length == 64
       - observability_server_bind_address is string
       - >-
         not (observability_install_enabled | bool) or
@@ -61,6 +65,7 @@
     - "{{ observability_config_dir }}/victoriametrics"
     - "{{ observability_config_dir }}/vmalert"
     - "{{ observability_config_dir }}/loki"
+    - "{{ observability_config_dir }}/tempo"
     - "{{ observability_config_dir }}/grafana"
     - "{{ observability_config_dir }}/grafana/provisioning/datasources"
     - "{{ observability_config_dir }}/grafana/provisioning/dashboards"
@@ -70,10 +75,21 @@
     - "{{ observability_data_root }}/victoriametrics"
     - "{{ observability_data_root }}/vmalert"
     - "{{ observability_data_root }}/loki"
+    - "{{ observability_data_root }}/tempo"
+    - "{{ observability_data_root }}/tempo/wal"
+    - "{{ observability_data_root }}/tempo/blocks"
+    - "{{ observability_data_root }}/tempo/work"
+    - "{{ observability_data_root }}/tempo/block-builder"
+    - "{{ observability_data_root }}/tempo/block-builder/traces"
+    - "{{ observability_data_root }}/tempo/live-store"
+    - "{{ observability_data_root }}/tempo/live-store/shutdown-marker"
+    - "{{ observability_data_root }}/tempo/live-store/traces"
+    - "/var/tempo"
     - "{{ observability_data_root }}/grafana"
     - "{{ observability_log_dir }}"
     - "{{ observability_log_dir }}/grafana"
     - "{{ observability_grafana_image_renderer_dir }}"
+    - "{{ observability_textfile_metrics_dir }}"
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
@@ -174,6 +190,19 @@
     url: "{{ observability_loki_archive_url }}"
     dest: "{{ observability_install_root }}/bin/loki-{{ observability_loki_version }}.zip"
     checksum: "sha256:{{ observability_loki_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Download pinned Tempo archive
+  ansible.builtin.get_url:
+    url: "{{ observability_tempo_archive_url }}"
+    dest: "{{ observability_install_root }}/bin/tempo-{{ observability_tempo_version }}.tar.gz"
+    checksum: "sha256:{{ observability_tempo_sha256 }}"
     mode: "0640"
     timeout: 300
   when:
@@ -317,6 +346,19 @@
     - not ansible_check_mode
   tags: [observability]
 
+- name: Extract Tempo binary
+  ansible.builtin.unarchive:
+    src: "{{ observability_install_root }}/bin/tempo-{{ observability_tempo_version }}.tar.gz"
+    dest: "{{ observability_install_root }}/bin"
+    remote_src: true
+    creates: "{{ observability_install_root }}/bin/tempo"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
 - name: Verify extracted binaries match pinned inner checksums
   ansible.builtin.command:
     argv:
@@ -374,6 +416,19 @@
   ansible.builtin.template:
     src: loki-config.yml.j2
     dest: "{{ observability_config_dir }}/loki/config.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+  notify: Reload observability services
+  tags: [observability]
+
+- name: Install Tempo configuration
+  ansible.builtin.template:
+    src: tempo-config.yml.j2
+    dest: "{{ observability_config_dir }}/tempo/config.yml"
     owner: root
     group: root
     mode: "0640"
@@ -449,6 +504,7 @@
     - aihost-observability-victoriametrics.service.j2
     - aihost-observability-vmalert.service.j2
     - aihost-observability-loki.service.j2
+    - aihost-observability-tempo.service.j2
     - aihost-observability-alloy.service.j2
     - aihost-observability-grafana-image-renderer.service.j2
     - aihost-observability-grafana.service.j2
@@ -477,6 +533,7 @@
     - {name: aihost-observability-victoriametrics, enabled: "{{ observability_vm_enabled | bool }}"}
     - {name: aihost-observability-vmalert, enabled: "{{ observability_vmalert_enabled | bool }}"}
     - {name: aihost-observability-loki, enabled: "{{ observability_loki_enabled | bool }}"}
+    - {name: aihost-observability-tempo, enabled: "{{ observability_tempo_enabled | bool }}"}
     - {name: aihost-observability-alloy, enabled: "{{ observability_alloy_enabled | bool }}"}
     - name: aihost-observability-grafana-image-renderer
       enabled: >-

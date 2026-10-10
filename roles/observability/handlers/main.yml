@@ -7,6 +7,7 @@
     - {name: aihost-observability-victoriametrics, enabled: "{{ observability_vm_enabled | default(true) | bool }}"}
     - {name: aihost-observability-vmalert, enabled: "{{ observability_vmalert_enabled | default(true) | bool }}"}
     - {name: aihost-observability-loki, enabled: "{{ observability_loki_enabled | default(true) | bool }}"}
+    - {name: aihost-observability-tempo, enabled: "{{ observability_tempo_enabled | default(true) | bool }}"}
     - {name: aihost-observability-alloy, enabled: "{{ observability_alloy_enabled | default(true) | bool }}"}
     - name: aihost-observability-grafana-image-renderer
       enabled: >-

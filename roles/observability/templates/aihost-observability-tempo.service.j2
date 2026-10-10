@@ -1,0 +1,18 @@
+[Unit]
+Description=Tempo distributed tracing backend (aihost observability)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={{ observability_install_root }}/bin/tempo \
+  -config.file={{ observability_config_dir }}/tempo/config.yml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ observability_data_root }}/tempo /var/tempo
+
+[Install]
+WantedBy=multi-user.target

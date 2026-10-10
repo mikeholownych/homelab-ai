@@ -58,7 +58,7 @@ class ObservabilityRoleContractTests(unittest.TestCase):
         self.assertEqual([], self.defaults["observability_verification_checklist"])
 
     def test_all_upstream_artifacts_hash_pinned(self) -> None:
-        for name in ("alloy", "vm", "grafana", "grafana_image_renderer", "loki"):
+        for name in ("alloy", "vm", "grafana", "grafana_image_renderer", "loki", "tempo"):
             self.assertIsInstance(
                 self.defaults[f"observability_{name}_version"], str
             )
@@ -105,7 +105,7 @@ class ObservabilityRoleContractTests(unittest.TestCase):
             for task in self.tasks
             if task.get("name", "").startswith("Download pinned")
         ]
-        self.assertEqual(6, len(download_tasks))
+        self.assertEqual(7, len(download_tasks))
         for task in download_tasks:
             get_url = task["ansible.builtin.get_url"]
             self.assertTrue(

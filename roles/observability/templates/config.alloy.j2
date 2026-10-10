@@ -34,6 +34,12 @@ prometheus.scrape "observability_self" {
   targets = [
     { "__address__" = "127.0.0.1:{{ observability_vm_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "victoriametrics" },
     { "__address__" = "127.0.0.1:{{ observability_vmalert_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "vmalert" },
+{% if observability_loki_enabled | bool %}
+    { "__address__" = "127.0.0.1:{{ observability_loki_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "loki" },
+{% endif %}
+{% if observability_tempo_enabled | default(false) | bool %}
+    { "__address__" = "127.0.0.1:{{ observability_tempo_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "tempo" },
+{% endif %}
   ]
   scrape_interval = "30s"
   forward_to      = [prometheus.remote_write.vm.receiver]
@@ -62,11 +68,30 @@ loki.write "loki" {
   }
 }
 
+loki.relabel "journal" {
+  forward_to = [loki.write.loki.receiver]
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "level"
+  }
+
+  rule {
+    action       = "replace"
+    target_label = "job"
+    replacement  = "systemd-journal"
+  }
+}
+
 loki.source.journal "system" {
   max_age    = "12h"
-  forward_to = [loki.write.loki.receiver]
+  forward_to = [loki.relabel.journal.receiver]
   labels     = {
-    "job"  = "systemd-journal",
     "host" = "{{ ansible_hostname | default('grafana') }}",
   }
 }

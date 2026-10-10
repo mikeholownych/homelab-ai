@@ -461,7 +461,7 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "{job=~\"systemd-journal|aihost\"}",
+          "expr": "{job=~\"systemd-journal|loki.source.journal.system|aihost\"}",
           "refId": "A"
         }
       ]

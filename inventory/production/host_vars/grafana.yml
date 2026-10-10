@@ -88,6 +88,7 @@ observability_vm_enabled: true
 observability_vmalert_enabled: true
 observability_grafana_enabled: true
 observability_loki_enabled: true
+observability_tempo_enabled: true
 
 # Grafana admin credentials
 observability_grafana_admin_password: "AiHost2026!Observability"

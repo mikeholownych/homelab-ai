@@ -20,3 +20,33 @@ datasources:
     isDefault: false
     jsonData:
       maxLines: 1000
+{% if observability_tempo_enabled | default(true) | bool %}
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: "(?:traceID|trace_id)=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+  - name: Tempo
+    uid: tempo
+    type: tempo
+    access: proxy
+    url: http://127.0.0.1:{{ observability_tempo_http_port }}
+    isDefault: false
+    jsonData:
+      httpMethod: GET
+      serviceMap:
+        datasourceUid: victoriametrics
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '-1h'
+        tags: ['job', 'instance', 'service.name']
+        filterBySpanID: false
+        filterByTraceID: true
+{% endif %}
