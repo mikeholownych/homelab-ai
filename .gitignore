@@ -10,3 +10,6 @@ evidence/*
 # Custom-kernel build artifacts are never committed; metadata/checksums are.
 kernel/build/*
 !kernel/build/.gitkeep
+
+# Session transcript archives
+docs/archive/transcripts/

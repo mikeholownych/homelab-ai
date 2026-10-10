@@ -1,7 +1,7 @@
 # DEFECT: unbounded reasoning on the deep route
 
 - **Opened:** 2026-10-07 (found during the 2026-10-06 model evaluation, Phase B)
-- **Status:** OPEN. Remediation design pending. No production change has been made, and none may be made without separate authorization.
+- **Status:** RESOLVED (2026-10-07). Remediated via Design 02 (W-REASON); bounded budgets (8192/4096) and total output bounds deployed in release f31218c and verified in production.
 - **Severity:** high. Requests can consume minutes and tens of thousands of tokens and end without producing an answer.
 - **Scope:** `engineering/deep` (worker `b0-live-llama-deep-worker2`, Qwen3.5-27B Q4_K_M, llama.cpp `5fc4f3c8c`). It probably
   applies to any route served by a reasoning-capable model.

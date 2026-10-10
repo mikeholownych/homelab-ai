@@ -27,7 +27,13 @@ PLAYBOOKS := \
 	playbooks/benchmark.yml \
 	playbooks/facts-export.yml \
 	playbooks/reboot-verify.yml \
-	playbooks/commission.yml
+	playbooks/commission.yml \
+	playbooks/inference.yml \
+	playbooks/candidate.yml \
+	playbooks/vault-backup-controller.yml \
+	playbooks/vault-platform-credentials.yml \
+	playbooks/vault-post-init.yml \
+	playbooks/vault-server.yml
 
 .PHONY: bootstrap-tools lint syntax test check tuning-smoke idempotency quality
 

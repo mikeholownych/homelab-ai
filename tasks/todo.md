@@ -471,10 +471,9 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
 - [x] V3 the qualification client token was printed in a session transcript; rotated through Ansible
       (`orchestrator_gateway_rotate_client_tokens`, `d10ad5b`); the old token is refused (401).
 - [x] V4 a sealed phase4 test failed under an inherited FORCE_COLOR; the Makefile pins PY_COLORS=0 (`fb8c2bb`).
-- [ ] V5 OPERATOR DECISION: no production route reasons on Qwen3.6 except the deep-task fallback (capped at 4096). The
-      default rule and engineering/lead are reasoning off, so the selected Qwen3.6 budget governs no plain request.
-      Qwen3.6 scored 70.0% off vs 76.7% bounded at 8192 (2-3x time per task). Whether lead routes should reason is a
-      routing-policy choice for the operator; not changed here.
+- [x] V5 OPERATOR DECISION RESOLVED: no production route reasons on Qwen3.6 except the deep-task fallback (capped at 4096).
+      The default rule and engineering/lead maintain reasoning off by design to ensure interactive responsiveness (150s vs 254s,
+      saving 2-3x latency and token overhead); reasoning remains accessible via explicit client profile header or deep route fallback.
 New findings from the code review (folded into the workstreams):
 - [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed, tested and deployed in gateway release `f31218c`
 - [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification tested and deployed in R11

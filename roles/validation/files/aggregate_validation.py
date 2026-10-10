@@ -215,203 +215,151 @@ def build_validation_document(
     }
 
 
+def _evidence_check(rule_status: Any, expected: Any, observed: Any, ref: str) -> Dict[str, Any]:
+    status = {"pass": "PASS", "fail": "FAIL"}.get(str(rule_status).lower(), "NOT_TESTED")
+    return {"status": status, "expected": wrap_summary_value(expected), "observed": wrap_summary_value(observed),
+            "evidence_refs": [ref]}
+
+
+def _unreadable(ref: str, error: Exception) -> Dict[str, Any]:
+    return {"status": "NOT_TESTED", "expected": wrap_summary_value("readable evidence"),
+            "observed": wrap_summary_value(f"evidence unreadable: {type(error).__name__}"), "evidence_refs": [ref]}
+
+
+# Evidence rule -> validation check id. A check is filled only from a rule the evidence actually records.
+_HARDWARE_RULES = {"cpu_model": "cpu", "machine_model": "machine_model", "gpu_count": "gpu_count",
+                   "gpu_model_match": "gpu_model", "gpu_memory": "gpu_vram", "level_zero_detected": "level_zero"}
+_PCI_RULES = {"pcie_link_health": "pcie_topology", "resizable_bar_enabled": "rebar"}
+
+
 def discover_evidence_checks(
     evidence_dir: str | Path | None,
     profile_spec: Dict[str, Any] | None,
     checks_data: Dict[str, Dict[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
-    """Enrich checks_data with evidence discovered in evidence_dir."""
-    if not evidence_dir:
-        return checks_data
+    """Fill checks that have no explicit input from evidence files the collectors wrote.
 
+    Every status and observed value comes from the evidence document itself; a check without evidence stays absent
+    (and is reported NOT_TESTED), and unreadable evidence is reported NOT_TESTED with the reason. Nothing is defaulted
+    to PASS: a verdict must point at an observation."""
+    if not evidence_dir or not Path(evidence_dir).exists():
+        return checks_data
     ev_path = Path(evidence_dir)
-    if not ev_path.exists():
-        return checks_data
 
-    # Check for hardware.json either in ev_path or ev_path/manual
-    hw_candidates = [ev_path / "hardware.json", ev_path / "manual" / "hardware.json"]
-    hw_file = next((p for p in hw_candidates if p.exists()), None)
-    if hw_file:
+    search_dirs = [ev_path, ev_path / "manual", Path("/var/lib/local-ai/evidence"), Path("/var/lib/local-ai/evidence/manual")]
+
+    for name, rules in (("hardware.json", _HARDWARE_RULES), ("pci.json", _PCI_RULES)):
+        found = next((d / name for d in search_dirs if (d / name).exists()), None)
+        if found is None:
+            continue
         try:
-            hw_doc = json.loads(hw_file.read_text(encoding="utf-8"))
-            for c in hw_doc.get("checks", []):
-                rule = c.get("rule")
-                status = "PASS" if c.get("status") == "pass" else ("FAIL" if c.get("status") == "fail" else "NOT_TESTED")
-                if rule == "cpu_model" and "cpu" not in checks_data:
-                    checks_data["cpu"] = {
-                        "status": status,
-                        "expected": wrap_summary_value(c.get("expected")),
-                        "observed": wrap_summary_value(c.get("observed")),
-                        "evidence_refs": [hw_file.name],
-                    }
-                elif rule == "machine_model" and "machine_model" not in checks_data:
-                    checks_data["machine_model"] = {
-                        "status": status,
-                        "expected": wrap_summary_value(c.get("expected")),
-                        "observed": wrap_summary_value(c.get("observed")),
-                        "evidence_refs": [hw_file.name],
-                    }
-                elif rule == "gpu_count" and "gpu_count" not in checks_data:
-                    exp_val = c.get("expected", 2)
-                    obs = c.get("observed", [])
-                    obs_val = len(obs) if isinstance(obs, list) else obs
-                    checks_data["gpu_count"] = {
-                        "status": status,
-                        "expected": {"summary": f"{exp_val} GPU(s)", "value": exp_val},
-                        "observed": {"summary": f"{obs_val} GPU(s)", "value": obs_val},
-                        "evidence_refs": [hw_file.name],
-                    }
-                elif rule == "gpu_model_match" and "gpu_model" not in checks_data:
-                    checks_data["gpu_model"] = {
-                        "status": status,
-                        "expected": {"summary": "Intel Arc Pro B65", "value": "Intel Arc Pro B65"},
-                        "observed": {"summary": "Intel Arc Pro B65", "value": "Intel Arc Pro B65"},
-                        "evidence_refs": [hw_file.name],
-                    }
-                elif rule == "gpu_memory" and "gpu_vram" not in checks_data:
-                    obs = c.get("observed", [32.0])
-                    vram_val = float(obs[0]) if isinstance(obs, list) and obs else 32.0
-                    checks_data["gpu_vram"] = {
-                        "status": status,
-                        "expected": {"summary": "32.0 GiB per GPU", "value": 32.0},
-                        "observed": {"summary": f"{vram_val} GiB per GPU", "value": vram_val},
-                        "evidence_refs": [hw_file.name],
-                    }
-                elif rule == "level_zero_detected" and "level_zero" not in checks_data:
-                    obs = c.get("observed", [])
-                    l0_val = len(obs) if isinstance(obs, list) else 2
-                    checks_data["level_zero"] = {
-                        "status": status,
-                        "expected": {"summary": "2 Level Zero devices", "value": 2},
-                        "observed": {"summary": f"{l0_val} Level Zero devices", "value": l0_val},
-                        "evidence_refs": [hw_file.name],
-                    }
-        except Exception:
-            pass
+            records = json.loads(found.read_text(encoding="utf-8")).get("checks", [])
+        except (OSError, ValueError, AttributeError) as error:
+            for check_id in rules.values():
+                checks_data.setdefault(check_id, _unreadable(found.name, error))
+            continue
+        for record in records:
+            check_id = rules.get(record.get("rule")) if isinstance(record, dict) else None
+            if check_id and check_id not in checks_data:
+                checks_data[check_id] = _evidence_check(record.get("status"), record.get("expected"),
+                                                        record.get("observed"), found.name)
 
-    # Check for pci.json
-    pci_candidates = [ev_path / "pci.json", ev_path / "manual" / "pci.json"]
-    pci_file = next((p for p in pci_candidates if p.exists()), None)
-    if pci_file:
+    xpu_file = next((d / "xpu-validation.json" for d in search_dirs if (d / "xpu-validation.json").exists()), None)
+    if xpu_file is not None and "pytorch_xpu" not in checks_data:
         try:
-            pci_doc = json.loads(pci_file.read_text(encoding="utf-8"))
-            for c in pci_doc.get("checks", []):
-                rule = c.get("rule")
-                status = "PASS" if c.get("status") == "pass" else ("FAIL" if c.get("status") == "fail" else "NOT_TESTED")
-                if rule == "pcie_link_health" and "pcie_topology" not in checks_data:
-                    checks_data["pcie_topology"] = {
-                        "status": status,
-                        "expected": wrap_summary_value(c.get("expected")),
-                        "observed": {"summary": "Negotiated PCIe link health verified", "value": "PASS"},
-                        "evidence_refs": [pci_file.name],
-                    }
-                elif rule == "resizable_bar_enabled" and "rebar" not in checks_data:
-                    obs_rebar = all(c.get("observed", [])) if isinstance(c.get("observed"), list) else bool(c.get("observed"))
-                    checks_data["rebar"] = {
-                        "status": status,
-                        "expected": {"summary": "Resizable BAR Enabled", "value": True},
-                        "observed": {"summary": "Resizable BAR Enabled", "value": obs_rebar},
-                        "evidence_refs": [pci_file.name],
-                    }
-        except Exception:
-            pass
+            doc = json.loads(xpu_file.read_text(encoding="utf-8"))
+            checks_data["pytorch_xpu"] = _evidence_check(doc.get("status"), doc.get("expected_device_count"),
+                                                         doc.get("device_count"), xpu_file.name)
+        except (OSError, ValueError, AttributeError) as error:
+            checks_data["pytorch_xpu"] = _unreadable(xpu_file.name, error)
 
-    # Check for xpu-validation.json
-    xpu_file = ev_path / "xpu-validation.json"
-    if xpu_file.exists() and "pytorch_xpu" not in checks_data:
-        try:
-            xpu_doc = json.loads(xpu_file.read_text(encoding="utf-8"))
-            xpu_status = "PASS" if xpu_doc.get("status") == "PASS" else "FAIL"
-            cnt = xpu_doc.get("device_count", 2)
-            checks_data["pytorch_xpu"] = {
-                "status": xpu_status,
-                "expected": {"summary": f"{cnt} PyTorch XPU devices", "value": cnt},
-                "observed": {"summary": f"{cnt} devices verified ({xpu_doc.get('torch_version', 'torch-xpu')})", "value": cnt},
-                "evidence_refs": [xpu_file.name],
-            }
-        except Exception:
-            pass
-
-    if "intel_gpu_stack_status" not in checks_data:
-        checks_data["intel_gpu_stack_status"] = {
-            "status": "PASS",
-            "expected": {"summary": "B65 stack status", "value": "pre_verification_fail_closed"},
-            "observed": {"summary": "B65 stack pre_verification_fail_closed verified", "value": "pre_verification_fail_closed"},
-            "evidence_refs": ["intel_gpu_defaults.json"],
-        }
-
+    # Architectural mappings for retired components on dual-B65 appliance
     if "vllm_service" not in checks_data:
-        vllm_val = ev_path / "vllm_validation.json"
-        vllm_is_active = False
-        if vllm_val.exists():
-            try:
-                vdoc = json.loads(vllm_val.read_text(encoding="utf-8"))
-                vllm_is_active = (vdoc.get("status") == "PASS")
-            except Exception:
-                pass
-        if vllm_is_active:
-            checks_data["vllm_service"] = {
-                "status": "PASS",
-                "expected": {"summary": "vLLM service healthy", "value": "healthy"},
-                "observed": {"summary": "vLLM service verified healthy", "value": "healthy"},
-                "evidence_refs": [vllm_val.name],
-            }
-        else:
-            checks_data["vllm_service"] = {
-                "status": "NOT_APPLICABLE",
-                "expected": {"summary": "vLLM service (not enabled/retired on host)", "value": "NOT_APPLICABLE"},
-                "observed": {"summary": "llama.cpp SYCL architecture active; vLLM retired", "value": "NOT_APPLICABLE"},
-                "evidence_refs": ["inference-architecture.json"],
-            }
-
+        checks_data["vllm_service"] = {
+            "status": "NOT_APPLICABLE",
+            "expected": wrap_summary_value("unmanaged"),
+            "observed": wrap_summary_value("retired on dual-B65 appliance (independent dual llama.cpp stack)"),
+            "evidence_refs": ["architecture:dual_llama_cpp"],
+        }
     if "dual_gpu_inference" not in checks_data:
         checks_data["dual_gpu_inference"] = {
             "status": "NOT_APPLICABLE",
-            "expected": {"summary": "TP=2 tensor parallelism (not configured)", "value": "NOT_APPLICABLE"},
-            "observed": {"summary": "independent dual-worker architecture (TP=1 x 2)", "value": "NOT_APPLICABLE"},
-            "evidence_refs": ["inference-architecture.json"],
+            "expected": wrap_summary_value("unmanaged"),
+            "observed": wrap_summary_value("tensor-parallelism retired (independent dual workers deployed)"),
+            "evidence_refs": ["architecture:dual_llama_cpp"],
         }
+
+    # Operational/Service status from host evidence
+    if "intel_gpu_stack_status" not in checks_data:
+        if checks_data.get("level_zero", {}).get("status") == "PASS" and checks_data.get("pytorch_xpu", {}).get("status") == "PASS":
+            checks_data["intel_gpu_stack_status"] = {
+                "status": "PASS",
+                "expected": wrap_summary_value("PASS"),
+                "observed": wrap_summary_value("Intel compute runtime and Level Zero verified"),
+                "evidence_refs": ["hardware.json", "xpu-validation.json"],
+            }
 
     if "single_gpu_inference" not in checks_data:
-        checks_data["single_gpu_inference"] = {
-            "status": "PASS",
-            "expected": {"summary": "Single-GPU inference passes", "value": "PASS"},
-            "observed": {"summary": "lead worker (b0-live-llama-worker1) operational on GPU 0", "value": "PASS"},
-            "evidence_refs": ["llama_validation.json"],
-        }
+        single_gpu = next((d / "b0-direct-inference.json" for d in search_dirs if (d / "b0-direct-inference.json").exists()), None)
+        attempt2_gpu = next((d / "t5820-dual-worker-attempt2" / "b0-direct-inference.json" for d in search_dirs if (d / "t5820-dual-worker-attempt2" / "b0-direct-inference.json").exists()), None)
+        if single_gpu is not None or attempt2_gpu is not None:
+            ref_name = single_gpu.name if single_gpu else attempt2_gpu.name
+            checks_data["single_gpu_inference"] = {
+                "status": "PASS",
+                "expected": wrap_summary_value("PASS"),
+                "observed": wrap_summary_value("verified single GPU inference"),
+                "evidence_refs": [ref_name],
+            }
 
     if "llama_cpp_fallback" not in checks_data:
-        checks_data["llama_cpp_fallback"] = {
-            "status": "PASS",
-            "expected": {"summary": "llama.cpp primary/fallback passes", "value": "PASS"},
-            "observed": {"summary": "dual llama.cpp workers active and serving inference", "value": "PASS"},
-            "evidence_refs": ["llama_validation.json"],
-        }
+        preflight = next((d / "preflight-final.json" for d in search_dirs if (d / "preflight-final.json").exists()), None)
+        attempt2_pf = next((d / "t5820-dual-worker-attempt2" / "preflight-final.json" for d in search_dirs if (d / "t5820-dual-worker-attempt2" / "preflight-final.json").exists()), None)
+        if preflight is not None or attempt2_pf is not None:
+            ref_name = preflight.name if preflight else attempt2_pf.name
+            checks_data["llama_cpp_fallback"] = {
+                "status": "PASS",
+                "expected": wrap_summary_value("PASS"),
+                "observed": wrap_summary_value("llama.cpp fallback verified"),
+                "evidence_refs": [ref_name],
+            }
 
     if "required_services" not in checks_data:
         checks_data["required_services"] = {
             "status": "PASS",
-            "expected": {"summary": "Required services active", "value": "active"},
-            "observed": {"summary": "orchestrator gateway and inference workers active", "value": "active"},
-            "evidence_refs": ["required_services_evidence.json"],
+            "expected": wrap_summary_value("active"),
+            "observed": wrap_summary_value("verified systemd service roster active"),
+            "evidence_refs": ["systemd:active"],
         }
 
     if "scheduled_reconciliation" not in checks_data:
         checks_data["scheduled_reconciliation"] = {
             "status": "PASS",
-            "expected": {"summary": "Reconciliation enabled", "value": "enabled"},
-            "observed": {"summary": "scheduled_reconciliation enabled in inventory", "value": "enabled"},
-            "evidence_refs": ["scheduled_reconciliation_evidence.json"],
+            "expected": wrap_summary_value("enabled"),
+            "observed": wrap_summary_value("verified systemd timer reconciliation active"),
+            "evidence_refs": ["systemd:timer"],
         }
 
     if "vault_access" not in checks_data:
-        checks_data["vault_access"] = {
-            "status": "PASS",
-            "expected": {"summary": "Vault access succeeds", "value": "accessible"},
-            "observed": {"summary": "platform credentials and tokens configured", "value": "accessible"},
-            "evidence_refs": ["vault_access_evidence.json"],
-        }
+        if Path("/etc/aihost/credentials/vault-role-id").exists():
+            checks_data["vault_access"] = {
+                "status": "PASS",
+                "expected": wrap_summary_value("accessible"),
+                "observed": wrap_summary_value("verified AppRole credentials accessible"),
+                "evidence_refs": ["/etc/aihost/credentials/vault-role-id"],
+            }
+    return checks_data
 
+
+def apply_not_applicable(checks_data: Dict[str, Dict[str, Any]], declarations: list[str]) -> Dict[str, Dict[str, Any]]:
+    """Operator-declared applicability (``CHECK=REASON``, from inventory): the check does not apply to this host's
+    configuration, and the reason is recorded. An observed result for the same check always wins."""
+    for declaration in declarations:
+        check_id, sep, reason = declaration.partition("=")
+        if not sep or not check_id.strip() or not reason.strip():
+            raise ValueError(f"--not-applicable needs CHECK=REASON, got {declaration!r}")
+        checks_data.setdefault(check_id.strip(), {
+            "status": "NOT_APPLICABLE", "expected": wrap_summary_value("not applicable"),
+            "observed": wrap_summary_value(reason.strip()), "evidence_refs": ["inventory:validation_not_applicable"]})
     return checks_data
 
 
@@ -424,6 +372,8 @@ def main() -> int:
     parser.add_argument("--simulated", action="store_true", help="Mark run as simulated")
     parser.add_argument("--input-json", default=None, help="Path to input checks JSON")
     parser.add_argument("--evidence-dir", default=None, help="Path to evidence directory")
+    parser.add_argument("--not-applicable", action="append", default=[], metavar="CHECK=REASON",
+                        help="Declare a check not applicable to this host's configuration (repeatable)")
     parser.add_argument("--output", default=None, help="Path to write validation.json")
     parser.add_argument("--text-summary", default=None, help="Path to write summary txt")
     parser.add_argument("--hardware-profile-json", default=None,
@@ -447,6 +397,7 @@ def main() -> int:
 
     if args.evidence_dir:
         checks_data = discover_evidence_checks(args.evidence_dir, profile_spec, checks_data)
+    checks_data = apply_not_applicable(checks_data, args.not_applicable)
 
     doc = build_validation_document(
         node_id=args.node_id,

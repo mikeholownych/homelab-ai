@@ -1,5 +1,5 @@
 ---
-validation_evidence_dir: "/var/lib/aihost/evidence"
+validation_evidence_dir: "{{ local_ai_evidence_dir | default('/var/lib/local-ai/evidence') }}"
 validation_output_path: "{{ validation_evidence_dir }}/validation.json"
 validation_summary_path: "{{ validation_evidence_dir }}/validation_summary.txt"
 validation_checks_input_path: "/var/lib/aihost/tuning/tuning-checks.json"
@@ -10,3 +10,4 @@ validation_simulated: false
 validation_hardware_profile_path: >-
   {{ playbook_dir }}/../profiles/hardware/{{ hardware_profile | default('p620_dual_b65') }}.yml
 validation_profile_json_path: "{{ validation_evidence_dir }}/hardware-profile-expected.json"
+validation_not_applicable: {}

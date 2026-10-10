@@ -33,8 +33,8 @@
   tags: [validation, operations]
 
 - name: Run independent validation aggregator
-  ansible.builtin.command:
-    argv:
+  vars:
+    validation_aggregator_argv:
       - /usr/bin/python3
       - "{{ validation_aggregator_path }}"
       - --node-id
@@ -55,6 +55,17 @@
       - "{{ validation_profile_json_path }}"
       - --evidence-dir
       - "{{ validation_evidence_dir }}"
+    # Operator-declared applicability from inventory (check id -> reason), recorded in the validation document.
+    validation_not_applicable_argv: >-
+      {{ (validation_not_applicable | default({})) | dict2items
+         | map('community.general.json_query', '[key, value]') | map('join', '=')
+         | map('regex_replace', '^', '--not-applicable=') | list }}
+  ansible.builtin.command:
+    argv: >-
+      {{ validation_aggregator_argv +
+         ((validation_not_applicable_argv | from_yaml)
+          if validation_not_applicable_argv is string
+          else (validation_not_applicable_argv | default([]))) }}
   register: validation_run
   changed_when: false
   failed_when:
