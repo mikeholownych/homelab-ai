@@ -34,7 +34,10 @@ RELEASE_CONFIGS = {
         "security_suite": "resolute-security",
     },
 }
-BUILD_TIMEOUT_SECONDS = 300
+# One image build. Its time is dominated by package downloads from the pinned Ubuntu snapshot archive: a green CI
+# run built resolute in 176 s, and on 2026-10-10 two runs exceeded 300 s (resolute, then noble). The harness
+# --timeout still bounds the whole invocation; this only stops a slow archive from failing an otherwise valid run.
+BUILD_TIMEOUT_SECONDS = 600
 # One playbook run. A cold resolute initial convergence exceeded 300 s under load (a single useradd took ~50 s).
 RUN_TIMEOUT_SECONDS = 600
 # Removing a privileged container can outlast dockerd's 10 s kill grace (it then escalates to SIGKILL and tears

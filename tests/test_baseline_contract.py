@@ -2274,7 +2274,7 @@ class BaselineContractTests(unittest.TestCase):
         self.assertIn('"docker", "inspect", self.container_name', harness_text)
         self.assertIn('"--network"', harness_text)
         self.assertIn('"none"', harness_text)
-        self.assertIn("BUILD_TIMEOUT_SECONDS = 300", harness_text)
+        self.assertIn("BUILD_TIMEOUT_SECONDS = 600", harness_text)
         self.assertIn("RUN_TIMEOUT_SECONDS = 600", harness_text)
         self.assertIn('choices=("noble", "resolute")', harness_text)
         self.assertIn("assert_apt_sources", harness_text)
