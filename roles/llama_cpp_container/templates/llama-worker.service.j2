@@ -17,6 +17,9 @@ ExecStartPre=-/usr/bin/podman rm -f {{ llama_worker.container_name }}
 ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
   --network host --ipc host --security-opt no-new-privileges \
   --device local-ai.intel/gpu=all --group-add keep-groups \
+{% if llama_worker.cpuset_cpus is defined and llama_worker.cpuset_cpus %}
+  --cpuset-cpus {{ llama_worker.cpuset_cpus }} \
+{% endif %}
   -e ONEAPI_DEVICE_SELECTOR=level_zero:0,1 -e ZE_AFFINITY_MASK={{ llama_worker.gpu }} \
   -e SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 \
   -e SYCL_CACHE_PERSISTENT=1 -e SYCL_CACHE_DIR={{ llama_cpp_container_home }}/.sycl_cache \

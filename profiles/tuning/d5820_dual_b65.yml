@@ -47,6 +47,7 @@ os_tuning:
       vm.zone_reclaim_mode: 0
     cmdline:
       - "transparent_hugepage=always"
+      - "pcie_aspm=performance"
     expected_release: null
   pcie:
     validate_rebar: true

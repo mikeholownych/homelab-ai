@@ -322,6 +322,7 @@ class HugepagesParamContractTests(unittest.TestCase):
             "default_hugepagesz=1G",
             "hugepagesz=2M",
             "hugepages=512",
+            "pcie_aspm=performance",
         ]
         for param in generated:
             self.assertTrue(

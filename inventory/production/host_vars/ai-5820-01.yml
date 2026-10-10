@@ -172,6 +172,7 @@ llama_cpp_container_workers:
     context: 65536
     # Q-BUDGET selected 8192 under the authorized quality-over-speed policy.
     reasoning_budget: 8192
+    cpuset_cpus: "0,1,4,5"
   worker2:
     worker_id: b0-live-llama-deep-worker2
     service_name: aihost-llama-worker2.service
@@ -183,8 +184,9 @@ llama_cpp_container_workers:
     served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
     context: 65536
     args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-           "--lazy-mode", "on"]
+           "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     reasoning_budget: 4096
+    cpuset_cpus: "2,3,6,7"
 
 # Scheduled lifecycle timers are OFF. The snapshot runner needs a deployed repo snapshot at /opt/local-ai
 # (absent), and the reconcile unit converges with site.yml, which would overwrite the live inference
@@ -402,7 +404,9 @@ llama_cpp_container_candidate_profiles:
       model_file: qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
       served_name: Qwen3.6-35B-A3B-UD-Q4_K_M
       context: 65536
-      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]
+      cpuset_cpus: "0,1,4,5"
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+             "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     gateway_worker:
       worker_id: candidate-qwen36-lead
       credential_name: candidate-qwen36-token
@@ -442,8 +446,9 @@ llama_cpp_container_candidate_profiles:
       model_file: flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf
       served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
       context: 65536
+      cpuset_cpus: "2,3,6,7"
       args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-             "--lazy-mode", "on"]
+             "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     gateway_worker:
       worker_id: candidate-flashnext-deep
       credential_name: candidate-flashnext-token
@@ -483,7 +488,9 @@ llama_cpp_container_candidate_profiles:
       model_file: qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf
       served_name: Qwen3.8-27B-UD-Q4_K_M
       context: 65536
-      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics"]
+      cpuset_cpus: "2,3,6,7"
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+             "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
     gateway_worker:
       worker_id: candidate-qwen38-deep
       credential_name: candidate-qwen38-token
