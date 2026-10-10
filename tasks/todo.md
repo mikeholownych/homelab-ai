@@ -474,6 +474,15 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
 - [x] V5 OPERATOR DECISION RESOLVED: no production route reasons on Qwen3.6 except the deep-task fallback (capped at 4096).
       The default rule and engineering/lead maintain reasoning off by design to ensure interactive responsiveness (150s vs 254s,
       saving 2-3x latency and token overhead); reasoning remains accessible via explicit client profile header or deep route fallback.
+- [x] V6 the generic validator published unobserved PASS verdicts (f7f6180, 83b5847); fixed in `f398935` (evidence-only
+      verdicts, live systemctl/Vault observation, inventory-declared applicability).
+- [ ] V7 host evidence `/var/lib/local-ai/evidence/validation_summary.txt` (2026-10-10 13:09) is false
+      (scheduled_reconciliation PASS while aihost-reconcile.timer is not installed); re-run validate.yml with `f398935`
+      in an operator window (it includes hardware roles).
+- [ ] V8 OPERATOR DECISION: features.scheduled_reconciliation is true but aihost-reconcile.timer is not installed.
+- [ ] V9 pcie_aspm=performance on the kernel command line is not a valid policy (live policy: default); use
+      pcie_aspm.policy=performance and add a validation check; transparent_hugepage=always is duplicated.
+- [ ] V10 AUTHORIZATION: bring the R6 gateway client tokens (operator, qualification, ansible-admin) under Vault.
 New findings from the code review (folded into the workstreams):
 - [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed, tested and deployed in gateway release `f31218c`
 - [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification tested and deployed in R11
