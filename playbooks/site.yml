@@ -3,7 +3,7 @@
   import_playbook: baseline.yml
 
 - name: Converge optional host services
-  hosts: ai_hosts
+  hosts: "ai_hosts:observability"
   gather_facts: true
   tags:
     - site
@@ -126,10 +126,28 @@
         - site
         - foundation
 
+    - name: Include node exporter role when enabled
+      ansible.builtin.include_role:
+        name: node_exporter
+        apply:
+          tags:
+            - site
+            - foundation
+            - monitoring
+            - node_exporter
+      when: node_exporter_enabled | default(false) | bool
+      tags:
+        - site
+        - foundation
+        - monitoring
+        - node_exporter
+
     - name: Include observability role when the feature is enabled
       ansible.builtin.include_role:
         name: observability
-      when: features.observability | default(false) | bool
+      when: >-
+        (features.observability | default(false) | bool)
+        or (observability_install_enabled | default(false) | bool)
       tags:
         - site
         - foundation

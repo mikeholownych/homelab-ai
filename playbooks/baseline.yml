@@ -1,6 +1,6 @@
 ---
 - name: Converge Ubuntu host baseline
-  hosts: ai_hosts
+  hosts: "ai_hosts:observability"
   gather_facts: true
   tags:
     - baseline

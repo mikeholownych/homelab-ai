@@ -69,9 +69,23 @@
     - "{{ observability_data_root }}/loki"
     - "{{ observability_data_root }}/grafana"
     - "{{ observability_log_dir }}"
+    - "{{ observability_log_dir }}/grafana"
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+  tags: [observability]
+
+- name: Ensure archive extraction prerequisites are installed
+  ansible.builtin.apt:
+    name:
+      - unzip
+      - tar
+      - curl
+    state: present
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
   tags: [observability]
 
 - name: Download pinned Grafana Alloy archive
@@ -144,7 +158,21 @@
     src: "{{ observability_install_root }}/bin/alloy-{{ observability_alloy_version }}.zip"
     dest: "{{ observability_install_root }}/bin"
     remote_src: true
-    creates: "{{ observability_install_root }}/bin/alloy"
+    creates: "{{ observability_install_root }}/bin/alloy-linux-amd64"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Symlink Grafana Alloy binary
+  ansible.builtin.file:
+    src: "{{ observability_install_root }}/bin/alloy-linux-amd64"
+    dest: "{{ observability_install_root }}/bin/alloy"
+    state: link
+    owner: root
+    group: root
     mode: "0755"
   when:
     - observability_install_enabled | bool
@@ -196,7 +224,21 @@
     src: "{{ observability_install_root }}/bin/loki-{{ observability_loki_version }}.zip"
     dest: "{{ observability_install_root }}/bin"
     remote_src: true
-    creates: "{{ observability_install_root }}/bin/loki"
+    creates: "{{ observability_install_root }}/bin/loki-linux-amd64"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Symlink Loki binary
+  ansible.builtin.file:
+    src: "{{ observability_install_root }}/bin/loki-linux-amd64"
+    dest: "{{ observability_install_root }}/bin/loki"
+    state: link
+    owner: root
+    group: root
     mode: "0755"
   when:
     - observability_install_enabled | bool
@@ -211,7 +253,7 @@
       - "-version"
   register: observability_vm_version_check
   changed_when: false
-  failed_when: "'v{{ observability_vm_version }}' not in observability_vm_version_check.stdout"
+  failed_when: "observability_vm_version not in observability_vm_version_check.stdout"
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
@@ -296,13 +338,16 @@
   notify: Reload observability services
   tags: [observability]
 
-- name: Install Grafana host overview dashboard
+- name: Install Grafana dashboards
   ansible.builtin.template:
-    src: aihost-host-overview.json.j2
-    dest: "{{ observability_config_dir }}/grafana/dashboards/aihost-host-overview.json"
+    src: "{{ item }}.j2"
+    dest: "{{ observability_config_dir }}/grafana/dashboards/{{ item }}"
     owner: root
     group: root
     mode: "0640"
+  loop:
+    - aihost-host-overview.json
+    - observability-stack-health.json
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'

@@ -1,0 +1,43 @@
+---
+schema_version: 1.0.0
+profile_name: vm_standard
+
+platform:
+  manufacturer: QEMU
+  product_family: Standard PC (Q35 + ICH9, 2009)
+  machine_type_model: "Standard PC"
+  product_name_patterns:
+    - Standard PC
+    - QEMU
+    - KVM
+
+cpu:
+  vendor: GenuineIntel
+  model_patterns:
+    - QEMU
+    - Intel
+    - Common KVM processor
+  sockets_expected: 1
+
+gpu:
+  count_expected: 0
+  architecture: None
+  approved_pci_devices: []
+  expected_models: []
+
+pcie:
+  host_link:
+    max_generation: 3
+    expected_negotiated_generation: 3
+  width_expectations:
+    desired_when_slot_supports: x1
+    allow_slot_limited_width: true
+  material_degradation:
+    default_severity: advisory
+    minimum_negotiated_to_slot_ratio: 0.1
+
+firmware:
+  above_4g_decoding:
+    expected_state: disabled
+  rebar:
+    expected_state: disabled

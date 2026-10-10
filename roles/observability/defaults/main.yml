@@ -41,9 +41,14 @@ observability_alloy_sha256: 3694ea4e1044b367e1c21ffe28117f209c5989fa5e604d000321
 observability_alloy_archive_url: https://github.com/grafana/alloy/releases/download/v1.19.2/alloy-linux-amd64.zip
 observability_alloy_http_port: 12345
 
-# vLLM /metrics endpoint scraped by Alloy (loopback only).
+# Remote inference host (ai-5820-01) scraped by Alloy
+observability_scrape_aihost_enabled: true
+observability_scrape_aihost_endpoint: "10.0.8.5:9100"
+observability_aihost_instance: "ai-5820-01"
+
+# vLLM /metrics endpoint scraped by Alloy (loopback only when local).
 observability_vllm_metrics_port: 8000
-observability_vllm_scrape_enabled: true
+observability_vllm_scrape_enabled: false
 
 # ---------------------------------------------------------------------------
 # VictoriaMetrics single-node TSDB.

@@ -1,57 +1,471 @@
+{% raw %}
 {
-  "title": "aihost host overview",
-  "uid": "aihost-host-overview",
-  "tags": ["aihost"],
+  "title": "aihost Appliance & GPU Telemetry",
+  "uid": "aihost-appliance-telemetry",
+  "tags": ["aihost", "gpu", "inference"],
   "schemaVersion": 39,
-  "version": 1,
-  "refresh": "1m",
+  "version": 2,
+  "refresh": "15s",
   "timezone": "browser",
   "time": {
-    "from": "now-6h",
+    "from": "now-1h",
     "to": "now"
-  },
-  "templating": {
-    "list": [
-      {
-        "name": "tuning_profile",
-        "label": "tuning_profile",
-        "type": "query",
-        "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-        "query": {
-          "query": "label_values(aihost_gpu_temperature_celsius, tuning_profile)",
-          "refId": "TuningProfileVariable"
-        },
-        "includeAll": true,
-        "multi": true
-      }
-    ]
   },
   "panels": [
     {
-      "title": "GPU temperature peak (all cards)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-      "targets": [
-        {
-          "expr": "aihost:gpu_temperature_celsius:peak",
-          "legendFormat": "peak",
-          "refId": "A"
-        }
-      ]
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Appliance Real-Time KPIs",
+      "type": "row"
     },
     {
-      "title": "GPU thermal severity",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "title": "GPU 0 Peak Temp",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 1 },
+      "id": 1,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "aihost:gpu_thermal_severity:peak",
-          "legendFormat": "severity",
+          "expr": "max(aihost_gpu_temperature_celsius{gpu=\"0\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 70 },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "GPU 1 Peak Temp",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 1 },
+      "id": 2,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "max(aihost_gpu_temperature_celsius{gpu=\"1\"})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "#EAB839", "value": 70 },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total GPU Power",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 },
+      "id": 3,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:gpu_power_watts:total or sum(rate(aihost_gpu_energy_joules_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 150 },
+              { "color": "red", "value": 200 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Worker 1 (GPU 0)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 1 },
+      "id": 4,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "node_systemd_unit_state{name=\"aihost-llama-worker1.service\",state=\"active\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "ACTIVE", "color": "green" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Worker 2 (GPU 1)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 1 },
+      "id": 5,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "node_systemd_unit_state{name=\"aihost-llama-worker2.service\",state=\"active\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "ACTIVE", "color": "green" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Gateway (8443)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 1 },
+      "id": 6,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "node_systemd_unit_state{name=\"aihost-orchestrator-gateway.service\",state=\"active\"}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "ACTIVE", "color": "green" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Host CPU %",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 1 },
+      "id": 7,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:cpu_utilization:percent or (100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m]))))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 90 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Firing Alerts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 1 },
+      "id": 8,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Dual Intel Arc B65 GPU Telemetry",
+      "type": "row"
+    },
+    {
+      "title": "GPU Peak Temperatures over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 9,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "max by (gpu) (aihost_gpu_temperature_celsius)",
+          "legendFormat": "GPU {{gpu}} Peak",
+          "refId": "A"
+        },
+        {
+          "expr": "aihost:gpu_temperature_celsius:peak",
+          "legendFormat": "Cross-Device Peak",
           "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 85 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "GPU Core & Memory Sensors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 10,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram|pcie|mctrl\"}",
+          "legendFormat": "GPU {{gpu}} - {{sensor}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius"
+        }
+      }
+    },
+    {
+      "title": "GPU Power Draw Rate (Watts)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 14 },
+      "id": 11,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "rate(aihost_gpu_energy_joules_total[1m])",
+          "legendFormat": "GPU {{gpu}} Power",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt"
+        }
+      }
+    },
+    {
+      "title": "Graphics-Tile (GT) Idle Residency",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 14 },
+      "id": 12,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "rate(aihost_gpu_gt_idle_residency_seconds_total[1m]) * 100",
+          "legendFormat": "GPU {{gpu}} GT Idle %",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "max": 100,
+          "min": 0
+        }
+      }
+    },
+    {
+      "title": "GPU Thermal Severity State",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 14 },
+      "id": 13,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost_gpu_thermal_severity",
+          "legendFormat": "Severity (0=OK, 1=WARN, 2=CRIT)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 2
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "id": 102,
+      "title": "Inference Infrastructure & Model Health",
+      "type": "row"
+    },
+    {
+      "title": "Model File Page-Cache Residency Ratio",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
+      "id": 14,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:llama_model_file_cache_residency:ratio or (aihost_llama_model_file_cached_bytes / aihost_llama_model_file_size_bytes)",
+          "legendFormat": "Page Cache Ratio",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    {
+      "title": "Llama Worker Major Page Faults Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
+      "id": 15,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:llama_worker_major_faults:rate5m or rate(aihost_llama_worker_major_faults_total[5m])",
+          "legendFormat": "Major Faults/sec",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "id": 103,
+      "title": "Host Resources (ai-5820-01)",
+      "type": "row"
+    },
+    {
+      "title": "CPU Core Saturation (Single-Thread Decode Saturation)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "id": 16,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "100 * (1 - rate(node_cpu_seconds_total{instance=~\"ai-5820-01.*\",mode=\"idle\"}[1m]))",
+          "legendFormat": "Core {{cpu}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        }
+      }
+    },
+    {
+      "title": "Host Memory Utilization Breakdown",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "id": 17,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "node_memory_MemTotal_bytes{instance=~\"ai-5820-01.*\"} - node_memory_MemAvailable_bytes{instance=~\"ai-5820-01.*\"}",
+          "legendFormat": "Used",
+          "refId": "A"
+        },
+        {
+          "expr": "node_memory_MemAvailable_bytes{instance=~\"ai-5820-01.*\"}",
+          "legendFormat": "Available",
+          "refId": "B"
+        },
+        {
+          "expr": "node_memory_Cached_bytes{instance=~\"ai-5820-01.*\"}",
+          "legendFormat": "Page Cache",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "id": 104,
+      "title": "Active Alerts & System Logs",
+      "type": "row"
+    },
+    {
+      "title": "Active Alerts",
+      "type": "alertlist",
+      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 39 },
+      "id": 18,
+      "options": {
+        "show": "current",
+        "stateFilter": {
+          "firing": true,
+          "pending": true,
+          "noData": false,
+          "normal": false
+        }
+      }
+    },
+    {
+      "title": "Appliance Logs (Loki)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 14, "x": 10, "y": 39 },
+      "id": 19,
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{job=~\"systemd-journal|aihost\"}",
+          "refId": "A"
         }
       ]
     }
   ]
 }
+{% endraw %}

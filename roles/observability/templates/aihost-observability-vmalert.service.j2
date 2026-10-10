@@ -7,10 +7,11 @@ Requires=aihost-observability-victoriametrics.service
 Type=simple
 EnvironmentFile={{ observability_config_dir }}/victoriametrics/victoriametrics.env
 ExecStart={{ observability_install_root }}/bin/vmalert-prod \
-  -datasource.url=http://${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VM_HTTP_PORT} \
-  -remoteWrite.url=http://${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VM_HTTP_PORT}/api/v1/write \
-  -remoteWrite.storagePath=${OBSERVABILITY_VMALERT_STATE_PATH} \
+  -datasource.url=http://127.0.0.1:${OBSERVABILITY_VM_HTTP_PORT} \
+  -remoteWrite.url=http://127.0.0.1:${OBSERVABILITY_VM_HTTP_PORT} \
+  -remoteRead.url=http://127.0.0.1:${OBSERVABILITY_VM_HTTP_PORT} \
   -rule=${OBSERVABILITY_VMALERT_RULES_PATH} \
+  -notifier.blackhole \
   -httpListenAddr=${OBSERVABILITY_BIND_ADDRESS}:${OBSERVABILITY_VMALERT_HTTP_PORT}
 Restart=on-failure
 RestartSec=5

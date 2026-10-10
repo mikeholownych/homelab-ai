@@ -199,8 +199,10 @@ scheduled_ansible_validate_enabled: false
 # systemd-networkd-wait-online time out (2 min) at every boot.
 boot_network_wait_optional_interfaces: [eno1]
 
-# Host metrics (loopback only until a Prometheus host exists).
+# Host metrics for Prometheus / Observability stack on 10.0.8.2.
 node_exporter_enabled: true
+node_exporter_allow_non_loopback: true
+node_exporter_listen_address: "10.0.8.5:9100"
 # Ubuntu 26.04.1 / kernel 7 exposes an XFS `xpc` row the packaged 1.10.2 parser rejects;
 # this host has no thermal_zone sysfs entries. GPU thermals continue via the hwmon textfile collector.
 node_exporter_disabled_collectors: [xfs, thermal_zone]

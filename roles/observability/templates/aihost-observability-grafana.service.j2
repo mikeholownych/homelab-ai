@@ -11,15 +11,15 @@ ExecStart={{ observability_install_root }}/grafana-{{ observability_grafana_vers
   cfg:default.server.http_port={{ observability_grafana_http_port }} \
   cfg:default.paths.data={{ observability_data_root }}/grafana \
   cfg:default.paths.logs={{ observability_log_dir }}/grafana \
-  cfg:default.paths.plugins={{ observability_install_root }}/grafana-{{ observability_grafana_version }}/public/plugins \
-  cfg:default.paths.provisioning={{ observability_config_dir }}/grafana/provisioning
+  cfg:default.paths.provisioning={{ observability_config_dir }}/grafana/provisioning \
+  cfg:default.plugins.plugin_admin_enabled=false
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths={{ observability_data_root }}/grafana
+ReadWritePaths={{ observability_data_root }}/grafana {{ observability_log_dir }} {{ observability_install_root }}/grafana-{{ observability_grafana_version }}/data
 
 [Install]
 WantedBy=multi-user.target

@@ -7,11 +7,16 @@ datasources:
     uid: victoriametrics
     type: prometheus
     access: proxy
-    url: http://{{ observability_server_bind_address }}:{{ observability_vm_http_port }}
+    url: http://127.0.0.1:{{ observability_vm_http_port }}
     isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
   - name: Loki
     uid: loki
     type: loki
     access: proxy
-    url: http://{{ observability_server_bind_address }}:{{ observability_loki_http_port }}
+    url: http://127.0.0.1:{{ observability_loki_http_port }}
     isDefault: false
+    jsonData:
+      maxLines: 1000

@@ -1,0 +1,99 @@
+---
+# Observability stack host (VictoriaMetrics, vmalert, Loki, Alloy, Grafana)
+ansible_host: 10.0.8.2
+
+node_metadata:
+  environment: production
+  hostname: grafana
+  hardware_profile: vm_standard
+  os_tuning_profile: baseline
+
+node_roles:
+  inference: false
+  gpu: false
+  observability: true
+
+capabilities:
+  gpu: false
+  inference: false
+  benchmarking: false
+  monitoring: true
+  cluster_eligible: false
+
+features:
+  monitoring: false
+  scheduled_reconciliation: false
+  os_tuning: false
+  observability: false
+  model_registry: false
+  clustering: false
+  cmdb_export: false
+  itsm_integration: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+
+network_endpoints:
+  primary_bind_address: 10.0.8.2
+  management_fqdn: grafana.local
+  metrics_endpoint: "http://10.0.8.2:3000"
+
+cluster:
+  enabled: false
+  name: null
+  membership_state: standalone
+  node_role: worker
+  roles:
+    worker: false
+    api: false
+    scheduler: false
+    storage: false
+  capabilities:
+    ray: false
+    distributed_vllm: false
+    worker_service: false
+    api_service: false
+    scheduler_service: false
+    storage_service: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+  endpoints:
+    api_base_url: null
+    scheduler_address: null
+    ray_gcs_address: null
+    object_storage_url: null
+  fleet:
+    id: null
+    coordinator: null
+    peer_hosts: []
+    quorum_size: null
+
+# Baseline and security configuration
+storage_mounts: []
+storage_lvm:
+  enabled: false
+
+networking_manage_netplan: false
+networking_ethernets: {}
+
+security_firewall_enabled: false
+security_auditd_enabled: false
+
+# Observability stack installation & runtime parameters
+observability_install_enabled: true
+observability_stack_status: commissioned
+observability_server_bind_address: "0.0.0.0"
+
+observability_alloy_enabled: true
+observability_vm_enabled: true
+observability_vmalert_enabled: true
+observability_grafana_enabled: true
+observability_loki_enabled: true
+
+# Grafana admin credentials
+observability_grafana_admin_password: "AiHost2026!Observability"
+
+# Scrape target: remote inference appliance (ai-5820-01)
+observability_scrape_aihost_enabled: true
+observability_scrape_aihost_endpoint: "10.0.8.5:9100"
+observability_aihost_instance: "ai-5820-01"
+observability_vllm_scrape_enabled: false

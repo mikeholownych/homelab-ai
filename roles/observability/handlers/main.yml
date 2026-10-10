@@ -1,4 +1,15 @@
 ---
 - name: Reload observability services
-  ansible.builtin.debug:
-    msg: "Observability configuration updated; restart pending at commissioning"
+  ansible.builtin.systemd_service:
+    name: "{{ item }}.service"
+    state: restarted
+  loop:
+    - aihost-observability-victoriametrics
+    - aihost-observability-vmalert
+    - aihost-observability-loki
+    - aihost-observability-alloy
+    - aihost-observability-grafana
+  when:
+    - observability_install_enabled | default(false) | bool
+    - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
