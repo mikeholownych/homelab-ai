@@ -307,6 +307,9 @@ class VaultRotationAndPolicyTests(unittest.TestCase):
         for slot in ("worker1", "worker2"):
             self.assertIn(f"secret/data/local-ai/services/inference/{slot}-api-key", policy)
         self.assertNotIn("services/vllm/worker", policy)
+        for client in ("operator", "qualification", "ansible-admin"):
+            self.assertIn(f'path "secret/data/local-ai/services/orchestrator-gateway/clients/{client}-token" '
+                          '{ capabilities = ["read"] }', policy)
         self.assertNotIn("create", policy)
         self.assertNotIn("update", policy)
 

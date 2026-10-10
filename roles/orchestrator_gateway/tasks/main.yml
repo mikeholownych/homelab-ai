@@ -311,6 +311,15 @@
 
 # R6: per-client identity. The gateway-readable registry holds only sha256 digests; plaintext tokens stay in
 # root-only files (an existing legacy token file keeps its token so current clients are not broken).
+- name: Refuse to rotate a Vault-managed client token outside Vault
+  ansible.builtin.assert:
+    that:
+      - orchestrator_gateway_rotate_client_tokens | intersect(orchestrator_gateway_vault_managed_clients) | length == 0
+    fail_msg: >-
+      {{ orchestrator_gateway_rotate_client_tokens | intersect(orchestrator_gateway_vault_managed_clients) }} are Vault
+      records; rotate them with playbooks/vault-post-init.yml -e vault_post_init_rotate=[...] so Vault stays the source.
+  when: orchestrator_gateway_enabled | bool
+
 - name: Create the root-only client token directory
   ansible.builtin.file:
     path: "{{ orchestrator_gateway_clients_dir }}"

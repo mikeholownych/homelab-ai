@@ -43,6 +43,9 @@
             - { name: vllm_compat, source: /etc/local-ai/vllm/vllm-api-key }
             - { name: worker1, source: /etc/local-ai/llama/worker1/worker-api-key }
             - { name: worker2, source: /etc/local-ai/llama/worker2/worker-api-key }
+            - { name: operator_client, source: /etc/local-ai/orchestrator/clients/operator.token }
+            - { name: qualification_client, source: /etc/local-ai/orchestrator/clients/qualification.token }
+            - { name: ansible_admin_client, source: /etc/local-ai/orchestrator/clients/ansible-admin.token }
           changed_when: false
           no_log: true
         - name: Tighten in-memory staged service credential permissions
@@ -50,7 +53,8 @@
             path: "{{ hostvars['localhost']['vault_post_init_stage']['path'] }}/{{ item }}"
             state: file
             mode: "0400"
-          loop: [gateway_client, opencode_client, vllm_compat, worker1, worker2]
+          loop: [gateway_client, opencode_client, vllm_compat, worker1, worker2, operator_client, qualification_client,
+                 ansible_admin_client]
           delegate_to: localhost
           become: false
           changed_when: false

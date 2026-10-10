@@ -13,10 +13,29 @@ vault_platform_credentials_secret_id_path: /etc/aihost/credentials/vault-secret-
 vault_platform_credentials_ca_path: /etc/aihost/vault/vault-ca.crt
 vault_platform_credentials_role_name: t5820-platform
 vault_platform_credentials_worker_specs_path: /etc/local-ai/orchestrator/gateway.env
-vault_platform_credentials_gateway_client_path: /etc/local-ai/orchestrator/client-token
-vault_platform_credentials_opencode_client_path: /etc/local-ai/orchestrator/opencode-client-token
 vault_platform_credentials_vllm_compat_path: /etc/local-ai/vllm/vllm-api-key
 # Worker slots (key dir, unit and port) come from llama_cpp_container_workers.
 vault_platform_credentials_worker_owner: aihost-runtime
 vault_platform_credentials_gateway_unit: aihost-orchestrator-gateway.service
+# Worker checks run as the gateway service account: only its uid may reach worker ports (W-ACCESS nftables skuid).
+vault_platform_credentials_probe_user: aihost-gateway
+# Gateway client tokens are Vault records; the gateway authenticates them by digest in this registry, which the
+# helper updates in the same transaction. Each client lists every file the gateway role keeps for it.
+vault_platform_credentials_client_registry: /var/lib/aihost-gateway/clients.json
+vault_platform_credentials_clients:
+  - name: gateway_client
+    client_id: nexus
+    files: [/etc/local-ai/orchestrator/client-token, /etc/local-ai/orchestrator/clients/nexus.token]
+  - name: opencode_client
+    client_id: opencode
+    files: [/etc/local-ai/orchestrator/opencode-client-token, /etc/local-ai/orchestrator/clients/opencode.token]
+  - name: operator_client
+    client_id: operator
+    files: [/etc/local-ai/orchestrator/clients/operator.token]
+  - name: qualification_client
+    client_id: qualification
+    files: [/etc/local-ai/orchestrator/clients/qualification.token]
+  - name: ansible_admin_client
+    client_id: ansible-admin
+    files: [/etc/local-ai/orchestrator/clients/ansible-admin.token]
 vault_platform_credentials_opencode_env_path: ""

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pwd
@@ -25,7 +26,25 @@ SECRETS = {
     # Engine-neutral worker slots: the key belongs to the GPU slot, not to whichever engine serves it.
     "worker1": ("local-ai/services/inference/worker1-api-key", "key"),
     "worker2": ("local-ai/services/inference/worker2-api-key", "key"),
+    # Gateway per-client registry (R6): each client token is a Vault record; the gateway authenticates by digest.
+    "operator_client": ("local-ai/services/orchestrator-gateway/clients/operator-token", "token"),
+    "qualification_client": ("local-ai/services/orchestrator-gateway/clients/qualification-token", "token"),
+    "ansible_admin_client": ("local-ai/services/orchestrator-gateway/clients/ansible-admin-token", "token"),
 }
+CLIENT_SECRETS = ("gateway_client", "opencode_client", "operator_client", "qualification_client", "ansible_admin_client")
+
+# Run as the gateway service account: since W-ACCESS only that uid may reach worker ports (nftables skuid), and a
+# probe as root is refused. The URL is an argument; a key, if any, arrives on stdin so it never appears in argv.
+_PROBE = """import sys, urllib.error, urllib.request
+key = sys.stdin.read().strip()
+request = urllib.request.Request(sys.argv[1], headers={"Authorization": "Bearer " + key} if key else {})
+try:
+    print(urllib.request.urlopen(request, timeout=8).status)
+except urllib.error.HTTPError as error:
+    print(error.code)
+except Exception as error:
+    print(type(error).__name__)
+"""
 
 
 def request(url: str, context: ssl.SSLContext, payload=None, token=None) -> dict:
@@ -43,7 +62,15 @@ def request(url: str, context: ssl.SSLContext, payload=None, token=None) -> dict
     return json.loads(raw) if raw else {}
 
 
-def http_status(url: str, key: str | None = None) -> int | str:
+def http_status(url: str, key: str | None = None, user: str | None = None) -> int | str:
+    if user:
+        try:
+            result = subprocess.run(["runuser", "-u", user, "--", "/usr/bin/python3", "-I", "-c", _PROBE, url],
+                                    input=key or "", capture_output=True, text=True, timeout=30)
+        except (OSError, subprocess.SubprocessError) as error:
+            return type(error).__name__
+        out = result.stdout.strip()
+        return int(out) if out.isdigit() else (out or f"probe-exit-{result.returncode}")
     headers = {} if key is None else {"Authorization": f"Bearer {key}"}
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=8) as response:
@@ -196,11 +223,11 @@ def apply_transaction(targets, restart_units, restart, verify_new, verify_old) -
                 pass
 
 
-def wait_until_healthy(url: str, label: str, timeout: float = 1500.0, interval: float = 5.0) -> None:
+def wait_until_healthy(url: str, label: str, timeout: float = 1500.0, interval: float = 5.0, user: str | None = None) -> None:
     """A restarted engine returns from systemctl long before its model is loaded; wait for /health."""
     deadline = time.monotonic() + timeout
     while True:
-        if http_status(url) == 200:
+        if http_status(url, user=user) == 200:
             return
         if time.monotonic() >= deadline:
             raise RuntimeError(f"{label} did not become healthy after restart")
@@ -209,6 +236,23 @@ def wait_until_healthy(url: str, label: str, timeout: float = 1500.0, interval: 
 
 def worker_key_file(worker: dict) -> Path:
     return Path(worker["key_dir"]) / "worker-api-key"
+
+
+def token_digest(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def registry_digests(path: Path) -> dict:
+    return {c["client_id"]: c.get("token_sha256") for c in json.loads(read_regular_file(path, "client registry"))["clients"]}
+
+
+def registry_with(path: Path, digests: dict) -> str:
+    """The registry with the given client digests replaced, in the gateway role's exact rendering (to_nice_json)."""
+    doc = json.loads(read_regular_file(path, "client registry"))
+    for client in doc["clients"]:
+        if client["client_id"] in digests:
+            client["token_sha256"] = digests[client["client_id"]]
+    return json.dumps(doc, indent=4, sort_keys=True) + "\n"
 
 
 def main() -> None:
@@ -223,8 +267,13 @@ def main() -> None:
     ttl = int(auth.get("lease_duration", 0))
     require(0 < ttl <= 3600 and "root" not in auth.get("policies", []), "Vault issued an out-of-contract workload token")
     token = auth["client_token"]
+    clients = config["clients"]
+    managed = {c["name"] for c in clients}
+    require(managed <= set(CLIENT_SECRETS), "Unknown gateway client credential in the runtime config")
     values = {}
     for name, (path, key) in SECRETS.items():
+        if name in CLIENT_SECRETS and name not in managed:
+            continue
         result = request(api + "secret/data/" + path, context, token=token)
         values[name] = result["data"]["data"][key]
         require(isinstance(values[name], str) and values[name], f"Vault returned an empty {name} credential")
@@ -235,11 +284,11 @@ def main() -> None:
     require(set(workers) == {"worker1", "worker2"}, "Worker roster must define exactly worker1 and worker2")
     gateway_unit = config.get("gateway_unit", "aihost-orchestrator-gateway.service")
     gateway_url = config.get("gateway_url", "http://127.0.0.1:8010")
-    previous = {
-        "gateway_client": read_regular_file(Path(paths["gateway_client"]), "gateway credential").strip(),
-        "opencode_client": read_regular_file(Path(paths["opencode_client"]), "OpenCode credential").strip(),
-        "vllm_compat": read_regular_file(Path(paths["vllm_compat"]), "vLLM compatibility credential").strip(),
-    }
+    probe_user = config["probe_user"]
+    registry_path = Path(config["client_registry"])
+    previous = {"vllm_compat": read_regular_file(Path(paths["vllm_compat"]), "vLLM compatibility credential").strip()}
+    for client in clients:
+        previous[client["name"]] = read_regular_file(Path(client["files"][0]), f"{client['client_id']} client credential").strip()
     for name, worker in workers.items():
         previous[name] = read_regular_file(worker_key_file(worker), f"{name} token file").strip()
 
@@ -252,8 +301,13 @@ def main() -> None:
             targets.append((path, content, owner, group))
             files_changed.append(name)
 
-    for name in ("gateway_client", "opencode_client", "vllm_compat"):
-        add_target(Path(paths[name]), values[name] + "\n", name)
+    add_target(Path(paths["vllm_compat"]), values["vllm_compat"] + "\n", "vllm_compat")
+    for client in clients:
+        for path in client["files"]:
+            add_target(Path(path), values[client["name"]] + "\n", client["name"])
+    # The gateway authenticates clients by the digests in its registry, so a token change is a registry change too.
+    add_target(registry_path, registry_with(registry_path, {c["client_id"]: token_digest(values[c["name"]]) for c in clients}),
+               "client_registry")
     changed_workers = []
     for name, worker in workers.items():
         owner = worker.get("owner")
@@ -268,15 +322,24 @@ def main() -> None:
         return base + "/v1/models", base + "/health"
 
     def validate_boundary(credentials: dict, label: str) -> dict:
-        results = {
-            f"gateway_{label}": http_status(gateway_url + "/v1/models", credentials["gateway_client"]),
-            f"opencode_{label}": http_status(gateway_url + "/v1/models", credentials["opencode_client"]),
-        }
+        # Clients: the loopback listener refuses workload requests (W-ORIGIN) and the host may not originate remote
+        # ones, so a client token is checked where the gateway checks it: its digest in the loaded registry.
+        registry = registry_digests(registry_path)
+        results = {f"{c['name']}_{label}": "registry-match" if registry.get(c["client_id"]) == token_digest(credentials[c["name"]])
+                   else "registry-mismatch" for c in clients}
         for name in workers:
-            results[f"{name}_{label}"] = http_status(worker_urls(name)[0], credentials[name])
-            require(http_status(worker_urls(name)[1]) == 200, f"{name} health check failed")
-        require(all(status == 200 for status in results.values()), "A credential failed its live acceptance check (" + label + ")")
-        require(http_status(gateway_url + "/health") == 200, "Gateway health check failed")
+            results[f"{name}_{label}"] = http_status(worker_urls(name)[0], credentials[name], user=probe_user)
+            require(http_status(worker_urls(name)[1], user=probe_user) == 200, f"{name} health check failed")
+        require(all(status in (200, "registry-match") for status in results.values()),
+                "A credential failed its live acceptance check (" + label + ")")
+        try:
+            with urllib.request.urlopen(gateway_url + "/health", timeout=8) as response:
+                health = json.load(response)
+        except Exception:
+            health = {}
+        scheduler = health.get("scheduler") or {}
+        require(health.get("ready") is True and scheduler.get("available_workers") == scheduler.get("configured_workers"),
+                "Gateway is not ready with every configured worker available")
         units = [gateway_unit] + [w["unit"] for w in workers.values()]
         states = {unit: subprocess.check_output(["systemctl", "is-active", unit], text=True).strip() for unit in units}
         require(all(state == "active" for state in states.values()), "A platform service is not active")
@@ -296,7 +359,7 @@ def main() -> None:
                 restarted.append(unit)
             health = {w["unit"]: f"http://127.0.0.1:{w['port']}/health" for w in workers.values()}
             health[gateway_unit] = gateway_url + "/health"
-            wait_until_healthy(health[unit], unit)
+            wait_until_healthy(health[unit], unit, user=None if unit == gateway_unit else probe_user)
 
         evidence = {}
         apply_transaction(

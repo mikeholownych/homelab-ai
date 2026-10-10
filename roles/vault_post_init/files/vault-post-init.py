@@ -22,6 +22,9 @@ path \"secret/data/local-ai/hosts/ai-5820-01/opencode-client-token\" { capabilit
 path \"secret/data/local-ai/services/vllm/api-key\" { capabilities = [\"read\"] }
 path \"secret/data/local-ai/services/inference/worker1-api-key\" { capabilities = [\"read\"] }
 path \"secret/data/local-ai/services/inference/worker2-api-key\" { capabilities = [\"read\"] }
+path \"secret/data/local-ai/services/orchestrator-gateway/clients/operator-token\" { capabilities = [\"read\"] }
+path \"secret/data/local-ai/services/orchestrator-gateway/clients/qualification-token\" { capabilities = [\"read\"] }
+path \"secret/data/local-ai/services/orchestrator-gateway/clients/ansible-admin-token\" { capabilities = [\"read\"] }
 """
 SNAPSHOT_POLICY = 'path "sys/storage/raft/snapshot" { capabilities = ["read", "sudo"] }\n'
 APPROLES = {
@@ -50,6 +53,10 @@ SEEDS = {
     "vllm_compat": ("local-ai/services/vllm/api-key", "key"),
     "worker1": ("local-ai/services/inference/worker1-api-key", "key"),
     "worker2": ("local-ai/services/inference/worker2-api-key", "key"),
+    # Gateway per-client registry (R6). Seeded from the tokens clients already hold, so adoption changes nothing.
+    "operator_client": ("local-ai/services/orchestrator-gateway/clients/operator-token", "token"),
+    "qualification_client": ("local-ai/services/orchestrator-gateway/clients/qualification-token", "token"),
+    "ansible_admin_client": ("local-ai/services/orchestrator-gateway/clients/ansible-admin-token", "token"),
 }
 ROTATABLE = tuple(SEEDS)
 # Records superseded by the engine-neutral worker slots. Their values were exposed, so every version is

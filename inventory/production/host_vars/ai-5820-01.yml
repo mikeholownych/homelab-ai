@@ -344,6 +344,8 @@ orchestrator_gateway_model_aliases:
   engineering/lead: {pool: lead, reasoning: {mode: "off", answer_allowance: 8192}}
   engineering/deep: {pool: deep, reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}}
 # R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
+# Every client token below is a Vault record (roles/vault_platform_credentials); rotate through Vault.
+orchestrator_gateway_vault_managed_clients: [nexus, opencode, operator, qualification, ansible-admin]
 orchestrator_gateway_clients:
   - {client_id: nexus, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/client-token}
   - client_id: opencode

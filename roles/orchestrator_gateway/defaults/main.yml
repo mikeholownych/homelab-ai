@@ -41,6 +41,9 @@ orchestrator_gateway_clients_dir: /etc/local-ai/orchestrator/clients
 # Client ids whose token is regenerated on this run (e.g. -e '{"orchestrator_gateway_rotate_client_tokens": ["x"]}'
 # after an exposure). The old token stops working when the registry is re-rendered; deliver the new file to the client.
 orchestrator_gateway_rotate_client_tokens: []
+# Client ids whose token is a Vault record (vault_platform_credentials converges it). They rotate through Vault
+# (vault_post_init_rotate), never through orchestrator_gateway_rotate_client_tokens.
+orchestrator_gateway_vault_managed_clients: []
 # The digest-only registry lives in the gateway's private state directory. `/etc/local-ai` is intentionally
 # not traversable by this isolated service account; plaintext client tokens remain root-only under clients_dir.
 orchestrator_gateway_clients_file: /var/lib/aihost-gateway/clients.json

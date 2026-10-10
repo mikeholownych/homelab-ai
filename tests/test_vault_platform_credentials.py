@@ -41,13 +41,45 @@ class VaultPlatformCredentialContractTests(unittest.TestCase):
                 "vllm_compat": ("local-ai/services/vllm/api-key", "key"),
                 "worker1": ("local-ai/services/inference/worker1-api-key", "key"),
                 "worker2": ("local-ai/services/inference/worker2-api-key", "key"),
+                "operator_client": ("local-ai/services/orchestrator-gateway/clients/operator-token", "token"),
+                "qualification_client": ("local-ai/services/orchestrator-gateway/clients/qualification-token", "token"),
+                "ansible_admin_client": ("local-ai/services/orchestrator-gateway/clients/ansible-admin-token", "token"),
             },
         )
+
+    def test_client_registry_rewrite_matches_the_gateway_role_rendering_and_changes_only_named_digests(self):
+        import json
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_registry")
+        doc = {"clients": [{"client_id": "nexus", "scopes": ["workload"], "token_sha256": "a" * 64},
+                           {"client_id": "operator", "scopes": ["workload"], "token_sha256": "b" * 64}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "clients.json"
+            path.write_text(json.dumps(doc, indent=4, sort_keys=True) + "\n")  # what to_nice_json renders
+            self.assertEqual(helper.registry_with(path, {}), path.read_text())  # unchanged tokens: identical bytes
+            updated = json.loads(helper.registry_with(path, {"operator": helper.token_digest("new")}))
+        digests = {c["client_id"]: c["token_sha256"] for c in updated["clients"]}
+        self.assertEqual(digests["nexus"], "a" * 64)
+        self.assertEqual(digests["operator"], __import__("hashlib").sha256(b"new").hexdigest())
+
+    def test_worker_probe_runs_as_the_gateway_account_and_keeps_the_key_out_of_argv(self):
+        helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_probe")
+        calls = []
+
+        def fake_run(argv, input=None, **kwargs):
+            calls.append((argv, input))
+            return type("R", (), {"stdout": "200\n", "returncode": 0})()
+        with patch.object(helper.subprocess, "run", side_effect=fake_run):
+            status = helper.http_status("http://127.0.0.1:8000/v1/models", "worker-secret", user="aihost-gateway")
+        self.assertEqual(status, 200)
+        argv, stdin = calls[0]
+        self.assertEqual(argv[:4], ["runuser", "-u", "aihost-gateway", "--"])
+        self.assertNotIn("worker-secret", " ".join(argv))
+        self.assertEqual(stdin, "worker-secret")
 
     def test_restart_waits_for_engine_health_before_continuing(self):
         helper = load_script("aihost-vault-apply-credentials.py", "vault_platform_wait")
         statuses = iter([503, 503, "URLError", 200])
-        with patch.object(helper, "http_status", side_effect=lambda *_: next(statuses)), \
+        with patch.object(helper, "http_status", side_effect=lambda *_, **__: next(statuses)), \
              patch.object(helper.time, "sleep") as sleep:
             helper.wait_until_healthy("http://127.0.0.1:8000/health", "worker1")
         self.assertEqual(sleep.call_count, 3)
