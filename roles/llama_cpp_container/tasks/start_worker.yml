@@ -33,6 +33,7 @@
       Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
     ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
     status_code: [200]
+    return_content: true
     timeout: 10
   delegate_to: localhost
   become: false
@@ -44,14 +45,21 @@
     - llama_cpp_container_unit_changed | bool or llama_cpp_container_target_state == 'stopped'
 
 
+# A worker the gateway does not know (a candidate being created, or one not yet registered) answers 404 not_found:
+# nothing can be in flight on it, so it may change without a drain. Any other failure aborts unless forced.
 - name: "Record the drain result for {{ llama_item.key }}"
   ansible.builtin.set_fact:
     llama_cpp_container_drained: "{{ (llama_cpp_container_drain.status | default(0)) == 200 }}"
+    llama_cpp_container_not_routed: >-
+      {{ (llama_cpp_container_drain.status | default(0)) == 404
+         and (llama_cpp_container_drain.json | default({})).status | default('') == 'not_found' }}
 
 - name: "Assert drain succeeded to protect in-flight requests on {{ llama_item.key }}"
   ansible.builtin.assert:
     that:
-      - llama_cpp_container_drained | bool or (llama_cpp_container_force_restart | default(false) | bool)
+      - >-
+        llama_cpp_container_drained | bool or llama_cpp_container_not_routed | bool
+        or (llama_cpp_container_force_restart | default(false) | bool)
     fail_msg: >-
       Failed to drain {{ llama_item.key }} (worker_id={{ llama_item.value.worker_id }}) via gateway
       (HTTP status {{ llama_cpp_container_drain.status | default('unreachable') }}).
