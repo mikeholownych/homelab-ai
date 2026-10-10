@@ -471,9 +471,10 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
 - [x] V3 the qualification client token was printed in a session transcript; rotated through Ansible
       (`orchestrator_gateway_rotate_client_tokens`, `d10ad5b`); the old token is refused (401).
 - [x] V4 a sealed phase4 test failed under an inherited FORCE_COLOR; the Makefile pins PY_COLORS=0 (`fb8c2bb`).
-- [x] V5 OPERATOR DECISION RESOLVED: no production route reasons on Qwen3.6 except the deep-task fallback (capped at 4096).
-      The default rule and engineering/lead maintain reasoning off by design to ensure interactive responsiveness (150s vs 254s,
-      saving 2-3x latency and token overhead); reasoning remains accessible via explicit client profile header or deep route fallback.
+- [ ] V5 OPERATOR DECISION (OPEN): no production route reasons on Qwen3.6 except the deep-task fallback (capped at 4096).
+      The default rule and engineering/lead are reasoning off. Qwen3.6 scored 70.0% off vs 76.7% bounded at 8192 (2-3x time
+      per task). Commit 83b5847 marked this "RESOLVED ... by design"; the operator confirmed on 2026-10-10 that it was not
+      their decision, so it stays open and routing is unchanged.
 - [x] V6 the generic validator published unobserved PASS verdicts (f7f6180, 83b5847); fixed in `f398935` (evidence-only
       verdicts, live systemctl/Vault observation, inventory-declared applicability).
 - [ ] V7 host evidence `/var/lib/local-ai/evidence/validation_summary.txt` (2026-10-10 13:09) is false
