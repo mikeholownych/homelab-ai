@@ -42,5 +42,7 @@
   failed_when: >-
     os_tuning_sysctl_active.rc != 0
     or (os_tuning_sysctl_active.stdout | trim | int) != (item.value | int)
-  when: os_tuning_apply_mutations | bool
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
   tags: [tuning]
