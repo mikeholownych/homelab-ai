@@ -6,7 +6,11 @@ import argparse
 import datetime
 import json
 import os
+import ssl
+import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -246,7 +250,7 @@ def discover_evidence_checks(
         return checks_data
     ev_path = Path(evidence_dir)
 
-    search_dirs = [ev_path, ev_path / "manual", Path("/var/lib/local-ai/evidence"), Path("/var/lib/local-ai/evidence/manual")]
+    search_dirs = [ev_path, ev_path / "manual"]
 
     for name, rules in (("hardware.json", _HARDWARE_RULES), ("pci.json", _PCI_RULES)):
         found = next((d / name for d in search_dirs if (d / name).exists()), None)
@@ -273,80 +277,75 @@ def discover_evidence_checks(
         except (OSError, ValueError, AttributeError) as error:
             checks_data["pytorch_xpu"] = _unreadable(xpu_file.name, error)
 
-    # Architectural mappings for retired components on dual-B65 appliance
-    if "vllm_service" not in checks_data:
-        checks_data["vllm_service"] = {
-            "status": "NOT_APPLICABLE",
-            "expected": wrap_summary_value("unmanaged"),
-            "observed": wrap_summary_value("retired on dual-B65 appliance (independent dual llama.cpp stack)"),
-            "evidence_refs": ["architecture:dual_llama_cpp"],
-        }
-    if "dual_gpu_inference" not in checks_data:
-        checks_data["dual_gpu_inference"] = {
-            "status": "NOT_APPLICABLE",
-            "expected": wrap_summary_value("unmanaged"),
-            "observed": wrap_summary_value("tensor-parallelism retired (independent dual workers deployed)"),
-            "evidence_refs": ["architecture:dual_llama_cpp"],
-        }
+    return checks_data
 
-    # Operational/Service status from host evidence
-    if "intel_gpu_stack_status" not in checks_data:
-        if checks_data.get("level_zero", {}).get("status") == "PASS" and checks_data.get("pytorch_xpu", {}).get("status") == "PASS":
-            checks_data["intel_gpu_stack_status"] = {
-                "status": "PASS",
-                "expected": wrap_summary_value("PASS"),
-                "observed": wrap_summary_value("Intel compute runtime and Level Zero verified"),
-                "evidence_refs": ["hardware.json", "xpu-validation.json"],
-            }
 
-    if "single_gpu_inference" not in checks_data:
-        single_gpu = next((d / "b0-direct-inference.json" for d in search_dirs if (d / "b0-direct-inference.json").exists()), None)
-        attempt2_gpu = next((d / "t5820-dual-worker-attempt2" / "b0-direct-inference.json" for d in search_dirs if (d / "t5820-dual-worker-attempt2" / "b0-direct-inference.json").exists()), None)
-        if single_gpu is not None or attempt2_gpu is not None:
-            ref_name = single_gpu.name if single_gpu else attempt2_gpu.name
-            checks_data["single_gpu_inference"] = {
-                "status": "PASS",
-                "expected": wrap_summary_value("PASS"),
-                "observed": wrap_summary_value("verified single GPU inference"),
-                "evidence_refs": [ref_name],
-            }
+def _systemctl(*args: str) -> str:
+    try:
+        return subprocess.run(["systemctl", *args], capture_output=True, text=True, timeout=10).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
-    if "llama_cpp_fallback" not in checks_data:
-        preflight = next((d / "preflight-final.json" for d in search_dirs if (d / "preflight-final.json").exists()), None)
-        attempt2_pf = next((d / "t5820-dual-worker-attempt2" / "preflight-final.json" for d in search_dirs if (d / "t5820-dual-worker-attempt2" / "preflight-final.json").exists()), None)
-        if preflight is not None or attempt2_pf is not None:
-            ref_name = preflight.name if preflight else attempt2_pf.name
-            checks_data["llama_cpp_fallback"] = {
-                "status": "PASS",
-                "expected": wrap_summary_value("PASS"),
-                "observed": wrap_summary_value("llama.cpp fallback verified"),
-                "evidence_refs": [ref_name],
-            }
 
-    if "required_services" not in checks_data:
+def _vault_login(config_path: Path) -> Dict[str, Any]:
+    """AppRole login with the node's own Vault client config; the token is revoked at once and nothing is printed."""
+    expected = wrap_summary_value("AppRole login succeeds")
+    refs = [str(config_path)]
+    if not config_path.exists():
+        return {"status": "NOT_TESTED", "expected": expected, "observed": wrap_summary_value("no Vault client config"),
+                "evidence_refs": refs}
+    try:
+        cfg = json.loads(config_path.read_text(encoding="utf-8"))
+        body = json.dumps({"role_id": Path(cfg["role_id_file"]).read_text(encoding="utf-8").strip(),
+                           "secret_id": Path(cfg["secret_id_file"]).read_text(encoding="utf-8").strip()}).encode()
+        context = ssl.create_default_context(cafile=cfg["ca_cert"])
+        addr = cfg["vault_addr"].rstrip("/")
+    except (OSError, ValueError, KeyError) as error:
+        return {"status": "NOT_TESTED", "expected": expected,
+                "observed": wrap_summary_value(f"Vault client config unusable: {type(error).__name__}"), "evidence_refs": refs}
+    try:
+        request = urllib.request.Request(addr + "/v1/auth/approle/login", body, {"Content-Type": "application/json"})
+        with urllib.request.urlopen(request, context=context, timeout=10) as response:
+            auth = json.load(response)["auth"]
+        revoke = urllib.request.Request(addr + "/v1/auth/token/revoke-self", b"", {"X-Vault-Token": auth["client_token"]})
+        urllib.request.urlopen(revoke, context=context, timeout=10).close()
+    except urllib.error.HTTPError as error:
+        return {"status": "FAIL", "expected": expected, "observed": wrap_summary_value(f"login refused: HTTP {error.code}"),
+                "evidence_refs": refs}
+    except (OSError, ValueError, KeyError) as error:
+        return {"status": "FAIL", "expected": expected,
+                "observed": wrap_summary_value(f"Vault unreachable or invalid reply: {type(error).__name__}"), "evidence_refs": refs}
+    return {"status": "PASS", "expected": expected,
+            "observed": wrap_summary_value(f"login ok at {addr}, policies {sorted(auth.get('policies') or [])}"),
+            "evidence_refs": refs}
+
+
+def observe_live_checks(
+    checks_data: Dict[str, Dict[str, Any]],
+    *,
+    required_units: list[str],
+    reconcile_timer: str | None,
+    vault_config: str | None,
+) -> Dict[str, Dict[str, Any]]:
+    """Checks the aggregator observes itself on the managed node (it runs there as root). A check whose input is not
+    configured stays NOT_TESTED; an observed problem is a FAIL with the observed state, never a PASS."""
+    if required_units and "required_services" not in checks_data:
+        states = {unit: _systemctl("is-active", unit) or "unknown" for unit in required_units}
+        inactive = sorted(f"{unit}={state}" for unit, state in states.items() if state != "active")
         checks_data["required_services"] = {
-            "status": "PASS",
-            "expected": wrap_summary_value("active"),
-            "observed": wrap_summary_value("verified systemd service roster active"),
-            "evidence_refs": ["systemd:active"],
-        }
-
-    if "scheduled_reconciliation" not in checks_data:
+            "status": "FAIL" if inactive else "PASS",
+            "expected": wrap_summary_value(f"{len(states)} units active"),
+            "observed": wrap_summary_value("all active" if not inactive else "not active: " + ", ".join(inactive)),
+            "evidence_refs": ["systemctl is-active"]}
+    if reconcile_timer and "scheduled_reconciliation" not in checks_data:
+        enabled, active = _systemctl("is-enabled", reconcile_timer) or "unknown", _systemctl("is-active", reconcile_timer) or "unknown"
         checks_data["scheduled_reconciliation"] = {
-            "status": "PASS",
-            "expected": wrap_summary_value("enabled"),
-            "observed": wrap_summary_value("verified systemd timer reconciliation active"),
-            "evidence_refs": ["systemd:timer"],
-        }
-
-    if "vault_access" not in checks_data:
-        if Path("/etc/aihost/credentials/vault-role-id").exists():
-            checks_data["vault_access"] = {
-                "status": "PASS",
-                "expected": wrap_summary_value("accessible"),
-                "observed": wrap_summary_value("verified AppRole credentials accessible"),
-                "evidence_refs": ["/etc/aihost/credentials/vault-role-id"],
-            }
+            "status": "PASS" if (enabled, active) == ("enabled", "active") else "FAIL",
+            "expected": wrap_summary_value(f"{reconcile_timer} enabled and active"),
+            "observed": wrap_summary_value(f"{reconcile_timer} {enabled}/{active}"),
+            "evidence_refs": ["systemctl is-enabled/is-active"]}
+    if vault_config and "vault_access" not in checks_data:
+        checks_data["vault_access"] = _vault_login(Path(vault_config))
     return checks_data
 
 
@@ -372,6 +371,9 @@ def main() -> int:
     parser.add_argument("--simulated", action="store_true", help="Mark run as simulated")
     parser.add_argument("--input-json", default=None, help="Path to input checks JSON")
     parser.add_argument("--evidence-dir", default=None, help="Path to evidence directory")
+    parser.add_argument("--required-unit", action="append", default=[], help="systemd unit that must be active (repeatable)")
+    parser.add_argument("--reconcile-timer", default=None, help="systemd timer that runs scheduled reconciliation")
+    parser.add_argument("--vault-config", default=None, help="Vault client config (platform-credentials.json) to test")
     parser.add_argument("--not-applicable", action="append", default=[], metavar="CHECK=REASON",
                         help="Declare a check not applicable to this host's configuration (repeatable)")
     parser.add_argument("--output", default=None, help="Path to write validation.json")
@@ -398,6 +400,8 @@ def main() -> int:
     if args.evidence_dir:
         checks_data = discover_evidence_checks(args.evidence_dir, profile_spec, checks_data)
     checks_data = apply_not_applicable(checks_data, args.not_applicable)
+    checks_data = observe_live_checks(checks_data, required_units=args.required_unit,
+                                      reconcile_timer=args.reconcile_timer, vault_config=args.vault_config)
 
     doc = build_validation_document(
         node_id=args.node_id,

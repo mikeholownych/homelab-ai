@@ -242,13 +242,23 @@ def test_evidence_dir_auto_discovery(tmp_path):
         [str(AGGREGATOR_PATH), "--node-id", "ai-5820-01", "--hardware-profile",
          "d5820_dual_b65", "--git-sha", "0123456789abcdef0123456789abcdef01234567",
          "--simulated", "--hardware-profile-json", str(profile_path),
-         "--evidence-dir", str(tmp_path)],
+         "--evidence-dir", str(tmp_path),
+         "--not-applicable", "vllm_service=vLLM retired; llama.cpp workers serve inference",
+         "--not-applicable", "dual_gpu_inference=independent TP=1 workers; no tensor parallelism"],
         check=False, capture_output=True, text=True,
     )
     assert process.returncode == 0, process.stderr
     doc = json.loads(process.stdout)
     jsonschema.validate(instance=doc, schema=schema)
     by_id = {check["id"]: check for check in doc["checks"]}
+    # Observed values come from the evidence, not from the aggregator.
+    assert by_id["cpu"]["observed"]["value"] == "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz"
+    assert by_id["gpu_vram"]["observed"]["value"] == [32.0, 32.0]
+    # Nothing without an observation is a PASS: these have no evidence and no live inputs here.
+    for check_id in ("single_gpu_inference", "llama_cpp_fallback", "required_services", "scheduled_reconciliation",
+                     "vault_access"):
+        assert by_id[check_id]["status"] == "NOT_TESTED", check_id
+    assert by_id["vllm_service"]["observed"]["value"] == "vLLM retired; llama.cpp workers serve inference"
     assert by_id["machine_model"]["status"] == "PASS"
     assert by_id["cpu"]["status"] == "PASS"
     assert by_id["gpu_count"]["status"] == "PASS"
@@ -261,3 +271,62 @@ def test_evidence_dir_auto_discovery(tmp_path):
     assert by_id["vllm_service"]["status"] == "NOT_APPLICABLE"
     assert by_id["dual_gpu_inference"]["status"] == "NOT_APPLICABLE"
 
+
+
+def test_live_checks_report_what_they_observe(tmp_path, monkeypatch):
+    # 2026-10-10: a disabled reconcile timer was published as "verified systemd timer reconciliation active" (PASS).
+    mod = load_aggregator()
+    states = {("is-active", "aihost-llama-worker1.service"): "active", ("is-active", "aihost-orchestrator-gateway.service"): "failed",
+              ("is-enabled", "aihost-reconcile.timer"): "disabled", ("is-active", "aihost-reconcile.timer"): "inactive"}
+    monkeypatch.setattr(mod, "_systemctl", lambda *args: states.get(args, ""))
+    checks = mod.observe_live_checks({}, required_units=["aihost-llama-worker1.service", "aihost-orchestrator-gateway.service"],
+                                     reconcile_timer="aihost-reconcile.timer", vault_config=str(tmp_path / "absent.json"))
+    assert checks["required_services"]["status"] == "FAIL"
+    assert checks["required_services"]["observed"]["value"] == "not active: aihost-orchestrator-gateway.service=failed"
+    assert checks["scheduled_reconciliation"]["status"] == "FAIL"
+    assert checks["scheduled_reconciliation"]["observed"]["value"] == "aihost-reconcile.timer disabled/inactive"
+    assert checks["vault_access"]["status"] == "NOT_TESTED"  # no client config: not observed, so not a verdict
+    states.update({("is-active", "aihost-orchestrator-gateway.service"): "active",
+                   ("is-enabled", "aihost-reconcile.timer"): "enabled", ("is-active", "aihost-reconcile.timer"): "active"})
+    checks = mod.observe_live_checks({}, required_units=["aihost-llama-worker1.service", "aihost-orchestrator-gateway.service"],
+                                     reconcile_timer="aihost-reconcile.timer", vault_config=None)
+    assert checks["required_services"]["status"] == "PASS" and checks["scheduled_reconciliation"]["status"] == "PASS"
+    assert "vault_access" not in checks
+
+
+def test_vault_access_is_an_actual_login(tmp_path, monkeypatch):
+    mod = load_aggregator()
+    for name in ("role", "secret"):
+        (tmp_path / name).write_text("x\n")
+    config = tmp_path / "platform-credentials.json"
+    config.write_text(json.dumps({"vault_addr": "https://vault.invalid:8200", "ca_cert": str(tmp_path / "ca.pem"),
+                                  "role_id_file": str(tmp_path / "role"), "secret_id_file": str(tmp_path / "secret")}))
+    monkeypatch.setattr(mod.ssl, "create_default_context", lambda cafile=None: None)
+
+    def refused(request, context=None, timeout=None):
+        raise mod.urllib.error.HTTPError(request.full_url, 400, "invalid role or secret ID", {}, None)
+    monkeypatch.setattr(mod.urllib.request, "urlopen", refused)
+    result = mod._vault_login(config)
+    assert result["status"] == "FAIL" and result["observed"]["value"] == "login refused: HTTP 400"
+
+    calls = []
+
+    class Reply:
+        def __init__(self, body):
+            self.body = body
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def read(self, *a):
+            return self.body
+        def close(self):
+            pass
+
+    def accepted(request, context=None, timeout=None):
+        calls.append(request.full_url)
+        return Reply(json.dumps({"auth": {"client_token": "t", "policies": ["default", "t5820-platform"]}}).encode())
+    monkeypatch.setattr(mod.urllib.request, "urlopen", accepted)
+    result = mod._vault_login(config)
+    assert result["status"] == "PASS"
+    assert calls == ["https://vault.invalid:8200/v1/auth/approle/login", "https://vault.invalid:8200/v1/auth/token/revoke-self"]

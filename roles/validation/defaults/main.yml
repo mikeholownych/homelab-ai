@@ -10,4 +10,9 @@ validation_simulated: false
 validation_hardware_profile_path: >-
   {{ playbook_dir }}/../profiles/hardware/{{ hardware_profile | default('p620_dual_b65') }}.yml
 validation_profile_json_path: "{{ validation_evidence_dir }}/hardware-profile-expected.json"
+# Checks that do not apply to this host's configuration: {check_id: reason}. The reason is recorded as observed.
 validation_not_applicable: {}
+# Live checks observed by the aggregator on the node; an empty input leaves the check NOT_TESTED.
+validation_required_units: []
+validation_reconcile_timer: ""
+validation_vault_config: ""

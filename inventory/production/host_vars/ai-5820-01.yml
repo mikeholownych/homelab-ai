@@ -35,6 +35,21 @@ features:
   ray_enabled: false
   distributed_vllm_enabled: false
 
+# Validation inputs (roles/validation): checks that do not apply here, with the reason recorded, and what the aggregator
+# observes live on the node. Nothing is reported PASS without an observation.
+validation_not_applicable:
+  vllm_service: "vLLM retired; two independent llama.cpp SYCL workers serve inference"
+  dual_gpu_inference: "no tensor parallelism: two independent TP=1 workers, one per GPU"
+validation_required_units:
+  - aihost-llama-worker1.service
+  - aihost-llama-worker2.service
+  - aihost-orchestrator-gateway.service
+  - aihost-inference-policy.service
+  - prometheus-node-exporter.service
+  - aihost-metrics.timer
+validation_reconcile_timer: aihost-reconcile.timer
+validation_vault_config: /etc/aihost/vault/platform-credentials.json
+
 network_endpoints:
   primary_bind_address: null
   management_fqdn: null

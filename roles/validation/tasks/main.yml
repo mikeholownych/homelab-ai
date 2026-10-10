@@ -55,21 +55,17 @@
       - "{{ validation_profile_json_path }}"
       - --evidence-dir
       - "{{ validation_evidence_dir }}"
-    # Operator-declared applicability from inventory (check id -> reason), recorded in the validation document.
-    validation_not_applicable_argv: >-
-      {%- set args = [] -%}
-      {%- if validation_not_applicable is defined and validation_not_applicable is mapping -%}
-        {%- for k, v in validation_not_applicable.items() -%}
-          {%- set _ = args.append('--not-applicable=' ~ k ~ '=' ~ v) -%}
-        {%- endfor -%}
-      {%- endif -%}
-      {{ args }}
+    # Inventory inputs: operator-declared applicability (check id -> reason, recorded in the document) and the live
+    # checks the aggregator observes on the node (required units, reconcile timer, Vault client login).
+    validation_extra_argv: >-
+      {{ (validation_not_applicable | dict2items | map(attribute='key')
+          | zip(validation_not_applicable | dict2items | map(attribute='value'))
+          | map('join', '=') | map('regex_replace', '^', '--not-applicable=') | list)
+         + (validation_required_units | map('regex_replace', '^', '--required-unit=') | list)
+         + (['--reconcile-timer=' ~ validation_reconcile_timer] if validation_reconcile_timer else [])
+         + (['--vault-config=' ~ validation_vault_config] if validation_vault_config else []) }}
   ansible.builtin.command:
-    argv: >-
-      {{ validation_aggregator_argv +
-         ((validation_not_applicable_argv | from_yaml)
-          if validation_not_applicable_argv is string
-          else (validation_not_applicable_argv | default([]))) }}
+    argv: "{{ validation_aggregator_argv + validation_extra_argv }}"
   register: validation_run
   changed_when: false
   failed_when:
