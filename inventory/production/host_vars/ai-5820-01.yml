@@ -184,7 +184,7 @@ llama_cpp_container_workers:
     served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
     context: 65536
     args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-           "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
+           "--lazy-mode", "on"]
     reasoning_budget: 4096
     cpuset_cpus: "2,3,6,7"
 
@@ -406,7 +406,7 @@ llama_cpp_container_candidate_profiles:
       context: 65536
       cpuset_cpus: "0,1,4,5"
       args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-             "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
+             "--lazy-mode", "on"]
     gateway_worker:
       worker_id: candidate-qwen36-lead
       credential_name: candidate-qwen36-token
@@ -448,7 +448,7 @@ llama_cpp_container_candidate_profiles:
       context: 65536
       cpuset_cpus: "2,3,6,7"
       args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-             "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
+             "--lazy-mode", "on"]
     gateway_worker:
       worker_id: candidate-flashnext-deep
       credential_name: candidate-flashnext-token
@@ -490,7 +490,7 @@ llama_cpp_container_candidate_profiles:
       context: 65536
       cpuset_cpus: "2,3,6,7"
       args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-             "--lazy-mode", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0"]
+             "--lazy-mode", "on"]
     gateway_worker:
       worker_id: candidate-qwen38-deep
       credential_name: candidate-qwen38-token
