@@ -1,0 +1,6 @@
+---
+_scheduled_ansible_timers:
+  - {name: aihost-reconcile, enabled: "{{ scheduled_ansible_reconcile_enabled | bool }}"}
+  - {name: aihost-patch, enabled: "{{ scheduled_ansible_patch_enabled | bool }}"}
+  - {name: aihost-validate, enabled: "{{ scheduled_ansible_validate_enabled | bool }}"}
+  - {name: aihost-benchmark, enabled: "{{ scheduled_ansible_benchmark_enabled | bool }}"}

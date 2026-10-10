@@ -21,74 +21,55 @@
     mode: "0750"
   tags: [scheduled_ansible, operations]
 
-- name: Install reconciliation systemd service and timer
-  ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "/etc/systemd/system/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - { src: "aihost-reconcile.service.j2", dest: "aihost-reconcile.service" }
-    - { src: "aihost-reconcile.timer.j2", dest: "aihost-reconcile.timer" }
-  notify: Reload systemd daemon
-  tags: [scheduled_ansible, operations]
-
-- name: Install patch systemd service and timer
-  ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "/etc/systemd/system/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - { src: "aihost-patch.service.j2", dest: "aihost-patch.service" }
-    - { src: "aihost-patch.timer.j2", dest: "aihost-patch.timer" }
-  notify: Reload systemd daemon
-  tags: [scheduled_ansible, operations]
-
-- name: Install validation systemd service and timer
-  ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "/etc/systemd/system/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - { src: "aihost-validate.service.j2", dest: "aihost-validate.service" }
-    - { src: "aihost-validate.timer.j2", dest: "aihost-validate.timer" }
-  notify: Reload systemd daemon
-  tags: [scheduled_ansible, operations]
-
-- name: Install benchmark systemd service and timer
-  ansible.builtin.template:
-    src: "{{ item.src }}"
-    dest: "/etc/systemd/system/{{ item.dest }}"
-    owner: root
-    group: root
-    mode: "0644"
-  loop:
-    - { src: "aihost-benchmark.service.j2", dest: "aihost-benchmark.service" }
-    - { src: "aihost-benchmark.timer.j2", dest: "aihost-benchmark.timer" }
-  notify: Reload systemd daemon
-  tags: [scheduled_ansible, operations]
-
-- name: Establish desired state for every lifecycle timer
+# A lifecycle timer's units exist only while it is enabled: a disabled timer is stopped and its units removed, so the
+# host carries nothing that cannot or must not run there (e.g. on the inference appliance reconciliation runs from the
+# controller, and on-host benchmarks are retired by inference_origin, which also removes those units).
+- name: Stop lifecycle timers that are disabled
   ansible.builtin.systemd_service:
-    name: "{{ item.name }}"
-    daemon_reload: true
-    enabled: "{{ item.enabled }}"
-    state: "{{ 'started' if (item.enabled | bool) else 'stopped' }}"
-  loop:
-    - name: aihost-reconcile.timer
-      enabled: "{{ scheduled_ansible_reconcile_enabled | bool }}"
-    - name: aihost-patch.timer
-      enabled: "{{ scheduled_ansible_patch_enabled | bool }}"
-    - name: aihost-validate.timer
-      enabled: "{{ scheduled_ansible_validate_enabled | bool }}"
-    - name: aihost-benchmark.timer
-      enabled: "{{ scheduled_ansible_benchmark_enabled | bool }}"
+    name: "{{ item.name }}.timer"
+    enabled: false
+    state: stopped
+  loop: "{{ _scheduled_ansible_timers | rejectattr('enabled') | list }}"
   loop_control:
-    label: "{{ item.name }}={{ item.enabled }}"
+    label: "{{ item.name }}"
+  failed_when: false
+  when: not ansible_check_mode
+  tags: [scheduled_ansible, operations]
+
+- name: Remove units of disabled lifecycle timers
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item.0.name }}.{{ item.1 }}"
+    state: absent
+  loop: "{{ _scheduled_ansible_timers | rejectattr('enabled') | product(['service', 'timer']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1 }}"
+  notify: Reload systemd daemon
+  tags: [scheduled_ansible, operations]
+
+- name: Install units of enabled lifecycle timers
+  ansible.builtin.template:
+    src: "{{ item.0.name }}.{{ item.1 }}.j2"
+    dest: "/etc/systemd/system/{{ item.0.name }}.{{ item.1 }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ _scheduled_ansible_timers | selectattr('enabled') | product(['service', 'timer']) | list }}"
+  loop_control:
+    label: "{{ item.0.name }}.{{ item.1 }}"
+  notify: Reload systemd daemon
+  tags: [scheduled_ansible, operations]
+
+- name: Apply unit changes before starting timers
+  ansible.builtin.meta: flush_handlers
+  tags: [scheduled_ansible, operations]
+
+- name: Enable and start enabled lifecycle timers
+  ansible.builtin.systemd_service:
+    name: "{{ item.name }}.timer"
+    enabled: true
+    state: started
+  loop: "{{ _scheduled_ansible_timers | selectattr('enabled') | list }}"
+  loop_control:
+    label: "{{ item.name }}"
   when: not ansible_check_mode
   tags: [scheduled_ansible, operations]
