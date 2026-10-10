@@ -1,0 +1,513 @@
+{
+  "schema_version": "1.0.0",
+  "generated_at": "2026-10-10T20:23:56Z",
+  "git_sha": "7b9415c1dc05945d91e52709272b6bb3a8f65f87",
+  "simulated": false,
+  "status": "FAIL",
+  "node": {
+    "id": "ai-5820-01",
+    "environment": "production",
+    "hardware_profile": "d5820_dual_b65"
+  },
+  "checks": [
+    {
+      "id": "cpu",
+      "category": "platform",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "['Intel(R) Xeon(R) W-2123', 'Intel Xeon W-2123', 'W-2123']",
+        "value": [
+          "Intel(R) Xeon(R) W-2123",
+          "Intel Xeon W-2123",
+          "W-2123"
+        ]
+      },
+      "observed": {
+        "summary": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz",
+        "value": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz"
+      },
+      "evidence_refs": [
+        "hardware.json"
+      ]
+    },
+    {
+      "id": "machine_model",
+      "category": "platform",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "Precision 5820 Tower",
+        "value": "Precision 5820 Tower"
+      },
+      "observed": {
+        "summary": "Precision 5820 Tower",
+        "value": "Precision 5820 Tower"
+      },
+      "evidence_refs": [
+        "hardware.json"
+      ]
+    },
+    {
+      "id": "gpu_count",
+      "category": "compute",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "2",
+        "value": 2
+      },
+      "observed": {
+        "summary": "['0000:51:00.0', '0000:93:00.0']",
+        "value": [
+          "0000:51:00.0",
+          "0000:93:00.0"
+        ]
+      },
+      "evidence_refs": [
+        "hardware.json"
+      ]
+    },
+    {
+      "id": "gpu_model",
+      "category": "compute",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "[{'device_id': '0xe222', 'model': 'Intel Arc Pro B65', 'source': 'Intel Xe KMD supported hardware table', 'source_url': 'https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html', 'subsystem_device_id': '0xe222', 'subsystem_vendor_id': '0x1849', 'vendor_id': '8086'}]",
+        "value": [
+          {
+            "device_id": "0xe222",
+            "model": "Intel Arc Pro B65",
+            "source": "Intel Xe KMD supported hardware table",
+            "source_url": "https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html",
+            "subsystem_device_id": "0xe222",
+            "subsystem_vendor_id": "0x1849",
+            "vendor_id": "8086"
+          }
+        ]
+      },
+      "observed": {
+        "summary": "[{'bdf': '0000:51:00.0', 'device_id': 'e222', 'vendor_id': '8086'}, {'bdf': '0000:93:00.0', 'device_id': 'e222', 'vendor_id': '8086'}]",
+        "value": [
+          {
+            "bdf": "0000:51:00.0",
+            "device_id": "e222",
+            "vendor_id": "8086"
+          },
+          {
+            "bdf": "0000:93:00.0",
+            "device_id": "e222",
+            "vendor_id": "8086"
+          }
+        ]
+      },
+      "evidence_refs": [
+        "hardware.json"
+      ]
+    },
+    {
+      "id": "gpu_vram",
+      "category": "compute",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "32 GiB +/- 4 GiB",
+        "value": "32 GiB +/- 4 GiB"
+      },
+      "observed": {
+        "summary": "[32, 32]",
+        "value": [
+          32,
+          32
+        ]
+      },
+      "evidence_refs": [
+        "hardware.json"
+      ]
+    },
+    {
+      "id": "level_zero",
+      "category": "compute",
+      "classification": "runtime",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "{'bdfs': ['0000:51:00.0', '0000:93:00.0'], 'count': 2}",
+        "value": {
+          "bdfs": [
+            "0000:51:00.0",
+            "0000:93:00.0"
+          ],
+          "count": 2
+        }
+      },
+      "observed": {
+        "summary": "[{'bdf': '0000:51:00.0', 'level_zero_uuid': '00000000-0000-0051-0000-0000e2228086', 'memory_gib': 32, 'memory_source': 'level_zero_global_memory', 'name': 'Intel(R) Arc(TM) Pro B65 Graphics', 'uuid': '00000000-0000-0051-0000-0000e2228086', 'xpu_ordinal': 0}, {'bdf': '0000:93:00.0', 'level_zero_uuid': '00000000-0000-0093-0000-0000e2228086', 'memory_gib': 32, 'memory_source': 'level_zero_global_memory', 'name': 'Intel(R) Arc(TM) Pro B65 Graphics', 'uuid': '00000000-0000-0093-0000-0000e2228086', 'xpu_ordinal': 1}]",
+        "value": [
+          {
+            "bdf": "0000:51:00.0",
+            "level_zero_uuid": "00000000-0000-0051-0000-0000e2228086",
+            "memory_gib": 32,
+            "memory_source": "level_zero_global_memory",
+            "name": "Intel(R) Arc(TM) Pro B65 Graphics",
+            "uuid": "00000000-0000-0051-0000-0000e2228086",
+            "xpu_ordinal": 0
+          },
+          {
+            "bdf": "0000:93:00.0",
+            "level_zero_uuid": "00000000-0000-0093-0000-0000e2228086",
+            "memory_gib": 32,
+            "memory_source": "level_zero_global_memory",
+            "name": "Intel(R) Arc(TM) Pro B65 Graphics",
+            "uuid": "00000000-0000-0093-0000-0000e2228086",
+            "xpu_ordinal": 1
+          }
+        ]
+      },
+      "evidence_refs": [
+        "hardware.json"
+      ]
+    },
+    {
+      "id": "pytorch_xpu",
+      "category": "compute",
+      "classification": "runtime",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "None",
+        "value": null
+      },
+      "observed": {
+        "summary": "2",
+        "value": 2
+      },
+      "evidence_refs": [
+        "xpu-validation.json"
+      ]
+    },
+    {
+      "id": "pcie_topology",
+      "category": "bus",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": ">=0.5 of each physical slot capability",
+        "value": ">=0.5 of each physical slot capability"
+      },
+      "observed": {
+        "summary": "[]",
+        "value": []
+      },
+      "evidence_refs": [
+        "pci.json"
+      ]
+    },
+    {
+      "id": "rebar",
+      "category": "bus",
+      "classification": "hardware",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "True",
+        "value": true
+      },
+      "observed": {
+        "summary": "[True, True]",
+        "value": [
+          true,
+          true
+        ]
+      },
+      "evidence_refs": [
+        "pci.json"
+      ]
+    },
+    {
+      "id": "vllm_service",
+      "category": "inference",
+      "classification": "service",
+      "severity": "warning",
+      "status": "NOT_APPLICABLE",
+      "expected": {
+        "summary": "not applicable",
+        "value": "not applicable"
+      },
+      "observed": {
+        "summary": "vLLM retired; two independent llama.cpp SYCL workers serve inference",
+        "value": "vLLM retired; two independent llama.cpp SYCL workers serve inference"
+      },
+      "evidence_refs": [
+        "inventory:validation_not_applicable"
+      ]
+    },
+    {
+      "id": "single_gpu_inference",
+      "category": "inference",
+      "classification": "runtime",
+      "severity": "warning",
+      "status": "NOT_TESTED",
+      "expected": {
+        "summary": "Single-GPU inference passes",
+        "value": "PASS"
+      },
+      "observed": {
+        "summary": "not observed",
+        "value": null
+      },
+      "evidence_refs": [
+        "single_gpu_inference_evidence.json"
+      ]
+    },
+    {
+      "id": "dual_gpu_inference",
+      "category": "inference",
+      "classification": "runtime",
+      "severity": "warning",
+      "status": "NOT_APPLICABLE",
+      "expected": {
+        "summary": "not applicable",
+        "value": "not applicable"
+      },
+      "observed": {
+        "summary": "no tensor parallelism: two independent TP=1 workers, one per GPU",
+        "value": "no tensor parallelism: two independent TP=1 workers, one per GPU"
+      },
+      "evidence_refs": [
+        "inventory:validation_not_applicable"
+      ]
+    },
+    {
+      "id": "llama_cpp_fallback",
+      "category": "inference",
+      "classification": "runtime",
+      "severity": "information",
+      "status": "NOT_TESTED",
+      "expected": {
+        "summary": "llama.cpp fallback passes",
+        "value": "PASS"
+      },
+      "observed": {
+        "summary": "not observed",
+        "value": null
+      },
+      "evidence_refs": [
+        "llama_cpp_fallback_evidence.json"
+      ]
+    },
+    {
+      "id": "required_services",
+      "category": "system",
+      "classification": "service",
+      "severity": "warning",
+      "status": "PASS",
+      "expected": {
+        "summary": "6 units active",
+        "value": "6 units active"
+      },
+      "observed": {
+        "summary": "all active",
+        "value": "all active"
+      },
+      "evidence_refs": [
+        "systemctl is-active"
+      ]
+    },
+    {
+      "id": "scheduled_reconciliation",
+      "category": "operations",
+      "classification": "operations",
+      "severity": "warning",
+      "status": "FAIL",
+      "expected": {
+        "summary": "aihost-reconcile.timer enabled and active",
+        "value": "aihost-reconcile.timer enabled and active"
+      },
+      "observed": {
+        "summary": "aihost-reconcile.timer disabled/inactive",
+        "value": "aihost-reconcile.timer disabled/inactive"
+      },
+      "evidence_refs": [
+        "systemctl is-enabled/is-active"
+      ]
+    },
+    {
+      "id": "vault_access",
+      "category": "security",
+      "classification": "access",
+      "severity": "blocking",
+      "status": "PASS",
+      "expected": {
+        "summary": "AppRole login succeeds",
+        "value": "AppRole login succeeds"
+      },
+      "observed": {
+        "summary": "login ok at https://10.0.8.254:8200, policies ['default', 't5820-platform']",
+        "value": "login ok at https://10.0.8.254:8200, policies ['default', 't5820-platform']"
+      },
+      "evidence_refs": [
+        "/etc/aihost/vault/platform-credentials.json"
+      ]
+    },
+    {
+      "id": "os_tuning_profile",
+      "category": "operations",
+      "classification": "operations",
+      "severity": "warning",
+      "status": "PASS",
+      "expected": {
+        "summary": "Active tuning profile",
+        "value": "d5820_dual_b65"
+      },
+      "observed": {
+        "summary": "converged profile",
+        "value": "d5820_dual_b65"
+      },
+      "evidence_refs": [
+        "tuning-profile.json"
+      ]
+    },
+    {
+      "id": "os_tuning_governor",
+      "category": "operations",
+      "classification": "operations",
+      "severity": "warning",
+      "status": "PASS",
+      "expected": {
+        "summary": "CPU governor",
+        "value": "performance"
+      },
+      "observed": {
+        "summary": "active scaling_governor",
+        "value": "performance"
+      },
+      "evidence_refs": [
+        "cpu-power.json"
+      ]
+    },
+    {
+      "id": "os_tuning_thp",
+      "category": "operations",
+      "classification": "operations",
+      "severity": "warning",
+      "status": "PASS",
+      "expected": {
+        "summary": "THP mode",
+        "value": "always"
+      },
+      "observed": {
+        "summary": "active THP mode",
+        "value": "always"
+      },
+      "evidence_refs": [
+        "hugepages.json"
+      ]
+    },
+    {
+      "id": "os_tuning_hugepages",
+      "category": "operations",
+      "classification": "operations",
+      "severity": "warning",
+      "status": "NOT_APPLICABLE",
+      "expected": {
+        "summary": "HugeTLB pages",
+        "value": "unmanaged (not applicable for profile)"
+      },
+      "observed": {
+        "summary": "HugePages_Total",
+        "value": 0
+      },
+      "evidence_refs": [
+        "hugepages.json"
+      ]
+    },
+    {
+      "id": "os_tuning_sysctl",
+      "category": "operations",
+      "classification": "operations",
+      "severity": "warning",
+      "status": "PASS",
+      "expected": {
+        "summary": "Managed sysctl keys active",
+        "value": "4 keys"
+      },
+      "observed": {
+        "summary": "verified against /proc/sys",
+        "value": "4 keys"
+      },
+      "evidence_refs": [
+        "memory-policy.json"
+      ]
+    },
+    {
+      "id": "running_kernel",
+      "category": "system",
+      "classification": "runtime",
+      "severity": "blocking",
+      "status": "NOT_APPLICABLE",
+      "expected": {
+        "summary": "Running kernel release",
+        "value": null
+      },
+      "observed": {
+        "summary": "uname -r",
+        "value": "7.0.0-38-generic"
+      },
+      "evidence_refs": [
+        "kernel.json"
+      ]
+    },
+    {
+      "id": "numa_topology",
+      "category": "platform",
+      "classification": "hardware",
+      "severity": "warning",
+      "status": "PASS",
+      "expected": {
+        "summary": "NUMA topology unchanged since first recording",
+        "value": "stable"
+      },
+      "observed": {
+        "summary": "fingerprint comparison",
+        "value": "PASS"
+      },
+      "evidence_refs": [
+        "numa.json"
+      ]
+    },
+    {
+      "id": "intel_gpu_stack_status",
+      "category": "compute",
+      "classification": "runtime",
+      "severity": "blocking",
+      "status": "NOT_TESTED",
+      "expected": {
+        "summary": "B65 stack status",
+        "value": "pre_verification_fail_closed"
+      },
+      "observed": {
+        "summary": "not observed",
+        "value": null
+      },
+      "evidence_refs": [
+        "intel_gpu_stack_status_evidence.json"
+      ]
+    }
+  ],
+  "summary": {
+    "blocking_failures": 0,
+    "failed_checks": 1,
+    "warnings": 11,
+    "not_tested": 3,
+    "not_applicable": 4,
+    "classification": "degraded"
+  }
+}

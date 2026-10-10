@@ -1,0 +1,1374 @@
+
+PLAY [Independently validate host state] ***************************************
+
+TASK [hardware_inventory : Ensure hardware inventory working directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Ensure hardware collector install directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Install read-only hardware collector] ***************
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Collect required hardware sources without mutation] ***
+ok: [ai-5820-01]
+
+TASK [hardware_inventory : Persist observed hardware snapshot] *****************
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Load version-controlled expected hardware profile] ***
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Ensure hardware classifier install directory exists] ***
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Install pure hardware classifier] ******************
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Ensure hardware evidence directory exists] *********
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Materialize expected profile for pure comparison] ***
+ok: [ai-5820-01]
+
+TASK [hardware_validation : Classify observed hardware and write structured evidence] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Run tuning input and profile assertions] *********************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/assert_inputs.yml for ai-5820-01
+
+TASK [os_tuning : Validate os_tuning inputs] ***********************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Load version-controlled OS tuning profile] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate loaded OS tuning profile structure] *****************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Validate tuning values against host allowlists] **************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Set resolved tuning facts] ***********************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Discover live OS tuning state without mutation] **************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/discovery.yml for ai-5820-01
+
+TASK [os_tuning : Ensure os_tuning work directory exists] **********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Ensure tuning helper install directory exists] ***************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Ensure tuning evidence directory exists] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Install read-only OS tuning telemetry collector] *************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Install CPU power enforcement helper] ************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Collect OS tuning telemetry without mutation] ****************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Parse collected telemetry snapshot] **************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Persist tuning evidence documents] ***************************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/persist_evidence.yml for ai-5820-01
+
+TASK [os_tuning : Persist tuning evidence documents] ***************************
+ok: [ai-5820-01] => (item=numa.json)
+ok: [ai-5820-01] => (item=interrupts.json)
+ok: [ai-5820-01] => (item=cpu-power.json)
+ok: [ai-5820-01] => (item=memory-policy.json)
+ok: [ai-5820-01] => (item=hugepages.json)
+ok: [ai-5820-01] => (item=io.json)
+ok: [ai-5820-01] => (item=kernel.json)
+
+TASK [os_tuning : Persist resolved tuning profile as machine-readable evidence] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Record active profile state for validation and drift classification] ***
+changed: [ai-5820-01]
+
+TASK [os_tuning : Enforce tuning safety gates before any mutation] *************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/safety_gates.yml for ai-5820-01
+
+TASK [os_tuning : Validate hugepages capacity safety] **************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified IRQ affinity changes] *********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified NUMA runtime binding] *********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified custom kernel deployment] *****************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Validate declared custom kernel artifact reference] **********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Install NUMA discovery packages when enabled] ****************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Compute managed sysctl mapping from the profile] *************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute managed kernel command-line parameters] **************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate managed kernel command-line parameters against allowlist] ***
+ok: [ai-5820-01] => (item=transparent_hugepage=always) => 
+    ansible_loop_var: param
+    changed: false
+    msg: All assertions passed
+    param: transparent_hugepage=always
+ok: [ai-5820-01] => (item=pcie_aspm=performance) => 
+    ansible_loop_var: param
+    changed: false
+    msg: All assertions passed
+    param: pcie_aspm=performance
+
+TASK [os_tuning : Apply memory sysctls owned by the tuning profile] ************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_memory.yml for ai-5820-01
+
+TASK [os_tuning : Apply managed memory sysctl values] **************************
+skipping: [ai-5820-01] => (item=vm.swappiness=1) 
+skipping: [ai-5820-01] => (item=vm.dirty_ratio=10) 
+skipping: [ai-5820-01] => (item=vm.dirty_background_ratio=5) 
+skipping: [ai-5820-01] => (item=vm.zone_reclaim_mode=0) 
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove stale managed sysctl keys no longer in the profile] ***
+skipping: [ai-5820-01] => (item=vm.swappiness (absent)) 
+skipping: [ai-5820-01] => (item=vm.dirty_ratio (absent)) 
+skipping: [ai-5820-01] => (item=vm.dirty_background_ratio (absent)) 
+skipping: [ai-5820-01] => (item=vm.zone_reclaim_mode (absent)) 
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Verify active sysctl values match the tuning profile] ********
+skipping: [ai-5820-01] => (item=vm.swappiness) 
+skipping: [ai-5820-01] => (item=vm.dirty_ratio) 
+skipping: [ai-5820-01] => (item=vm.dirty_background_ratio) 
+skipping: [ai-5820-01] => (item=vm.zone_reclaim_mode) 
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Compute drifted NVMe queue lists for I/O enforcement] ********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply I/O settings owned by the tuning profile] **************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_io.yml for ai-5820-01
+
+TASK [os_tuning : Render NVMe I/O udev rule] ***********************************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove NVMe I/O udev rule when nothing is managed] ***********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime NVMe scheduler on drifted devices] *************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime NVMe read-ahead on drifted devices] ************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply CPU power settings owned by the tuning profile] ********
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_cpu_power.yml for ai-5820-01
+
+TASK [os_tuning : Install aihost-cpu-power oneshot service] ********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove aihost-cpu-power service when nothing is managed] *****
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Enable aihost-cpu-power boot persistence] ********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply CPU governor and energy-performance preference at runtime] ***
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Validate active CPU power state matches the profile] *********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply transparent hugepage settings owned by the tuning profile] ***
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_thp.yml for ai-5820-01
+
+TASK [os_tuning : Render tuning kernel command-line drop-in] *******************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove tuning command-line drop-in when nothing is managed] ***
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime transparent hugepage mode] *********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime transparent hugepage defrag mode] **************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Detect kernel drift against the declared expectation] ********
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/kernel_drift.yml for ai-5820-01
+
+TASK [os_tuning : Compare running kernel against declared expectation] *********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Install checksummed custom kernel artifact] ******************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Inspect previous NUMA topology fingerprint] ******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Read previous NUMA topology fingerprint] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute current NUMA topology fingerprint] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compare NUMA topology against previous observation] **********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Write current NUMA topology fingerprint] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Emit independent tuning validation checks] *******************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/emit_checks.yml for ai-5820-01
+
+TASK [os_tuning : Derive tuning validation checks from observed state] *********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Persist tuning validation check fragment] ********************
+ok: [ai-5820-01]
+
+TASK [Run independent validation aggregation after tuning discovery] ***********
+included: validation for ai-5820-01
+
+TASK [validation : Ensure evidence directory exists for validation] ************
+ok: [ai-5820-01]
+
+TASK [validation : Load expected hardware profile for harness value derivation] ***
+ok: [ai-5820-01]
+
+TASK [validation : Materialize expected hardware profile for the aggregator] ***
+ok: [ai-5820-01]
+
+TASK [validation : Install validation aggregator on the managed node] **********
+changed: [ai-5820-01]
+
+TASK [validation : Run independent validation aggregator] **********************
+[ERROR]: Task failed: Module failed: A 'failed_when' expression evaluated to 'True'.
+Origin: /home/mike/Projects/aihost/roles/validation/tasks/main.yml:35:3
+
+33   tags: [validation, operations]
+34
+35 - name: Run independent validation aggregator # noqa: jinja[invalid]
+     ^ column 3
+
+fatal: [ai-5820-01]: FAILED! => 
+    changed: false
+    changed_when_result: false
+    cmd:
+    - /usr/bin/python3
+    - /usr/local/libexec/local-ai-validate-aggregate
+    - --node-id
+    - ai-5820-01
+    - --environment
+    - production
+    - --hardware-profile
+    - d5820_dual_b65
+    - --git-sha
+    - 7b9415c1dc05945d91e52709272b6bb3a8f65f87
+    - --input-json
+    - /var/lib/aihost/tuning/tuning-checks.json
+    - --output
+    - /var/lib/local-ai/evidence/validation.json
+    - --text-summary
+    - /var/lib/local-ai/evidence/validation_summary.txt
+    - --hardware-profile-json
+    - /var/lib/local-ai/evidence/hardware-profile-expected.json
+    - --evidence-dir
+    - /var/lib/local-ai/evidence
+    - --not-applicable=vllm_service=vLLM retired; two independent llama.cpp SYCL workers
+      serve inference
+    - '--not-applicable=dual_gpu_inference=no tensor parallelism: two independent TP=1
+      workers, one per GPU'
+    - --required-unit=aihost-llama-worker1.service
+    - --required-unit=aihost-llama-worker2.service
+    - --required-unit=aihost-orchestrator-gateway.service
+    - --required-unit=aihost-inference-policy.service
+    - --required-unit=prometheus-node-exporter.service
+    - --required-unit=aihost-metrics.timer
+    - --reconcile-timer=aihost-reconcile.timer
+    - --vault-config=/etc/aihost/vault/platform-credentials.json
+    delta: '0:00:00.223503'
+    end: '2026-10-10 20:23:56.085468'
+    failed_when_result: true
+    failed_when_suppressed_exception: (traceback unavailable)
+    msg: The command exited with a non-zero return code.
+    rc: 1
+    start: '2026-10-10 20:23:55.861965'
+    stderr: ''
+    stderr_lines: []
+    stdout: |-
+      {
+        "schema_version": "1.0.0",
+        "generated_at": "2026-10-10T20:23:56Z",
+        "git_sha": "7b9415c1dc05945d91e52709272b6bb3a8f65f87",
+        "simulated": false,
+        "status": "FAIL",
+        "node": {
+          "id": "ai-5820-01",
+          "environment": "production",
+          "hardware_profile": "d5820_dual_b65"
+        },
+        "checks": [
+          {
+            "id": "cpu",
+            "category": "platform",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "['Intel(R) Xeon(R) W-2123', 'Intel Xeon W-2123', 'W-2123']",
+              "value": [
+                "Intel(R) Xeon(R) W-2123",
+                "Intel Xeon W-2123",
+                "W-2123"
+              ]
+            },
+            "observed": {
+              "summary": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz",
+              "value": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz"
+            },
+            "evidence_refs": [
+              "hardware.json"
+            ]
+          },
+          {
+            "id": "machine_model",
+            "category": "platform",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "Precision 5820 Tower",
+              "value": "Precision 5820 Tower"
+            },
+            "observed": {
+              "summary": "Precision 5820 Tower",
+              "value": "Precision 5820 Tower"
+            },
+            "evidence_refs": [
+              "hardware.json"
+            ]
+          },
+          {
+            "id": "gpu_count",
+            "category": "compute",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "2",
+              "value": 2
+            },
+            "observed": {
+              "summary": "['0000:51:00.0', '0000:93:00.0']",
+              "value": [
+                "0000:51:00.0",
+                "0000:93:00.0"
+              ]
+            },
+            "evidence_refs": [
+              "hardware.json"
+            ]
+          },
+          {
+            "id": "gpu_model",
+            "category": "compute",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "[{'device_id': '0xe222', 'model': 'Intel Arc Pro B65', 'source': 'Intel Xe KMD supported hardware table', 'source_url': 'https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html', 'subsystem_device_id': '0xe222', 'subsystem_vendor_id': '0x1849', 'vendor_id': '8086'}]",
+              "value": [
+                {
+                  "device_id": "0xe222",
+                  "model": "Intel Arc Pro B65",
+                  "source": "Intel Xe KMD supported hardware table",
+                  "source_url": "https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html",
+                  "subsystem_device_id": "0xe222",
+                  "subsystem_vendor_id": "0x1849",
+                  "vendor_id": "8086"
+                }
+              ]
+            },
+            "observed": {
+              "summary": "[{'bdf': '0000:51:00.0', 'device_id': 'e222', 'vendor_id': '8086'}, {'bdf': '0000:93:00.0', 'device_id': 'e222', 'vendor_id': '8086'}]",
+              "value": [
+                {
+                  "bdf": "0000:51:00.0",
+                  "device_id": "e222",
+                  "vendor_id": "8086"
+                },
+                {
+                  "bdf": "0000:93:00.0",
+                  "device_id": "e222",
+                  "vendor_id": "8086"
+                }
+              ]
+            },
+            "evidence_refs": [
+              "hardware.json"
+            ]
+          },
+          {
+            "id": "gpu_vram",
+            "category": "compute",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "32 GiB +/- 4 GiB",
+              "value": "32 GiB +/- 4 GiB"
+            },
+            "observed": {
+              "summary": "[32, 32]",
+              "value": [
+                32,
+                32
+              ]
+            },
+            "evidence_refs": [
+              "hardware.json"
+            ]
+          },
+          {
+            "id": "level_zero",
+            "category": "compute",
+            "classification": "runtime",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "{'bdfs': ['0000:51:00.0', '0000:93:00.0'], 'count': 2}",
+              "value": {
+                "bdfs": [
+                  "0000:51:00.0",
+                  "0000:93:00.0"
+                ],
+                "count": 2
+              }
+            },
+            "observed": {
+              "summary": "[{'bdf': '0000:51:00.0', 'level_zero_uuid': '00000000-0000-0051-0000-0000e2228086', 'memory_gib': 32, 'memory_source': 'level_zero_global_memory', 'name': 'Intel(R) Arc(TM) Pro B65 Graphics', 'uuid': '00000000-0000-0051-0000-0000e2228086', 'xpu_ordinal': 0}, {'bdf': '0000:93:00.0', 'level_zero_uuid': '00000000-0000-0093-0000-0000e2228086', 'memory_gib': 32, 'memory_source': 'level_zero_global_memory', 'name': 'Intel(R) Arc(TM) Pro B65 Graphics', 'uuid': '00000000-0000-0093-0000-0000e2228086', 'xpu_ordinal': 1}]",
+              "value": [
+                {
+                  "bdf": "0000:51:00.0",
+                  "level_zero_uuid": "00000000-0000-0051-0000-0000e2228086",
+                  "memory_gib": 32,
+                  "memory_source": "level_zero_global_memory",
+                  "name": "Intel(R) Arc(TM) Pro B65 Graphics",
+                  "uuid": "00000000-0000-0051-0000-0000e2228086",
+                  "xpu_ordinal": 0
+                },
+                {
+                  "bdf": "0000:93:00.0",
+                  "level_zero_uuid": "00000000-0000-0093-0000-0000e2228086",
+                  "memory_gib": 32,
+                  "memory_source": "level_zero_global_memory",
+                  "name": "Intel(R) Arc(TM) Pro B65 Graphics",
+                  "uuid": "00000000-0000-0093-0000-0000e2228086",
+                  "xpu_ordinal": 1
+                }
+              ]
+            },
+            "evidence_refs": [
+              "hardware.json"
+            ]
+          },
+          {
+            "id": "pytorch_xpu",
+            "category": "compute",
+            "classification": "runtime",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "None",
+              "value": null
+            },
+            "observed": {
+              "summary": "2",
+              "value": 2
+            },
+            "evidence_refs": [
+              "xpu-validation.json"
+            ]
+          },
+          {
+            "id": "pcie_topology",
+            "category": "bus",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": ">=0.5 of each physical slot capability",
+              "value": ">=0.5 of each physical slot capability"
+            },
+            "observed": {
+              "summary": "[]",
+              "value": []
+            },
+            "evidence_refs": [
+              "pci.json"
+            ]
+          },
+          {
+            "id": "rebar",
+            "category": "bus",
+            "classification": "hardware",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "True",
+              "value": true
+            },
+            "observed": {
+              "summary": "[True, True]",
+              "value": [
+                true,
+                true
+              ]
+            },
+            "evidence_refs": [
+              "pci.json"
+            ]
+          },
+          {
+            "id": "vllm_service",
+            "category": "inference",
+            "classification": "service",
+            "severity": "warning",
+            "status": "NOT_APPLICABLE",
+            "expected": {
+              "summary": "not applicable",
+              "value": "not applicable"
+            },
+            "observed": {
+              "summary": "vLLM retired; two independent llama.cpp SYCL workers serve inference",
+              "value": "vLLM retired; two independent llama.cpp SYCL workers serve inference"
+            },
+            "evidence_refs": [
+              "inventory:validation_not_applicable"
+            ]
+          },
+          {
+            "id": "single_gpu_inference",
+            "category": "inference",
+            "classification": "runtime",
+            "severity": "warning",
+            "status": "NOT_TESTED",
+            "expected": {
+              "summary": "Single-GPU inference passes",
+              "value": "PASS"
+            },
+            "observed": {
+              "summary": "not observed",
+              "value": null
+            },
+            "evidence_refs": [
+              "single_gpu_inference_evidence.json"
+            ]
+          },
+          {
+            "id": "dual_gpu_inference",
+            "category": "inference",
+            "classification": "runtime",
+            "severity": "warning",
+            "status": "NOT_APPLICABLE",
+            "expected": {
+              "summary": "not applicable",
+              "value": "not applicable"
+            },
+            "observed": {
+              "summary": "no tensor parallelism: two independent TP=1 workers, one per GPU",
+              "value": "no tensor parallelism: two independent TP=1 workers, one per GPU"
+            },
+            "evidence_refs": [
+              "inventory:validation_not_applicable"
+            ]
+          },
+          {
+            "id": "llama_cpp_fallback",
+            "category": "inference",
+            "classification": "runtime",
+            "severity": "information",
+            "status": "NOT_TESTED",
+            "expected": {
+              "summary": "llama.cpp fallback passes",
+              "value": "PASS"
+            },
+            "observed": {
+              "summary": "not observed",
+              "value": null
+            },
+            "evidence_refs": [
+              "llama_cpp_fallback_evidence.json"
+            ]
+          },
+          {
+            "id": "required_services",
+            "category": "system",
+            "classification": "service",
+            "severity": "warning",
+            "status": "PASS",
+            "expected": {
+              "summary": "6 units active",
+              "value": "6 units active"
+            },
+            "observed": {
+              "summary": "all active",
+              "value": "all active"
+            },
+            "evidence_refs": [
+              "systemctl is-active"
+            ]
+          },
+          {
+            "id": "scheduled_reconciliation",
+            "category": "operations",
+            "classification": "operations",
+            "severity": "warning",
+            "status": "FAIL",
+            "expected": {
+              "summary": "aihost-reconcile.timer enabled and active",
+              "value": "aihost-reconcile.timer enabled and active"
+            },
+            "observed": {
+              "summary": "aihost-reconcile.timer disabled/inactive",
+              "value": "aihost-reconcile.timer disabled/inactive"
+            },
+            "evidence_refs": [
+              "systemctl is-enabled/is-active"
+            ]
+          },
+          {
+            "id": "vault_access",
+            "category": "security",
+            "classification": "access",
+            "severity": "blocking",
+            "status": "PASS",
+            "expected": {
+              "summary": "AppRole login succeeds",
+              "value": "AppRole login succeeds"
+            },
+            "observed": {
+              "summary": "login ok at https://10.0.8.254:8200, policies ['default', 't5820-platform']",
+              "value": "login ok at https://10.0.8.254:8200, policies ['default', 't5820-platform']"
+            },
+            "evidence_refs": [
+              "/etc/aihost/vault/platform-credentials.json"
+            ]
+          },
+          {
+            "id": "os_tuning_profile",
+            "category": "operations",
+            "classification": "operations",
+            "severity": "warning",
+            "status": "PASS",
+            "expected": {
+              "summary": "Active tuning profile",
+              "value": "d5820_dual_b65"
+            },
+            "observed": {
+              "summary": "converged profile",
+              "value": "d5820_dual_b65"
+            },
+            "evidence_refs": [
+              "tuning-profile.json"
+            ]
+          },
+          {
+            "id": "os_tuning_governor",
+            "category": "operations",
+            "classification": "operations",
+            "severity": "warning",
+            "status": "PASS",
+            "expected": {
+              "summary": "CPU governor",
+              "value": "performance"
+            },
+            "observed": {
+              "summary": "active scaling_governor",
+              "value": "performance"
+            },
+            "evidence_refs": [
+              "cpu-power.json"
+            ]
+          },
+          {
+            "id": "os_tuning_thp",
+            "category": "operations",
+            "classification": "operations",
+            "severity": "warning",
+            "status": "PASS",
+            "expected": {
+              "summary": "THP mode",
+              "value": "always"
+            },
+            "observed": {
+              "summary": "active THP mode",
+              "value": "always"
+            },
+            "evidence_refs": [
+              "hugepages.json"
+            ]
+          },
+          {
+            "id": "os_tuning_hugepages",
+            "category": "operations",
+            "classification": "operations",
+            "severity": "warning",
+            "status": "NOT_APPLICABLE",
+            "expected": {
+              "summary": "HugeTLB pages",
+              "value": "unmanaged (not applicable for profile)"
+            },
+            "observed": {
+              "summary": "HugePages_Total",
+              "value": 0
+            },
+            "evidence_refs": [
+              "hugepages.json"
+            ]
+          },
+          {
+            "id": "os_tuning_sysctl",
+            "category": "operations",
+            "classification": "operations",
+            "severity": "warning",
+            "status": "PASS",
+            "expected": {
+              "summary": "Managed sysctl keys active",
+              "value": "4 keys"
+            },
+            "observed": {
+              "summary": "verified against /proc/sys",
+              "value": "4 keys"
+            },
+            "evidence_refs": [
+              "memory-policy.json"
+            ]
+          },
+          {
+            "id": "running_kernel",
+            "category": "system",
+            "classification": "runtime",
+            "severity": "blocking",
+            "status": "NOT_APPLICABLE",
+            "expected": {
+              "summary": "Running kernel release",
+              "value": null
+            },
+            "observed": {
+              "summary": "uname -r",
+              "value": "7.0.0-38-generic"
+            },
+            "evidence_refs": [
+              "kernel.json"
+            ]
+          },
+          {
+            "id": "numa_topology",
+            "category": "platform",
+            "classification": "hardware",
+            "severity": "warning",
+            "status": "PASS",
+            "expected": {
+              "summary": "NUMA topology unchanged since first recording",
+              "value": "stable"
+            },
+            "observed": {
+              "summary": "fingerprint comparison",
+              "value": "PASS"
+            },
+            "evidence_refs": [
+              "numa.json"
+            ]
+          },
+          {
+            "id": "intel_gpu_stack_status",
+            "category": "compute",
+            "classification": "runtime",
+            "severity": "blocking",
+            "status": "NOT_TESTED",
+            "expected": {
+              "summary": "B65 stack status",
+              "value": "pre_verification_fail_closed"
+            },
+            "observed": {
+              "summary": "not observed",
+              "value": null
+            },
+            "evidence_refs": [
+              "intel_gpu_stack_status_evidence.json"
+            ]
+          }
+        ],
+        "summary": {
+          "blocking_failures": 0,
+          "failed_checks": 1,
+          "warnings": 11,
+          "not_tested": 3,
+          "not_applicable": 4,
+          "classification": "degraded"
+        }
+      }
+    stdout_lines:
+    - '{'
+    - '  "schema_version": "1.0.0",'
+    - '  "generated_at": "2026-10-10T20:23:56Z",'
+    - '  "git_sha": "7b9415c1dc05945d91e52709272b6bb3a8f65f87",'
+    - '  "simulated": false,'
+    - '  "status": "FAIL",'
+    - '  "node": {'
+    - '    "id": "ai-5820-01",'
+    - '    "environment": "production",'
+    - '    "hardware_profile": "d5820_dual_b65"'
+    - '  },'
+    - '  "checks": ['
+    - '    {'
+    - '      "id": "cpu",'
+    - '      "category": "platform",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "[''Intel(R) Xeon(R) W-2123'', ''Intel Xeon W-2123'', ''W-2123'']",'
+    - '        "value": ['
+    - '          "Intel(R) Xeon(R) W-2123",'
+    - '          "Intel Xeon W-2123",'
+    - '          "W-2123"'
+    - '        ]'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz",'
+    - '        "value": "Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hardware.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "machine_model",'
+    - '      "category": "platform",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "Precision 5820 Tower",'
+    - '        "value": "Precision 5820 Tower"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "Precision 5820 Tower",'
+    - '        "value": "Precision 5820 Tower"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hardware.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "gpu_count",'
+    - '      "category": "compute",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "2",'
+    - '        "value": 2'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "[''0000:51:00.0'', ''0000:93:00.0'']",'
+    - '        "value": ['
+    - '          "0000:51:00.0",'
+    - '          "0000:93:00.0"'
+    - '        ]'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hardware.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "gpu_model",'
+    - '      "category": "compute",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "[{''device_id'': ''0xe222'', ''model'': ''Intel Arc Pro B65'',
+      ''source'': ''Intel Xe KMD supported hardware table'', ''source_url'': ''https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html'',
+      ''subsystem_device_id'': ''0xe222'', ''subsystem_vendor_id'': ''0x1849'', ''vendor_id'':
+      ''8086''}]",'
+    - '        "value": ['
+    - '          {'
+    - '            "device_id": "0xe222",'
+    - '            "model": "Intel Arc Pro B65",'
+    - '            "source": "Intel Xe KMD supported hardware table",'
+    - '            "source_url": "https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html",'
+    - '            "subsystem_device_id": "0xe222",'
+    - '            "subsystem_vendor_id": "0x1849",'
+    - '            "vendor_id": "8086"'
+    - '          }'
+    - '        ]'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "[{''bdf'': ''0000:51:00.0'', ''device_id'': ''e222'', ''vendor_id'':
+      ''8086''}, {''bdf'': ''0000:93:00.0'', ''device_id'': ''e222'', ''vendor_id'': ''8086''}]",'
+    - '        "value": ['
+    - '          {'
+    - '            "bdf": "0000:51:00.0",'
+    - '            "device_id": "e222",'
+    - '            "vendor_id": "8086"'
+    - '          },'
+    - '          {'
+    - '            "bdf": "0000:93:00.0",'
+    - '            "device_id": "e222",'
+    - '            "vendor_id": "8086"'
+    - '          }'
+    - '        ]'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hardware.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "gpu_vram",'
+    - '      "category": "compute",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "32 GiB +/- 4 GiB",'
+    - '        "value": "32 GiB +/- 4 GiB"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "[32, 32]",'
+    - '        "value": ['
+    - '          32,'
+    - '          32'
+    - '        ]'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hardware.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "level_zero",'
+    - '      "category": "compute",'
+    - '      "classification": "runtime",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "{''bdfs'': [''0000:51:00.0'', ''0000:93:00.0''], ''count'':
+      2}",'
+    - '        "value": {'
+    - '          "bdfs": ['
+    - '            "0000:51:00.0",'
+    - '            "0000:93:00.0"'
+    - '          ],'
+    - '          "count": 2'
+    - '        }'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "[{''bdf'': ''0000:51:00.0'', ''level_zero_uuid'': ''00000000-0000-0051-0000-0000e2228086'',
+      ''memory_gib'': 32, ''memory_source'': ''level_zero_global_memory'', ''name'': ''Intel(R)
+      Arc(TM) Pro B65 Graphics'', ''uuid'': ''00000000-0000-0051-0000-0000e2228086'',
+      ''xpu_ordinal'': 0}, {''bdf'': ''0000:93:00.0'', ''level_zero_uuid'': ''00000000-0000-0093-0000-0000e2228086'',
+      ''memory_gib'': 32, ''memory_source'': ''level_zero_global_memory'', ''name'': ''Intel(R)
+      Arc(TM) Pro B65 Graphics'', ''uuid'': ''00000000-0000-0093-0000-0000e2228086'',
+      ''xpu_ordinal'': 1}]",'
+    - '        "value": ['
+    - '          {'
+    - '            "bdf": "0000:51:00.0",'
+    - '            "level_zero_uuid": "00000000-0000-0051-0000-0000e2228086",'
+    - '            "memory_gib": 32,'
+    - '            "memory_source": "level_zero_global_memory",'
+    - '            "name": "Intel(R) Arc(TM) Pro B65 Graphics",'
+    - '            "uuid": "00000000-0000-0051-0000-0000e2228086",'
+    - '            "xpu_ordinal": 0'
+    - '          },'
+    - '          {'
+    - '            "bdf": "0000:93:00.0",'
+    - '            "level_zero_uuid": "00000000-0000-0093-0000-0000e2228086",'
+    - '            "memory_gib": 32,'
+    - '            "memory_source": "level_zero_global_memory",'
+    - '            "name": "Intel(R) Arc(TM) Pro B65 Graphics",'
+    - '            "uuid": "00000000-0000-0093-0000-0000e2228086",'
+    - '            "xpu_ordinal": 1'
+    - '          }'
+    - '        ]'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hardware.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "pytorch_xpu",'
+    - '      "category": "compute",'
+    - '      "classification": "runtime",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "None",'
+    - '        "value": null'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "2",'
+    - '        "value": 2'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "xpu-validation.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "pcie_topology",'
+    - '      "category": "bus",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": ">=0.5 of each physical slot capability",'
+    - '        "value": ">=0.5 of each physical slot capability"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "[]",'
+    - '        "value": []'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "pci.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "rebar",'
+    - '      "category": "bus",'
+    - '      "classification": "hardware",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "True",'
+    - '        "value": true'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "[True, True]",'
+    - '        "value": ['
+    - '          true,'
+    - '          true'
+    - '        ]'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "pci.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "vllm_service",'
+    - '      "category": "inference",'
+    - '      "classification": "service",'
+    - '      "severity": "warning",'
+    - '      "status": "NOT_APPLICABLE",'
+    - '      "expected": {'
+    - '        "summary": "not applicable",'
+    - '        "value": "not applicable"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "vLLM retired; two independent llama.cpp SYCL workers serve
+      inference",'
+    - '        "value": "vLLM retired; two independent llama.cpp SYCL workers serve inference"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "inventory:validation_not_applicable"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "single_gpu_inference",'
+    - '      "category": "inference",'
+    - '      "classification": "runtime",'
+    - '      "severity": "warning",'
+    - '      "status": "NOT_TESTED",'
+    - '      "expected": {'
+    - '        "summary": "Single-GPU inference passes",'
+    - '        "value": "PASS"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "not observed",'
+    - '        "value": null'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "single_gpu_inference_evidence.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "dual_gpu_inference",'
+    - '      "category": "inference",'
+    - '      "classification": "runtime",'
+    - '      "severity": "warning",'
+    - '      "status": "NOT_APPLICABLE",'
+    - '      "expected": {'
+    - '        "summary": "not applicable",'
+    - '        "value": "not applicable"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "no tensor parallelism: two independent TP=1 workers, one per
+      GPU",'
+    - '        "value": "no tensor parallelism: two independent TP=1 workers, one per
+      GPU"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "inventory:validation_not_applicable"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "llama_cpp_fallback",'
+    - '      "category": "inference",'
+    - '      "classification": "runtime",'
+    - '      "severity": "information",'
+    - '      "status": "NOT_TESTED",'
+    - '      "expected": {'
+    - '        "summary": "llama.cpp fallback passes",'
+    - '        "value": "PASS"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "not observed",'
+    - '        "value": null'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "llama_cpp_fallback_evidence.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "required_services",'
+    - '      "category": "system",'
+    - '      "classification": "service",'
+    - '      "severity": "warning",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "6 units active",'
+    - '        "value": "6 units active"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "all active",'
+    - '        "value": "all active"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "systemctl is-active"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "scheduled_reconciliation",'
+    - '      "category": "operations",'
+    - '      "classification": "operations",'
+    - '      "severity": "warning",'
+    - '      "status": "FAIL",'
+    - '      "expected": {'
+    - '        "summary": "aihost-reconcile.timer enabled and active",'
+    - '        "value": "aihost-reconcile.timer enabled and active"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "aihost-reconcile.timer disabled/inactive",'
+    - '        "value": "aihost-reconcile.timer disabled/inactive"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "systemctl is-enabled/is-active"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "vault_access",'
+    - '      "category": "security",'
+    - '      "classification": "access",'
+    - '      "severity": "blocking",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "AppRole login succeeds",'
+    - '        "value": "AppRole login succeeds"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "login ok at https://10.0.8.254:8200, policies [''default'',
+      ''t5820-platform'']",'
+    - '        "value": "login ok at https://10.0.8.254:8200, policies [''default'', ''t5820-platform'']"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "/etc/aihost/vault/platform-credentials.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "os_tuning_profile",'
+    - '      "category": "operations",'
+    - '      "classification": "operations",'
+    - '      "severity": "warning",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "Active tuning profile",'
+    - '        "value": "d5820_dual_b65"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "converged profile",'
+    - '        "value": "d5820_dual_b65"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "tuning-profile.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "os_tuning_governor",'
+    - '      "category": "operations",'
+    - '      "classification": "operations",'
+    - '      "severity": "warning",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "CPU governor",'
+    - '        "value": "performance"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "active scaling_governor",'
+    - '        "value": "performance"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "cpu-power.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "os_tuning_thp",'
+    - '      "category": "operations",'
+    - '      "classification": "operations",'
+    - '      "severity": "warning",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "THP mode",'
+    - '        "value": "always"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "active THP mode",'
+    - '        "value": "always"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hugepages.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "os_tuning_hugepages",'
+    - '      "category": "operations",'
+    - '      "classification": "operations",'
+    - '      "severity": "warning",'
+    - '      "status": "NOT_APPLICABLE",'
+    - '      "expected": {'
+    - '        "summary": "HugeTLB pages",'
+    - '        "value": "unmanaged (not applicable for profile)"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "HugePages_Total",'
+    - '        "value": 0'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "hugepages.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "os_tuning_sysctl",'
+    - '      "category": "operations",'
+    - '      "classification": "operations",'
+    - '      "severity": "warning",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "Managed sysctl keys active",'
+    - '        "value": "4 keys"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "verified against /proc/sys",'
+    - '        "value": "4 keys"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "memory-policy.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "running_kernel",'
+    - '      "category": "system",'
+    - '      "classification": "runtime",'
+    - '      "severity": "blocking",'
+    - '      "status": "NOT_APPLICABLE",'
+    - '      "expected": {'
+    - '        "summary": "Running kernel release",'
+    - '        "value": null'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "uname -r",'
+    - '        "value": "7.0.0-38-generic"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "kernel.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "numa_topology",'
+    - '      "category": "platform",'
+    - '      "classification": "hardware",'
+    - '      "severity": "warning",'
+    - '      "status": "PASS",'
+    - '      "expected": {'
+    - '        "summary": "NUMA topology unchanged since first recording",'
+    - '        "value": "stable"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "fingerprint comparison",'
+    - '        "value": "PASS"'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "numa.json"'
+    - '      ]'
+    - '    },'
+    - '    {'
+    - '      "id": "intel_gpu_stack_status",'
+    - '      "category": "compute",'
+    - '      "classification": "runtime",'
+    - '      "severity": "blocking",'
+    - '      "status": "NOT_TESTED",'
+    - '      "expected": {'
+    - '        "summary": "B65 stack status",'
+    - '        "value": "pre_verification_fail_closed"'
+    - '      },'
+    - '      "observed": {'
+    - '        "summary": "not observed",'
+    - '        "value": null'
+    - '      },'
+    - '      "evidence_refs": ['
+    - '        "intel_gpu_stack_status_evidence.json"'
+    - '      ]'
+    - '    }'
+    - '  ],'
+    - '  "summary": {'
+    - '    "blocking_failures": 0,'
+    - '    "failed_checks": 1,'
+    - '    "warnings": 11,'
+    - '    "not_tested": 3,'
+    - '    "not_applicable": 4,'
+    - '    "classification": "degraded"'
+    - '  }'
+    - '}'
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=57   changed=2    unreachable=0    failed=1    skipped=19   rescued=0    ignored=0   
+
+EXIT=2

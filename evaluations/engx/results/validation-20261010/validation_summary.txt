@@ -1,0 +1,34 @@
+Validation Status: FAIL (degraded)
+Node: ai-5820-01 (production)
+Hardware Profile: d5820_dual_b65
+Simulated: False
+Blocking Failures: 0
+Failed Checks: 1
+Not Tested: 3
+Not Applicable: 4
+
+Checks:
+  - [PASS] cpu (expected: ['Intel(R) Xeon(R) W-2123', 'Intel Xeon W-2123', 'W-2123'], observed: Intel(R) Xeon(R) W-2123 CPU @ 3.60GHz)
+  - [PASS] machine_model (expected: Precision 5820 Tower, observed: Precision 5820 Tower)
+  - [PASS] gpu_count (expected: 2, observed: ['0000:51:00.0', '0000:93:00.0'])
+  - [PASS] gpu_model (expected: [{'device_id': '0xe222', 'model': 'Intel Arc Pro B65', 'source': 'Intel Xe KMD supported hardware table', 'source_url': 'https://dgpu-docs.intel.com/overview/supported-hardware/xe-driver-gpus.html', 'subsystem_device_id': '0xe222', 'subsystem_vendor_id': '0x1849', 'vendor_id': '8086'}], observed: [{'bdf': '0000:51:00.0', 'device_id': 'e222', 'vendor_id': '8086'}, {'bdf': '0000:93:00.0', 'device_id': 'e222', 'vendor_id': '8086'}])
+  - [PASS] gpu_vram (expected: 32 GiB +/- 4 GiB, observed: [32, 32])
+  - [PASS] level_zero (expected: {'bdfs': ['0000:51:00.0', '0000:93:00.0'], 'count': 2}, observed: [{'bdf': '0000:51:00.0', 'level_zero_uuid': '00000000-0000-0051-0000-0000e2228086', 'memory_gib': 32, 'memory_source': 'level_zero_global_memory', 'name': 'Intel(R) Arc(TM) Pro B65 Graphics', 'uuid': '00000000-0000-0051-0000-0000e2228086', 'xpu_ordinal': 0}, {'bdf': '0000:93:00.0', 'level_zero_uuid': '00000000-0000-0093-0000-0000e2228086', 'memory_gib': 32, 'memory_source': 'level_zero_global_memory', 'name': 'Intel(R) Arc(TM) Pro B65 Graphics', 'uuid': '00000000-0000-0093-0000-0000e2228086', 'xpu_ordinal': 1}])
+  - [PASS] pytorch_xpu (expected: None, observed: 2)
+  - [PASS] pcie_topology (expected: >=0.5 of each physical slot capability, observed: [])
+  - [PASS] rebar (expected: True, observed: [True, True])
+  - [NOT_APPLICABLE] vllm_service (expected: not applicable, observed: vLLM retired; two independent llama.cpp SYCL workers serve inference)
+  - [NOT_TESTED] single_gpu_inference (expected: Single-GPU inference passes, observed: not observed)
+  - [NOT_APPLICABLE] dual_gpu_inference (expected: not applicable, observed: no tensor parallelism: two independent TP=1 workers, one per GPU)
+  - [NOT_TESTED] llama_cpp_fallback (expected: llama.cpp fallback passes, observed: not observed)
+  - [PASS] required_services (expected: 6 units active, observed: all active)
+  - [FAIL] scheduled_reconciliation (expected: aihost-reconcile.timer enabled and active, observed: aihost-reconcile.timer disabled/inactive)
+  - [PASS] vault_access (expected: AppRole login succeeds, observed: login ok at https://10.0.8.254:8200, policies ['default', 't5820-platform'])
+  - [PASS] os_tuning_profile (expected: Active tuning profile, observed: converged profile)
+  - [PASS] os_tuning_governor (expected: CPU governor, observed: active scaling_governor)
+  - [PASS] os_tuning_thp (expected: THP mode, observed: active THP mode)
+  - [NOT_APPLICABLE] os_tuning_hugepages (expected: HugeTLB pages, observed: HugePages_Total)
+  - [PASS] os_tuning_sysctl (expected: Managed sysctl keys active, observed: verified against /proc/sys)
+  - [NOT_APPLICABLE] running_kernel (expected: Running kernel release, observed: uname -r)
+  - [PASS] numa_topology (expected: NUMA topology unchanged since first recording, observed: fingerprint comparison)
+  - [NOT_TESTED] intel_gpu_stack_status (expected: B65 stack status, observed: not observed)
