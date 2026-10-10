@@ -1,15 +1,21 @@
 ---
 - name: Reload observability services
   ansible.builtin.systemd_service:
-    name: "{{ item }}.service"
+    name: "{{ item.name }}.service"
     state: restarted
   loop:
-    - aihost-observability-victoriametrics
-    - aihost-observability-vmalert
-    - aihost-observability-loki
-    - aihost-observability-alloy
-    - aihost-observability-grafana
+    - {name: aihost-observability-victoriametrics, enabled: "{{ observability_vm_enabled | default(true) | bool }}"}
+    - {name: aihost-observability-vmalert, enabled: "{{ observability_vmalert_enabled | default(true) | bool }}"}
+    - {name: aihost-observability-loki, enabled: "{{ observability_loki_enabled | default(true) | bool }}"}
+    - {name: aihost-observability-alloy, enabled: "{{ observability_alloy_enabled | default(true) | bool }}"}
+    - name: aihost-observability-grafana-image-renderer
+      enabled: >-
+        {{ (observability_grafana_enabled | default(true) | bool) and
+           (observability_grafana_image_renderer_enabled | default(true) | bool) }}
+    - name: aihost-observability-grafana
+      enabled: "{{ observability_grafana_enabled | default(true) | bool }}"
   when:
     - observability_install_enabled | default(false) | bool
     - observability_stack_status == 'commissioned'
+    - item.enabled
     - not ansible_check_mode

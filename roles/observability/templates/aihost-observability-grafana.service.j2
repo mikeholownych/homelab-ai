@@ -1,6 +1,11 @@
 [Unit]
 Description=Grafana dashboards (aihost observability)
+{% if observability_grafana_image_renderer_enabled | bool %}
+After=aihost-observability-victoriametrics.service aihost-observability-grafana-image-renderer.service
+Wants=aihost-observability-grafana-image-renderer.service
+{% else %}
 After=aihost-observability-victoriametrics.service
+{% endif %}
 
 [Service]
 Type=simple
@@ -12,7 +17,15 @@ ExecStart={{ observability_install_root }}/grafana-{{ observability_grafana_vers
   cfg:default.paths.data={{ observability_data_root }}/grafana \
   cfg:default.paths.logs={{ observability_log_dir }}/grafana \
   cfg:default.paths.provisioning={{ observability_config_dir }}/grafana/provisioning \
+{% if observability_grafana_image_renderer_enabled | bool %}
+  cfg:default.plugins.plugin_admin_enabled=false \
+  cfg:default.rendering.server_url=http://127.0.0.1:{{ observability_grafana_image_renderer_http_port }}/render \
+  cfg:default.rendering.callback_url=http://127.0.0.1:{{ observability_grafana_http_port }}/
+
+{% else %}
   cfg:default.plugins.plugin_admin_enabled=false
+
+{% endif %}
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

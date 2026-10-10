@@ -58,7 +58,7 @@ class ObservabilityRoleContractTests(unittest.TestCase):
         self.assertEqual([], self.defaults["observability_verification_checklist"])
 
     def test_all_upstream_artifacts_hash_pinned(self) -> None:
-        for name in ("alloy", "vm", "grafana", "loki"):
+        for name in ("alloy", "vm", "grafana", "grafana_image_renderer", "loki"):
             self.assertIsInstance(
                 self.defaults[f"observability_{name}_version"], str
             )
@@ -105,7 +105,7 @@ class ObservabilityRoleContractTests(unittest.TestCase):
             for task in self.tasks
             if task.get("name", "").startswith("Download pinned")
         ]
-        self.assertEqual(5, len(download_tasks))
+        self.assertEqual(6, len(download_tasks))
         for task in download_tasks:
             get_url = task["ansible.builtin.get_url"]
             self.assertTrue(
@@ -198,6 +198,25 @@ class ObservabilityRoleContractTests(unittest.TestCase):
         makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
         self.assertIn("observability_gate_check.yml", makefile)
         self.assertIn("--check", makefile)
+
+    def test_grafana_image_renderer_configured(self) -> None:
+        unit = (
+            TEMPLATES_DIR / "aihost-observability-grafana-image-renderer.service.j2"
+        ).read_text(encoding="utf-8")
+        self.assertIn("observability_grafana_image_renderer_http_port", unit)
+        self.assertIn("observability_grafana_image_renderer_token", unit)
+        self.assertIn("CHROME_BIN", unit)
+        self.assertIn("PUPPETEER_EXECUTABLE_PATH", unit)
+        self.assertIn("server", unit)
+
+        grafana_unit = (
+            TEMPLATES_DIR / "aihost-observability-grafana.service.j2"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            "aihost-observability-grafana-image-renderer.service", grafana_unit
+        )
+        self.assertIn("cfg:default.rendering.server_url", grafana_unit)
+        self.assertIn("cfg:default.rendering.callback_url", grafana_unit)
 
 
 if __name__ == "__main__":

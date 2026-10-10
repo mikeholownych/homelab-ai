@@ -85,6 +85,33 @@ observability_grafana_http_port: 3000
 observability_grafana_admin_password: null
 
 # ---------------------------------------------------------------------------
+# Grafana Image Renderer - remote HTTP rendering service for panel screenshots.
+# ---------------------------------------------------------------------------
+observability_grafana_image_renderer_enabled: true
+observability_grafana_image_renderer_version: "4.1.5"
+observability_grafana_image_renderer_sha256: ab1601ee37d6d9253ce922b8e479ec67c77dd8f7509de7e1e914e2ae4a016ae7
+observability_grafana_image_renderer_archive_url: >-
+  https://storage.googleapis.com/grafana-plugins-catalog/grafana-image-renderer/release/4.1.5/grafana-image-renderer-4.1.5.linux-amd64.zip
+observability_grafana_image_renderer_chrome_version: "144.0.7503.2"
+observability_grafana_image_renderer_http_port: 8081
+observability_grafana_image_renderer_dir: >-
+  {{ observability_install_root }}/grafana-image-renderer-{{ observability_grafana_image_renderer_version }}
+observability_grafana_image_renderer_bin: >-
+  {{ observability_grafana_image_renderer_dir }}/plugin-linux-x64-glibc/plugin_start_linux_amd64
+observability_grafana_image_renderer_archive: >-
+  {{ observability_install_root }}/bin/grafana-image-renderer-{{
+  observability_grafana_image_renderer_version }}.linux-amd64.zip
+observability_grafana_image_renderer_token: >-
+  {{ (observability_grafana_admin_password | default('') ~ '-renderer-token') | hash('sha256') }}
+observability_grafana_image_renderer_packages:
+  - fonts-liberation
+  - libasound2t64
+  - libatk-bridge2.0-0t64
+  - libgtk-3-0t64
+  - libgbm1
+  - libnss3
+
+# ---------------------------------------------------------------------------
 # Loki - log aggregation fed by Alloy.
 # ---------------------------------------------------------------------------
 observability_loki_version: v3.7.6

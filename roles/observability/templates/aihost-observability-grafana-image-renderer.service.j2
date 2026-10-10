@@ -1,0 +1,22 @@
+[Unit]
+Description=Grafana Image Renderer service (aihost observability)
+After=network.target
+
+[Service]
+Type=simple
+Environment=HTTP_HOST=127.0.0.1
+Environment=HTTP_PORT={{ observability_grafana_image_renderer_http_port }}
+Environment=AUTH_TOKEN={{ observability_grafana_image_renderer_token }}
+Environment=CHROME_BIN={{ observability_install_root }}/grafana-image-renderer-{{ observability_grafana_image_renderer_version }}/plugin-linux-x64-glibc/chrome-headless-shell/linux-{{ observability_grafana_image_renderer_chrome_version }}/chrome-headless-shell-linux64/chrome-headless-shell
+Environment=PUPPETEER_EXECUTABLE_PATH={{ observability_install_root }}/grafana-image-renderer-{{ observability_grafana_image_renderer_version }}/plugin-linux-x64-glibc/chrome-headless-shell/linux-{{ observability_grafana_image_renderer_chrome_version }}/chrome-headless-shell-linux64/chrome-headless-shell
+ExecStart={{ observability_install_root }}/bin/grafana-image-renderer server
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+WorkingDirectory={{ observability_install_root }}/grafana-image-renderer-{{ observability_grafana_image_renderer_version }}/plugin-linux-x64-glibc
+
+[Install]
+WantedBy=multi-user.target

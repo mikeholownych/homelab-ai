@@ -19,6 +19,7 @@ Target architecture agreed for this host:
 | VictoriaMetrics single-node | TSDB store + recording rules for throughput/watt, TTFT trends per tuning profile | **role provided, hash-pinned** (`v1.150.0`) - install gated at commissioning |
 | vmalert | evaluates recording rules, writes derived series back to VictoriaMetrics | **role provided** (from the pinned `vmutils` tarball) |
 | Grafana | dashboards over VM datasources | **role provided, hash-pinned** (`13.2.0`) - install gated at commissioning |
+| Grafana Image Renderer | standalone headless Chrome image rendering service on port 8081 for panel PNG snapshots | **role provided, hash-pinned** (`4.1.5`) - install gated at commissioning |
 | Loki | local log aggregation fed by Alloy | **role provided, hash-pinned** (`v3.7.6`) - install gated at commissioning |
 | xpumd / Level Zero telemetry | GPU utilisation, VRAM, clocks, thermals into textfile dir | **pending hardware** |
 | vLLM metrics endpoint | already exposed by the service; scraped by Alloy once deployed | available when service runs |
@@ -95,8 +96,8 @@ check is recorded in `observability_verification_checklist`; host-level series
 4. VM `/api/v1/status/active_tsdb` returns after first scrape cycle; Alloy `/metrics` shows textfile series.
 5. Recording rule output `aihost:gpu_temperature_celsius:peak` present in VM.
 
-Install all five components together (Alloy, VictoriaMetrics, vmalert, Loki,
-Grafana) or prune individual ones via `observability_*_enabled` flags before
+Install all components together (Alloy, VictoriaMetrics, vmalert, Loki,
+Grafana, Grafana Image Renderer) or prune individual ones via `observability_*_enabled` flags before
 launch. In check mode the role is fully inert: it renders every config/unit
 template and records `observability_validation_status: NOT_TESTED`, but never
 downloads, extracts, verifies, or starts services (see

@@ -16,6 +16,9 @@
       - observability_vm_sha256 | length == 64
       - observability_grafana_version is string
       - observability_grafana_sha256 | length == 64
+      - observability_grafana_image_renderer_enabled is boolean
+      - observability_grafana_image_renderer_version is string
+      - observability_grafana_image_renderer_sha256 | length == 64
       - observability_loki_version is string
       - observability_loki_sha256 | length == 64
       - observability_server_bind_address is string
@@ -70,6 +73,7 @@
     - "{{ observability_data_root }}/grafana"
     - "{{ observability_log_dir }}"
     - "{{ observability_log_dir }}/grafana"
+    - "{{ observability_grafana_image_renderer_dir }}"
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
@@ -85,6 +89,17 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Ensure Grafana Image Renderer runtime packages are installed
+  ansible.builtin.apt:
+    name: "{{ observability_grafana_image_renderer_packages }}"
+    state: present
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - observability_grafana_image_renderer_enabled | bool
     - not ansible_check_mode
   tags: [observability]
 
@@ -137,6 +152,20 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Download pinned Grafana Image Renderer archive
+  ansible.builtin.get_url:
+    url: "{{ observability_grafana_image_renderer_archive_url }}"
+    dest: "{{ observability_grafana_image_renderer_archive }}"
+    checksum: "sha256:{{ observability_grafana_image_renderer_sha256 }}"
+    mode: "0640"
+    timeout: 300
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - observability_grafana_image_renderer_enabled | bool
     - not ansible_check_mode
   tags: [observability]
 
@@ -216,6 +245,48 @@
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Extract Grafana Image Renderer bundle
+  ansible.builtin.unarchive:
+    src: "{{ observability_grafana_image_renderer_archive }}"
+    dest: "{{ observability_grafana_image_renderer_dir }}"
+    remote_src: true
+    creates: "{{ observability_grafana_image_renderer_bin }}"
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - observability_grafana_image_renderer_enabled | bool
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Symlink Grafana Image Renderer binary
+  ansible.builtin.file:
+    src: "{{ observability_grafana_image_renderer_bin }}"
+    dest: "{{ observability_install_root }}/bin/grafana-image-renderer"
+    state: link
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - observability_grafana_image_renderer_enabled | bool
+    - not ansible_check_mode
+  tags: [observability]
+
+- name: Ensure Grafana Image Renderer binary permissions
+  ansible.builtin.file:
+    path: "{{ observability_grafana_image_renderer_bin }}"
+    mode: "0755"
+    owner: root
+    group: root
+  when:
+    - observability_install_enabled | bool
+    - observability_stack_status == 'commissioned'
+    - observability_grafana_image_renderer_enabled | bool
     - not ansible_check_mode
   tags: [observability]
 
@@ -379,6 +450,7 @@
     - aihost-observability-vmalert.service.j2
     - aihost-observability-loki.service.j2
     - aihost-observability-alloy.service.j2
+    - aihost-observability-grafana-image-renderer.service.j2
     - aihost-observability-grafana.service.j2
   when:
     - observability_install_enabled | bool
@@ -406,7 +478,12 @@
     - {name: aihost-observability-vmalert, enabled: "{{ observability_vmalert_enabled | bool }}"}
     - {name: aihost-observability-loki, enabled: "{{ observability_loki_enabled | bool }}"}
     - {name: aihost-observability-alloy, enabled: "{{ observability_alloy_enabled | bool }}"}
-    - {name: aihost-observability-grafana, enabled: "{{ observability_grafana_enabled | bool }}"}
+    - name: aihost-observability-grafana-image-renderer
+      enabled: >-
+        {{ (observability_grafana_enabled | bool) and
+           (observability_grafana_image_renderer_enabled | bool) }}
+    - name: aihost-observability-grafana
+      enabled: "{{ observability_grafana_enabled | bool }}"
   when:
     - observability_install_enabled | bool
     - observability_stack_status == 'commissioned'
