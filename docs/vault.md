@@ -295,8 +295,21 @@ The Vault policy grants read access only to these five KVv2 records:
 - `secret/local-ai/services/orchestrator-gateway/client-token`
 - `secret/local-ai/hosts/ai-5820-01/opencode-client-token`
 - `secret/local-ai/services/vllm/api-key`
-- `secret/local-ai/services/vllm/worker1-api-key`
-- `secret/local-ai/services/vllm/worker2-api-key`
+- `secret/local-ai/services/inference/worker1-api-key`
+- `secret/local-ai/services/inference/worker2-api-key`
+
+Worker keys moved from `secret/local-ai/services/vllm/worker{1,2}-api-key` to the engine-neutral
+`services/inference/` paths in `6a11f6c`; the old paths are retired and the AppRole policy no longer reads them.
+
+Live verification (2026-10-09, from the appliance with its own client config): the `t5820-platform` AppRole logs in
+over verified TLS, and all five consumer files match their Vault records by digest (gateway client token v1,
+OpenCode client token v2, compatibility key v1, worker 1 and worker 2 keys v2 from 2026-10-03). The validation role
+repeats the login as its `vault_access` check.
+
+Not yet covered: the gateway's per-client registry (R6, 2026-10-07) generates the `operator`, `qualification` and
+`ansible-admin` tokens with Ansible on the appliance (`/etc/local-ai/orchestrator/clients/`); they are not Vault
+records. Bringing them under this lifecycle needs new KV records and policy entries (vault-post-init) plus helper
+targets; until then they rotate with `orchestrator_gateway_rotate_client_tokens`.
 
 ## Encrypted Raft snapshot backup
 
