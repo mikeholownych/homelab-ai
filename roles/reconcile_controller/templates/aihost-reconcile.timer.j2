@@ -1,0 +1,10 @@
+[Unit]
+Description=aihost scheduled reconciliation of {{ reconcile_controller_target }}
+
+[Timer]
+OnCalendar={{ reconcile_controller_schedule }}
+RandomizedDelaySec={{ reconcile_controller_random_delay }}
+Persistent=true
+
+[Install]
+WantedBy=timers.target

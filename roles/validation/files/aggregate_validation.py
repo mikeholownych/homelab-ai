@@ -320,12 +320,35 @@ def _vault_login(config_path: Path) -> Dict[str, Any]:
             "evidence_refs": refs}
 
 
+def _reconcile_check(stamp: Path, max_age_hours: float, now: datetime.datetime) -> Dict[str, Any]:
+    """Reconciliation runs from the controller (the gateway CA key never leaves it) and stamps the host on success."""
+    expected = wrap_summary_value(f"successful reconciliation within {max_age_hours:g} h")
+    refs = [str(stamp)]
+    try:
+        doc = json.loads(stamp.read_text(encoding="utf-8"))
+        completed = datetime.datetime.strptime(doc["completed_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+    except FileNotFoundError:
+        return {"status": "FAIL", "expected": expected, "observed": wrap_summary_value("no reconciliation stamp"),
+                "evidence_refs": refs}
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        return {"status": "FAIL", "expected": expected,
+                "observed": wrap_summary_value(f"reconciliation stamp unreadable: {type(error).__name__}"), "evidence_refs": refs}
+    age_hours = (now - completed).total_seconds() / 3600
+    fresh = doc.get("result") == "success" and 0 <= age_hours <= max_age_hours
+    return {"status": "PASS" if fresh else "FAIL", "expected": expected,
+            "observed": wrap_summary_value(f"{doc.get('result')} at {doc['completed_at']} ({age_hours:.1f} h ago), "
+                                           f"snapshot {str(doc.get('git_sha', 'unknown'))[:12]}"),
+            "evidence_refs": refs}
+
+
 def observe_live_checks(
     checks_data: Dict[str, Dict[str, Any]],
     *,
     required_units: list[str],
-    reconcile_timer: str | None,
+    reconcile_stamp: str | None,
     vault_config: str | None,
+    reconcile_max_age_hours: float = 2.0,
+    now: datetime.datetime | None = None,
 ) -> Dict[str, Dict[str, Any]]:
     """Checks the aggregator observes itself on the managed node (it runs there as root). A check whose input is not
     configured stays NOT_TESTED; an observed problem is a FAIL with the observed state, never a PASS."""
@@ -337,13 +360,9 @@ def observe_live_checks(
             "expected": wrap_summary_value(f"{len(states)} units active"),
             "observed": wrap_summary_value("all active" if not inactive else "not active: " + ", ".join(inactive)),
             "evidence_refs": ["systemctl is-active"]}
-    if reconcile_timer and "scheduled_reconciliation" not in checks_data:
-        enabled, active = _systemctl("is-enabled", reconcile_timer) or "unknown", _systemctl("is-active", reconcile_timer) or "unknown"
-        checks_data["scheduled_reconciliation"] = {
-            "status": "PASS" if (enabled, active) == ("enabled", "active") else "FAIL",
-            "expected": wrap_summary_value(f"{reconcile_timer} enabled and active"),
-            "observed": wrap_summary_value(f"{reconcile_timer} {enabled}/{active}"),
-            "evidence_refs": ["systemctl is-enabled/is-active"]}
+    if reconcile_stamp and "scheduled_reconciliation" not in checks_data:
+        checks_data["scheduled_reconciliation"] = _reconcile_check(Path(reconcile_stamp), reconcile_max_age_hours,
+                                                                   now or datetime.datetime.now(datetime.timezone.utc))
     if vault_config and "vault_access" not in checks_data:
         checks_data["vault_access"] = _vault_login(Path(vault_config))
     return checks_data
@@ -372,7 +391,8 @@ def main() -> int:
     parser.add_argument("--input-json", default=None, help="Path to input checks JSON")
     parser.add_argument("--evidence-dir", default=None, help="Path to evidence directory")
     parser.add_argument("--required-unit", action="append", default=[], help="systemd unit that must be active (repeatable)")
-    parser.add_argument("--reconcile-timer", default=None, help="systemd timer that runs scheduled reconciliation")
+    parser.add_argument("--reconcile-stamp", default=None, help="Stamp the controller-side reconciliation writes on success")
+    parser.add_argument("--reconcile-max-age-hours", type=float, default=2.0, help="Oldest acceptable reconciliation stamp")
     parser.add_argument("--vault-config", default=None, help="Vault client config (platform-credentials.json) to test")
     parser.add_argument("--not-applicable", action="append", default=[], metavar="CHECK=REASON",
                         help="Declare a check not applicable to this host's configuration (repeatable)")
@@ -401,7 +421,8 @@ def main() -> int:
         checks_data = discover_evidence_checks(args.evidence_dir, profile_spec, checks_data)
     checks_data = apply_not_applicable(checks_data, args.not_applicable)
     checks_data = observe_live_checks(checks_data, required_units=args.required_unit,
-                                      reconcile_timer=args.reconcile_timer, vault_config=args.vault_config)
+                                      reconcile_stamp=args.reconcile_stamp, vault_config=args.vault_config,
+                                      reconcile_max_age_hours=args.reconcile_max_age_hours)
 
     doc = build_validation_document(
         node_id=args.node_id,

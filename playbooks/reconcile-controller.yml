@@ -1,0 +1,12 @@
+---
+# Deploy (or move) the reconciliation snapshot on the controller and install its hourly user timer:
+#   ansible-playbook playbooks/reconcile-controller.yml -e reconcile_controller_snapshot_ref=$(git rev-parse HEAD)
+# Run as the operator account that holds the gateway CA key and the SSH key for the inference host.
+- name: Install controller-side scheduled reconciliation
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: false
+  roles:
+    - role: reconcile_controller
+      tags: [reconcile]

@@ -1,0 +1,25 @@
+---
+# Scheduled reconciliation, run from the controller (roles/reconcile_controller): converge the inference host to the
+# deployed snapshot, then record the success on the host. inference.yml signs the gateway TLS leaf with the CA key that
+# only the controller holds, so this can never run on the appliance itself. A failed converge (including the refusal
+# while a candidate holds a GPU) stops before the stamp, and the validator reports the stamp as stale.
+- name: Converge the inference serving stack to the deployed snapshot
+  import_playbook: inference.yml
+
+- name: Record a successful reconciliation on the inference host
+  hosts: inference
+  gather_facts: false
+  become: true
+  tags: [inference, reconcile]
+  vars:
+    reconcile_stamp_path: /var/lib/local-ai/evidence/reconcile-last.json
+  tasks:
+    - name: Write the reconciliation stamp the validator observes
+      ansible.builtin.copy:
+        content: "{{ {'completed_at': now(utc=true).strftime('%Y-%m-%dT%H:%M:%SZ'), 'result': 'success',
+                      'playbook': 'playbooks/reconcile.yml', 'git_sha': git_commit_sha | default('unknown'),
+                      'source': 'controller'} | to_nice_json }}\n"
+        dest: "{{ reconcile_stamp_path }}"
+        owner: root
+        group: root
+        mode: "0644"

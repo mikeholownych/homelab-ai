@@ -62,7 +62,8 @@
           | zip(validation_not_applicable | dict2items | map(attribute='value'))
           | map('join', '=') | map('regex_replace', '^', '--not-applicable=') | list)
          + (validation_required_units | map('regex_replace', '^', '--required-unit=') | list)
-         + (['--reconcile-timer=' ~ validation_reconcile_timer] if validation_reconcile_timer else [])
+         + (['--reconcile-stamp=' ~ validation_reconcile_stamp,
+             '--reconcile-max-age-hours=' ~ validation_reconcile_max_age_hours] if validation_reconcile_stamp else [])
          + (['--vault-config=' ~ validation_vault_config] if validation_vault_config else []) }}
   ansible.builtin.command:
     argv: "{{ validation_aggregator_argv + validation_extra_argv }}"

@@ -274,24 +274,36 @@ def test_evidence_dir_auto_discovery(tmp_path):
 
 
 def test_live_checks_report_what_they_observe(tmp_path, monkeypatch):
-    # 2026-10-10: a disabled reconcile timer was published as "verified systemd timer reconciliation active" (PASS).
+    # 2026-10-10: reconciliation was published as "verified systemd timer reconciliation active" (PASS) with no timer.
+    import datetime as dt
     mod = load_aggregator()
-    states = {("is-active", "aihost-llama-worker1.service"): "active", ("is-active", "aihost-orchestrator-gateway.service"): "failed",
-              ("is-enabled", "aihost-reconcile.timer"): "disabled", ("is-active", "aihost-reconcile.timer"): "inactive"}
+    states = {("is-active", "aihost-llama-worker1.service"): "active", ("is-active", "aihost-orchestrator-gateway.service"): "failed"}
     monkeypatch.setattr(mod, "_systemctl", lambda *args: states.get(args, ""))
-    checks = mod.observe_live_checks({}, required_units=["aihost-llama-worker1.service", "aihost-orchestrator-gateway.service"],
-                                     reconcile_timer="aihost-reconcile.timer", vault_config=str(tmp_path / "absent.json"))
+    stamp = tmp_path / "reconcile-last.json"
+    now = dt.datetime(2026, 10, 10, 22, 0, tzinfo=dt.timezone.utc)
+    observe = lambda: mod.observe_live_checks({}, required_units=["aihost-llama-worker1.service", "aihost-orchestrator-gateway.service"],
+                                              reconcile_stamp=str(stamp), vault_config=str(tmp_path / "absent.json"), now=now)
+    checks = observe()
     assert checks["required_services"]["status"] == "FAIL"
     assert checks["required_services"]["observed"]["value"] == "not active: aihost-orchestrator-gateway.service=failed"
     assert checks["scheduled_reconciliation"]["status"] == "FAIL"
-    assert checks["scheduled_reconciliation"]["observed"]["value"] == "aihost-reconcile.timer disabled/inactive"
+    assert checks["scheduled_reconciliation"]["observed"]["value"] == "no reconciliation stamp"
     assert checks["vault_access"]["status"] == "NOT_TESTED"  # no client config: not observed, so not a verdict
-    states.update({("is-active", "aihost-orchestrator-gateway.service"): "active",
-                   ("is-enabled", "aihost-reconcile.timer"): "enabled", ("is-active", "aihost-reconcile.timer"): "active"})
-    checks = mod.observe_live_checks({}, required_units=["aihost-llama-worker1.service", "aihost-orchestrator-gateway.service"],
-                                     reconcile_timer="aihost-reconcile.timer", vault_config=None)
+
+    stamp.write_text(json.dumps({"completed_at": "2026-10-10T18:00:00Z", "result": "success", "git_sha": "a" * 40}))
+    checks = observe()
+    assert checks["scheduled_reconciliation"]["status"] == "FAIL"  # 4 h old: the hourly run has stopped succeeding
+    assert "4.0 h ago" in checks["scheduled_reconciliation"]["observed"]["value"]
+
+    stamp.write_text(json.dumps({"completed_at": "2026-10-10T21:10:00Z", "result": "success", "git_sha": "a" * 40}))
+    states[("is-active", "aihost-orchestrator-gateway.service")] = "active"
+    checks = observe()
     assert checks["required_services"]["status"] == "PASS" and checks["scheduled_reconciliation"]["status"] == "PASS"
-    assert "vault_access" not in checks
+    assert checks["scheduled_reconciliation"]["observed"]["value"].endswith("snapshot aaaaaaaaaaaa")
+
+    stamp.write_text("{not json")
+    assert observe()["scheduled_reconciliation"]["status"] == "FAIL"
+    assert "vault_access" not in mod.observe_live_checks({}, required_units=[], reconcile_stamp=None, vault_config=None)
 
 
 def test_vault_access_is_an_actual_login(tmp_path, monkeypatch):

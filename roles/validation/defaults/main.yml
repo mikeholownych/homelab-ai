@@ -14,5 +14,7 @@ validation_profile_json_path: "{{ validation_evidence_dir }}/hardware-profile-ex
 validation_not_applicable: {}
 # Live checks observed by the aggregator on the node; an empty input leaves the check NOT_TESTED.
 validation_required_units: []
-validation_reconcile_timer: ""
+# Stamp written by the controller-side reconciliation (playbooks/reconcile.yml) on success, and its maximum age.
+validation_reconcile_stamp: ""
+validation_reconcile_max_age_hours: 2
 validation_vault_config: ""

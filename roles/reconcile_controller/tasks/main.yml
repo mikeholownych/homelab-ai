@@ -1,0 +1,61 @@
+---
+- name: Require an explicit snapshot commit
+  ansible.builtin.assert:
+    that:
+      - reconcile_controller_snapshot_ref is match('^[0-9a-f]{40}$')
+    fail_msg: >-
+      Set reconcile_controller_snapshot_ref to the full commit to deploy (git rev-parse <ref>). The timer re-applies
+      exactly that snapshot until an operator deploys another.
+  tags: [reconcile]
+
+- name: Create the reconciliation directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0700"
+  loop:
+    - "{{ reconcile_controller_root }}"
+    - "{{ reconcile_controller_evidence_dir }}"
+    - "{{ reconcile_controller_lock_dir }}"
+    - "{{ reconcile_controller_unit_dir }}"
+  tags: [reconcile]
+
+- name: Check out the pinned snapshot
+  ansible.builtin.git:
+    repo: "{{ reconcile_controller_source_repo }}"
+    dest: "{{ reconcile_controller_snapshot_dir }}"
+    version: "{{ reconcile_controller_snapshot_ref }}"
+    force: true
+  register: reconcile_controller_snapshot
+  tags: [reconcile]
+
+- name: Check for the snapshot's tool environment
+  ansible.builtin.stat:
+    path: "{{ reconcile_controller_snapshot_dir }}/.venv/bin/ansible-playbook"
+  register: reconcile_controller_venv
+  tags: [reconcile]
+
+- name: Install the snapshot's pinned tools (hash-checked requirements, collections)
+  ansible.builtin.command:
+    argv: [make, -C, "{{ reconcile_controller_snapshot_dir }}", bootstrap-tools]
+  when: reconcile_controller_snapshot.changed or not reconcile_controller_venv.stat.exists
+  changed_when: true
+  tags: [reconcile]
+
+- name: Install the reconciliation units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ reconcile_controller_unit_dir }}/{{ item }}"
+    mode: "0644"
+  loop: [aihost-reconcile.service, aihost-reconcile.timer]
+  register: reconcile_controller_units
+  tags: [reconcile]
+
+- name: Establish the reconciliation timer state
+  ansible.builtin.systemd_service:
+    name: aihost-reconcile.timer
+    scope: user
+    daemon_reload: "{{ reconcile_controller_units.changed }}"
+    enabled: "{{ reconcile_controller_timer_enabled | bool }}"
+    state: "{{ 'started' if reconcile_controller_timer_enabled | bool else 'stopped' }}"
+  tags: [reconcile]

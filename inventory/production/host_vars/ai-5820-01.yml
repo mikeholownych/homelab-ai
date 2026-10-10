@@ -47,7 +47,8 @@ validation_required_units:
   - aihost-inference-policy.service
   - prometheus-node-exporter.service
   - aihost-metrics.timer
-validation_reconcile_timer: aihost-reconcile.timer
+# Reconciliation runs hourly from the controller (roles/reconcile_controller); the appliance holds no CA key.
+validation_reconcile_stamp: /var/lib/local-ai/evidence/reconcile-last.json
 validation_vault_config: /etc/aihost/vault/platform-credentials.json
 
 network_endpoints:

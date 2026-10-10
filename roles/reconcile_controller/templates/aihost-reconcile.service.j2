@@ -1,0 +1,17 @@
+[Unit]
+Description=aihost scheduled reconciliation of {{ reconcile_controller_target }} (controller, snapshot {{ reconcile_controller_snapshot_ref[:12] }})
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ reconcile_controller_snapshot_dir }}
+Environment=PATH={{ reconcile_controller_snapshot_dir }}/.venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart={{ reconcile_controller_snapshot_dir }}/scripts/run-ansible-snapshot \
+  --repo-root {{ reconcile_controller_snapshot_dir }} \
+  --schema-root {{ reconcile_controller_snapshot_dir }}/schemas \
+  --inventory inventory/production \
+  --target {{ reconcile_controller_target }} \
+  --playbook reconcile.yml \
+  --lock-root {{ reconcile_controller_lock_dir }} \
+  --evidence-root {{ reconcile_controller_evidence_dir }}
+Nice=10
