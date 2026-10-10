@@ -34,6 +34,7 @@
     name: "{{ os_tuning_cpu_power_service_name }}"
     enabled: true
     state: started
+    daemon_reload: true
   when:
     - os_tuning_apply_mutations | bool
     - not ansible_check_mode
