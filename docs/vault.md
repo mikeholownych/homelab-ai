@@ -306,10 +306,17 @@ over verified TLS, and all five consumer files match their Vault records by dige
 OpenCode client token v2, compatibility key v1, worker 1 and worker 2 keys v2 from 2026-10-03). The validation role
 repeats the login as its `vault_access` check.
 
-Not yet covered: the gateway's per-client registry (R6, 2026-10-07) generates the `operator`, `qualification` and
-`ansible-admin` tokens with Ansible on the appliance (`/etc/local-ai/orchestrator/clients/`); they are not Vault
-records. Bringing them under this lifecycle needs new KV records and policy entries (vault-post-init) plus helper
-targets; until then they rotate with `orchestrator_gateway_rotate_client_tokens`.
+Gateway clients (2026-10-10): the per-client registry tokens (`operator`, `qualification`, `ansible-admin`, and the
+existing `nexus`/`opencode` tokens) are Vault records under `secret/local-ai/services/orchestrator-gateway/clients/`,
+read-only for `t5820-platform`. The gateway authenticates clients by the SHA-256 digests in
+`/var/lib/aihost-gateway/clients.json`; the helper updates the matching digests in the same transaction as the token
+files. Rotate them only through Vault (`-e vault_post_init_rotate=[operator_client]` and so on); the gateway role refuses
+`orchestrator_gateway_rotate_client_tokens` for Vault-managed clients.
+
+Verification under the current access model: the loopback listener refuses workload requests (W-ORIGIN) and only the
+gateway's uid may reach worker ports (W-ACCESS). The helper therefore checks client tokens against the loaded registry
+digests, probes worker keys and health as the gateway service account (`runuser`, key on stdin), and requires gateway
+readiness with every configured worker available.
 
 ## Encrypted Raft snapshot backup
 
