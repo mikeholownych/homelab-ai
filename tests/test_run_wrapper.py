@@ -120,7 +120,7 @@ def create_repo(root: Path) -> Path:
     (root / "evidence").mkdir(parents=True, exist_ok=True)
     (root / ".pytest_cache").mkdir(parents=True, exist_ok=True)
     (root / "ansible.cfg").write_text("[defaults]\nstdout_callback = yaml\n", encoding="utf-8")
-    for playbook in ("site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "reboot-verify.yml", "bootstrap.yml"):
+    for playbook in ("site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "reboot-verify.yml", "reconcile.yml", "bootstrap.yml"):
         (root / "playbooks" / playbook).write_text("---\n[]\n", encoding="utf-8")
     (root / "inventory" / "production" / "hosts.yml").write_text("all:\n  hosts:\n    ai-p620-01:\n", encoding="utf-8")
     return root
@@ -622,7 +622,7 @@ class RunWrapperTests(unittest.TestCase):
             self.assertNotIn("ansible-playbook", tool_log.read_text(encoding="utf-8"))
 
     def test_wrapper_accepts_exact_playbook_allowlist_and_rejects_others(self) -> None:
-        allowed = ["site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "reboot-verify.yml"]
+        allowed = ["site.yml", "drift-check.yml", "patch.yml", "validate.yml", "benchmark.yml", "facts-export.yml", "reboot-verify.yml", "reconcile.yml"]
         for playbook in allowed:
             with self.subTest(playbook=playbook):
                 with tempfile.TemporaryDirectory() as tmpdir:

@@ -197,6 +197,7 @@
             "facts-export.yml",
             "patch.yml",
             "reboot-verify.yml",
+            "reconcile.yml",
             "site.yml",
             "validate.yml"
           ]
