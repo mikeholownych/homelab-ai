@@ -478,9 +478,12 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
 - [x] V6 the generic validator published unobserved PASS verdicts (f7f6180, 83b5847); fixed in `f398935` (evidence-only
       verdicts, live systemctl/Vault observation, inventory-declared applicability).
 - [x] V7 (corrected by the validate.yml run 2026-10-10 20:23, `62bc25a`) host evidence `/var/lib/local-ai/evidence/validation_summary.txt` (2026-10-10 13:09) is false
-      (scheduled_reconciliation PASS while aihost-reconcile.timer is not installed); re-run validate.yml with `f398935`
+      (scheduled_reconciliation PASS while aihost-reconcile.timer was disabled and inactive); re-run validate.yml with `f398935`
       in an operator window (it includes hardware roles).
-- [ ] V8 OPERATOR DECISION: features.scheduled_reconciliation is true but aihost-reconcile.timer is not installed.
+- [x] V8 scheduled reconciliation (operator: install it, 2026-10-10). The appliance timer was installed but disabled and
+      could not work there (CA key on the controller; it ran site.yml). Built controller-side (`a909c3d`..`cdfa1c0`): pinned
+      snapshot, hourly user timer, stamp on the host observed by the validator. First runs fixed two role conflicts (gateway
+      readiness script owned twice; lifecycle units installed then removed each run); steady state changes only the stamp.
 - [ ] V9 pcie_aspm=performance on the kernel command line is not a valid policy (live policy: default); use
       pcie_aspm.policy=performance and add a validation check; transparent_hugepage=always is duplicated.
 - [x] V10 R6 gateway client tokens are Vault records (`526bda1`, evidence `a520267`). Found on the way: Vault credential

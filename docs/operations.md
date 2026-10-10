@@ -151,3 +151,18 @@ ansible-playbook -i inventory/production/hosts.yml playbooks/commission.yml --li
 ```
 Note: Ubuntu Server acceptance is evidence-based and linear LVM is not redundant.
 
+
+### Scheduled reconciliation (controller-side)
+Reconciliation runs hourly **from the controller**, never on the inference appliance: `playbooks/inference.yml` signs the
+gateway TLS leaf with the CA key that only the controller holds. `roles/reconcile_controller` checks out a pinned snapshot
+commit, bootstraps its hash-pinned tools and builds its own `vllm-top`, then installs a user systemd timer
+(`aihost-reconcile.timer`, operator account) that runs `scripts/run-ansible-snapshot ... --playbook reconcile.yml`.
+The timer re-applies that snapshot; it never pulls `main`. Deploy or move the snapshot explicitly:
+```bash
+ansible-playbook playbooks/reconcile-controller.yml -e reconcile_controller_snapshot_ref=$(git rev-parse HEAD)
+systemctl --user start aihost-reconcile.service   # optional immediate run
+```
+`playbooks/reconcile.yml` writes `/var/lib/local-ai/evidence/reconcile-last.json` on the appliance only after a
+successful converge; the validator's `scheduled_reconciliation` check passes only for a successful stamp under 2 h old.
+A run refused while a candidate holds a GPU leaves the stamp to age, which the validator then reports. Run evidence:
+`~/.local/share/aihost/reconcile/evidence/`.

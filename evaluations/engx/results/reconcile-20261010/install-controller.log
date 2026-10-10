@@ -1,0 +1,210 @@
+
+PLAY [Install controller-side scheduled reconciliation] ************************
+
+TASK [reconcile_controller : Require an explicit snapshot commit] **************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [reconcile_controller : Create the reconciliation directories] ************
+changed: [localhost] => (item=/home/mike/.local/share/aihost/reconcile)
+changed: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/evidence)
+changed: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/lock)
+changed: [localhost] => (item=/home/mike/.config/systemd/user)
+
+TASK [reconcile_controller : Check out the pinned snapshot] ********************
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's tool environment] ********
+ok: [localhost]
+
+TASK [reconcile_controller : Install the snapshot's pinned tools (hash-checked requirements, collections)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Install the reconciliation units] *****************
+changed: [localhost] => (item=aihost-reconcile.service)
+changed: [localhost] => (item=aihost-reconcile.timer)
+
+TASK [reconcile_controller : Establish the reconciliation timer state] *********
+changed: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=5    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+
+PLAY [Install controller-side scheduled reconciliation] ************************
+
+TASK [reconcile_controller : Require an explicit snapshot commit] **************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [reconcile_controller : Create the reconciliation directories] ************
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/evidence)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/lock)
+ok: [localhost] => (item=/home/mike/.config/systemd/user)
+
+TASK [reconcile_controller : Check out the pinned snapshot] ********************
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's tool environment] ********
+ok: [localhost]
+
+TASK [reconcile_controller : Install the snapshot's pinned tools (hash-checked requirements, collections)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Install the reconciliation units] *****************
+changed: [localhost] => (item=aihost-reconcile.service)
+ok: [localhost] => (item=aihost-reconcile.timer)
+
+TASK [reconcile_controller : Establish the reconciliation timer state] *********
+ok: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+
+PLAY [Install controller-side scheduled reconciliation] ************************
+
+TASK [reconcile_controller : Require an explicit snapshot commit] **************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [reconcile_controller : Create the reconciliation directories] ************
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/evidence)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/lock)
+ok: [localhost] => (item=/home/mike/.config/systemd/user)
+
+TASK [reconcile_controller : Check out the pinned snapshot] ********************
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's tool environment] ********
+ok: [localhost]
+
+TASK [reconcile_controller : Install the snapshot's pinned tools (hash-checked requirements, collections)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Install the reconciliation units] *****************
+changed: [localhost] => (item=aihost-reconcile.service)
+ok: [localhost] => (item=aihost-reconcile.timer)
+
+TASK [reconcile_controller : Establish the reconciliation timer state] *********
+ok: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+
+PLAY [Install controller-side scheduled reconciliation] ************************
+
+TASK [reconcile_controller : Require an explicit snapshot commit] **************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [reconcile_controller : Create the reconciliation directories] ************
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/evidence)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/lock)
+ok: [localhost] => (item=/home/mike/.config/systemd/user)
+
+TASK [reconcile_controller : Check out the pinned snapshot] ********************
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's tool environment] ********
+ok: [localhost]
+
+TASK [reconcile_controller : Install the snapshot's pinned tools (hash-checked requirements, collections)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Install the reconciliation units] *****************
+changed: [localhost] => (item=aihost-reconcile.service)
+ok: [localhost] => (item=aihost-reconcile.timer)
+
+TASK [reconcile_controller : Establish the reconciliation timer state] *********
+ok: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=7    changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+
+PLAY [Install controller-side scheduled reconciliation] ************************
+
+TASK [reconcile_controller : Require an explicit snapshot commit] **************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [reconcile_controller : Create the reconciliation directories] ************
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/evidence)
+changed: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/lock)
+ok: [localhost] => (item=/home/mike/.config/systemd/user)
+
+TASK [reconcile_controller : Check out the pinned snapshot] ********************
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's tool environment] ********
+ok: [localhost]
+
+TASK [reconcile_controller : Install the snapshot's pinned tools (hash-checked requirements, collections)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's vllm-top build] **********
+ok: [localhost]
+
+TASK [reconcile_controller : Build the snapshot's vllm-top (locked dependencies)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Install the reconciliation units] *****************
+changed: [localhost] => (item=aihost-reconcile.service)
+ok: [localhost] => (item=aihost-reconcile.timer)
+
+TASK [reconcile_controller : Establish the reconciliation timer state] *********
+ok: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=9    changed=5    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
+
+PLAY [Install controller-side scheduled reconciliation] ************************
+
+TASK [reconcile_controller : Require an explicit snapshot commit] **************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [reconcile_controller : Create the reconciliation directories] ************
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile)
+ok: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/evidence)
+changed: [localhost] => (item=/home/mike/.local/share/aihost/reconcile/lock)
+ok: [localhost] => (item=/home/mike/.config/systemd/user)
+
+TASK [reconcile_controller : Check out the pinned snapshot] ********************
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's tool environment] ********
+ok: [localhost]
+
+TASK [reconcile_controller : Install the snapshot's pinned tools (hash-checked requirements, collections)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Check for the snapshot's vllm-top build] **********
+ok: [localhost]
+
+TASK [reconcile_controller : Build the snapshot's vllm-top (locked dependencies)] ***
+changed: [localhost]
+
+TASK [reconcile_controller : Install the reconciliation units] *****************
+changed: [localhost] => (item=aihost-reconcile.service)
+ok: [localhost] => (item=aihost-reconcile.timer)
+
+TASK [reconcile_controller : Establish the reconciliation timer state] *********
+ok: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=9    changed=5    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+

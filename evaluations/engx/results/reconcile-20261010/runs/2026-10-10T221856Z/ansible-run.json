@@ -1,0 +1,11 @@
+{
+  "exit_code": 2,
+  "finished_at": "2026-10-10T22:21:53Z",
+  "git_sha": "f1a4287133d1ce9ecf4f77bd239b032399883e27",
+  "inventory": "inventory/production/hosts.yml",
+  "limit": "ai-5820-01",
+  "playbook": "reconcile.yml",
+  "recap": null,
+  "simulated": false,
+  "started_at": "2026-10-10T22:18:56Z"
+}

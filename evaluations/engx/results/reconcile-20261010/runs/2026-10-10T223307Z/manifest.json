@@ -1,0 +1,97 @@
+{
+  "artifacts": [
+    {
+      "expected": {
+        "path": "ansible.log",
+        "summary": "Ansible combined stdout and stderr log"
+      },
+      "id": "ansible-log",
+      "kind": "text/plain",
+      "observed": {
+        "observed_at": "2026-10-10T22:36:38Z",
+        "path": "ansible.log",
+        "sha256": "4bbce455784de7ea98543dcd20b7e6f75418aa2c049364b66658a04f584641ed",
+        "summary": "Captured ansible-log"
+      }
+    },
+    {
+      "expected": {
+        "path": "ansible-run.json",
+        "summary": "Ansible execution metadata"
+      },
+      "id": "ansible-run",
+      "kind": "application/json",
+      "observed": {
+        "observed_at": "2026-10-10T22:36:38Z",
+        "path": "ansible-run.json",
+        "sha256": "a80852196e93a2e5e9cb1b8eace26e9a38ec7196d68894d901bfdd2323e2844b",
+        "summary": "Captured ansible-run"
+      }
+    }
+  ],
+  "collection_target": {
+    "adapter": "ansible",
+    "node_id": "ai-5820-01"
+  },
+  "finalization": {
+    "completed_at": "2026-10-10T22:36:38Z",
+    "reason": null,
+    "state": "complete"
+  },
+  "generated_at": "2026-10-10T22:36:38Z",
+  "git_sha": "cdfa1c02870c49bbafb0c0d01c374acd24f4fec3",
+  "run": {
+    "ansible": {
+      "exit_code": 0,
+      "recap": {
+        "hosts": {
+          "ai-5820-01": {
+            "changed": 1,
+            "failed": 0,
+            "ignored": 0,
+            "ok": 136,
+            "rescued": 0,
+            "skipped": 32,
+            "unreachable": 0
+          }
+        },
+        "totals": {
+          "changed": 1,
+          "failed": 0,
+          "ignored": 0,
+          "ok": 136,
+          "rescued": 0,
+          "skipped": 32,
+          "unreachable": 0
+        }
+      }
+    },
+    "directory_name": "2026-10-10T223307Z",
+    "finished_at": "2026-10-10T22:36:38Z",
+    "inventory": "inventory/production/hosts.yml",
+    "limit": "ai-5820-01",
+    "lock": {
+      "path": "/home/mike/.local/share/aihost/reconcile/lock/ansible-snapshot.lock",
+      "status": "acquired"
+    },
+    "playbook": "reconcile.yml",
+    "repository": {
+      "allowlist": [
+        "evidence/",
+        ".pytest_cache/",
+        ".mypy_cache/",
+        ".ansible/"
+      ],
+      "clean": true,
+      "root": "/home/mike/.local/share/aihost/reconcile/snapshot"
+    },
+    "started_at": "2026-10-10T22:33:07Z",
+    "validation": {
+      "classification": "incomplete",
+      "status": "NOT_TESTED"
+    }
+  },
+  "schema_version": "1.1.0",
+  "simulated": false,
+  "status": "captured"
+}
