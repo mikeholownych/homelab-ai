@@ -48,6 +48,19 @@
   ansible.builtin.set_fact:
     llama_cpp_container_drained: "{{ (llama_cpp_container_drain.status | default(0)) == 200 }}"
 
+- name: "Assert drain succeeded to protect in-flight requests on {{ llama_item.key }}"
+  ansible.builtin.assert:
+    that:
+      - llama_cpp_container_drained | bool or (llama_cpp_container_force_restart | default(false) | bool)
+    fail_msg: >-
+      Failed to drain {{ llama_item.key }} (worker_id={{ llama_item.value.worker_id }}) via gateway
+      (HTTP status {{ llama_cpp_container_drain.status | default('unreachable') }}).
+      Aborting worker mutation to avoid terminating in-flight client requests.
+      Set -e llama_cpp_container_force_restart=true to override.
+  when:
+    - llama_cpp_container_admin_token.content is defined
+    - llama_cpp_container_unit_changed | bool or llama_cpp_container_target_state == 'stopped'
+
 - name: "Wait for in-flight work to finish on {{ llama_item.key }}"
   ansible.builtin.uri:
     url: "{{ llama_cpp_container_admin_base }}"
@@ -82,20 +95,18 @@
 - name: "Wait for a healthy report from {{ llama_item.key }}"
   ansible.builtin.command:
     argv:
-      - runuser
-      - -u
-      - "{{ hostvars[inventory_hostname].orchestrator_gateway_user | default('aihost-gateway') }}"
-      - --
-      - curl
-      - --fail
-      - --silent
-      - --show-error
-      - --max-time
-      - "10"
-      - "http://127.0.0.1:{{ llama_item.value.port }}/health"
+      - /bin/bash
+      - -c
+      - |
+        if ! systemctl is-active --quiet "{{ llama_item.value.service_name }}"; then
+          echo "SERVICE_INACTIVE" >&2
+          exit 42
+        fi
+        exec runuser -u "{{ hostvars[inventory_hostname].orchestrator_gateway_user | default('aihost-gateway') }}" -- \
+          curl --fail --silent --show-error --max-time 10 "http://127.0.0.1:{{ llama_item.value.port }}/health"
   register: llama_cpp_container_health
   changed_when: false
-  failed_when: false
+  failed_when: llama_cpp_container_health.rc == 42
   # Worker ports accept only the gateway uid (docs/design/04). Run curl with that uid directly so
   # Ansible does not need to create temporary module files readable by an unprivileged become_user.
   no_log: true

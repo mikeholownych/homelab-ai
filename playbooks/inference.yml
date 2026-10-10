@@ -69,3 +69,48 @@
     - role: monitoring
       when: features.monitoring | default(false) | bool
       tags: [inference, monitoring, telemetry]
+
+  post_tasks:
+    - name: Flush handlers to ensure service transitions complete
+      ansible.builtin.meta: flush_handlers
+      tags: [inference, runtime, orchestrator]
+
+    - name: Verify orchestrator gateway service is active
+      ansible.builtin.systemd_service:
+        name: aihost-orchestrator-gateway.service
+      register: _inference_gateway_service_status
+      when:
+        - orchestrator_gateway_enabled | default(false) | bool
+        - not ansible_check_mode
+      failed_when: _inference_gateway_service_status.status.ActiveState | default('') != 'active'
+      tags: [inference, runtime, orchestrator]
+
+    - name: Read admin token for gateway health verification
+      ansible.builtin.slurp:
+        src: >-
+          {{ orchestrator_gateway_clients_dir | default('/etc/local-ai/orchestrator/clients') }}/{{
+             llama_cpp_container_admin_client | default('qualification') }}.token
+      register: _inference_admin_token
+      failed_when: false
+      no_log: true
+      when:
+        - orchestrator_gateway_enabled | default(false) | bool
+        - not ansible_check_mode
+      tags: [inference, runtime, orchestrator]
+
+    - name: Verify gateway responds to authenticated health check
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ orchestrator_gateway_port | default(8010) }}/health"
+        headers:
+          Authorization: "Bearer {{ _inference_admin_token.content | b64decode | trim }}"
+        status_code: [200]
+        timeout: 5
+      register: _inference_gateway_health
+      until: _inference_gateway_health.status == 200
+      retries: 30
+      delay: 2
+      when:
+        - orchestrator_gateway_enabled | default(false) | bool
+        - not ansible_check_mode
+        - _inference_admin_token.content is defined
+      tags: [inference, runtime, orchestrator]

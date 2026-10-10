@@ -328,10 +328,10 @@
     label: "{{ item.client_id }}"
   register: _orchestrator_gateway_client_tokens
   failed_when: false
+  check_mode: false
   no_log: true
   when:
     - orchestrator_gateway_enabled | bool
-    - not ansible_check_mode
 
 - name: Keep existing client tokens and generate missing ones
   ansible.builtin.set_fact:
@@ -347,7 +347,6 @@
   no_log: true
   when:
     - orchestrator_gateway_enabled | bool
-    - not ansible_check_mode
 
 - name: Install root-only client token files for delivery to clients
   ansible.builtin.copy:

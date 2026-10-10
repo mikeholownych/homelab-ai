@@ -15,7 +15,7 @@ ExecStart={{ scheduled_ansible_runner_path }} \
   --schema-root {{ scheduled_ansible_snapshot_dir }}/schemas \
   --inventory {{ scheduled_ansible_inventory_path }} \
   --target {{ inventory_hostname }} \
-  --playbook site.yml \
+  --playbook {{ scheduled_ansible_reconcile_playbook }} \
   --lock-root {{ scheduled_ansible_lock_root }} \
   --validate-after-site
 # Classify drift after convergence so blocking drift raises an operator alert

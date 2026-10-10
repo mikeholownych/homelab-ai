@@ -7,6 +7,10 @@
     - drift
     - validation
     - operations
+  vars:
+    drift_check_evidence_dir: >-
+      {{ validation_evidence_dir | default(local_ai_evidence_dir | default('/var/lib/local-ai/evidence')) }}
+
   tasks:
     - name: Run hardware discovery for drift check
       ansible.builtin.include_role:
@@ -31,9 +35,23 @@
         name: validation
       tags: [drift, validation]
 
+    - name: Check location of validation outcome
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ validation_output_path | default(drift_check_evidence_dir ~ '/validation.json') }}"
+        - /var/lib/local-ai/evidence/validation.json
+        - /var/lib/aihost/evidence/validation.json
+      register: drift_check_validation_stat
+      check_mode: false
+      tags: [drift]
+
     - name: Read validation outcome from the managed node
       ansible.builtin.slurp:
-        src: /var/lib/aihost/evidence/validation.json
+        src: >-
+          {{ (drift_check_validation_stat.results | selectattr('stat.exists', 'equalto', true)
+              | map(attribute='item') | first)
+             | default(validation_output_path | default(drift_check_evidence_dir ~ '/validation.json')) }}
       register: drift_check_validation_raw
       check_mode: false
       failed_when: false
@@ -51,6 +69,15 @@
           {{ validation_document | aihost_drift_classify(os_tuning_numa_stability | default('PASS')) }}
       tags: [drift]
 
+    - name: Ensure manual evidence directory exists
+      ansible.builtin.file:
+        path: "{{ drift_check_evidence_dir }}/manual"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      tags: [drift]
+
     - name: Persist machine-readable drift status artifact
       ansible.builtin.copy:
         content: "{{ {'schema_version': '1.0.0',
@@ -60,7 +87,7 @@
                        'active_tuning_profile': os_tuning_config.profile_name | default('unknown'),
                        'numa_stability': os_tuning_numa_stability | default('unknown'),
                        'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')} | to_nice_json }}\n"
-        dest: "/var/lib/aihost/evidence/manual/drift-status.json"
+        dest: "{{ drift_check_evidence_dir }}/manual/drift-status.json"
         owner: root
         group: root
         mode: "0640"

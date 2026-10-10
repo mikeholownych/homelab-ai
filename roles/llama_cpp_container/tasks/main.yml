@@ -84,6 +84,7 @@
     label: "{{ item.key }}"
   register: llama_cpp_container_keys_existing
   failed_when: false
+  check_mode: false
   no_log: true
   when: llama_cpp_container_enabled | bool
 

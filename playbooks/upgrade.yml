@@ -25,7 +25,7 @@
     upgrade_lifecycle_file: "{{ playbook_dir }}/../inventory/production/group_vars/gpu.yml"
     upgrade_evidence_dir: >-
       {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR')
-         | default('/var/lib/aihost/evidence/manual', true) }}
+         | default((local_ai_evidence_dir | default('/var/lib/local-ai/evidence')) ~ '/manual', true) }}
 
   tasks:
     - name: Load upgrade policy definitions
@@ -62,35 +62,62 @@
     # acceptance on a physical pass; commission.yml persists phase checkpoints
     # on success. The Git-committed `candidate` / `previous_known_good` remain
     # the version authorization below, while a null `current` no longer blocks.
-    - name: Resolve on-host commissioning evidence path for this component
+    - name: Resolve on-host commissioning evidence paths for this component
+      vars:
+        _ev_dir: "{{ local_ai_evidence_dir | default('/var/lib/local-ai/evidence') }}"
       ansible.builtin.set_fact:
-        upgrade_commission_evidence_path: >-
+        upgrade_commission_evidence_paths: >-
           {{ {
-            'pytorch_xpu': '/var/lib/local-ai/evidence/xpu-validation.json',
-            'vllm': '/var/lib/aihost/evidence/vllm_validation.json',
-            'llama_cpp': '/var/lib/aihost/evidence/llama_validation.json',
-            'intel_gpu': '/var/lib/local-ai/evidence/checkpoints/gpu_validation.json',
-            'level_zero': '/var/lib/local-ai/evidence/checkpoints/gpu_validation.json',
-            'kernel': '/var/lib/local-ai/evidence/checkpoints/preflight.json',
-            'firmware_bios': '/var/lib/local-ai/evidence/checkpoints/omix.json'
+            'pytorch_xpu': [
+              _ev_dir ~ '/xpu-validation.json',
+              '/var/lib/aihost/evidence/xpu-validation.json'],
+            'vllm': [
+              _ev_dir ~ '/vllm_validation.json',
+              '/var/lib/aihost/evidence/vllm_validation.json'],
+            'llama_cpp': [
+              _ev_dir ~ '/llama_validation.json',
+              '/var/lib/aihost/evidence/llama_validation.json',
+              _ev_dir ~ '/validation.json'],
+            'intel_gpu': [
+              _ev_dir ~ '/checkpoints/gpu_validation.json',
+              '/var/lib/aihost/evidence/checkpoints/gpu_validation.json'],
+            'level_zero': [
+              _ev_dir ~ '/checkpoints/gpu_validation.json',
+              '/var/lib/aihost/evidence/checkpoints/gpu_validation.json'],
+            'kernel': [
+              _ev_dir ~ '/checkpoints/preflight.json',
+              '/var/lib/aihost/evidence/checkpoints/preflight.json'],
+            'firmware_bios': [
+              _ev_dir ~ '/checkpoints/omix.json',
+              '/var/lib/aihost/evidence/checkpoints/omix.json']
           }[upgrade_component] }}
       tags: [upgrade, rollback]
 
     - name: Stat the commissioning evidence for {{ upgrade_component }}
       ansible.builtin.stat:
-        path: "{{ upgrade_commission_evidence_path }}"
-      register: upgrade_commission_stat
+        path: "{{ item }}"
+      loop: "{{ upgrade_commission_evidence_paths }}"
+      register: upgrade_commission_stats
+      tags: [upgrade, rollback]
+
+    - name: Select active commissioning evidence path for {{ upgrade_component }}
+      ansible.builtin.set_fact:
+        upgrade_commission_evidence_path: >-
+          {{ (upgrade_commission_stats.results | selectattr('stat.exists', 'equalto', true)
+              | map(attribute='item') | first) | default(upgrade_commission_evidence_paths | first) }}
+        upgrade_commission_evidence_exists: >-
+          {{ (upgrade_commission_stats.results | selectattr('stat.exists', 'equalto', true) | list | length) > 0 }}
       tags: [upgrade, rollback]
 
     - name: Refuse transitions when commissioning evidence is absent
       ansible.builtin.fail:
         msg: >-
           Component {{ upgrade_component }} has no commissioning evidence at
-          {{ upgrade_commission_evidence_path }}. Readiness is derived from live
+          {{ upgrade_commission_evidence_paths }}. Readiness is derived from live
           observation, not registry pins: run playbooks/commission.yml (or the
           validate.yml flow) so this host records a physical acceptance before
           attempting a transition.
-      when: not upgrade_commission_stat.stat.exists
+      when: not (upgrade_commission_evidence_exists | bool)
       tags: [upgrade, rollback]
 
     - name: Read commissioning evidence for {{ upgrade_component }}
@@ -164,6 +191,15 @@
   gather_facts: false
   become: true
   tasks:
+    - name: Ensure upgrade evidence directory exists
+      ansible.builtin.file:
+        path: "{{ upgrade_evidence_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      tags: [upgrade, rollback]
+
     - name: Persist upgrade transition evidence
       ansible.builtin.copy:
         content: "{{ {'schema_version': '1.0.0',

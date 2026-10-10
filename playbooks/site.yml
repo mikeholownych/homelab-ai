@@ -84,7 +84,19 @@
       when:
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
+        - >-
+          (vllm_xpu_install_enabled | default(false) | bool)
+          or (vllm_xpu_service_enabled | default(false) | bool)
       tags: [site, gpu, runtime, inference, vllm]
+
+    - name: Include llama.cpp container role for containerized inference nodes
+      ansible.builtin.include_role:
+        name: llama_cpp_container
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+        - llama_cpp_container_enabled | default(false) | bool
+      tags: [site, gpu, runtime, inference, llama_cpp, llama]
 
     - name: Include authenticated orchestrator gateway for declared platforms
       ansible.builtin.include_role:
@@ -100,6 +112,9 @@
       when:
         - capabilities.gpu | default(false) | bool
         - capabilities.inference | default(false) | bool
+        - >-
+          (llama_cpp_sycl_install_enabled | default(false) | bool)
+          or (llama_cpp_sycl_service_enabled | default(false) | bool)
       tags: [site, gpu, runtime, inference, llama_cpp]
 
     - name: Include monitoring role when the feature is enabled

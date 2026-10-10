@@ -23,7 +23,7 @@
     patch_policy_file: "{{ playbook_dir }}/../policies/patching.yml"
     patch_evidence_dir: >-
       {{ lookup('ansible.builtin.env', 'LOCAL_AI_EVIDENCE_RUN_DIR')
-         | default('/var/lib/aihost/evidence/manual', true) }}
+         | default((local_ai_evidence_dir | default('/var/lib/local-ai/evidence')) ~ '/manual', true) }}
     patch_dependency_expansion_permitted: false
 
   tasks:
@@ -91,6 +91,16 @@
                  'in_allowlist': pkg in (patch_allowlist | default([]))}) %}
           {% endfor %}
           {{ entries }}
+      tags: [patch]
+
+    - name: Ensure patch evidence directory exists
+      ansible.builtin.file:
+        path: "{{ patch_evidence_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      when: not ansible_check_mode
       tags: [patch]
 
     - name: Persist the patch assessment artifact

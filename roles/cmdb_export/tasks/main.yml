@@ -68,9 +68,22 @@
   failed_when: false
   tags: [cmdb, operations]
 
+- name: Stat last validation outcome from the managed node
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ cmdb_export_output_dir }}/validation.json"
+    - /var/lib/local-ai/evidence/validation.json
+    - /var/lib/aihost/evidence/validation.json
+  register: cmdb_export_validation_stat
+  check_mode: false
+  tags: [cmdb, operations]
+
 - name: Read last validation outcome from the managed node
   ansible.builtin.slurp:
-    src: /var/lib/aihost/evidence/validation.json
+    src: >-
+      {{ (cmdb_export_validation_stat.results | selectattr('stat.exists', 'equalto', true)
+          | map(attribute='item') | first) | default(cmdb_export_output_dir ~ '/validation.json') }}
   register: cmdb_export_validation_raw
   failed_when: false
   check_mode: false
