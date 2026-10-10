@@ -64,6 +64,7 @@ def test_aggregator_produces_valid_schema_document(tmp_path):
             "os_tuning_thp": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
             "os_tuning_hugepages": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
             "os_tuning_sysctl": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
+            "os_tuning_pcie_aspm": {"status": "PASS", "expected": "performance", "observed": "performance"},
             "running_kernel": {"status": "PASS", "expected": "PASS", "observed": "PASS"},
             "numa_topology": {"status": "PASS", "expected": "stable", "observed": "PASS"},
             "intel_gpu_stack_status": {"status": "PASS", "expected": "pre_verification_fail_closed",

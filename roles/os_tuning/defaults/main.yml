@@ -49,7 +49,8 @@ os_tuning_allowed_boot_parameter_patterns:
   - '^default_hugepagesz=(1G|2M)$'
   - '^hugepagesz=(1G|2M)$'
   - '^hugepages=[0-9]+$'
-  - '^pcie_aspm=(default|performance|powersave|powersupersave)$'
+  # The ASPM policy parameter is pcie_aspm.policy=; plain pcie_aspm= only takes off|force and ignores a policy name.
+  - '^pcie_aspm[.]policy=(default|performance|powersave|powersupersave)$'
 os_tuning_allowed_governors:
   - performance
   - powersave

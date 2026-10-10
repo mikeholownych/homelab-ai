@@ -321,6 +321,7 @@ def _secure_boot_state():
 def collect_kernel():
     installed = run(["dpkg-query", "-W", "-f=${Package}=${Version}\n", "linux-image-generic"])
     cmdline_raw = read_text("/proc/cmdline")
+    aspm_policy = read_text("/sys/module/pcie_aspm/parameters/policy")
     return {
         "simulated": False,
         "running_release": run(["uname", "-r"], required=True).strip(),
@@ -328,6 +329,8 @@ def collect_kernel():
         "cmdline_parameters": cmdline_raw.split() if isinstance(cmdline_raw, str) else [],
         "installed_kernel_packages": sorted(line for line in installed.splitlines() if line),
         "secure_boot": _secure_boot_state(),
+        # Active PCIe ASPM policy (the bracketed choice); the kernel parameter is pcie_aspm.policy=<policy>.
+        "pcie_aspm_policy": bracketed_choice(aspm_policy) if isinstance(aspm_policy, str) else aspm_policy,
     }
 
 

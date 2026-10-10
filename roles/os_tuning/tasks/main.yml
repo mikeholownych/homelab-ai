@@ -57,7 +57,8 @@
 
 - name: Compute managed kernel command-line parameters
   ansible.builtin.set_fact:
-    os_tuning_managed_cmdline: "{{ declared_thp_params + declared_hp_params + declared_kernel_params }}"
+    # unique: THP settings and the profile's own cmdline may both declare transparent_hugepage=.
+    os_tuning_managed_cmdline: "{{ (declared_thp_params + declared_hp_params + declared_kernel_params) | unique }}"
   vars:
     thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
     hugepages: "{{ os_tuning_config.os_tuning.hugepages }}"

@@ -64,6 +64,14 @@
         expected: {summary: "NUMA topology unchanged since first recording", value: "stable"}
         observed: {summary: "fingerprint comparison", value: "{{ os_tuning_numa_stability }}"}
         evidence_refs: ["numa.json"]
+      os_tuning_pcie_aspm:
+        status: "{{ 'NOT_APPLICABLE' if expected_aspm is none else
+                    ('PASS' if observed_aspm == expected_aspm else 'FAIL') }}"
+        expected:
+          summary: "PCIe ASPM policy"
+          value: "{{ expected_aspm | default('unmanaged (not applicable for profile)', true) }}"
+        observed: {summary: "/sys/module/pcie_aspm/parameters/policy", value: "{{ observed_aspm }}"}
+        evidence_refs: ["kernel.json"]
   vars:
     tuning_cpu: "{{ os_tuning_config.os_tuning.cpu }}"
     tuning_thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
@@ -73,6 +81,10 @@
     observed_thp: "{{ os_tuning_observed.hugepages.transparent_hugepage_enabled_mode }}"
     observed_hugepages_total: "{{ os_tuning_observed.hugepages.meminfo.HugePages_Total | default(0) | int }}"
     observed_kernel: "{{ os_tuning_observed.kernel.running_release }}"
+    observed_aspm: "{{ os_tuning_observed.kernel.pcie_aspm_policy | default('not observed') }}"
+    expected_aspm: >-
+      {{ (tuning_kernel.cmdline | select('match', '^pcie_aspm[.]policy=')
+          | map('regex_replace', '^pcie_aspm[.]policy=', '') | first) | default(none) }}
   tags: [tuning, validation]
 
 - name: Persist tuning validation check fragment
