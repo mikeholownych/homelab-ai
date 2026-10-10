@@ -485,7 +485,8 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
       pcie_aspm.policy=performance and add a validation check; transparent_hugepage=always is duplicated.
 - [x] V10 R6 gateway client tokens are Vault records (`526bda1`, evidence `a520267`). Found on the way: Vault credential
       convergence had been broken since the 2026-10-07 access changes (its checks were refused); repaired in `526bda1`.
-- [ ] V11 live Vault rotation proof (rotate one client record end to end) restarts the gateway; awaits an operator window.
+- [x] V11 live Vault rotation proof (2026-10-10 21:55): qualification_client rotated in Vault; the helper converged the token
+      file and registry digest, restarted only the gateway; the old token is refused (401), the new one accepted (200).
 New findings from the code review (folded into the workstreams):
 - [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed, tested and deployed in gateway release `f31218c`
 - [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification tested and deployed in R11
