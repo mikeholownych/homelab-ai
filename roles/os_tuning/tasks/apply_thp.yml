@@ -65,3 +65,25 @@
   vars:
     tuning_thp: "{{ os_tuning_config.os_tuning.transparent_hugepages }}"
   tags: [tuning, baseline]
+
+# The ASPM policy is runtime-settable like THP; the kernel parameter (pcie_aspm.policy=) only persists it across
+# boots. Written on observed drift only; a refusal (e.g. firmware kept ASPM control) fails the task visibly.
+- name: Apply runtime PCIe ASPM policy
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > /sys/module/pcie_aspm/parameters/policy"
+      - aspm-apply
+      - "{{ tuning_aspm }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - tuning_aspm | length > 0
+    - os_tuning_observed.kernel.pcie_aspm_policy | default('') != tuning_aspm
+  vars:
+    tuning_aspm: >-
+      {{ os_tuning_config.os_tuning.kernel.cmdline | select('match', '^pcie_aspm[.]policy=')
+         | map('regex_replace', '^pcie_aspm[.]policy=', '') | first | default('') }}
+  tags: [tuning, baseline]
