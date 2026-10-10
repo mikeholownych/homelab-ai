@@ -9,7 +9,7 @@ Environment=PATH={{ reconcile_controller_snapshot_dir }}/.venv/bin:/usr/local/bi
 ExecStart={{ reconcile_controller_snapshot_dir }}/scripts/run-ansible-snapshot \
   --repo-root {{ reconcile_controller_snapshot_dir }} \
   --schema-root {{ reconcile_controller_snapshot_dir }}/schemas \
-  --inventory inventory/production \
+  --inventory inventory/production/hosts.yml \
   --target {{ reconcile_controller_target }} \
   --playbook reconcile.yml \
   --lock-root {{ reconcile_controller_lock_dir }} \
