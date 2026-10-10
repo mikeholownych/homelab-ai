@@ -13,3 +13,4 @@ reconcile_controller_target: ai-5820-01
 reconcile_controller_schedule: hourly
 reconcile_controller_random_delay: 300s
 reconcile_controller_timer_enabled: true
+reconcile_controller_cargo: "{{ ansible_facts.env.HOME }}/.cargo/bin/cargo"

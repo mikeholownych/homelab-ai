@@ -42,6 +42,22 @@
   changed_when: true
   tags: [reconcile]
 
+- name: Check for the snapshot's vllm-top build
+  ansible.builtin.stat:
+    path: "{{ reconcile_controller_snapshot_dir }}/vllm-top/target/release/vllm-top"
+  register: reconcile_controller_vllm_top
+  tags: [reconcile]
+
+# roles/vllm_top_console deploys the binary built on the controller from the in-repo source; the snapshot builds its
+# own so the deployed console always matches the snapshot (target/ is gitignored, so the tree stays clean).
+- name: Build the snapshot's vllm-top (locked dependencies)
+  ansible.builtin.command:
+    argv: ["{{ reconcile_controller_cargo }}", build, --release, --locked]
+    chdir: "{{ reconcile_controller_snapshot_dir }}/vllm-top"
+  when: reconcile_controller_snapshot.changed or not reconcile_controller_vllm_top.stat.exists
+  changed_when: true
+  tags: [reconcile]
+
 - name: Install the reconciliation units
   ansible.builtin.template:
     src: "{{ item }}.j2"
