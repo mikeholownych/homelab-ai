@@ -172,15 +172,6 @@
     mode: "0750"
   tags: [vault, credentials]
 
-- name: Install gateway readiness check with per-worker Vault credentials
-  ansible.builtin.copy:
-    src: aihost-gateway-readiness
-    dest: /usr/local/libexec/aihost-gateway-readiness
-    owner: root
-    group: root
-    mode: "0755"
-  tags: [vault, credentials]
-
 - name: Install non-secret Vault credential runtime settings
   ansible.builtin.template:
     src: platform-credentials.json.j2
