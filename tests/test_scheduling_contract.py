@@ -27,8 +27,13 @@ def test_patch_and_benchmark_timers_disabled_by_default():
 
 def test_systemd_unit_templates_use_lock_and_snapshot_runner():
     reconcile_service = (REPO_ROOT / "roles/scheduled_ansible/templates/aihost-reconcile.service.j2").read_text()
+    defaults = load_yaml("roles/scheduled_ansible/defaults/main.yml")
     assert "run-ansible-snapshot" in reconcile_service
-    assert "site.yml" in reconcile_service
+    assert (
+        "{{ scheduled_ansible_reconcile_playbook }}" in reconcile_service
+        or "site.yml" in reconcile_service
+    )
+    assert defaults["scheduled_ansible_reconcile_playbook"] == "site.yml"
     assert "LimitNOFILE=" in reconcile_service
 
 
@@ -62,10 +67,18 @@ def test_no_git_network_operations_in_reconcile_service():
 def test_reconcile_service_runs_drift_check_after_site():
     reconcile_service = (REPO_ROOT / "roles/scheduled_ansible/templates/aihost-reconcile.service.j2").read_text()
     assert reconcile_service.count("ExecStart=") == 2
-    assert "--playbook site.yml" in reconcile_service
+    assert (
+        "--playbook {{ scheduled_ansible_reconcile_playbook }}" in reconcile_service
+        or "--playbook site.yml" in reconcile_service
+    )
     assert "--playbook drift-check.yml" in reconcile_service
     # Drift classification must run after convergence so blocking drift is raised.
-    assert reconcile_service.find("--playbook drift-check.yml") > reconcile_service.find("--playbook site.yml")
+    first_playbook_pos = (
+        reconcile_service.find("--playbook {{ scheduled_ansible_reconcile_playbook }}")
+        if "--playbook {{ scheduled_ansible_reconcile_playbook }}" in reconcile_service
+        else reconcile_service.find("--playbook site.yml")
+    )
+    assert reconcile_service.find("--playbook drift-check.yml") > first_playbook_pos
 
 
 def test_drift_check_playbook_is_wrapper_allowlisted():
