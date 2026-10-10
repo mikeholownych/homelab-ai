@@ -1,0 +1,2 @@
+{"changed": false, "changed_files": [], "live_acceptance": {"ansible_admin_client_current": "registry-match", "gateway_client_current": "registry-match", "opencode_client_current": "registry-match", "operator_client_current": "registry-match", "qualification_client_current": "registry-match", "worker1_current": 200, "worker2_current": 200}, "restarted": [], "service_states": {"aihost-llama-worker1.service": "active", "aihost-llama-worker2.service": "active", "aihost-orchestrator-gateway.service": "active"}}
+rc=0

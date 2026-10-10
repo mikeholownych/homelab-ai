@@ -1,0 +1,166 @@
+
+PLAY [Create protected ephemeral Vault bootstrap staging directory] ************
+
+TASK [Require explicit Vault post-initialization convergence] ******************
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [Create private in-memory staging directory] ******************************
+ok: [localhost]
+
+PLAY [Capture active T5820 service credentials privately for missing KV records] ***
+
+TASK [Fetch each protected service credential into controller tmpfs] ***********
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [Tighten in-memory staged service credential permissions] *****************
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+ok: [ai-5820-01 -> localhost] => (item=(censored due to no_log))
+
+PLAY [Converge Vault configuration and bootstrap AppRole handoff files] ********
+
+TASK [Run Vault post-initialization role] **************************************
+included: vault_post_init for localhost
+
+TASK [vault_post_init : Require explicit post-initialization convergence inputs] ***
+ok: [localhost] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [vault_post_init : Install Vault post-initialization convergence helper] ***
+changed: [localhost]
+
+TASK [vault_post_init : Converge observed Vault post-initialization state without initialization] ***
+changed: [localhost]
+
+TASK [Remove ephemeral credential staging directory] ***************************
+ok: [localhost]
+
+PLAY [Converge T5820 protected AppRole files and workload credentials] *********
+
+TASK [vault_platform_credentials : Validate explicit Vault workload credential deployment inputs] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [vault_platform_credentials : Create protected Vault runtime and AppRole directories] ***
+ok: [ai-5820-01] => (item=/etc/aihost/vault)
+ok: [ai-5820-01] => (item=/etc/aihost/credentials)
+
+TASK [vault_platform_credentials : Install the Vault issuing CA on the T5820] ***
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Inspect the current protected AppRole file pair] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [vault_platform_credentials : Refuse unsafe existing AppRole credential paths] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [vault_platform_credentials : Create private tmpfs snapshot for AppRole file-pair rollback] ***
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Preserve existing AppRole files in tmpfs] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [vault_platform_credentials : Install the protected AppRole RoleID on the T5820] ***
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Install the protected AppRole SecretID on the T5820] ***
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Mark AppRole pair promotion complete] *******
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Remove AppRole file-pair tmpfs staging after a known outcome] ***
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Install the Vault credential convergence helper] ***
+changed: [ai-5820-01]
+
+TASK [vault_platform_credentials : Install gateway readiness check with per-worker Vault credentials] ***
+changed: [ai-5820-01]
+
+TASK [vault_platform_credentials : Install non-secret Vault credential runtime settings] ***
+changed: [ai-5820-01]
+
+TASK [vault_platform_credentials : Create private in-memory OpenCode rollback staging directory] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [vault_platform_credentials : Preserve the current OpenCode credential file in tmpfs] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [vault_platform_credentials : Stage the Vault-issued OpenCode credential before T5820 changes] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [vault_platform_credentials : Mark the T5820 transaction as attempted] ****
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Authenticate to Vault and transactionally converge T5820 credentials] ***
+ok: [ai-5820-01]
+
+TASK [vault_platform_credentials : Remove the private OpenCode rollback staging directory] ***
+ok: [ai-5820-01 -> localhost]
+
+PLAY [Install backup AppRole handoff only when post-init created a new one] ****
+
+TASK [vault_snapshot_backup : Require explicit encrypted Vault snapshot backup configuration] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Create protected controller backup credential directory] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install the encrypted snapshot exporter] *********
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install Vault issuing CA for controller backup verification] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install the protected snapshot AppRole RoleID] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install the protected snapshot AppRole SecretID] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install the protected backup encryption passphrase] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install non-secret encrypted backup settings] ****
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install systemd snapshot backup service] *********
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Install daily systemd snapshot backup timer] *****
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Apply systemd unit updates before enabling the backup timer] ***
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Enable daily encrypted snapshot backup timer] ****
+skipping: [localhost]
+
+TASK [vault_snapshot_backup : Run and verify an encrypted snapshot export now] ***
+skipping: [localhost]
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=22   changed=3    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+localhost                  : ok=7    changed=2    unreachable=0    failed=0    skipped=12   rescued=0    ignored=0   
+
+EXIT=0
