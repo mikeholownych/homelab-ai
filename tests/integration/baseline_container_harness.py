@@ -126,6 +126,12 @@ class DockerBaselineHarness:
         print(f"Using pinned {self.release} base image {self.release_config['pinned_base_image']}")
 
     def build_image(self) -> None:
+        # CI prebuilds both harness images with a layer cache (the snapshot archive can take >10 min per cold build)
+        # and sets AIHOST_HARNESS_PREBUILT=1; the image must then already exist under the exact harness tag.
+        if os.environ.get("AIHOST_HARNESS_PREBUILT") == "1":
+            self.run(["docker", "image", "inspect", str(self.release_config["harness_image"])])
+            print(f"Using prebuilt {self.release_config['harness_image']}")
+            return
         print(f"Building pinned Ubuntu {self.release} baseline harness image...")
         completed = self.run(
             [
