@@ -30,9 +30,14 @@
         not (observability_install_enabled | bool) or
         (observability_grafana_admin_password is string and
         observability_grafana_admin_password | length > 0)
+      - >-
+        not (observability_install_enabled | bool) or
+        (observability_grafana_secret_key is string and
+        observability_grafana_secret_key | length > 0)
     fail_msg: >-
       observability role requires pinned, hash-verified artifacts and a non-empty
-      Grafana admin password (from Vault) before any install is allowed.
+      Grafana admin password and security secret key (from Vault) before any
+      install is allowed.
   tags: [observability, telemetry]
 
 - name: Refuse unverified observability stack installation

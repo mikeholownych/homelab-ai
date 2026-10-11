@@ -82,9 +82,12 @@ Install is **fail-closed and commissioning-gated**, mirroring the Intel GPU
 role: `observability_stack_status` defaults to `pre_verification_fail_closed`
 and `observability_install_enabled` to `false`. Nothing downloads or starts
 until the commissioning run on physical hardware flips both to
-`commissioned` / `true`. The Grafana admin password is read from Vault
-(`secret/local-ai/observability/grafana-admin`) into a mode-0600 env file; no
-credential is committed. The vLLM dependence in the throughput recording rules
+`commissioned` / `true`. The Grafana admin password and the Grafana encryption
+`secret_key` are read from Vault (`secret/local-ai/observability/grafana-admin`)
+into a mode-0600 env file (`GF_SECURITY_ADMIN_PASSWORD`, `GF_SECURITY_SECRET_KEY`);
+no credential is committed. When no explicit `observability_grafana_secret_key`
+is supplied, it is derived deterministically from the admin credential so the
+Grafana default key is never used. The vLLM dependence in the throughput recording rules
 stays disabled (`observability_vllm_recording_rules_enabled: false`) until the
 live `/metrics` series names are validated against the running service and that
 check is recorded in `observability_verification_checklist`; host-level series
@@ -161,7 +164,7 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 | | Power, energy, and caps | `aihost:gpu_power_watts:rate5m`, `aihost_gpu_power_cap_watts`, `aihost:joules_per_generated_token_incl_idle:rate15m` | Host & GPU: Panels 9-10; Appliance: Panel 3 | Verified live. |
 | | Per-sensor temps & limits | `aihost_gpu_temperature_celsius`, `aihost_gpu_temperature_limit_celsius`, `headroom` | Host & GPU: Panels 3, 11; Appliance: Panels 1-2, 10 | Verified live across pkg, vram, pcie, mctrl. |
 | | Hardware throttling | `aihost_gpu_throttle_status`, `throttle_reason_thermal`, `throttle_reason_power` | Host & GPU: Panels 7, 13; Appliance: Panel 25 | Verified live from sysfs tile registers. |
-| | PCIe link state | `aihost_gpu_pcie_link_width`, `max_link_width`, `link_speed_gts` | Host & GPU: Panel 14 | Verified live (x16 width, 16 GT/s link). |
+| | PCIe link state | `aihost_gpu_slot_pcie_link_width`, `aihost_gpu_slot_pcie_link_speed_gts`, `aihost_gpu_pcie_link_width`, `aihost_gpu_pcie_link_speed_gts` | Host & GPU: Panel 15 | Verified live (Slot: Gen3 x16 @ 8 GT/s; Endpoint: x1 @ 2.5 GT/s). |
 | **3. Host Health** | CPU per-core decode saturation | `aihost:cpu_core_busy_ratio:rate5m`, `aihost:cpu_busiest_core_ratio:rate5m` | Host & GPU: Panels 4, 15; Appliance: Panels 7, 16 | Verified live (identifies single-thread decode bottleneck). |
 | | Memory & swap allocation | `node_memory_MemAvailable_bytes`, `node_memory_Swap*` | Host & GPU: Panel 16; Appliance: Panels 17, 26 | Verified live. |
 | | Linux PSI pressure stalls | `node_pressure_cpu_*`, `node_pressure_memory_*`, `node_pressure_io_*` | Host & GPU: Panel 17 | Verified live across CPU, memory, and I/O. |
@@ -207,11 +210,11 @@ All dashboards include top-level cross-navigation links enabling immediate drill
      - *Card Onboard PCI Switch:* Devices `0000:4f:00.0` and `0000:91:00.0` (Intel `8086:e2ff` bridge) connect to the host root port at **Speed 8GT/s, Width x16**.
      - *Internal Downstream Switch Ports:* Switch downstream ports `0000:50:01.0` and `0000:92:01.0` (Port #8 on bridge `8086:e2ff`) report capability and status: **Speed 2.5GT/s, Width x1**.
      - *Inspected Graphics Endpoints:* Battlemage G31 graphics tiles `0000:51:00.0` and `0000:93:00.0` report `LnkCap: Speed 2.5GT/s, Width x1` and `LnkSta: Speed 2.5GT/s, Width x1`.
-   - *Conclusion:* The physical slot link operates at **Gen3 x16 (8 GT/s)**. The 1x width at 2.5 GT/s reported by `aihost_gpu_pcie_link_width` reflects the **internal downstream link from the onboard bridge `8086:e2ff` to the graphics tile endpoint**, rather than a degradation of the physical PCIe card slot.
+   - *Conclusion & Operational Dashboard Representation:* The physical slot link operates at **Gen3 x16 (8 GT/s)**. The 1x width at 2.5 GT/s reported by `aihost_gpu_pcie_link_width` reflects the **internal downstream link from the onboard bridge `8086:e2ff` to the graphics tile endpoint**, rather than a degradation of the physical PCIe card slot. Panel 15 on `aihost-host` ("PCIe Link: Physical Slot vs Internal Endpoint") explicitly exposes both the physical slot metrics (`aihost_gpu_slot_pcie_link_width` = 16, `aihost_gpu_slot_pcie_link_speed_gts` = 8) alongside the internal endpoint metrics (`aihost_gpu_pcie_link_width` = 1, `aihost_gpu_pcie_link_speed_gts` = 2.5) with separate, distinct legends to ensure operators are never misled into diagnosing a physical slot link degradation.
 3. **Alloy Internal Metrics (Closed Collection Gap):**
    - Configured `prometheus.scrape "observability_self"` in `config.alloy` to scrape `127.0.0.1:12345` (`job="alloy"`).
    - Metrics are active in VictoriaMetrics: `up{job="alloy"} = 1`, `prometheus_remote_storage_samples_total`.
-   - Stack Health Panel 8 queries `rate(prometheus_remote_storage_samples_total[1m])` and `rate(prometheus_remote_storage_samples_failed_total[1m])`, providing live remote-write egress visibility.
+   - Stack Health Panel 8 queries `rate(prometheus_remote_storage_samples_total[1m])` and `rate(prometheus_remote_storage_samples_failed_total[1m])`, providing live remote-write egress visibility. All 7 scrape targets report healthy (`up == 1`).
 4. **Distributed Tracing Pipeline Boundary:**
    - The backend tracing pipeline (Alloy OTLP ingestion on `:4317`/`:4318`, Tempo storage on `:3200`, and VictoriaMetrics service graph generation) is verified.
    - *Operational Consequence:* In-process instrumentation across Nexus, the orchestrator gateway, and llama.cpp workers remains an unproven boundary. Telemetry spans demonstrate backend pipeline and correlation capability, not native production inference tracing. Trace panels remain unpopulated during normal production inference.
@@ -222,11 +225,12 @@ All dashboards include top-level cross-navigation links enabling immediate drill
    - `aihost_reconciliation_timer_active` reporting `0` indicates that `scheduled_ansible_reconcile_enabled` is set to `false` in `inventory/production/host_vars/ai-5820-01.yml`.
    - *Authorization:* Configured by Mike Holownych (commit `6a039cca`) to protect the live dual-worker inference topology and long-running GPU evaluations against unintended configuration overwrites from unconstrained `site.yml` runs.
    - *Resumption Criteria:* The reconciliation timer should resume only after: (a) a repository snapshot is deployed to `/opt/local-ai`, (b) the reconciliation unit is scoped specifically to `playbooks/inference.yml` and matching validate plays, and (c) active GPU benchmarking sweeps conclude.
-7. **Availability, Administrative Drain, and Metric Absence:**
+7. **Availability, Administrative Drain, Execution Success, and Metric Absence:**
    - Dashboards maintain explicit separation between:
      - *Administrative Routing State:* `aihost_worker_drained = 0` means "not drained" (traffic routing permitted), distinct from health or active execution.
      - *Health Probe Availability:* `aihost_worker_health_status = 1` indicates that gateway periodic `/health` probes succeed.
-     - *Inference Execution Success:* `aihost_inference_completions_total{outcome="completed"}` tracks actual request and token generation completions.
+     - *Inference Execution Success:* `aihost_inference_completions_total{outcome="completed"}` tracks actual request and token generation completions processed by the engine.
+     - *Independent Acceptance Validation:* Separate from internal engine completion counters, independent contract acceptance validation (external verification assertions validating payload schema, token content validity, and SLA latency ceilings) constitutes an external verification gate. Execution completions prove workload processing; independent acceptance proves semantic correctness against the contract.
      - *Metric Absence vs Zero:* TSDB series that do not exist when inactive (`ALERTS{alertstate="firing"}`, `outcome="rejected"`) render as empty sets / "No data", whereas physical gauges (`throttle = 0`, `network_errs = 0`, `drained = 0`) and PromQL fallbacks (`or 0 * completed`) output measured zeros.
 8. **Live Inference Worker Topology:**
    - Worker 1 (`b0-live-llama-worker1`): GPU 0 (`0000:51:00.0`), port 8000, model **`Qwen3.6-35B-A3B-UD-Q4_K_M`**, alias `Qwen3.6-35B-A3B-UD-Q4_K_M`, reasoning budget 8192 (`engineering/lead-reasoning`).
@@ -234,5 +238,6 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 9. **Quality Gates & Hosted CI Verification:**
    - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1171 passed) pass cleanly.
    - *Hosted GitHub Actions CI:*
-     - Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` **PASSED** in 15m 17s.
-     - Workflow `quality.yml` (Run ID `38113136143`) on commit `6d95874` is currently executing.
+     - Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` **PASSED** in 15m 19s.
+     - Workflow `quality.yml` (Run ID `38113136143`) on commit `6d95874` **PASSED** in 13m 04s.
+     - Workflow `quality.yml` (Run ID `38113648179`) on commit `1ad1170` **PASSED** in 14m 09s.

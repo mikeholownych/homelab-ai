@@ -765,7 +765,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "PCIe link width (active vs max capable) and link speed in GT/s.",
+      "description": "PCIe physical motherboard slot link (host root port to card bridge: Gen3 x16, 8 GT/s) alongside internal endpoint link (onboard bridge to graphics tile: x1, 2.5 GT/s).",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -803,8 +803,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_gpu_pcie_link_width",
-          "legendFormat": "active width x{{gpu}}",
+          "expr": "aihost_gpu_slot_pcie_link_width",
+          "legendFormat": "GPU {{gpu}} physical slot width",
           "range": true,
           "refId": "A"
         },
@@ -814,8 +814,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_gpu_pcie_max_link_width",
-          "legendFormat": "max width x{{gpu}}",
+          "expr": "aihost_gpu_slot_pcie_link_speed_gts",
+          "legendFormat": "GPU {{gpu}} physical slot speed GT/s",
           "range": true,
           "refId": "B"
         },
@@ -825,13 +825,24 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_gpu_pcie_link_speed_gts",
-          "legendFormat": "speed GT/s gpu{{gpu}}",
+          "expr": "aihost_gpu_pcie_link_width",
+          "legendFormat": "GPU {{gpu}} internal endpoint width",
           "range": true,
           "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_pcie_link_speed_gts",
+          "legendFormat": "GPU {{gpu}} internal endpoint speed GT/s",
+          "range": true,
+          "refId": "D"
         }
       ],
-      "title": "PCIe link width and speed",
+      "title": "PCIe Link: Physical Slot vs Internal Endpoint",
       "type": "timeseries"
     },
     {

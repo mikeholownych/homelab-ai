@@ -184,8 +184,11 @@ def host() -> dict:
     b.timeseries("Graphics tile frequency", "Actual graphics tile frequency.", [("aihost_gpu_actual_frequency_hertz", "gpu{{gpu}} {{gt}}")], unit="hertz", w=8)
     b.timeseries("Hardware throttle triggers", "Hardware frequency throttle triggers from graphics tile registers (thermal and power limit throttling).",
                  [("aihost_gpu_throttle_reason_thermal", "thermal throttle gpu{{gpu}}"), ("aihost_gpu_throttle_reason_power", "power throttle gpu{{gpu}}")], unit="short", min_=0, max_=1, w=8)
-    b.timeseries("PCIe link width and speed", "PCIe link width (active vs max capable) and link speed in GT/s.",
-                 [("aihost_gpu_pcie_link_width", "active width x{{gpu}}"), ("aihost_gpu_pcie_max_link_width", "max width x{{gpu}}"), ("aihost_gpu_pcie_link_speed_gts", "speed GT/s gpu{{gpu}}")], unit="short", w=8)
+    b.timeseries("PCIe Link: Physical Slot vs Internal Endpoint", "PCIe physical motherboard slot link (host root port to card bridge: Gen3 x16, 8 GT/s) alongside internal endpoint link (onboard bridge to graphics tile: x1, 2.5 GT/s).",
+                 [("aihost_gpu_slot_pcie_link_width", "GPU {{gpu}} physical slot width"),
+                  ("aihost_gpu_slot_pcie_link_speed_gts", "GPU {{gpu}} physical slot speed GT/s"),
+                  ("aihost_gpu_pcie_link_width", "GPU {{gpu}} internal endpoint width"),
+                  ("aihost_gpu_pcie_link_speed_gts", "GPU {{gpu}} internal endpoint speed GT/s")], unit="short", w=8)
 
     b.row("Host CPU, Memory and Pressure")
     b.timeseries("CPU busy per core", "Per-core busy share. One core near 100% while the rest idle is the single-thread decode bottleneck.",

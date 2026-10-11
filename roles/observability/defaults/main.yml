@@ -84,6 +84,13 @@ observability_grafana_sha256: 4669384cdb0bb5b4a3f804927e57490d17f4cc47258cd1698f
 observability_grafana_archive_url: https://dl.grafana.com/oss/release/grafana-13.2.0.linux-amd64.tar.gz
 observability_grafana_http_port: 3000
 observability_grafana_admin_password: null
+# Grafana's encryption secret (sessions, datasource secrets, signed URLs).
+# Grafana ships a well-known default, so an explicit stable value is required.
+# Derived deterministically from the admin credential, mirroring the image
+# renderer token below, unless a dedicated value is supplied from Vault at
+# commissioning via observability_grafana_secret_key.
+observability_grafana_secret_key: >-
+  {{ (observability_grafana_admin_password | default('') ~ '-grafana-secret-key') | hash('sha256') }}
 
 # ---------------------------------------------------------------------------
 # Grafana Image Renderer - remote HTTP rendering service for panel screenshots.

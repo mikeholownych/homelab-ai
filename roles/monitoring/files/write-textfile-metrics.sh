@@ -57,6 +57,9 @@ throttle_power_lines=""
 pcie_width_lines=""
 pcie_max_width_lines=""
 pcie_speed_lines=""
+pcie_slot_width_lines=""
+pcie_slot_max_width_lines=""
+pcie_slot_speed_lines=""
 
 # One entry per xe GPU, ordered by PCI address so the `gpu` ordinal is stable across reboots (hwmonN is not).
 gpus="$(for d in "$HWMON_ROOT"/hwmon*; do
@@ -156,6 +159,24 @@ aihost_gpu_pcie_max_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$PCI_R
 aihost_gpu_pcie_link_speed_gts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $speed"
         fi
     fi
+    # Physical motherboard slot link (card onboard switch to host root port):
+    pdev="$(readlink -f "$PCI_ROOT/$bdf" 2>/dev/null || true)"
+    bridge="$(readlink -f "$pdev/../.." 2>/dev/null || true)"
+    if [ -n "$bridge" ] && [ -f "$bridge/current_link_width" ]; then
+        pcie_slot_width_lines="$pcie_slot_width_lines
+aihost_gpu_slot_pcie_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$bridge/current_link_width")"
+    fi
+    if [ -n "$bridge" ] && [ -f "$bridge/max_link_width" ]; then
+        pcie_slot_max_width_lines="$pcie_slot_max_width_lines
+aihost_gpu_slot_pcie_max_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$bridge/max_link_width")"
+    fi
+    if [ -n "$bridge" ] && [ -f "$bridge/current_link_speed" ]; then
+        slot_speed="$(awk '{print $1}' "$bridge/current_link_speed" 2>/dev/null || true)"
+        if [ -n "$slot_speed" ]; then
+            pcie_slot_speed_lines="$pcie_slot_speed_lines
+aihost_gpu_slot_pcie_link_speed_gts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $slot_speed"
+        fi
+    fi
     ord=$((ord + 1))
 done <<EOF_GPUS
 $gpus
@@ -249,9 +270,12 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
     family aihost_gpu_throttle_status gauge "GPU graphics tile throttling status (0=normal, 1=throttled)." "$throttle_lines"
     family aihost_gpu_throttle_reason_thermal gauge "GPU throttling due to thermal condition (0=no, 1=yes)." "$throttle_thermal_lines"
     family aihost_gpu_throttle_reason_power gauge "GPU throttling due to power limit (0=no, 1=yes)." "$throttle_power_lines"
-    family aihost_gpu_pcie_link_width gauge "Current PCIe link width." "$pcie_width_lines"
-    family aihost_gpu_pcie_max_link_width gauge "Maximum supported PCIe link width." "$pcie_max_width_lines"
-    family aihost_gpu_pcie_link_speed_gts gauge "Current PCIe link speed in GT/s." "$pcie_speed_lines"
+    family aihost_gpu_slot_pcie_link_width gauge "Current PCIe physical slot link width (host root port to onboard bridge)." "$pcie_slot_width_lines"
+    family aihost_gpu_slot_pcie_max_link_width gauge "Maximum supported PCIe physical slot link width." "$pcie_slot_max_width_lines"
+    family aihost_gpu_slot_pcie_link_speed_gts gauge "Current PCIe physical slot link speed in GT/s." "$pcie_slot_speed_lines"
+    family aihost_gpu_pcie_link_width gauge "Current PCIe internal endpoint link width (onboard bridge to graphics tile)." "$pcie_width_lines"
+    family aihost_gpu_pcie_max_link_width gauge "Maximum supported PCIe internal endpoint link width." "$pcie_max_width_lines"
+    family aihost_gpu_pcie_link_speed_gts gauge "Current PCIe internal endpoint link speed in GT/s." "$pcie_speed_lines"
     family aihost_llama_worker_major_faults_total counter "Major page faults of one llama.cpp worker process; a rising rate means mapped weights are being read back from disk." "$fault_lines"
     family aihost_llama_worker_resident_file_bytes gauge "File-backed resident memory of one llama.cpp worker process (mapped model weights in use) in bytes." "$rss_file_lines"
     family aihost_llama_model_file_size_bytes gauge "Size of one model file memory-mapped by a llama.cpp worker in bytes." "$model_size_lines"
