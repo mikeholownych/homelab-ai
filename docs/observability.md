@@ -201,12 +201,17 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 1. **GPU Driver VRAM Telemetry (Intel Arc B65) vs Host DRAM:**
    - The Linux kernel `xe` driver does not provide driver-level VRAM allocation statistics via sysfs or Level Zero without `xpumd` (Intel XPU Manager).
    - *Host vs GPU Memory Qualification:* Dashboards observe host system DRAM occupancy (where mmap'd GGUF weights reside and get mapped into SYCL Level Zero USM device memory) via OS page-cache residency (`aihost:llama_model_file_cache_residency:ratio`) and worker RSS (`aihost_llama_worker_resident_file_bytes`). These host metrics do **not** measure device-local GPU VRAM allocation or on-card memory bus saturation. GPU VRAM occupancy remains an explicit hardware/driver observability gap.
-2. **PCIe Link Capabilities vs Negotiated Status:**
-   - Sysfs and `lspci -vv` measurements show that both Arc B65 cards (`0000:51:00.0` and `0000:93:00.0`) operate at `Width x1` and `Speed 2.5GT/s`.
-   - *Capability vs State:* Maximum supported link width (`LnkCap`) is x1 (`aihost_gpu_pcie_max_link_width = 1`); current negotiated width (`LnkSta`) is x1 (`aihost_gpu_pcie_link_width = 1`). Maximum supported link speed (`LnkCap2`) is 2.5 GT/s; current negotiated speed (`LnkSta`) is 2.5 GT/s (`aihost_gpu_pcie_link_speed_gts = 2.5`). The link is operating at its maximum endpoint capability in these slots; the reading is not an idle downclocking artifact.
-3. **Alloy Internal Metrics (Collection Gap):**
-   - Grafana Alloy runs as the local collection agent forwarding to VictoriaMetrics, Loki, and Tempo. However, its own internal `/metrics` endpoint (`127.0.0.1:12345/metrics`) is not configured as a Prometheus scrape target in `roles/observability`.
-   - *Classification:* This is an exporter collection configuration gap, distinct from distributed tracing boundaries. Remote-write pipeline statistics are observable indirectly through VictoriaMetrics ingestion rates rather than Alloy internal counters.
+2. **PCIe Link Capabilities, Upstream Topology & Negotiated Status:**
+   - Raw PCI tree inspection (`lspci -tv`) reveals a multi-tier topology:
+     - *Host Root Ports:* `0000:4e:00.0` (for GPU 0) and `0000:90:00.0` (for GPU 1) are Dell Precision 5820 C422/Skylake-E root ports operating at **Speed 8GT/s, Width x16** (PCIe Gen3 x16).
+     - *Card Onboard PCI Switch:* Devices `0000:4f:00.0` and `0000:91:00.0` (Intel `8086:e2ff` bridge) connect to the host root port at **Speed 8GT/s, Width x16**.
+     - *Internal Downstream Switch Ports:* Switch downstream ports `0000:50:01.0` and `0000:92:01.0` (Port #8 on bridge `8086:e2ff`) report capability and status: **Speed 2.5GT/s, Width x1**.
+     - *Inspected Graphics Endpoints:* Battlemage G31 graphics tiles `0000:51:00.0` and `0000:93:00.0` report `LnkCap: Speed 2.5GT/s, Width x1` and `LnkSta: Speed 2.5GT/s, Width x1`.
+   - *Conclusion:* The physical slot link operates at **Gen3 x16 (8 GT/s)**. The 1x width at 2.5 GT/s reported by `aihost_gpu_pcie_link_width` reflects the **internal downstream link from the onboard bridge `8086:e2ff` to the graphics tile endpoint**, rather than a degradation of the physical PCIe card slot.
+3. **Alloy Internal Metrics (Closed Collection Gap):**
+   - Configured `prometheus.scrape "observability_self"` in `config.alloy` to scrape `127.0.0.1:12345` (`job="alloy"`).
+   - Metrics are active in VictoriaMetrics: `up{job="alloy"} = 1`, `prometheus_remote_storage_samples_total`.
+   - Stack Health Panel 8 queries `rate(prometheus_remote_storage_samples_total[1m])` and `rate(prometheus_remote_storage_samples_failed_total[1m])`, providing live remote-write egress visibility.
 4. **Distributed Tracing Pipeline Boundary:**
    - The backend tracing pipeline (Alloy OTLP ingestion on `:4317`/`:4318`, Tempo storage on `:3200`, and VictoriaMetrics service graph generation) is verified.
    - *Operational Consequence:* In-process instrumentation across Nexus, the orchestrator gateway, and llama.cpp workers remains an unproven boundary. Telemetry spans demonstrate backend pipeline and correlation capability, not native production inference tracing. Trace panels remain unpopulated during normal production inference.
@@ -217,14 +222,17 @@ All dashboards include top-level cross-navigation links enabling immediate drill
    - `aihost_reconciliation_timer_active` reporting `0` indicates that `scheduled_ansible_reconcile_enabled` is set to `false` in `inventory/production/host_vars/ai-5820-01.yml`.
    - *Authorization:* Configured by Mike Holownych (commit `6a039cca`) to protect the live dual-worker inference topology and long-running GPU evaluations against unintended configuration overwrites from unconstrained `site.yml` runs.
    - *Resumption Criteria:* The reconciliation timer should resume only after: (a) a repository snapshot is deployed to `/opt/local-ai`, (b) the reconciliation unit is scoped specifically to `playbooks/inference.yml` and matching validate plays, and (c) active GPU benchmarking sweeps conclude.
-7. **Metric Absence vs Measured Zeros in Dashboards:**
-   - Dashboards handle metric states in three distinct categories:
-     - *Exporter-Measured Zeros:* Physical gauges with literal value `0` emitted by exporters (`aihost_gpu_throttle_status = 0`, `aihost_gpu_throttle_reason_* = 0`, `node_network_receive_errs_total = 0`, `aihost_worker_drained = 0`).
-     - *PromQL Synthesized Zeros:* Rules that synthesize a zero baseline during active traffic when no error series exist (`aihost:inference_error_ratio:rate5m` uses `(errors or 0 * completed) / completed` to return a measured `0` when completions occur, but yields no sample when idle).
-     - *Metric Absence (Unemitted Series):* Series that do not exist in the TSDB when inactive (e.g. `ALERTS{alertstate="firing"}`, `aihost_inference_completions_total{outcome="rejected"}`). These render as empty sets / "No data" unless wrapped in `or vector(0)` or table panels.
+7. **Availability, Administrative Drain, and Metric Absence:**
+   - Dashboards maintain explicit separation between:
+     - *Administrative Routing State:* `aihost_worker_drained = 0` means "not drained" (traffic routing permitted), distinct from health or active execution.
+     - *Health Probe Availability:* `aihost_worker_health_status = 1` indicates that gateway periodic `/health` probes succeed.
+     - *Inference Execution Success:* `aihost_inference_completions_total{outcome="completed"}` tracks actual request and token generation completions.
+     - *Metric Absence vs Zero:* TSDB series that do not exist when inactive (`ALERTS{alertstate="firing"}`, `outcome="rejected"`) render as empty sets / "No data", whereas physical gauges (`throttle = 0`, `network_errs = 0`, `drained = 0`) and PromQL fallbacks (`or 0 * completed`) output measured zeros.
 8. **Live Inference Worker Topology:**
    - Worker 1 (`b0-live-llama-worker1`): GPU 0 (`0000:51:00.0`), port 8000, model **`Qwen3.6-35B-A3B-UD-Q4_K_M`**, alias `Qwen3.6-35B-A3B-UD-Q4_K_M`, reasoning budget 8192 (`engineering/lead-reasoning`).
    - Worker 2 (`b0-live-llama-deep-worker2`): GPU 1 (`0000:93:00.0`), port 8001, model **`Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`**, alias `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`, reasoning budget 4096.
 9. **Quality Gates & Hosted CI Verification:**
-   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1171 passed) pass cleanly on commit `433554c`.
-   - *Hosted GitHub Actions CI:* Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` completed successfully (**PASSED** in 15m 17s).
+   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1171 passed) pass cleanly.
+   - *Hosted GitHub Actions CI:*
+     - Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` **PASSED** in 15m 17s.
+     - Workflow `quality.yml` (Run ID `38113136143`) on commit `6d95874` is currently executing.

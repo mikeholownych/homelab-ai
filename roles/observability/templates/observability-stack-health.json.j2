@@ -205,12 +205,12 @@
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "rate(prometheus_remote_write_sent_samples_total[1m])",
+          "expr": "rate(prometheus_remote_storage_samples_total[1m])",
           "legendFormat": "Sent samples/s",
           "refId": "A"
         },
         {
-          "expr": "rate(prometheus_remote_write_failed_samples_total[1m])",
+          "expr": "rate(prometheus_remote_storage_samples_failed_total[1m])",
           "legendFormat": "Failed samples/s",
           "refId": "B"
         }

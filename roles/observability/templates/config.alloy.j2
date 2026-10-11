@@ -32,6 +32,7 @@ prometheus.scrape "node" {
 // Local observability infrastructure self-monitoring
 prometheus.scrape "observability_self" {
   targets = [
+    { "__address__" = "127.0.0.1:{{ observability_alloy_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "alloy" },
     { "__address__" = "127.0.0.1:{{ observability_vm_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "victoriametrics" },
     { "__address__" = "127.0.0.1:{{ observability_vmalert_http_port }}", "instance" = "{{ ansible_hostname | default('grafana') }}", "job" = "vmalert" },
 {% if observability_loki_enabled | bool %}
