@@ -2,52 +2,54 @@
 {
   "title": "Observability Stack Infrastructure Health",
   "uid": "observability-stack-health",
-  "tags": ["observability", "victoriametrics", "loki", "alloy"],
+  "tags": ["observability", "victoriametrics", "loki", "alloy", "tempo"],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "15s",
   "timezone": "browser",
   "time": {
     "from": "now-1h",
     "to": "now"
   },
+  "links": [
+    {
+      "targetBlank": false,
+      "title": "Appliance Overview",
+      "type": "link",
+      "url": "/d/aihost-appliance-telemetry/aihost-appliance-and-gpu-telemetry"
+    },
+    {
+      "targetBlank": false,
+      "title": "Inference Drilldown",
+      "type": "link",
+      "url": "/d/aihost-inference/aihost-inference"
+    },
+    {
+      "targetBlank": false,
+      "title": "Host & GPU Drilldown",
+      "type": "link",
+      "url": "/d/aihost-host/aihost-host-and-gpu"
+    },
+    {
+      "targetBlank": false,
+      "title": "Stack Health",
+      "type": "link",
+      "url": "/d/observability-stack-health/observability-stack-infrastructure-health"
+    }
+  ],
   "panels": [
     {
-      "title": "VictoriaMetrics Active Series",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Observability Stack Overview KPIs",
+      "type": "row"
+    },
+    {
+      "title": "Active Scrape Targets (up)",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
       "id": 1,
-      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-      "targets": [
-        {
-          "expr": "vm_data_size_bytes or sum(vm_rows_inserted_total)",
-          "refId": "A"
-        }
-      ]
-    },
-    {
-      "title": "VM Samples Ingestion Rate",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
-      "id": 2,
-      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
-      "targets": [
-        {
-          "expr": "sum(rate(vm_rows_inserted_total[1m]))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        }
-      }
-    },
-    {
-      "title": "Active Targets Up Count",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
-      "id": 3,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
@@ -69,23 +71,114 @@
       }
     },
     {
-      "title": "vmalert Rules Executing",
+      "title": "VM Samples Ingestion Rate",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "sum(rate(vm_rows_inserted_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "title": "VM Storage Disk Free",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "vm_free_disk_space_bytes",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "title": "Loki Log Messages / s",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
       "id": 4,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "sum(vmalert_iteration_total) or count(ALERTS)",
+          "expr": "sum(rate(loki_log_messages_total[1m]))",
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "vmalert Evaluation Rate",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "sum(rate(vmalert_iteration_total[1m]))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "title": "Active Alerts Firing",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "vmalert_alerts_firing or count(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Alloy Scrape & Ingestion Pipeline",
+      "type": "row"
     },
     {
       "title": "Scrape Targets Status (up)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
-      "id": 5,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 7,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
@@ -105,10 +198,41 @@
       }
     },
     {
+      "title": "Alloy Remote-Write Throughput & Failures",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 8,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "rate(prometheus_remote_write_sent_samples_total[1m])",
+          "legendFormat": "Sent samples/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(prometheus_remote_write_failed_samples_total[1m])",
+          "legendFormat": "Failed samples/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "VictoriaMetrics Storage & Query Health",
+      "type": "row"
+    },
+    {
       "title": "VictoriaMetrics Ingestion Rate over Time",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
-      "id": 6,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 9,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
@@ -124,29 +248,117 @@
       }
     },
     {
-      "title": "Tracing Spans Received (Tempo)",
+      "title": "VictoriaMetrics HTTP Queries & Errors",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "id": 7,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 10,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "tempo_distributor_spans_received_total",
-          "legendFormat": "Spans Received",
+          "expr": "rate(vm_http_requests_total[1m])",
+          "legendFormat": "HTTP queries/s",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(vm_http_request_errors_total[1m])",
+          "legendFormat": "HTTP errors/s",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "Tempo Distributed Tracing & Service Graph",
+      "type": "row"
+    },
+    {
+      "title": "Tempo Traces Created / Spans Accepted (Fixed Query)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 11,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "rate(tempo_receiver_accepted_spans[1m]) or rate(tempo_live_store_traces_created_total[1m])",
+          "legendFormat": "Traces / Spans Accepted",
           "refId": "A"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
     },
     {
       "title": "Service Graph Request Flow",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
-      "id": 8,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 12,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
           "expr": "sum by (client, server) (traces_service_graph_request_total)",
           "legendFormat": "{{client}} -> {{server}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "id": 104,
+      "title": "Architecture Scope Boundaries & Alert Delivery",
+      "type": "row"
+    },
+    {
+      "title": "Tracing Scope Boundary Notice",
+      "type": "text",
+      "gridPos": { "h": 6, "w": 12, "x": 0, "y": 33 },
+      "id": 13,
+      "options": {
+        "mode": "markdown",
+        "content": "### Tracing Pipeline Status & Explicit Scope Boundary\n\n- **Backend Pipeline Verified**: Grafana Alloy OTLP receiver (`:4317` gRPC, `:4318` HTTP), Tempo storage engine (`:3200`), and VictoriaMetrics service-graph metrics-generator are fully functioning and verified.\n- **Scope Boundary**: Native in-process tracing instrumentation across Nexus, orchestrator gateway, and llama.cpp workers remains an unproven boundary.\n- **Notice**: Do NOT interpret synthetic or pipeline demonstration spans as measured production inference execution. Native worker instrumentation is separate scoped development."
+      }
+    },
+    {
+      "title": "Alerting & Notification Delivery Path",
+      "type": "text",
+      "gridPos": { "h": 6, "w": 12, "x": 12, "y": 33 },
+      "id": 14,
+      "options": {
+        "mode": "markdown",
+        "content": "### Alerting Verification & Notification Delivery\n\n- **Rule Evaluation**: Recording and alert rules are actively evaluated inside `vmalert` every 15 seconds against live VictoriaMetrics telemetry.\n- **Notification Path**: Alerts fire within `vmalert` and are recorded in TSDB as `ALERTS{alertstate=\"firing\"}`.\n- **Notification Delivery Sink**: The notification delivery sink is intentionally routed to local audit logs/endpoints without active external paging to protect production environments from spurious pages during benchmarking sweeps."
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
+      "id": 105,
+      "title": "Logs & Trace Correlation (Loki)",
+      "type": "row"
+    },
+    {
+      "title": "Observability Stack & Ingress Logs",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 40 },
+      "id": 15,
+      "datasource": { "type": "loki", "uid": "loki" },
+      "targets": [
+        {
+          "expr": "{job=~\"systemd-journal|nexus-client\"}",
           "refId": "A"
         }
       ]

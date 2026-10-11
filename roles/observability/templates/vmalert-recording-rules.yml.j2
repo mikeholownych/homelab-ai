@@ -19,6 +19,59 @@ groups:
         expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[1m])))
       - record: aihost:memory_utilization:percent
         expr: 100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes))
+      # ---- engine throughput (the engine's own counters; advance when a request finishes) ----------
+      - record: aihost:engine_decode_tokens_per_second:rate5m
+        expr: rate(aihost_engine_generation_tokens_total[5m]) / (rate(aihost_engine_generation_seconds_total[5m]) > 0)
+      - record: aihost:engine_prompt_eval_tokens_per_second:rate5m
+        expr: rate(aihost_engine_prompt_tokens_total[5m]) / (rate(aihost_engine_prompt_seconds_total[5m]) > 0)
+      - record: aihost:engine_prefix_cache_hit_ratio:rate1h
+        expr: >-
+          rate(aihost_engine_prompt_tokens_cached_total[1h])
+          / ((rate(aihost_engine_prompt_tokens_cached_total[1h]) + rate(aihost_engine_prompt_tokens_total[1h])) > 0)
+
+      # ---- gateway requests -----------------------------------------------------------------------------
+      - record: aihost:inference_completions:rate5m
+        expr: sum by (worker_id, outcome) (rate(aihost_inference_completions_total[5m]))
+      - record: aihost:inference_error_ratio:rate5m
+        expr: >-
+          (
+            sum by (worker_id) (rate(aihost_inference_completions_total{outcome=~"failed|timed_out"}[5m]))
+            or (0 * sum by (worker_id) (rate(aihost_inference_completions_total{outcome="completed"}[5m])))
+          )
+          / (sum by (worker_id) (
+              rate(aihost_inference_completions_total{outcome=~"completed|failed|timed_out"}[5m])) > 0)
+      - record: aihost:inference_duration_seconds:p50_5m
+        expr: histogram_quantile(0.5, sum by (pool, le) (rate(aihost_inference_duration_seconds_bucket[5m])))
+      - record: aihost:inference_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (pool, le) (rate(aihost_inference_duration_seconds_bucket[5m])))
+      - record: aihost:inference_tokens_estimated_share:rate1h
+        expr: >-
+          (
+            (sum(rate(aihost_inference_prompt_tokens_total{source="estimated"}[1h])) or vector(0))
+            + (sum(rate(aihost_inference_completion_tokens_total{source="estimated"}[1h])) or vector(0))
+          )
+          / ((sum(rate(aihost_inference_prompt_tokens_total[1h]))
+              + sum(rate(aihost_inference_completion_tokens_total[1h]))) > 0)
+
+      # ---- GPU ------------------------------------------------------------------------------------------
+      - record: aihost:gpu_utilization_ratio:rate5m
+        expr: clamp(1 - rate(aihost_gpu_gt_idle_residency_seconds_total{gt="gt0"}[5m]), 0, 1)
+      - record: aihost:gpu_power_watts:rate5m
+        expr: sum by (gpu) (rate(aihost_gpu_energy_joules_total{domain="card"}[5m]))
+      - record: aihost:joules_per_generated_token_incl_idle:rate15m
+        expr: >-
+          sum by (worker_id) (
+            rate(aihost_gpu_energy_joules_total{domain="card"}[15m])
+            * on (gpu) group_left (worker_id) aihost_worker_info)
+          / (sum by (worker_id) (rate(aihost_engine_generation_tokens_total[15m])) > 0)
+      - record: aihost:gpu_temperature_headroom_celsius:min
+        expr: min by (gpu) (aihost_gpu_temperature_limit_celsius - on (gpu, bdf, sensor) aihost_gpu_temperature_celsius)
+
+      # ---- host CPU: decode is bound by one CPU thread, so the busiest core is the number that matters -----
+      - record: aihost:cpu_core_busy_ratio:rate5m
+        expr: 1 - rate(node_cpu_seconds_total{mode="idle"}[5m])
+      - record: aihost:cpu_busiest_core_ratio:rate5m
+        expr: max by (instance) (1 - rate(node_cpu_seconds_total{mode="idle"}[5m]))
 
 {% raw %}
   - name: aihost_alerts
@@ -94,7 +147,79 @@ groups:
           severity: warning
         annotations:
           summary: "Root filesystem space below 15%"
-          description: "Root filesystem free space on {{ $labels.instance }} is below 15%."
+      - alert: AihostMetricsFileStale
+        expr: time() - aihost_metrics_last_success_timestamp_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host GPU and appliance telemetry has not refreshed for >5m"
+          description: "aihost-metrics.timer runs every minute; metrics timestamp is stale on {{ $labels.instance }}."
+
+      - alert: AihostWorkerUnhealthy
+        expr: aihost_worker_health_status == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Worker {{ $labels.worker_id }} is reported unhealthy by the gateway"
+          description: "Gateway health check probes failed for worker {{ $labels.worker_id }} on {{ $labels.instance }}."
+
+      - alert: AihostWorkerEngineStatsMissing
+        expr: aihost_worker_health_status == 1 unless on (worker_id) aihost_engine_requests_running
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker {{ $labels.worker_id }} is healthy but engine statistics are missing"
+          description: "Engine stats are missing while worker {{ $labels.worker_id }} is declared healthy."
+
+      - alert: AihostInferenceErrorRatioHigh
+        expr: >-
+          aihost:inference_error_ratio:rate5m > 0.05
+          and on (worker_id) sum by (worker_id) (rate(aihost_inference_completions_total[5m])) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 5% of requests to {{ $labels.worker_id }} are failing on provider side"
+          description: "Provider error ratio exceeds 5% on {{ $labels.worker_id }}."
+
+      - alert: AihostRequestsQueueingInEngine
+        expr: aihost_engine_requests_waiting > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.worker_id }} has sustained request queueing in engine"
+          description: "Requests are waiting for an available engine slot on {{ $labels.worker_id }}."
+
+      - alert: AihostKvCacheNearFull
+        expr: aihost_engine_kv_cache_usage_ratio > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.worker_id }} context KV cache occupancy is above 90%"
+          description: "Engine KV cache occupancy exceeded 90% for 10 minutes on {{ $labels.worker_id }}."
+
+      - alert: AihostGpuNearKernelTemperatureLimit
+        expr: aihost:gpu_temperature_headroom_celsius:min < 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GPU {{ $labels.gpu }} temperature headroom below 10°C to kernel limit"
+          description: "GPU {{ $labels.gpu }} sensor is within 10°C of critical kernel shutdown threshold."
+
+      - alert: AihostLocalAiDiskLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/var/lib/local-ai"} / node_filesystem_size_bytes{mountpoint="/var/lib/local-ai"}) * 100 < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model & cache storage /var/lib/local-ai below 10% free space"
+          description: "LVM volume free space on /var/lib/local-ai is below 10% on {{ $labels.instance }}."
 {% endraw %}
 {% if observability_vllm_recording_rules_enabled | bool %}
   # Enabled only after the live vLLM /metrics series names are validated at

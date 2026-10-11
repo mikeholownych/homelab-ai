@@ -4,13 +4,39 @@
   "uid": "aihost-appliance-telemetry",
   "tags": ["aihost", "gpu", "inference"],
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "15s",
   "timezone": "browser",
   "time": {
     "from": "now-1h",
     "to": "now"
   },
+  "links": [
+    {
+      "targetBlank": false,
+      "title": "Appliance Overview",
+      "type": "link",
+      "url": "/d/aihost-appliance-telemetry/aihost-appliance-and-gpu-telemetry"
+    },
+    {
+      "targetBlank": false,
+      "title": "Inference Drilldown",
+      "type": "link",
+      "url": "/d/aihost-inference/aihost-inference"
+    },
+    {
+      "targetBlank": false,
+      "title": "Host & GPU Drilldown",
+      "type": "link",
+      "url": "/d/aihost-host/aihost-host-and-gpu"
+    },
+    {
+      "targetBlank": false,
+      "title": "Stack Health",
+      "type": "link",
+      "url": "/d/observability-stack-health/observability-stack-infrastructure-health"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
@@ -210,8 +236,185 @@
       }
     },
     {
+      "title": "Telemetry Freshness",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 0, "y": 5 },
+      "id": 20,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "time() - max(aihost_metrics_last_success_timestamp_seconds)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 180 },
+              { "color": "red", "value": 300 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Active In-Flight Workload",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 3, "y": 5 },
+      "id": 21,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost_http_requests_in_flight or sum(aihost_engine_requests_running) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Request Ingress Rate",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 6, "y": 5 },
+      "id": 22,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "sum(rate(aihost_inference_requests_total{status=\"received\"}[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
+    },
+    {
+      "title": "Token Generation Rate",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 9, "y": 5 },
+      "id": 23,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "sum(rate(aihost_engine_generation_tokens_total[5m])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "title": "Inference Latency p95",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 12, "y": 5 },
+      "id": 24,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "max(aihost:inference_duration_seconds:p95_5m)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      }
+    },
+    {
+      "title": "GPU Throttle State",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 15, "y": 5 },
+      "id": 25,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "max(aihost_gpu_throttle_status) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": 0 },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "mappings": [
+            { "options": { "0": { "text": "NORMAL", "color": "green" }, "1": { "text": "THROTTLED", "color": "red" } }, "type": "value" }
+          ]
+        }
+      }
+    },
+    {
+      "title": "Host Memory Utilization",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 18, "y": 5 },
+      "id": 26,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:memory_utilization:percent or (100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 80 },
+              { "color": "red", "value": 92 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Local-AI Disk Free",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 3, "x": 21, "y": 5 },
+      "id": 27,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "(node_filesystem_avail_bytes{mountpoint=\"/var/lib/local-ai\"} / node_filesystem_size_bytes{mountpoint=\"/var/lib/local-ai\"}) * 100",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 10 },
+              { "color": "green", "value": 20 }
+            ]
+          }
+        }
+      }
+    },
+    {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
       "id": 101,
       "title": "Dual Intel Arc B65 GPU Telemetry",
       "type": "row"
@@ -219,7 +422,7 @@
     {
       "title": "GPU Peak Temperatures over Time",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
       "id": 9,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -251,7 +454,7 @@
     {
       "title": "GPU Core & Memory Sensors",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
       "id": 10,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -270,7 +473,7 @@
     {
       "title": "GPU Power Draw Rate (Watts)",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 14 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 18 },
       "id": 11,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -289,7 +492,7 @@
     {
       "title": "Graphics-Tile (GT) Idle Residency",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 14 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 18 },
       "id": 12,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -310,7 +513,7 @@
     {
       "title": "GPU Thermal Severity State",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 14 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 18 },
       "id": 13,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -329,7 +532,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
       "id": 102,
       "title": "Inference Infrastructure & Model Health",
       "type": "row"
@@ -337,7 +540,7 @@
     {
       "title": "Model File Page-Cache Residency Ratio",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 22 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 26 },
       "id": 14,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -358,7 +561,7 @@
     {
       "title": "Llama Worker Major Page Faults Rate",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 22 },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 26 },
       "id": 15,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -376,7 +579,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 },
       "id": 103,
       "title": "Host Resources (ai-5820-01)",
       "type": "row"
@@ -384,7 +587,7 @@
     {
       "title": "CPU Core Saturation (Single-Thread Decode Saturation)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 30 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
       "id": 16,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -405,7 +608,7 @@
     {
       "title": "Host Memory Utilization Breakdown",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 30 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
       "id": 17,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -433,7 +636,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 38 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 },
       "id": 104,
       "title": "Active Alerts & System Logs",
       "type": "row"
@@ -441,7 +644,7 @@
     {
       "title": "Active Alerts",
       "type": "alertlist",
-      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 39 },
+      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 43 },
       "id": 18,
       "options": {
         "show": "current",
@@ -456,7 +659,7 @@
     {
       "title": "Appliance Logs (Loki)",
       "type": "logs",
-      "gridPos": { "h": 8, "w": 14, "x": 10, "y": 39 },
+      "gridPos": { "h": 8, "w": 14, "x": 10, "y": 43 },
       "id": 19,
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [

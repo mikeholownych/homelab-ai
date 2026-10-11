@@ -2,6 +2,32 @@
   "description": "Gateway and engine view of the local inference stack. Engine counters advance when a request finishes, so rates are smooth only over minutes; TTFT and inter-token latency are not measurable (non-streaming upstream).",
   "editable": false,
   "graphTooltip": 1,
+  "links": [
+    {
+      "targetBlank": false,
+      "title": "Appliance Overview",
+      "type": "link",
+      "url": "/d/aihost-appliance-telemetry/aihost-appliance-and-gpu-telemetry"
+    },
+    {
+      "targetBlank": false,
+      "title": "Inference Drilldown",
+      "type": "link",
+      "url": "/d/aihost-inference/aihost-inference"
+    },
+    {
+      "targetBlank": false,
+      "title": "Host & GPU Drilldown",
+      "type": "link",
+      "url": "/d/aihost-host/aihost-host-and-gpu"
+    },
+    {
+      "targetBlank": false,
+      "title": "Stack Health",
+      "type": "link",
+      "url": "/d/observability-stack-health/observability-stack-infrastructure-health"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
@@ -43,7 +69,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 1
       },
@@ -97,8 +123,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 4,
         "y": 1
       },
       "id": 3,
@@ -155,8 +181,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 4,
+        "x": 8,
         "y": 1
       },
       "id": 4,
@@ -213,8 +239,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 12,
         "y": 1
       },
       "id": 5,
@@ -267,9 +293,9 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 0,
-        "y": 5
+        "w": 4,
+        "x": 16,
+        "y": 1
       },
       "id": 6,
       "options": {
@@ -299,14 +325,68 @@
       "type": "stat"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Elapsed time in seconds since the orchestrator gateway started.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "max(aihost_gateway_uptime_seconds)",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Gateway uptime",
+      "type": "stat"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 9
       },
-      "id": 7,
+      "id": 8,
       "panels": [],
       "title": "Throughput",
       "type": "row"
@@ -335,9 +415,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 14
+        "y": 10
       },
-      "id": 8,
+      "id": 9,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -387,9 +467,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 14
+        "y": 10
       },
-      "id": 9,
+      "id": 10,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -439,9 +519,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 18
       },
-      "id": 10,
+      "id": 11,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -493,9 +573,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 22
+        "y": 18
       },
-      "id": 11,
+      "id": 12,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -527,11 +607,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 26
       },
-      "id": 12,
+      "id": 13,
       "panels": [],
-      "title": "Latency",
+      "title": "Latency and Outcomes",
       "type": "row"
     },
     {
@@ -539,7 +619,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Time the gateway spent on the worker call, including engine-side queueing. Not time-to-first-token.",
+      "description": "Time the gateway spent on the worker call, including engine-side queueing. Measurement window: 5 minutes.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -558,9 +638,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 27
       },
-      "id": 13,
+      "id": 14,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -602,6 +682,58 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
+      "description": "Average time requests spend waiting inside the gateway scheduler queue prior to worker dispatch. Measurement window: 5 minutes.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0)",
+          "legendFormat": "queue wait",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Scheduler queue wait latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "description": "Completed, failed, timed-out and rejected requests per second.",
       "fieldConfig": {
         "defaults": {
@@ -620,10 +752,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 31
+        "x": 0,
+        "y": 35
       },
-      "id": 14,
+      "id": 16,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -650,14 +782,66 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Completed inference requests broken down by termination reason (stop token, max length context truncation).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 35
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (model, reason) (rate(aihost_completion_terminations_total[5m]))",
+          "legendFormat": "{{model}} - {{reason}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Completion terminations by reason",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 43
       },
-      "id": 15,
+      "id": 18,
       "panels": [],
       "title": "Engine state",
       "type": "row"
@@ -686,9 +870,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 40
+        "y": 44
       },
-      "id": 16,
+      "id": 19,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -751,9 +935,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 40
+        "y": 44
       },
-      "id": 17,
+      "id": 20,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -803,9 +987,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 52
       },
-      "id": 18,
+      "id": 21,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -843,134 +1027,6 @@
       "type": "timeseries"
     },
     {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 56
-      },
-      "id": 19,
-      "panels": [],
-      "title": "Routing and accounting",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Which routing rule sent traffic to which pool.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 25,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 57
-      },
-      "id": 20,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))",
-          "legendFormat": "{{rule}} -> {{pool}}",
-          "range": true,
-          "refId": "A"
-        }
-      ],
-      "title": "Route decisions / s",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "description": "Tokens the gateway counted: provider = the engine's exact usage, estimated = the gateway's fallback.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "fillOpacity": 25,
-            "lineWidth": 1,
-            "showPoints": "never",
-            "stacking": {
-              "mode": "normal"
-            }
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 57
-      },
-      "id": 21,
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "multi"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))",
-          "legendFormat": "prompt {{source}}",
-          "range": true,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "editorMode": "code",
-          "expr": "sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))",
-          "legendFormat": "completion {{source}}",
-          "range": true,
-          "refId": "B"
-        }
-      ],
-      "title": "Token accounting by source (tokens / s)",
-      "type": "timeseries"
-    },
-    {
       "datasource": {
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
@@ -993,8 +1049,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 65
+        "x": 12,
+        "y": 52
       },
       "id": 22,
       "options": {
@@ -1032,6 +1088,535 @@
       ],
       "title": "Requests outstanding vs configured concurrency",
       "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
+      "id": 23,
+      "panels": [],
+      "title": "Routing, Policy and Authentication",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Routing rule evaluations and destinations. Distinguishes reasoning-off lead routes from engineering/lead-reasoning at 8192 context window.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 61
+      },
+      "id": 24,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rule, pool, model) (rate(aihost_route_decisions_total[5m]))",
+          "legendFormat": "{{rule}} ({{model}}) -> {{pool}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Route decisions by rule, pool and model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Dispatches to target inference workers, reflecting distribution, health-based eligibility, and fallback.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 61
+      },
+      "id": 25,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (target_worker) (rate(aihost_inference_dispatches_total[5m]))",
+          "legendFormat": "-> {{target_worker}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Worker dispatches / s",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Client authority check rate partitioned by authority and outcome (allow / deny) without exposing credentials.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 69
+      },
+      "id": 26,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (authority, result) (rate(aihost_authority_validations_total[5m]))",
+          "legendFormat": "{{authority}} ({{result}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Client authority validations",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Gateway HTTP ingress request outcomes grouped by response status code.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 69
+      },
+      "id": 27,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (code) (rate(aihost_http_requests_total[5m]))",
+          "legendFormat": "HTTP {{code}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP requests by status code",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Tokens the gateway counted: provider = the engine's exact usage, estimated = the gateway's fallback.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 77
+      },
+      "id": 28,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))",
+          "legendFormat": "prompt {{source}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))",
+          "legendFormat": "completion {{source}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Token accounting by source (tokens / s)",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 85
+      },
+      "id": 29,
+      "panels": [],
+      "title": "Production Lifecycle",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Release evidence chain verification state (1 = cryptographically valid, 0 = failed).",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 86
+      },
+      "id": 30,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "min(aihost_evidence_chain_valid)",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Evidence chain valid",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Rate of release evidence verification failures.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 86
+      },
+      "id": 31,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(rate(aihost_evidence_verification_failures_total[5m]))",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Evidence verification failures / s",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "State of scheduled Ansible reconciliation timer (0 = paused, 1 = active). Value 0 is an expected operational pause during benchmark sweeps.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 86
+      },
+      "id": 32,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "max(aihost_reconciliation_timer_active)",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Reconciliation timer active",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Count of workers marked as drained for scheduled maintenance.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 86
+      },
+      "id": 33,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum(aihost_worker_drained{worker_id=~\"$worker\"})",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Workers drained",
+      "type": "stat"
     }
   ],
   "refresh": "30s",
@@ -1042,7 +1627,11 @@
   "templating": {
     "list": [
       {
-        "current": {},
+        "current": {
+          "selected": true,
+          "text": "VictoriaMetrics",
+          "value": "victoriametrics"
+        },
         "hide": 0,
         "label": "Prometheus",
         "name": "DS_PROMETHEUS",

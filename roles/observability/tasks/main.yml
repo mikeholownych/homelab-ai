@@ -474,6 +474,8 @@
     mode: "0640"
   loop:
     - aihost-host-overview.json
+    - aihost-inference.json
+    - aihost-host.json
     - observability-stack-health.json
   when:
     - observability_install_enabled | bool

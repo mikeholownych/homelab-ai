@@ -75,6 +75,12 @@ groups:
       - record: aihost:cpu_busiest_core_ratio:rate5m
         expr: max by (instance) (1 - rate(node_cpu_seconds_total{mode="idle"}[5m]))
 
+      # ---- model residency and faults -------------------------------------------------------------------
+      - record: aihost:llama_model_file_cache_residency:ratio
+        expr: aihost_llama_model_file_cached_bytes / aihost_llama_model_file_size_bytes
+      - record: aihost:llama_worker_major_faults:rate5m
+        expr: rate(aihost_llama_worker_major_faults_total[5m])
+
   - name: aihost_alerts
     rules:
       - alert: AihostGatewayDown

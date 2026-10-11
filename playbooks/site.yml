@@ -125,6 +125,8 @@
       tags:
         - site
         - foundation
+        - monitoring
+        - telemetry
 
     - name: Include node exporter role when enabled
       ansible.builtin.include_role:

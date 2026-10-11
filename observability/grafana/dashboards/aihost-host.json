@@ -2,6 +2,32 @@
   "description": "Host CPU, memory, disk and the two Arc GPUs. Decode on this machine is bound by a single CPU thread, so the busiest-core panel is the one that explains inference speed.",
   "editable": false,
   "graphTooltip": 1,
+  "links": [
+    {
+      "targetBlank": false,
+      "title": "Appliance Overview",
+      "type": "link",
+      "url": "/d/aihost-appliance-telemetry/aihost-appliance-and-gpu-telemetry"
+    },
+    {
+      "targetBlank": false,
+      "title": "Inference Drilldown",
+      "type": "link",
+      "url": "/d/aihost-inference/aihost-inference"
+    },
+    {
+      "targetBlank": false,
+      "title": "Host & GPU Drilldown",
+      "type": "link",
+      "url": "/d/aihost-host/aihost-host-and-gpu"
+    },
+    {
+      "targetBlank": false,
+      "title": "Stack Health",
+      "type": "link",
+      "url": "/d/observability-stack-health/observability-stack-infrastructure-health"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
@@ -47,7 +73,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
+        "w": 4,
         "x": 0,
         "y": 1
       },
@@ -109,8 +135,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 6,
+        "w": 4,
+        "x": 4,
         "y": 1
       },
       "id": 3,
@@ -137,7 +163,7 @@
           "refId": "A"
         }
       ],
-      "title": "Closest GPU temperature to a kernel limit",
+      "title": "Closest GPU temperature to limit",
       "type": "stat"
     },
     {
@@ -167,8 +193,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 12,
+        "w": 4,
+        "x": 8,
         "y": 1
       },
       "id": 4,
@@ -229,8 +255,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 6,
-        "x": 18,
+        "w": 4,
+        "x": 12,
         "y": 1
       },
       "id": 5,
@@ -261,6 +287,118 @@
       "type": "stat"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Seconds elapsed since the host kernel booted.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "time() - min(node_boot_time_seconds)",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Host uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Hardware frequency throttling state (0 = normal, 1 = throttled).",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "max(aihost_gpu_throttle_status)",
+          "legendFormat": "",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GPU throttle active",
+      "type": "stat"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -268,9 +406,9 @@
         "x": 0,
         "y": 9
       },
-      "id": 6,
+      "id": 8,
       "panels": [],
-      "title": "GPU",
+      "title": "Dual Intel Arc B65 GPUs",
       "type": "row"
     },
     {
@@ -301,7 +439,7 @@
         "x": 0,
         "y": 10
       },
-      "id": 7,
+      "id": 9,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -332,7 +470,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Whole-card power from the energy counter.",
+      "description": "Whole-card power from the energy counter versus configured card power cap.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -353,7 +491,7 @@
         "x": 12,
         "y": 10
       },
-      "id": 8,
+      "id": 10,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -371,12 +509,23 @@
           },
           "editorMode": "code",
           "expr": "aihost:gpu_power_watts:rate5m",
-          "legendFormat": "gpu{{gpu}}",
+          "legendFormat": "power gpu{{gpu}}",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_power_cap_watts",
+          "legendFormat": "cap gpu{{gpu}}",
+          "range": true,
+          "refId": "B"
         }
       ],
-      "title": "GPU power (W)",
+      "title": "GPU power (W) and cap",
       "type": "timeseries"
     },
     {
@@ -405,7 +554,7 @@
         "x": 0,
         "y": 18
       },
-      "id": 9,
+      "id": 11,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -436,7 +585,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Package and VRAM sensors with the kernel-reported critical limit.",
+      "description": "Package, VRAM, PCIe, and memory controller sensors with kernel-reported critical limits.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -457,7 +606,7 @@
         "x": 12,
         "y": 18
       },
-      "id": 10,
+      "id": 12,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -474,7 +623,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram\"}",
+          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram|pcie|mctrl\"}",
           "legendFormat": "{{sensor}} gpu{{gpu}}",
           "range": true,
           "refId": "A"
@@ -491,7 +640,7 @@
           "refId": "B"
         }
       ],
-      "title": "Temperature: package and VRAM vs limit",
+      "title": "Temperature: sensors vs limit",
       "type": "timeseries"
     },
     {
@@ -516,11 +665,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
         "y": 26
       },
-      "id": 11,
+      "id": 13,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -547,6 +696,145 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Hardware frequency throttle triggers from graphics tile registers (thermal and power limit throttling).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "max": 1,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 26
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_throttle_reason_thermal",
+          "legendFormat": "thermal throttle gpu{{gpu}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_throttle_reason_power",
+          "legendFormat": "power throttle gpu{{gpu}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Hardware throttle triggers",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "PCIe link width (active vs max capable) and link speed in GT/s.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 26
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_pcie_link_width",
+          "legendFormat": "active width x{{gpu}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_pcie_max_link_width",
+          "legendFormat": "max width x{{gpu}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_pcie_link_speed_gts",
+          "legendFormat": "speed GT/s gpu{{gpu}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "PCIe link width and speed",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -554,9 +842,9 @@
         "x": 0,
         "y": 34
       },
-      "id": 12,
+      "id": 16,
       "panels": [],
-      "title": "CPU, memory, disk",
+      "title": "Host CPU, Memory and Pressure",
       "type": "row"
     },
     {
@@ -587,7 +875,7 @@
         "x": 0,
         "y": 35
       },
-      "id": 13,
+      "id": 17,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -618,7 +906,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Available memory and its share of total.",
+      "description": "Available memory, total host memory, and active swap space in bytes.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -639,7 +927,7 @@
         "x": 12,
         "y": 35
       },
-      "id": 14,
+      "id": 18,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -671,9 +959,20 @@
           "legendFormat": "total",
           "range": true,
           "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes",
+          "legendFormat": "swap used",
+          "range": true,
+          "refId": "C"
         }
       ],
-      "title": "Memory available",
+      "title": "Memory available and swap",
       "type": "timeseries"
     },
     {
@@ -681,7 +980,158 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Free share of the root and model filesystems.",
+      "description": "Percentage of time tasks are stalled waiting for CPU, memory, or I/O resources (100 * rate of waiting seconds).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "min": 0,
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 43
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_pressure_cpu_waiting_seconds_total[5m]) * 100",
+          "legendFormat": "CPU PSI %",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_pressure_memory_waiting_seconds_total[5m]) * 100",
+          "legendFormat": "Memory PSI %",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_pressure_io_waiting_seconds_total[5m]) * 100",
+          "legendFormat": "I/O PSI %",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Linux PSI (Pressure Stall Information)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Share of model weights cached in OS page cache (0..1) and worker major page fault rate requiring disk reads. Note: kernel xe driver does not provide VRAM allocation; page-cache residency is the authoritative metric.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 43
+      },
+      "id": 20,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost:llama_model_file_cache_residency:ratio",
+          "legendFormat": "cache ratio",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost:llama_worker_major_faults:rate5m",
+          "legendFormat": "major faults/s",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Model file page-cache residency and faults",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 21,
+      "panels": [],
+      "title": "Host Disk, Network and Services",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Free share of the root and local-ai model filesystems.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -700,11 +1150,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 8,
         "x": 0,
-        "y": 43
+        "y": 52
       },
-      "id": 15,
+      "id": 22,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -735,6 +1185,247 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
+      "description": "Disk read and write throughput in bytes per second for physical storage.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 52
+      },
+      "id": 23,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (device) (rate(node_disk_read_bytes_total[5m]))",
+          "legendFormat": "read {{device}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (device) (rate(node_disk_written_bytes_total[5m]))",
+          "legendFormat": "write {{device}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Disk throughput (read / write)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Percentage of time physical disks were occupied servicing read or write requests.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 52
+      },
+      "id": 24,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (device) (rate(node_disk_io_time_seconds_total[5m])) * 100",
+          "legendFormat": "{{device}} io %",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Disk I/O time (% busy)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Network ingress and egress bandwidth on host interfaces.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 60
+      },
+      "id": 25,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_network_receive_bytes_total{device=~\"en.*|eth.*\"}[5m]) * 8",
+          "legendFormat": "Rx {{device}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_network_transmit_bytes_total{device=~\"en.*|eth.*\"}[5m]) * 8",
+          "legendFormat": "Tx {{device}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Network throughput (Rx / Tx)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Network packet receive and transmit error rate.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "pps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 60
+      },
+      "id": 26,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_network_receive_errs_total{device=~\"en.*|eth.*\"}[5m])",
+          "legendFormat": "Rx err {{device}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "rate(node_network_transmit_errs_total{device=~\"en.*|eth.*\"}[5m])",
+          "legendFormat": "Tx err {{device}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Network errors (Rx / Tx)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
       "description": "systemd state of the gateway, workers and console.",
       "fieldConfig": {
         "defaults": {
@@ -754,11 +1445,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 43
+        "w": 8,
+        "x": 16,
+        "y": 60
       },
-      "id": 16,
+      "id": 27,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -793,7 +1484,11 @@
   "templating": {
     "list": [
       {
-        "current": {},
+        "current": {
+          "selected": true,
+          "text": "VictoriaMetrics",
+          "value": "victoriametrics"
+        },
         "hide": 0,
         "label": "Prometheus",
         "name": "DS_PROMETHEUS",

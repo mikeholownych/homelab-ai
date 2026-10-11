@@ -24,6 +24,12 @@ have_promtool = Path(PROMTOOL).exists()
 NODE_METRICS = {
     "node_cpu_seconds_total", "node_memory_MemAvailable_bytes", "node_memory_MemTotal_bytes",
     "node_filesystem_avail_bytes", "node_filesystem_size_bytes", "node_systemd_unit_state",
+    "node_boot_time_seconds", "node_memory_SwapTotal_bytes", "node_memory_SwapFree_bytes",
+    "node_pressure_cpu_waiting_seconds_total", "node_pressure_memory_waiting_seconds_total",
+    "node_pressure_io_waiting_seconds_total", "node_disk_read_bytes_total", "node_disk_written_bytes_total",
+    "node_disk_io_time_seconds_total", "node_network_receive_bytes_total",
+    "node_network_transmit_bytes_total", "node_network_receive_errs_total",
+    "node_network_transmit_errs_total",
 }
 # Declared in the gateway registry but never emitted today (unused paths): a panel on
 # these would be permanently empty, which looks like "no problem" instead of "no data".

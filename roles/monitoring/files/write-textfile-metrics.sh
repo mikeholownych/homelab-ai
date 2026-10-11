@@ -51,6 +51,12 @@ cap_lines=""
 fan_lines=""
 idle_lines=""
 freq_lines=""
+throttle_lines=""
+throttle_thermal_lines=""
+throttle_power_lines=""
+pcie_width_lines=""
+pcie_max_width_lines=""
+pcie_speed_lines=""
 
 # One entry per xe GPU, ordered by PCI address so the `gpu` ordinal is stable across reboots (hwmonN is not).
 gpus="$(for d in "$HWMON_ROOT"/hwmon*; do
@@ -122,7 +128,34 @@ aihost_gpu_gt_idle_residency_seconds_total{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt
             freq_lines="$freq_lines
 aihost_gpu_actual_frequency_hertz{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"$(lbl "$gtn")\"} $(awk "BEGIN{print $(cat "$gt/freq0/act_freq")*1000000}")"
         fi
+        if [ -f "$gt/freq0/throttle/status" ]; then
+            throttle_lines="$throttle_lines
+aihost_gpu_throttle_status{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"$(lbl "$gtn")\"} $(cat "$gt/freq0/throttle/status")"
+        fi
+        if [ -f "$gt/freq0/throttle/reason_thermal" ]; then
+            throttle_thermal_lines="$throttle_thermal_lines
+aihost_gpu_throttle_reason_thermal{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"$(lbl "$gtn")\"} $(cat "$gt/freq0/throttle/reason_thermal")"
+        fi
+        if [ -f "$gt/freq0/throttle/reason_pl1" ]; then
+            throttle_power_lines="$throttle_power_lines
+aihost_gpu_throttle_reason_power{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"$(lbl "$gtn")\"} $(cat "$gt/freq0/throttle/reason_pl1")"
+        fi
     done
+    if [ -f "$PCI_ROOT/$bdf/current_link_width" ]; then
+        pcie_width_lines="$pcie_width_lines
+aihost_gpu_pcie_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$PCI_ROOT/$bdf/current_link_width")"
+    fi
+    if [ -f "$PCI_ROOT/$bdf/max_link_width" ]; then
+        pcie_max_width_lines="$pcie_max_width_lines
+aihost_gpu_pcie_max_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$PCI_ROOT/$bdf/max_link_width")"
+    fi
+    if [ -f "$PCI_ROOT/$bdf/current_link_speed" ]; then
+        speed="$(awk '{print $1}' "$PCI_ROOT/$bdf/current_link_speed" 2>/dev/null || true)"
+        if [ -n "$speed" ]; then
+            pcie_speed_lines="$pcie_speed_lines
+aihost_gpu_pcie_link_speed_gts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $speed"
+        fi
+    fi
     ord=$((ord + 1))
 done <<EOF_GPUS
 $gpus
@@ -213,6 +246,12 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
     family aihost_gpu_fan_speed_rpm gauge "GPU fan speed in revolutions per minute." "$fan_lines"
     family aihost_gpu_gt_idle_residency_seconds_total counter "Cumulative seconds a GPU graphics tile spent in RC6 idle; 1 - rate() is utilisation." "$idle_lines"
     family aihost_gpu_actual_frequency_hertz gauge "Actual graphics tile frequency in hertz." "$freq_lines"
+    family aihost_gpu_throttle_status gauge "GPU graphics tile throttling status (0=normal, 1=throttled)." "$throttle_lines"
+    family aihost_gpu_throttle_reason_thermal gauge "GPU throttling due to thermal condition (0=no, 1=yes)." "$throttle_thermal_lines"
+    family aihost_gpu_throttle_reason_power gauge "GPU throttling due to power limit (0=no, 1=yes)." "$throttle_power_lines"
+    family aihost_gpu_pcie_link_width gauge "Current PCIe link width." "$pcie_width_lines"
+    family aihost_gpu_pcie_max_link_width gauge "Maximum supported PCIe link width." "$pcie_max_width_lines"
+    family aihost_gpu_pcie_link_speed_gts gauge "Current PCIe link speed in GT/s." "$pcie_speed_lines"
     family aihost_llama_worker_major_faults_total counter "Major page faults of one llama.cpp worker process; a rising rate means mapped weights are being read back from disk." "$fault_lines"
     family aihost_llama_worker_resident_file_bytes gauge "File-backed resident memory of one llama.cpp worker process (mapped model weights in use) in bytes." "$rss_file_lines"
     family aihost_llama_model_file_size_bytes gauge "Size of one model file memory-mapped by a llama.cpp worker in bytes." "$model_size_lines"
@@ -240,3 +279,15 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
 } >"$TMP"
 
 mv "$TMP" "$OUT_FILE"
+
+# Bridge local orchestrator gateway metrics into textfile collection when available.
+GATEWAY_METRICS_URL="${MONITORING_GATEWAY_METRICS_URL:-http://127.0.0.1:8010/metrics}"
+GATEWAY_FILE="$OUT_DIR/gateway.prom"
+if [ -n "$GATEWAY_METRICS_URL" ] && command -v curl >/dev/null 2>&1; then
+    TMP_GW="$GATEWAY_FILE.$$"
+    if curl -s -f -m 3 "$GATEWAY_METRICS_URL" >"$TMP_GW" 2>/dev/null; then
+        mv "$TMP_GW" "$GATEWAY_FILE"
+    else
+        rm -f "$TMP_GW"
+    fi
+fi
