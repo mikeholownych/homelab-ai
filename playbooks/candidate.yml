@@ -80,7 +80,8 @@
         - name: Converge the gateway
           ansible.builtin.include_role:
             name: orchestrator_gateway
-        # Drill hook (default off): fail after the swap fully converged, the worst point, to prove the rescue.
+        # Drill hook (default off): fail after the swap fully converged, a demanding recovery case; partial-swap
+        # failures can leave other states behind and are not proven by this drill.
         - name: Drill a failure after the swap
           ansible.builtin.fail:
             msg: candidate_drill_fail_after_swap is set
