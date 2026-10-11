@@ -173,3 +173,53 @@ def test_llama_workers_report_faults_residency_and_page_cache_of_mapped_weights(
     assert 'aihost_llama_model_file_cached_bytes{port="8003",file="weights-00001-of-00002.gguf"} 40960' in text
     assert 'port="9000"' not in text
     assert 'aihost_llama_worker_resident_file_bytes{port="8001"}' not in text
+
+
+def test_gpu_vram_total_and_worker_resident_metrics(tmp_path):
+    proc = tmp_path / "proc"
+    hw, pci = tmp_path / "hwmon", tmp_path / "pci"
+    _gpu(hw, pci, "hwmon3", "0000:51:00.0", {"pkg": 30000, "vram": 32000, "vram_ch_0": 31000}, 12_345_678, 3504771, 2400)
+    _gpu(hw, pci, "hwmon4", "0000:93:00.0", {"pkg": 38000, "vram": 40000, "vram_ch_0": 36000}, 2_000_000, 1000, 1200)
+
+    # BAR2 32 GiB aperture in /sys/bus/pci/devices/<bdf>/resource:
+    bar2_line = "0x0000003800000000 0x0000003fffffffff 0x000000000014220c\n"
+    (pci / "0000:51:00.0/resource").write_text(f"0x0 0x0 0x0\n{bar2_line}")
+    (pci / "0000:93:00.0/resource").write_text(f"0x0 0x0 0x0\n{bar2_line}")
+
+    _worker(proc, 1001, "llama-server", "8000", 5, 1000, b"\0" * 4096)
+    _worker(proc, 1002, "llama-server", "8001", 8, 1000, b"\0" * 4096)
+
+    # DRM fdinfo for worker 1 (port 8000 on GPU 0) and worker 2 (port 8001 on GPU 1):
+    fd1 = proc / "1001/fdinfo"
+    fd1.mkdir()
+    (fd1 / "3").write_text("pos:\t0\ndrm-driver:\txe\ndrm-pdev:\t0000:51:00.0\ndrm-resident-vram0:\t23343984 KiB\n")
+
+    fd2 = proc / "1002/fdinfo"
+    fd2.mkdir()
+    (fd2 / "3").write_text("pos:\t0\ndrm-driver:\txe\ndrm-pdev:\t0000:93:00.0\ndrm-resident-vram0:\t32922788 KiB\n")
+
+    out = tmp_path / "out"
+    env_file = tmp_path / "monitoring.env"
+    env_file.write_text(f"MONITORING_METRICS_TEXTFILE_DIR={out}\nMONITORING_LOG_DIR={tmp_path}/log\nMONITORING_ALERT_LOG_DIR={tmp_path}/a\n"
+                        f"MONITORING_GPU_TEMP_STATE_DIR={tmp_path}/state\n")
+
+    subprocess.run(["sh", str(SCRIPT)], check=True, capture_output=True, text=True,
+                   env={**os.environ, "AIHOST_MONITORING_ENV": str(env_file), "AIHOST_HWMON_ROOT": str(hw),
+                        "AIHOST_PCI_ROOT": str(pci), "AIHOST_PROC_ROOT": str(proc)})
+    text = (out / "gpu.prom").read_text()
+    types = validate_exposition(text)
+    assert types["aihost_gpu_vram_total_bytes"] == "gauge"
+    assert types["aihost_gpu_vram_used_bytes"] == "gauge"
+    assert types["aihost_llama_worker_vram_resident_bytes"] == "gauge"
+
+    assert 'aihost_gpu_vram_total_bytes{gpu="0",bdf="0000:51:00.0"} 34359738368' in text
+    assert 'aihost_gpu_vram_total_bytes{gpu="1",bdf="0000:93:00.0"} 34359738368' in text
+
+    # 23343984 KiB = 23904239616 bytes
+    assert 'aihost_llama_worker_vram_resident_bytes{port="8000",bdf="0000:51:00.0"} 23904239616' in text
+    assert 'aihost_gpu_vram_used_bytes{gpu="0",bdf="0000:51:00.0"} 23904239616' in text
+
+    # 32922788 KiB = 33712934912 bytes
+    assert 'aihost_llama_worker_vram_resident_bytes{port="8001",bdf="0000:93:00.0"} 33712934912' in text
+    assert 'aihost_gpu_vram_used_bytes{gpu="1",bdf="0000:93:00.0"} 33712934912' in text
+

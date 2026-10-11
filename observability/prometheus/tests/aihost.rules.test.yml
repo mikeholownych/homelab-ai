@@ -239,3 +239,17 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, worker_id: w2, pool: deep, engine: llama.cpp}
             exp_annotations: {summary: "w2 has requests waiting for a free slot (sustained queueing)"}
+
+  - name: gpu vram usage ratio computes used divided by total per gpu
+    interval: 1m
+    input_series:
+      - series: 'aihost_gpu_vram_used_bytes{gpu="0",bdf="0000:51:00.0"}'
+        values: '16000000000x10'
+      - series: 'aihost_gpu_vram_total_bytes{gpu="0",bdf="0000:51:00.0"}'
+        values: '32000000000x10'
+    promql_expr_test:
+      - expr: aihost:gpu_vram_usage_ratio:ratio
+        eval_time: 5m
+        exp_samples:
+          - labels: 'aihost:gpu_vram_usage_ratio:ratio{gpu="0",bdf="0000:51:00.0"}'
+            value: 0.5

@@ -189,6 +189,14 @@ def host() -> dict:
                   ("aihost_gpu_slot_pcie_link_speed_gts", "GPU {{gpu}} physical slot speed GT/s"),
                   ("aihost_gpu_pcie_link_width", "GPU {{gpu}} internal endpoint width"),
                   ("aihost_gpu_pcie_link_speed_gts", "GPU {{gpu}} internal endpoint speed GT/s")], unit="short", w=8)
+    b.timeseries("GPU VRAM allocation and worker residency",
+                 "Resident GPU VRAM allocated by llama.cpp workers via kernel xe DRM fdinfo versus total physical VRAM (BAR2 32 GiB aperture).",
+                 [("aihost_gpu_vram_used_bytes", "GPU {{gpu}} VRAM used"),
+                  ("aihost_gpu_vram_total_bytes", "GPU {{gpu}} VRAM total"),
+                  ("aihost_llama_worker_vram_resident_bytes", "Worker port {{port}} resident")], unit="bytes", w=12, h=8)
+    b.timeseries("GPU VRAM utilization ratio",
+                 "Share of physical GPU VRAM allocated to inference workloads.",
+                 [("aihost:gpu_vram_usage_ratio:ratio", "GPU {{gpu}} ({{bdf}})")], unit="percentunit", min_=0, max_=1, w=12, h=8)
 
     b.row("Host CPU, Memory and Pressure")
     b.timeseries("CPU busy per core", "Per-core busy share. One core near 100% while the rest idle is the single-thread decode bottleneck.",
@@ -199,7 +207,7 @@ def host() -> dict:
                  [("rate(node_pressure_cpu_waiting_seconds_total[5m]) * 100", "CPU PSI %"),
                   ("rate(node_pressure_memory_waiting_seconds_total[5m]) * 100", "Memory PSI %"),
                   ("rate(node_pressure_io_waiting_seconds_total[5m]) * 100", "I/O PSI %")], unit="percent", min_=0)
-    b.timeseries("Model file page-cache residency and faults", "Share of model weights cached in OS page cache (0..1) and worker major page fault rate requiring disk reads. Note: kernel xe driver does not provide VRAM allocation; page-cache residency is the authoritative metric.",
+    b.timeseries("Model file page-cache residency and faults", "Share of model weights cached in host OS page cache (0..1) and worker major page fault rate requiring disk reads. Complements GPU VRAM allocation with host-side page-cache visibility.",
                  [("aihost:llama_model_file_cache_residency:ratio", "cache ratio"), ("aihost:llama_worker_major_faults:rate5m", "major faults/s")], unit="short")
 
     b.row("Host Disk, Network and Services")

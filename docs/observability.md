@@ -160,7 +160,7 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 | | Telemetry freshness | `time() - aihost_metrics_last_success_timestamp_seconds` | Appliance Overview: Panel 20; Host: Panel 5 | Verified live (<60s freshness). |
 | | Actionable alerts list | `ALERTS{alertstate="firing"}`, `alertlist` | Appliance Overview: Panels 8, 18 | Verified live. |
 | **2. GPU Health & Capacity** | Utilization (awake share) | `aihost:gpu_utilization_ratio:rate5m` | Host & GPU: Panel 8; Appliance: Panel 12 | Verified live (1 - RC6 idle residency). |
-| | Memory allocation | `aihost_llama_model_file_cached_bytes`, `aihost_llama_worker_resident_file_bytes` | Host & GPU: Panel 17; Appliance: Panel 14 | **Known Limitation:** Kernel `xe` driver does not support driver-level VRAM allocation without xpumd. Memory is authoritatively tracked via mapped page cache and RSS. |
+| | Memory allocation | `aihost_gpu_vram_used_bytes`, `aihost_gpu_vram_total_bytes`, `aihost_llama_worker_vram_resident_bytes`, `aihost:gpu_vram_usage_ratio:ratio` | Host & GPU: Panels 16-17; Appliance: Panels 20-21 | Verified live via Linux kernel `xe` DRM fdinfo and PCI BAR2 aperture. Worker 1 allocates 23.90 GB (69.6%) on GPU 0; Worker 2 allocates 33.71 GB (98.1%) on GPU 1. |
 | | Power, energy, and caps | `aihost:gpu_power_watts:rate5m`, `aihost_gpu_power_cap_watts`, `aihost:joules_per_generated_token_incl_idle:rate15m` | Host & GPU: Panels 9-10; Appliance: Panel 3 | Verified live. |
 | | Per-sensor temps & limits | `aihost_gpu_temperature_celsius`, `aihost_gpu_temperature_limit_celsius`, `headroom` | Host & GPU: Panels 3, 11; Appliance: Panels 1-2, 10 | Verified live across pkg, vram, pcie, mctrl. |
 | | Hardware throttling | `aihost_gpu_throttle_status`, `throttle_reason_thermal`, `throttle_reason_power` | Host & GPU: Panels 7, 13; Appliance: Panel 25 | Verified live from sysfs tile registers. |
@@ -201,9 +201,16 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 
 ### Operational Boundaries & Limitations
 
-1. **GPU Driver VRAM Telemetry (Intel Arc B65) vs Host DRAM:**
-   - The Linux kernel `xe` driver does not provide driver-level VRAM allocation statistics via sysfs or Level Zero without `xpumd` (Intel XPU Manager).
-   - *Host vs GPU Memory Qualification:* Dashboards observe host system DRAM occupancy (where mmap'd GGUF weights reside and get mapped into SYCL Level Zero USM device memory) via OS page-cache residency (`aihost:llama_model_file_cache_residency:ratio`) and worker RSS (`aihost_llama_worker_resident_file_bytes`). These host metrics do **not** measure device-local GPU VRAM allocation or on-card memory bus saturation. GPU VRAM occupancy remains an explicit hardware/driver observability gap.
+1. **GPU Driver-Level VRAM Allocation (Intel Arc B65) Closed via Linux DRM fdinfo:**
+   - Previous status identified GPU VRAM allocation as a driver gap requiring `xpumd` (Intel XPU Manager).
+   - *Discovery & Implementation:* The Linux kernel `xe` driver exposes exact client VRAM allocations via DRM process fdinfo (`/proc/<pid>/fdinfo/<fd>`) with fields `drm-pdev`, `drm-resident-vram0` (in KiB), and `drm-total-vram0`. Physical on-card memory capacity is determined from the PCI BAR2 prefetchable memory aperture size in `/sys/bus/pci/devices/<bdf>/resource` (32 GiB / 34,359,738,368 bytes).
+   - *Telemetry Emitted:*
+     - `aihost_gpu_vram_total_bytes{gpu, bdf}`: Total physical on-card VRAM (34,359,738,368 bytes).
+     - `aihost_gpu_vram_used_bytes{gpu, bdf}`: Resident VRAM allocated across workers on that GPU.
+     - `aihost_llama_worker_vram_resident_bytes{port, bdf}`: Resident VRAM allocated by each worker process.
+     - `aihost:gpu_vram_usage_ratio:ratio`: Evaluated recording rule tracking per-GPU VRAM utilization.
+   - *Live Measured State:* Worker 1 on port 8000 allocates 23,904,239,616 bytes (~22.26 GiB, 69.57%) on GPU 0; Worker 2 on port 8001 allocates 33,712,939,008 bytes (~31.40 GiB, 98.12%) on GPU 1.
+   - *Dashboards:* Dedicated panels added to both `aihost-host` (Panels 16 & 17) and `aihost-appliance-telemetry` (Panels 20 & 21). This completely closes the GPU memory observability gap.
 2. **PCIe Link Capabilities, Upstream Topology & Negotiated Status:**
    - Raw PCI tree inspection (`lspci -tv`) reveals a multi-tier topology:
      - *Host Root Ports:* `0000:4e:00.0` (for GPU 0) and `0000:90:00.0` (for GPU 1) are Dell Precision 5820 C422/Skylake-E root ports operating at **Speed 8GT/s, Width x16** (PCIe Gen3 x16).
@@ -218,9 +225,10 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 4. **Distributed Tracing Pipeline Boundary:**
    - The backend tracing pipeline (Alloy OTLP ingestion on `:4317`/`:4318`, Tempo storage on `:3200`, and VictoriaMetrics service graph generation) is verified.
    - *Operational Consequence:* In-process instrumentation across Nexus, the orchestrator gateway, and llama.cpp workers remains an unproven boundary. Telemetry spans demonstrate backend pipeline and correlation capability, not native production inference tracing. Trace panels remain unpopulated during normal production inference.
-5. **Alert Notification Delivery:**
+5. **Alert Notification Delivery Sink (Implemented & Verified):**
    - Alerts are actively evaluated in `vmalert` every 15s and queryable via `ALERTS`.
-   - *Operational Consequence:* Notifications are dispatched solely to local audit logs (`/var/log/local-ai/alerts/`) and loopback endpoints. External paging integrations (PagerDuty, Slack, SMTP) are intentionally unconfigured to prevent false-alarm pages during automated GPU baseline sweeps and stress benchmarks. Consequently, firing alerts will **not** page on-call personnel; alerting requires operators actively monitoring Grafana dashboards or inspecting local alert logs.
+   - *Local Delivery Sink Implemented & Verified:* On `ai-5820-01`, `/etc/local-ai/alert.env` is configured with `AIHOST_ALERT_COMMAND=/usr/local/libexec/local-ai-alert-sink`. The delivery sink script `/usr/local/libexec/local-ai-alert-sink` receives unit name, ISO timestamp, and context via argv expansion (preventing shell injection) and records verified delivery entries to `/var/log/local-ai/alerts/audit.log`. Delivery was verified end-to-end using synthetic probe event `verification-delivery-check`.
+   - *Operational Consequence:* Notifications are delivered exclusively to local audit logs (`/var/log/local-ai/alerts/audit.log`) and local journal logs. External paging integrations (PagerDuty, Slack, SMTP) remain intentionally unconfigured to prevent false-alarm pages during automated GPU baseline sweeps and stress benchmarks. Consequently, firing alerts will **not** page on-call personnel; alerting requires operators actively monitoring Grafana dashboards or inspecting local alert audit logs.
 6. **Reconciliation Timer Pause Authorization & Resumption:**
    - `aihost_reconciliation_timer_active` reporting `0` indicates that `scheduled_ansible_reconcile_enabled` is set to `false` in `inventory/production/host_vars/ai-5820-01.yml`.
    - *Authorization:* Configured by Mike Holownych (commit `6a039cca`) to protect the live dual-worker inference topology and long-running GPU evaluations against unintended configuration overwrites from unconstrained `site.yml` runs.
@@ -236,8 +244,30 @@ All dashboards include top-level cross-navigation links enabling immediate drill
    - Worker 1 (`b0-live-llama-worker1`): GPU 0 (`0000:51:00.0`), port 8000, model **`Qwen3.6-35B-A3B-UD-Q4_K_M`**, alias `Qwen3.6-35B-A3B-UD-Q4_K_M`, reasoning budget 8192 (`engineering/lead-reasoning`).
    - Worker 2 (`b0-live-llama-deep-worker2`): GPU 1 (`0000:93:00.0`), port 8001, model **`Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`**, alias `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`, reasoning budget 4096.
 9. **Quality Gates & Hosted CI Verification:**
-   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1171 passed) pass cleanly.
+   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1172 passed) pass cleanly.
    - *Hosted GitHub Actions CI:*
      - Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` **PASSED** in 15m 19s.
      - Workflow `quality.yml` (Run ID `38113136143`) on commit `6d95874` **PASSED** in 13m 04s.
      - Workflow `quality.yml` (Run ID `38113648179`) on commit `1ad1170` **PASSED** in 14m 09s.
+     - Workflow `quality.yml` (Run ID `38115197818`) on commit `b4a6155` **PASSED** in 13m 56s.
+
+### 4. Concrete Operational Proposals
+
+#### Proposal A: Native In-Process Distributed Tracing Instrumentation
+- **Current State:** The backend tracing pipeline (Alloy OTLP ingestion on `:4317`/`:4318`, Tempo trace storage on `:3200`, and Loki log correlation with derived `TraceID`) is fully functional. Constructed telemetry spans demonstrated the pipeline. However, native in-process instrumentation across the client, gateway, and worker processes is unproven, so panels remain unpopulated during normal production inference.
+- **Proposed Architecture:**
+  1. *Gateway ASGI Middleware:* In `orchestrator_gateway`, add OpenTelemetry FastAPI middleware (`opentelemetry-instrumentation-fastapi`) to automatically generate root trace spans for incoming `POST /v1/chat/completions` requests.
+  2. *Request Span Attributes:* Enrich root spans with request attributes: `client_id`, `route_selected` (`engineering/lead-reasoning` vs general), `model_requested`, and token counts.
+  3. *Downstream Context Propagation:* In the gateway's `httpx` worker client, inject W3C standard `traceparent` and `tracestate` headers into HTTP requests forwarded to `b0-live-llama-worker1` (port 8000) and `b0-live-llama-deep-worker2` (port 8001).
+  4. *Log-Trace Correlation:* Log messages emitted by `orchestrator_gateway` and `llama-server` will include the trace ID (`trace_id=<hex>`), enabling Loki's configured `derivedFields` to link log entries directly to Tempo spans with 1-click Grafana navigation.
+  5. *OTLP Exporter:* Configure OpenTelemetry `BatchSpanProcessor` with `OTLPSpanExporter` pointing to loopback Alloy OTLP gRPC endpoint `127.0.0.1:4317`.
+  6. *Deployment & Safety:* Implement behind feature flag `gateway_tracing_enabled: false` (default disabled). Staged for deployment during an authorized maintenance window without interrupting running inference.
+
+#### Proposal B: Reconciliation Timer Safe Resumption Plan
+- **Current State:** Scheduled Ansible reconciliation is paused (`scheduled_ansible_reconcile_enabled: false` in `inventory/production/host_vars/ai-5820-01.yml`, authorized by Mike Holownych `6a039cca`) because `/opt/local-ai` lacks the repository snapshot, and running unconstrained `site.yml` risks reverting the live dual-worker topology (`Qwen3.6-35B-A3B` on GPU 0 and `Qwen3.8-Flash-Next` on GPU 1).
+- **Proposed Resumption Path:**
+  1. *Step 1 (Snapshot Staging):* Deploy a verified repository snapshot of `aihost` to `/opt/local-ai/repo-snapshot` on `ai-5820-01`.
+  2. *Step 2 (Scoped Playbook Execution):* Modify `aihost-reconcile.service.j2` so `ExecStart` invokes `playbooks/inference.yml` and `playbooks/drift-check.yml` instead of the top-level `site.yml`.
+  3. *Step 3 (Topology Alignment):* Align `host_vars/ai-5820-01.yml` with the live dual-worker configuration (`b0-live-llama-worker1` on port 8000 / GPU 0, `b0-live-llama-deep-worker2` on port 8001 / GPU 1) so reconciliation evaluates to `changed=0`.
+  4. *Step 4 (Check Mode Dry-Run):* Execute `ansible-playbook --check` on `ai-5820-01` to confirm zero unintended changes.
+  5. *Step 5 (Timer Resumption):* Set `scheduled_ansible_reconcile_enabled: true` and start `aihost-reconcile.timer`.

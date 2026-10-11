@@ -60,6 +60,75 @@ pcie_speed_lines=""
 pcie_slot_width_lines=""
 pcie_slot_max_width_lines=""
 pcie_slot_speed_lines=""
+vram_total_lines=""
+vram_used_lines=""
+worker_vram_lines=""
+fault_lines=""
+rss_file_lines=""
+model_size_lines=""
+model_cached_lines=""
+
+# llama.cpp workers memory-map their GGUF weights (Flash-Next maps far more than it keeps resident), so a page-cache
+# eviction turns into major faults and stalls on the next request. Observed per worker, identified by its --port:
+# faults and file-backed residency of the process, how much of each mapped model file the page cache holds,
+# and resident GPU VRAM allocation from Linux DRM fdinfo.
+PROC_ROOT="${AIHOST_PROC_ROOT:-/proc}"
+for p in "$PROC_ROOT"/[0-9]*; do
+    [ "$(cat "$p/comm" 2>/dev/null)" = "llama-server" ] || continue
+    port="$(tr '\0' '\n' <"$p/cmdline" 2>/dev/null | awk 'prev == "--port" {print; exit} {prev = $0}')"
+    [ -n "$port" ] || continue
+    port="$(lbl "$port")"
+    majflt="$(sed 's/^.*) //' "$p/stat" 2>/dev/null | awk '{print $10}')"
+    [ -n "$majflt" ] && fault_lines="$fault_lines
+aihost_llama_worker_major_faults_total{port=\"$port\"} $majflt"
+    rss_file="$(awk '/^RssFile:/ {print $2 * 1024}' "$p/status" 2>/dev/null || true)"
+    [ -n "$rss_file" ] && rss_file_lines="$rss_file_lines
+aihost_llama_worker_resident_file_bytes{port=\"$port\"} $rss_file"
+    if [ -d "$p/fdinfo" ]; then
+        worker_vram_info="$(awk '
+            FNR == 1 {
+                if (pdev && vram > 0) {
+                    if (vram > max_vram[pdev]) max_vram[pdev] = vram
+                }
+                pdev = ""; vram = 0
+            }
+            /^drm-pdev:/ { pdev = $2 }
+            /^drm-resident-vram0:/ { vram = $2 * 1024 }
+            END {
+                if (pdev && vram > 0) {
+                    if (vram > max_vram[pdev]) max_vram[pdev] = vram
+                }
+                for (d in max_vram) {
+                    printf "%s %.0f\n", d, max_vram[d]
+                }
+            }
+        ' "$p"/fdinfo/* 2>/dev/null || true)"
+        if [ -n "$worker_vram_info" ]; then
+            while read -r wpdev wvram; do
+                [ -n "$wpdev" ] && [ -n "$wvram" ] || continue
+                worker_vram_lines="$worker_vram_lines
+aihost_llama_worker_vram_resident_bytes{port=\"$port\",bdf=\"$(lbl "$wpdev")\"} $wvram"
+            done <<EOF_VRAM
+$worker_vram_info
+EOF_VRAM
+        fi
+    fi
+    command -v fincore >/dev/null 2>&1 || continue
+    while read -r f; do
+        [ -n "$f" ] || continue
+        # The path is as the container sees it; the process's own root resolves it on the host.
+        res_size="$(fincore --bytes --noheadings --output RES,SIZE "$p/root$f" 2>/dev/null || true)"
+        res="$(printf '%s' "$res_size" | awk 'NF == 2 {print $1}')"
+        size="$(printf '%s' "$res_size" | awk 'NF == 2 {print $2}')"
+        if [ -z "$res" ] || [ -z "$size" ]; then continue; fi
+        model_cached_lines="$model_cached_lines
+aihost_llama_model_file_cached_bytes{port=\"$port\",file=\"$(lbl "$(basename "$f")")\"} $res"
+        model_size_lines="$model_size_lines
+aihost_llama_model_file_size_bytes{port=\"$port\",file=\"$(lbl "$(basename "$f")")\"} $size"
+    done <<EOF_MAPS
+$(awk '$6 ~ /[.]gguf$/ {print $6}' "$p/maps" 2>/dev/null | sort -u)
+EOF_MAPS
+done
 
 # One entry per xe GPU, ordered by PCI address so the `gpu` ordinal is stable across reboots (hwmonN is not).
 gpus="$(for d in "$HWMON_ROOT"/hwmon*; do
@@ -177,46 +246,37 @@ aihost_gpu_slot_pcie_max_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$
 aihost_gpu_slot_pcie_link_speed_gts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $slot_speed"
         fi
     fi
+    # Total on-card physical VRAM (BAR2 aperture size from PCI resource, e.g. 32 GiB on B65):
+    if [ -f "$PCI_ROOT/$bdf/resource" ]; then
+        vram_total="$(awk '
+            {
+                start = strtonum($1); end = strtonum($2)
+                if (end >= start) {
+                    size = end - start + 1
+                    if (size >= 1073741824 && size > max_size) max_size = size
+                }
+            }
+            END { if (max_size > 0) printf "%.0f", max_size }
+        ' "$PCI_ROOT/$bdf/resource" 2>/dev/null || true)"
+        if [ -n "$vram_total" ] && [ "$vram_total" -gt 0 ] 2>/dev/null; then
+            vram_total_lines="$vram_total_lines
+aihost_gpu_vram_total_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $vram_total"
+            # Aggregate resident VRAM across workers for this GPU:
+            vram_used="$(printf '%s\n' "$worker_vram_lines" | awk -v target="$(lbl "$bdf")" '
+                index($0, "bdf=\"" target "\"") {
+                    split($0, parts, " ")
+                    total += parts[2]
+                }
+                END { printf "%.0f", total }
+            ')"
+            vram_used_lines="$vram_used_lines
+aihost_gpu_vram_used_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} ${vram_used:-0}"
+        fi
+    fi
     ord=$((ord + 1))
 done <<EOF_GPUS
 $gpus
 EOF_GPUS
-
-# llama.cpp workers memory-map their GGUF weights (Flash-Next maps far more than it keeps resident), so a page-cache
-# eviction turns into major faults and stalls on the next request. Observed per worker, identified by its --port:
-# faults and file-backed residency of the process, and how much of each mapped model file the page cache holds.
-PROC_ROOT="${AIHOST_PROC_ROOT:-/proc}"
-fault_lines=""
-rss_file_lines=""
-model_size_lines=""
-model_cached_lines=""
-for p in "$PROC_ROOT"/[0-9]*; do
-    [ "$(cat "$p/comm" 2>/dev/null)" = "llama-server" ] || continue
-    port="$(tr '\0' '\n' <"$p/cmdline" 2>/dev/null | awk 'prev == "--port" {print; exit} {prev = $0}')"
-    [ -n "$port" ] || continue
-    port="$(lbl "$port")"
-    majflt="$(sed 's/^.*) //' "$p/stat" 2>/dev/null | awk '{print $10}')"
-    [ -n "$majflt" ] && fault_lines="$fault_lines
-aihost_llama_worker_major_faults_total{port=\"$port\"} $majflt"
-    rss_file="$(awk '/^RssFile:/ {print $2 * 1024}' "$p/status" 2>/dev/null || true)"
-    [ -n "$rss_file" ] && rss_file_lines="$rss_file_lines
-aihost_llama_worker_resident_file_bytes{port=\"$port\"} $rss_file"
-    command -v fincore >/dev/null 2>&1 || continue
-    while read -r f; do
-        [ -n "$f" ] || continue
-        # The path is as the container sees it; the process's own root resolves it on the host.
-        res_size="$(fincore --bytes --noheadings --output RES,SIZE "$p/root$f" 2>/dev/null || true)"
-        res="$(printf '%s' "$res_size" | awk 'NF == 2 {print $1}')"
-        size="$(printf '%s' "$res_size" | awk 'NF == 2 {print $2}')"
-        if [ -z "$res" ] || [ -z "$size" ]; then continue; fi
-        model_cached_lines="$model_cached_lines
-aihost_llama_model_file_cached_bytes{port=\"$port\",file=\"$(lbl "$(basename "$f")")\"} $res"
-        model_size_lines="$model_size_lines
-aihost_llama_model_file_size_bytes{port=\"$port\",file=\"$(lbl "$(basename "$f")")\"} $size"
-    done <<EOF_MAPS
-$(awk '$6 ~ /[.]gguf$/ {print $6}' "$p/maps" 2>/dev/null | sort -u)
-EOF_MAPS
-done
 
 case "$sev" in
     2) severity="critical" ;;
@@ -280,6 +340,9 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
     family aihost_llama_worker_resident_file_bytes gauge "File-backed resident memory of one llama.cpp worker process (mapped model weights in use) in bytes." "$rss_file_lines"
     family aihost_llama_model_file_size_bytes gauge "Size of one model file memory-mapped by a llama.cpp worker in bytes." "$model_size_lines"
     family aihost_llama_model_file_cached_bytes gauge "Bytes of one mapped model file held in the host page cache; cached / size is its residency." "$model_cached_lines"
+    family aihost_gpu_vram_total_bytes gauge "Total physical GPU VRAM in bytes (BAR2 prefetchable aperture)." "$vram_total_lines"
+    family aihost_gpu_vram_used_bytes gauge "Current resident GPU VRAM allocated across workers in bytes." "$vram_used_lines"
+    family aihost_llama_worker_vram_resident_bytes gauge "Current resident GPU VRAM allocated by a llama.cpp worker in bytes (from kernel xe DRM fdinfo)." "$worker_vram_lines"
 
     echo "# HELP aihost_gpu_thermal_severity Cross-device peak severity (0=ok, 1=warning, 2=critical) vs monitoring thresholds."
     echo "# TYPE aihost_gpu_thermal_severity gauge"

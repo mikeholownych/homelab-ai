@@ -846,14 +846,142 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Resident GPU VRAM allocated by llama.cpp workers via kernel xe DRM fdinfo versus total physical VRAM (BAR2 32 GiB aperture).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_vram_used_bytes",
+          "legendFormat": "GPU {{gpu}} VRAM used",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_gpu_vram_total_bytes",
+          "legendFormat": "GPU {{gpu}} VRAM total",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_llama_worker_vram_resident_bytes",
+          "legendFormat": "Worker port {{port}} resident",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "GPU VRAM allocation and worker residency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Share of physical GPU VRAM allocated to inference workloads.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "max": 1,
+          "min": 0,
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost:gpu_vram_usage_ratio:ratio",
+          "legendFormat": "GPU {{gpu}} ({{bdf}})",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "GPU VRAM utilization ratio",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 42
       },
-      "id": 16,
+      "id": 18,
       "panels": [],
       "title": "Host CPU, Memory and Pressure",
       "type": "row"
@@ -884,9 +1012,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 43
       },
-      "id": 17,
+      "id": 19,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -936,9 +1064,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 43
       },
-      "id": 18,
+      "id": 20,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1011,9 +1139,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 43
+        "y": 51
       },
-      "id": 19,
+      "id": 21,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1066,7 +1194,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Share of model weights cached in OS page cache (0..1) and worker major page fault rate requiring disk reads. Note: kernel xe driver does not provide VRAM allocation; page-cache residency is the authoritative metric.",
+      "description": "Share of model weights cached in host OS page cache (0..1) and worker major page fault rate requiring disk reads. Complements GPU VRAM allocation with host-side page-cache visibility.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -1085,9 +1213,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 43
+        "y": 51
       },
-      "id": 20,
+      "id": 22,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1130,9 +1258,9 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 59
       },
-      "id": 21,
+      "id": 23,
       "panels": [],
       "title": "Host Disk, Network and Services",
       "type": "row"
@@ -1163,9 +1291,9 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 52
+        "y": 60
       },
-      "id": 22,
+      "id": 24,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1215,9 +1343,9 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 52
+        "y": 60
       },
-      "id": 23,
+      "id": 25,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1278,9 +1406,9 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 52
+        "y": 60
       },
-      "id": 24,
+      "id": 26,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1330,9 +1458,9 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 60
+        "y": 68
       },
-      "id": 25,
+      "id": 27,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1393,9 +1521,9 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 60
+        "y": 68
       },
-      "id": 26,
+      "id": 28,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1458,9 +1586,9 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 60
+        "y": 68
       },
-      "id": 27,
+      "id": 29,
       "options": {
         "legend": {
           "displayMode": "list",

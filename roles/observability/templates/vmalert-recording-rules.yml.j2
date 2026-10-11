@@ -66,6 +66,10 @@ groups:
           / (sum by (worker_id) (rate(aihost_engine_generation_tokens_total[15m])) > 0)
       - record: aihost:gpu_temperature_headroom_celsius:min
         expr: min by (gpu) (aihost_gpu_temperature_limit_celsius - on (gpu, bdf, sensor) aihost_gpu_temperature_celsius)
+      - record: aihost:gpu_vram_usage_ratio:ratio
+        expr: >-
+          sum by (gpu, bdf) (aihost_gpu_vram_used_bytes)
+          / sum by (gpu, bdf) (aihost_gpu_vram_total_bytes > 0)
 
       # ---- host CPU: decode is bound by one CPU thread, so the busiest core is the number that matters -----
       - record: aihost:cpu_core_busy_ratio:rate5m

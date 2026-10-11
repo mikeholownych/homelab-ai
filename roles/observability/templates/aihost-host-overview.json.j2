@@ -578,8 +578,58 @@
       }
     },
     {
+      "title": "GPU VRAM Allocation & Worker Residency",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 33 },
+      "id": 20,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost_gpu_vram_used_bytes",
+          "legendFormat": "GPU {{gpu}} Used",
+          "refId": "A"
+        },
+        {
+          "expr": "aihost_gpu_vram_total_bytes",
+          "legendFormat": "GPU {{gpu}} Total",
+          "refId": "B"
+        },
+        {
+          "expr": "aihost_llama_worker_vram_resident_bytes",
+          "legendFormat": "Worker port {{port}} Resident",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        }
+      }
+    },
+    {
+      "title": "GPU VRAM Utilization Ratio",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 33 },
+      "id": 21,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "aihost:gpu_vram_usage_ratio:ratio or (sum by (gpu, bdf) (aihost_gpu_vram_used_bytes) / sum by (gpu, bdf) (aihost_gpu_vram_total_bytes > 0))",
+          "legendFormat": "GPU {{gpu}} ({{bdf}})",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1
+        }
+      }
+    },
+    {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 33 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 },
       "id": 103,
       "title": "Host Resources (ai-5820-01)",
       "type": "row"
@@ -587,7 +637,7 @@
     {
       "title": "CPU Core Saturation (Single-Thread Decode Saturation)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
       "id": 16,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -608,7 +658,7 @@
     {
       "title": "Host Memory Utilization Breakdown",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
       "id": 17,
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
@@ -636,7 +686,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 42 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 49 },
       "id": 104,
       "title": "Active Alerts & System Logs",
       "type": "row"
@@ -644,7 +694,7 @@
     {
       "title": "Active Alerts",
       "type": "alertlist",
-      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 43 },
+      "gridPos": { "h": 8, "w": 10, "x": 0, "y": 50 },
       "id": 18,
       "options": {
         "show": "current",
@@ -659,7 +709,7 @@
     {
       "title": "Appliance Logs (Loki)",
       "type": "logs",
-      "gridPos": { "h": 8, "w": 14, "x": 10, "y": 43 },
+      "gridPos": { "h": 8, "w": 14, "x": 10, "y": 50 },
       "id": 19,
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
