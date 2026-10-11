@@ -64,6 +64,17 @@ Gateway healthy, 2/2 workers routable, evidence chain valid, zero restarts since
 
 ## Limitations and observations
 
+- **How to read validation outcomes.** An *observed* check can still report insufficient evidence:
+  `single_gpu_inference` passes only on a validated production completion per worker in the gateway evidence chain;
+  worker health alone never satisfies it, and an idle worker is NOT_TESTED. NOT_APPLICABLE (for example
+  `llama_cpp_fallback`, retired with vLLM) is a documented disposition from inventory with its reason recorded, not a
+  passing test.
+- **Reconciliation pauses while a candidate holds a GPU.** `inference.yml` refuses to converge during exclusive GPU
+  use, so no stamp is written and `scheduled_reconciliation` turns FAIL once the stamp is older than 2 h. That is the
+  intended signal for the duration of a qualification window, not a reconciliation defect.
+- **Candidate swaps fail safe.** A swap that fails part-way converges the production configuration again and still
+  fails the run (`f54cc7a`), after the 2026-10-10 abort left the lead pool down (`f061a95` fixed that cause).
+
 - **ASPM tuning is ineffective.** The profile sets `pcie_aspm=performance` on the kernel command line, which the kernel
   does not accept as a policy (`pcie_aspm=` takes `off|force`; the policy is `pcie_aspm.policy=`). The live policy is
   `default`, and no validation check covers ASPM. `transparent_hugepage=always` also appears twice on the command line.
