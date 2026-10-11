@@ -32,6 +32,13 @@
           - _candidate_reasoning_budget | int <= 32768
         fail_msg: "Unknown candidate profile; declared: {{ llama_cpp_container_candidate_profiles.keys() | list }}"
 
+    - name: Remember the production configuration (restored if the swap fails part-way)
+      ansible.builtin.set_fact:
+        _candidate_production:
+          llama_cpp_container_workers: "{{ llama_cpp_container_workers }}"
+          orchestrator_gateway_workers: "{{ orchestrator_gateway_workers }}"
+          orchestrator_gateway_model_aliases: "{{ orchestrator_gateway_model_aliases }}"
+
     - name: Merge the candidate into the worker and gateway configuration
       ansible.builtin.set_fact:
         llama_cpp_container_workers: >-
@@ -58,8 +65,41 @@
                  'reasoning': {'mode': 'on', 'budget': _candidate_reasoning_budget, 'answer_allowance': 8192}
                }}) }}
       when: candidate_state == 'present'
-  roles:
-    - role: inference_policy
-      when: inference_policy_enabled | default(false) | bool
-    - role: llama_cpp_container
-    - role: orchestrator_gateway
+  tasks:
+    # A swap can fail after the production worker is already stopped (2026-10-10: the lead pool stayed down until fixed
+    # by hand). Any failure converges the production configuration again, then still fails the run.
+    - name: Converge the swap; on failure restore production capacity
+      block:
+        - name: Converge the inference policy
+          ansible.builtin.include_role:
+            name: inference_policy
+          when: inference_policy_enabled | default(false) | bool
+        - name: Converge the workers
+          ansible.builtin.include_role:
+            name: llama_cpp_container
+        - name: Converge the gateway
+          ansible.builtin.include_role:
+            name: orchestrator_gateway
+        # Drill hook (default off): fail after the swap fully converged, the worst point, to prove the rescue.
+        - name: Drill a failure after the swap
+          ansible.builtin.fail:
+            msg: candidate_drill_fail_after_swap is set
+          when: candidate_drill_fail_after_swap | default(false) | bool
+      rescue:
+        - name: Return to the production configuration
+          ansible.builtin.set_fact:
+            llama_cpp_container_workers: "{{ _candidate_production.llama_cpp_container_workers }}"
+            orchestrator_gateway_workers: "{{ _candidate_production.orchestrator_gateway_workers }}"
+            orchestrator_gateway_model_aliases: "{{ _candidate_production.orchestrator_gateway_model_aliases }}"
+            _candidate_failed_task: "{{ ansible_failed_task.name | default('unknown') }}"
+        - name: Restore the production workers
+          ansible.builtin.include_role:
+            name: llama_cpp_container
+        - name: Restore the production gateway configuration
+          ansible.builtin.include_role:
+            name: orchestrator_gateway
+        - name: Report the failed swap (production restored)
+          ansible.builtin.fail:
+            msg: >-
+              Candidate {{ candidate }} ({{ candidate_state }}) failed at "{{ _candidate_failed_task }}"; the production
+              configuration was converged again. Fix the cause before retrying.
