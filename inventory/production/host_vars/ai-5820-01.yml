@@ -348,6 +348,9 @@ orchestrator_gateway_routes:
 orchestrator_gateway_model_aliases:
   engineering/lead: {pool: lead, reasoning: {mode: "off", answer_allowance: 8192}}
   engineering/deep: {pool: deep, reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}}
+  # Operator decision 2026-10-11 (V5): lead reasoning stays off by default; 8192 (the Q-BUDGET choice) is opt-in for
+  # demanding tasks through this alias. The observed gain was 6.7 points at 2-3x time per task.
+  engineering/lead-reasoning: {pool: lead, reasoning: {mode: "on", budget: 8192, answer_allowance: 8192}}
 # R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
 # Every client token below is a Vault record (roles/vault_platform_credentials); rotate through Vault.
 orchestrator_gateway_vault_managed_clients: [nexus, opencode, operator, qualification, ansible-admin]

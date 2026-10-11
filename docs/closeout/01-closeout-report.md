@@ -8,14 +8,14 @@ Scope: the operator brief of 2026-10-07 ("complete all remaining authorized non-
 **`AIHOST_WORKSTREAM_COMPLETE_PROVEN_WITH_LIMITATIONS`**
 
 Every required item is complete and evidenced on the appliance, including the Qwen3.6 12,288-token budget point
-(row 37), which confirmed 8192. One operator decision remains open (the lead-pool reasoning policy, V5); it is a policy
-choice, not unfinished work. Limitations are listed below.
+(row 37), which confirmed 8192. The lead-pool reasoning policy (V5) is decided: off by default, 8192 opt-in. Limitations are
+listed below.
 
 ## Production state (verified 2026-10-11)
 
 | Pool | Model | Artifact | Reasoning budget | Alias policy |
 |---|---|---|---|---|
-| lead (GPU 0) | Qwen3.6-35B-A3B UD-Q4_K_M | `sha256:ac0e2c11…` | 8192 (Q-BUDGET, 12,288 adds nothing) | `engineering/lead` and the default rule: reasoning off |
+| lead (GPU 0) | Qwen3.6-35B-A3B UD-Q4_K_M | `sha256:ac0e2c11…` | 8192 (Q-BUDGET, 12,288 adds nothing) | `engineering/lead` and the default rule: reasoning off; `engineering/lead-reasoning`: on, 8192 |
 | deep (GPU 1) | Qwen3.8-Flash-Next GSQ RCO IQ1_M | `sha256:93558718…` | 4096 (Q-BUDGET: 8192 adds nothing) | `engineering/deep`: reasoning on |
 
 Gateway release `t5820-gateway-6a3a52e`, healthy, 2/2 workers routable, evidence chain valid. Host validation
@@ -50,11 +50,12 @@ ASPM policy `performance` live and persisted.
 - An inherited FORCE_COLOR failed a sealed test (`fb8c2bb`).
 - The validator published unobserved PASS results (`f7f6180`, `83b5847`). Fixed in `f398935`, observed live since 2026-10-10 20:23.
 
-## Open: operator decision
+## Operator decision recorded
 
-1. **Lead reasoning policy (V5).** No plain request reasons on Qwen3.6; only the deep-task fallback does, capped at 4096.
-   Qwen3.6 scores 70.0% with reasoning off and 76.7% bounded at 8192, at 2-3x the time per task. Commit 83b5847 had
-   marked this resolved; it was not an operator decision and stays open. Routing is unchanged.
+1. **Lead reasoning policy (V5, decided 2026-10-11).** Reasoning stays off by default on the lead pool
+   (`engineering/lead`, `engineering/b0` and the default rule). 8192 reasoning is available explicitly for demanding
+   tasks through `engineering/lead-reasoning`. Basis: +6.7 points (70.0% off vs 76.7% at 8192) at 2-3x the time per
+   task, and no observed demand for it during dogfood troubleshooting.
 
 ## Limitations and observations
 
