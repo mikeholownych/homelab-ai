@@ -84,6 +84,7 @@
     - "{{ observability_data_root }}/tempo/live-store"
     - "{{ observability_data_root }}/tempo/live-store/shutdown-marker"
     - "{{ observability_data_root }}/tempo/live-store/traces"
+    - "{{ observability_data_root }}/tempo/generator"
     - "/var/tempo"
     - "{{ observability_data_root }}/grafana"
     - "{{ observability_log_dir }}"

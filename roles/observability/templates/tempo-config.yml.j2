@@ -39,12 +39,28 @@ storage:
     local:
       path: {{ observability_data_root }}/tempo/blocks
 
+metrics_generator:
+  registry:
+    collection_interval: 15s
+    external_labels:
+      source: tempo
+      cluster: aihost
+  storage:
+    path: {{ observability_data_root }}/tempo/generator
+    remote_write:
+      - url: http://127.0.0.1:{{ observability_vm_http_port }}/api/v1/write
+        send_exemplars: true
+
 overrides:
   defaults:
     compaction:
       block_retention: {{ observability_tempo_retention_hours }}h
     ingestion:
       rate_limit_bytes: 15000000
+    metrics_generator:
+      processors:
+        - service-graphs
+        - span-metrics
 
 usage_report:
   reporting_enabled: false
