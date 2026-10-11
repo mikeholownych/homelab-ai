@@ -201,21 +201,30 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 1. **GPU Driver VRAM Telemetry (Intel Arc B65) vs Host DRAM:**
    - The Linux kernel `xe` driver does not provide driver-level VRAM allocation statistics via sysfs or Level Zero without `xpumd` (Intel XPU Manager).
    - *Host vs GPU Memory Qualification:* Dashboards observe host system DRAM occupancy (where mmap'd GGUF weights reside and get mapped into SYCL Level Zero USM device memory) via OS page-cache residency (`aihost:llama_model_file_cache_residency:ratio`) and worker RSS (`aihost_llama_worker_resident_file_bytes`). These host metrics do **not** measure device-local GPU VRAM allocation or on-card memory bus saturation. GPU VRAM occupancy remains an explicit hardware/driver observability gap.
-2. **Distributed Tracing Pipeline Boundary:**
+2. **PCIe Link Capabilities vs Negotiated Status:**
+   - Sysfs and `lspci -vv` measurements show that both Arc B65 cards (`0000:51:00.0` and `0000:93:00.0`) operate at `Width x1` and `Speed 2.5GT/s`.
+   - *Capability vs State:* Maximum supported link width (`LnkCap`) is x1 (`aihost_gpu_pcie_max_link_width = 1`); current negotiated width (`LnkSta`) is x1 (`aihost_gpu_pcie_link_width = 1`). Maximum supported link speed (`LnkCap2`) is 2.5 GT/s; current negotiated speed (`LnkSta`) is 2.5 GT/s (`aihost_gpu_pcie_link_speed_gts = 2.5`). The link is operating at its maximum endpoint capability in these slots; the reading is not an idle downclocking artifact.
+3. **Alloy Internal Metrics (Collection Gap):**
+   - Grafana Alloy runs as the local collection agent forwarding to VictoriaMetrics, Loki, and Tempo. However, its own internal `/metrics` endpoint (`127.0.0.1:12345/metrics`) is not configured as a Prometheus scrape target in `roles/observability`.
+   - *Classification:* This is an exporter collection configuration gap, distinct from distributed tracing boundaries. Remote-write pipeline statistics are observable indirectly through VictoriaMetrics ingestion rates rather than Alloy internal counters.
+4. **Distributed Tracing Pipeline Boundary:**
    - The backend tracing pipeline (Alloy OTLP ingestion on `:4317`/`:4318`, Tempo storage on `:3200`, and VictoriaMetrics service graph generation) is verified.
    - *Operational Consequence:* In-process instrumentation across Nexus, the orchestrator gateway, and llama.cpp workers remains an unproven boundary. Telemetry spans demonstrate backend pipeline and correlation capability, not native production inference tracing. Trace panels remain unpopulated during normal production inference.
-3. **Alert Notification Delivery:**
+5. **Alert Notification Delivery:**
    - Alerts are actively evaluated in `vmalert` every 15s and queryable via `ALERTS`.
    - *Operational Consequence:* Notifications are dispatched solely to local audit logs (`/var/log/local-ai/alerts/`) and loopback endpoints. External paging integrations (PagerDuty, Slack, SMTP) are intentionally unconfigured to prevent false-alarm pages during automated GPU baseline sweeps and stress benchmarks. Consequently, firing alerts will **not** page on-call personnel; alerting requires operators actively monitoring Grafana dashboards or inspecting local alert logs.
-4. **Reconciliation Timer Pause Authorization & Resumption:**
+6. **Reconciliation Timer Pause Authorization & Resumption:**
    - `aihost_reconciliation_timer_active` reporting `0` indicates that `scheduled_ansible_reconcile_enabled` is set to `false` in `inventory/production/host_vars/ai-5820-01.yml`.
    - *Authorization:* Configured by Mike Holownych (commit `6a039cca`) to protect the live dual-worker inference topology and long-running GPU evaluations against unintended configuration overwrites from unconstrained `site.yml` runs.
    - *Resumption Criteria:* The reconciliation timer should resume only after: (a) a repository snapshot is deployed to `/opt/local-ai`, (b) the reconciliation unit is scoped specifically to `playbooks/inference.yml` and matching validate plays, and (c) active GPU benchmarking sweeps conclude.
-5. **Rendered Panel & Variable Drilldown Verification:**
-   - Queries evaluated: 144 targets across 113 panels in 4 dashboards.
-   - Active telemetry is verified on 94 targets; 29 targets represent healthy zero states (e.g., zero GPU throttle, zero major page faults, zero firing alerts, zero network errors).
-   - Event-dependent targets (e.g. p50/p95 duration, completion rates) populate upon request completion; during multi-minute reasoning generations, short 5m rates correctly read zero.
-   - Variable drilldown (`$worker`) has been verified via the Grafana Image Renderer (`/render/d-solo/...`) for `All` (`.*`), `b0-live-llama-worker1`, and `b0-live-llama-deep-worker2`.
-6. **Local Quality Gates vs Hosted CI Status:**
-   - Local validation checks (`make syntax`, `make check`, `make lint`, `pytest -q`) pass 100% on the local commit.
-   - Hosted GitHub Actions quality runs (`.github/workflows/quality.yml`) execute upon `git push` to `origin/main`. The last passing hosted run on `origin/main` was on commit `18cdbae` (Run ID `3810629...`).
+7. **Metric Absence vs Measured Zeros in Dashboards:**
+   - Dashboards handle metric states in three distinct categories:
+     - *Exporter-Measured Zeros:* Physical gauges with literal value `0` emitted by exporters (`aihost_gpu_throttle_status = 0`, `aihost_gpu_throttle_reason_* = 0`, `node_network_receive_errs_total = 0`, `aihost_worker_drained = 0`).
+     - *PromQL Synthesized Zeros:* Rules that synthesize a zero baseline during active traffic when no error series exist (`aihost:inference_error_ratio:rate5m` uses `(errors or 0 * completed) / completed` to return a measured `0` when completions occur, but yields no sample when idle).
+     - *Metric Absence (Unemitted Series):* Series that do not exist in the TSDB when inactive (e.g. `ALERTS{alertstate="firing"}`, `aihost_inference_completions_total{outcome="rejected"}`). These render as empty sets / "No data" unless wrapped in `or vector(0)` or table panels.
+8. **Live Inference Worker Topology:**
+   - Worker 1 (`b0-live-llama-worker1`): GPU 0 (`0000:51:00.0`), port 8000, model **`Qwen3.6-35B-A3B-UD-Q4_K_M`**, alias `Qwen3.6-35B-A3B-UD-Q4_K_M`, reasoning budget 8192 (`engineering/lead-reasoning`).
+   - Worker 2 (`b0-live-llama-deep-worker2`): GPU 1 (`0000:93:00.0`), port 8001, model **`Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`**, alias `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`, reasoning budget 4096.
+9. **Quality Gates & Hosted CI Verification:**
+   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1171 passed) pass cleanly on commit `433554c`.
+   - *Hosted GitHub Actions CI:* Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` completed successfully (**PASSED** in 15m 17s).
