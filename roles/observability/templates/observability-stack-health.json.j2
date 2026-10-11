@@ -122,6 +122,34 @@
           "unit": "ops"
         }
       }
+    },
+    {
+      "title": "Tracing Spans Received (Tempo)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "tempo_distributor_spans_received_total",
+          "legendFormat": "Spans Received",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "Service Graph Request Flow",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "datasource": { "type": "prometheus", "uid": "victoriametrics" },
+      "targets": [
+        {
+          "expr": "sum by (client, server) (traces_service_graph_request_total)",
+          "legendFormat": "{{client}} -> {{server}}",
+          "refId": "A"
+        }
+      ]
     }
   ]
 }

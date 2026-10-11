@@ -105,9 +105,9 @@ downloads, extracts, verifies, or starts services (see
 `tests/integration/observability_gate_check.yml`, wired into `make check`), so
 a CI/controller check run never touches the network.
 
-### Why the full stack is not installed yet
+### Distributed Tracing & Service Graph Correlation
 
-Physical B65 hardware has not arrived. Per repository policy, an install that
-cannot be converged on the real target is never claimed as verified: the role
-is pinned, committed and linted, but its download/start steps only execute once
-the commissioning checklist above has passed on the host.
+Grafana Tempo operates as the trace backend with the embedded `metrics_generator` processor enabled:
+- **OTLP Ingestion:** Receivers listen on gRPC (`:4317`) and HTTP (`:4318`) for trace spans.
+- **Log Correlation:** The Loki datasource provisions `derivedFields` matching `(?:traceID|trace_id)=(\w+)` with a direct link (`urlDisplayLabel: "View Trace"`) to Tempo (`uid: tempo`), enabling 1-click drilldowns from log entries to span traces.
+- **Service Graphs & Span Metrics:** Tempo's metrics-generator processes span relationships (`nexus-client` -> `orchestrator-gateway` -> `b0-live-llama-worker1`) and writes `traces_service_graph_request_total` and `traces_spanmetrics_*` series directly into VictoriaMetrics via Prometheus remote-write (`http://127.0.0.1:8428/api/v1/write`), populating Grafana's Service Map and Node Graph.

@@ -26,6 +26,7 @@ datasources:
           matcherRegex: "(?:traceID|trace_id)=(\\w+)"
           name: TraceID
           url: "$${__value.raw}"
+          urlDisplayLabel: "View Trace"
   - name: Tempo
     uid: tempo
     type: tempo
