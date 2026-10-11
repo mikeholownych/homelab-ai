@@ -111,3 +111,6 @@ Grafana Tempo operates as the trace backend with the embedded `metrics_generator
 - **OTLP Ingestion:** Receivers listen on gRPC (`:4317`) and HTTP (`:4318`) for trace spans.
 - **Log Correlation:** The Loki datasource provisions `derivedFields` matching `(?:traceID|trace_id)=(\w+)` with a direct link (`urlDisplayLabel: "View Trace"`) to Tempo (`uid: tempo`), enabling 1-click drilldowns from log entries to span traces.
 - **Service Graphs & Span Metrics:** Tempo's metrics-generator processes span relationships (`nexus-client` -> `orchestrator-gateway` -> `b0-live-llama-worker1`) and writes `traces_service_graph_request_total` and `traces_spanmetrics_*` series directly into VictoriaMetrics via Prometheus remote-write (`http://127.0.0.1:8428/api/v1/write`), populating Grafana's Service Map and Node Graph.
+
+**Verification Disposition & Scope Boundary:**
+Backend telemetry pipeline readiness (OTLP span ingestion, Loki log ingestion with derived field correlation, Tempo trace retrieval via datasource proxy, and VictoriaMetrics service graph metric generation) is proven using live inference coupled with a constructed telemetry demonstration. Native in-process instrumentation (automatic trace context propagation across the client, gateway, and worker processes) and end-user browser click-through remain unproven.

@@ -81,3 +81,4 @@ ASPM policy `performance` live and persisted.
 - **Gateway release identity drifted once.** `6a3a52e` changed gateway code (client `reasoning_effort` mapped to
   reasoning profiles) while inventory still named `b41eaa1`, and a reconcile deployed it under that name. The release
   id now names the code (`t5820-gateway-6a3a52e`), and `tests/test_gateway_release_identity.py` fails on any future drift.
+- **Observability tracing pipeline vs. native Nexus instrumentation.** Distributed tracing infrastructure (Grafana Tempo v3.1.0 with OTLP receivers on :4317/:4318, VictoriaMetrics remote-write service-graph generation, and Loki `derivedFields` log-to-trace linking) is operational and verified via live inference with synthetic OTLP telemetry. Native in-process instrumentation (automatic trace context propagation across the client, gateway, and worker processes) and end-user browser click-through remain unproven.
