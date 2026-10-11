@@ -1,38 +1,42 @@
-# AIHOST closeout report (draft, 2026-10-10)
+# AIHOST closeout report (2026-10-11)
 
 Scope: the operator brief of 2026-10-07 ("complete all remaining authorized non-deferred work") as reconciled in
 `00-reconciliation.md` and `tasks/todo.md`. Nexus development and "future evolution" are out of scope.
 
 ## Status
 
-**`AIHOST_WORKSTREAM_BLOCKED_GPU_WINDOW_FOR_QBUDGET_12288`**
+**`AIHOST_WORKSTREAM_COMPLETE_PROVEN_WITH_LIMITATIONS`**
 
-One required item remains: the Qwen3.6 12,288-token reasoning-budget point (reconciliation row 37, "adding points if
-needed"). It needs GPU 0 for about three hours, and the operator has reserved inference access for Nexus client work.
-Everything else below is complete and evidenced, or recorded as a limitation or an operator decision. This status does not
-move required work to a later list.
+Every required item is complete and evidenced on the appliance, including the Qwen3.6 12,288-token budget point
+(row 37), which confirmed 8192. One operator decision remains open (the lead-pool reasoning policy, V5); it is a policy
+choice, not unfinished work. Limitations are listed below.
 
-## Production state (verified 2026-10-10)
+## Production state (verified 2026-10-11)
 
 | Pool | Model | Artifact | Reasoning budget | Alias policy |
 |---|---|---|---|---|
-| lead (GPU 0) | Qwen3.6-35B-A3B UD-Q4_K_M | `sha256:ac0e2c11…` | 8192 (provisional, see row 37) | `engineering/lead` and the default rule: reasoning off |
+| lead (GPU 0) | Qwen3.6-35B-A3B UD-Q4_K_M | `sha256:ac0e2c11…` | 8192 (Q-BUDGET, 12,288 adds nothing) | `engineering/lead` and the default rule: reasoning off |
 | deep (GPU 1) | Qwen3.8-Flash-Next GSQ RCO IQ1_M | `sha256:93558718…` | 4096 (Q-BUDGET: 8192 adds nothing) | `engineering/deep`: reasoning on |
 
-Gateway healthy, 2/2 workers routable, evidence chain valid, zero restarts since the 2026-10-10 13:08 reboot.
+Gateway release `t5820-gateway-6a3a52e`, healthy, 2/2 workers routable, evidence chain valid. Host validation
+(2026-10-11T02:18:26Z, `results/validation-20261010/validation_summary-post-sweep.txt`): **PASS (healthy)**, 0 failed, 0 not
+tested, 5 not applicable by inventory declaration. Controller-side reconciliation runs hourly (snapshot `6c36739`). PCIe
+ASPM policy `performance` live and persisted.
 
 ## Evidence index
 
 | Gate | Result | Evidence |
 |---|---|---|
 | Q-BUDGET Flash-Next | 2048 80% · **4096 90%** · 8192 90% (1.7x time) | `evaluations/engx/QBUDGET-2026-10-08.md` (`4fb2597`) |
-| Q-BUDGET Qwen3.6 | 2048 46.7% · 4096 70.0% · 8192 76.7%, still binding 66% | same; 12,288 open |
+| Q-BUDGET Qwen3.6 | 2048 46.7% · 4096 70.0% · **8192 76.7%** · 12288 66.7% (budget reached 38%) | same; `results/qbudget-20261010/` |
 | Q-TOOLS | 7 checks x3 and 20 Nexus replays: all pass, both models | `QUALIFICATION-FLASHNEXT-2026-10-08.md`, `QUALIFICATION-QWEN36-2026-10-09.md` |
 | Q-LONGCTX | 12/12 needles to ~59.9K (Flash-Next) / ~55.8K (Qwen3.6); clean over-context 400 | same |
 | Q-MMAP | page-cache and major-fault metrics live; Flash-Next faults flat under load | `5548f3f`, `results/qmmap-20261008/` |
 | Output contract | 36/36 machine checks on every production path | `072357a`, `results/contract-20261009/` |
 | Q-FINAL | promotion, two reboots, rollback drill with the default deep route working | `QUALIFICATION-QFINAL-2026-10-09.md`, `ff4f888` |
-| Vault | AppRole login and all five consumer credentials match Vault (digest) | `docs/vault.md` (`9e4b6c4`) |
+| Vault | AppRole login; all eight consumer credentials match Vault; client rotation end to end (old 401, new 200) | `docs/vault.md`, `results/vault-r6-20261010/` |
+| Swap recovery | drilled failure after a completed swap: run fails naming the task; candidate removed; production worker and gateway restored; lead completion routed to worker1 and validated in the audit log | `results/candidate-recovery-drill-20261011/` |
+| Reconciliation | controller timer; stamp observed by the validator; steady state changes only the stamp | `results/reconcile-20261010/` |
 
 ## Defects found and fixed during closeout (all tested and deployed unless stated)
 
@@ -44,23 +48,13 @@ Gateway healthy, 2/2 workers routable, evidence chain valid, zero restarts since
 - `output_contract_compliance` cited prose instead of a check; it is now machine-verified (`072357a`).
 - The qualification token was exposed in a transcript; it was rotated through Ansible and the old token returns 401 (`d10ad5b`).
 - An inherited FORCE_COLOR failed a sealed test (`fb8c2bb`).
-- The validator published unobserved PASS results (`f7f6180`, `83b5847`). Fixed in the repo (`f398935`); **not yet
-  re-run on the host** (see below).
+- The validator published unobserved PASS results (`f7f6180`, `83b5847`). Fixed in `f398935`, observed live since 2026-10-10 20:23.
 
-## Open: operator action or decision
+## Open: operator decision
 
-1. **Q-BUDGET 12,288 (required).** Run `evaluations/engx/qbudget.sh qwen36-lead 12288` when GPU 0 can leave the lead
-   pool for about three hours. The lead alias falls back to deep in the meantime.
-2. **Lead reasoning policy (decision).** No plain request reasons on Qwen3.6. Only the deep-task fallback does, capped at
-   4096. Qwen3.6 scores 70.0% with reasoning off and 76.7% at 8192, at 2-3x the time per task.
-3. **Host validation evidence (action).** `/var/lib/local-ai/evidence/validation_summary.txt` (2026-10-10 13:09) is false.
-   It claims `scheduled_reconciliation` PASS, but `aihost-reconcile.timer` is not installed. Re-running
-   `playbooks/validate.yml` with `f398935` replaces it. The run includes the hardware roles, so it waits for an operator
-   window.
-4. **Scheduled reconciliation (decision).** Inventory sets `features.scheduled_reconciliation: true`, but the timer is not
-   installed. Either install it or set the feature to false. The corrected validator reports it as FAIL until then.
-5. **R6 client tokens under Vault (authorization).** `operator`, `qualification` and `ansible-admin` gateway tokens
-   are Ansible-generated, not Vault records. This needs Vault policy and KV changes on the Vault host.
+1. **Lead reasoning policy (V5).** No plain request reasons on Qwen3.6; only the deep-task fallback does, capped at 4096.
+   Qwen3.6 scores 70.0% with reasoning off and 76.7% bounded at 8192, at 2-3x the time per task. Commit 83b5847 had
+   marked this resolved; it was not an operator decision and stays open. Routing is unchanged.
 
 ## Limitations and observations
 
@@ -77,9 +71,13 @@ Gateway healthy, 2/2 workers routable, evidence chain valid, zero restarts since
   cause). The live drill fails *after a fully completed swap*, a demanding recovery case; it proves that recovery path, not every partially
   completed state (for example a failure while the candidate model is still loading, or inside the gateway role). Those
   paths share the same rescue but are covered only by the contract test.
-
-- **ASPM tuning is ineffective.** The profile sets `pcie_aspm=performance` on the kernel command line, which the kernel
-  does not accept as a policy (`pcie_aspm=` takes `off|force`; the policy is `pcie_aspm.policy=`). The live policy is
-  `default`, and no validation check covers ASPM. `transparent_hugepage=always` also appears twice on the command line.
-- **Inference checks are not observed.** `single_gpu_inference` and `llama_cpp_fallback` stay NOT_TESTED until a
-  collector observes them; production inference is evidenced by Q-FINAL instead.
+- **ASPM tuning was ineffective until 2026-10-11.** The profile set `pcie_aspm=performance`, which the kernel does not
+  take as a policy (`pcie_aspm=` accepts `off|force`); the live policy stayed `default` and nothing checked it. Fixed in
+  `30d405b`/`badb5c2`: `pcie_aspm.policy=performance` persisted in GRUB, applied at runtime on drift (the kernel
+  accepted it, so the firmware grants the OS ASPM control), the duplicate `transparent_hugepage=always` removed, and
+  `os_tuning_pcie_aspm` now compares the live policy with the profile.
+- **The validation text summary prints check labels for some observed values** (for example the tuning checks); the
+  observed values themselves are in `validation.json`. Cosmetic.
+- **Gateway release identity drifted once.** `6a3a52e` changed gateway code (client `reasoning_effort` mapped to
+  reasoning profiles) while inventory still named `b41eaa1`, and a reconcile deployed it under that name. The release
+  id now names the code (`t5820-gateway-6a3a52e`), and `tests/test_gateway_release_identity.py` fails on any future drift.

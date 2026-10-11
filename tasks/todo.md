@@ -436,10 +436,9 @@ Awaiting operator decisions:
 - [x] Deep-pool choice DECIDED: Flash-Next, with Qwen3.8-27B as fallback if operational qualification fails (operator brief section 1); execution in Q-*/W-PROMOTE
 - [x] Glimmer: DROPPED (operator brief 2026-10-07)
 New work made apparent (report section 6):
-- [ ] Reasoning-budget sweep 2048/8192 (+12288 if needed): Flash-Next 2048/4096/8192 complete (4096 selected; 8192 adds
-      nothing). Qwen3.6 2048/4096/8192 complete, and 12288 IS needed: at 8192 the budget still bound 66% of attempts, one
-      answer hit the output limit, and quality was still rising (46.7 -> 70.0 -> 76.7%). Reopened 2026-10-09 by the
-      validation review; the 12288 run follows. See `evaluations/engx/QBUDGET-2026-10-08.md`.
+- [x] Reasoning-budget sweep 2048/8192 (+12288 if needed): Flash-Next 4096 (8192 adds nothing). Qwen3.6 8192, confirmed by
+      the 12288 point (2026-10-11): 66.7% vs 76.7%, budget reached on 38% of attempts (the curve has flattened). See
+      `evaluations/engx/QBUDGET-2026-10-08.md`.
 - [x] Long-context qualification (32-60K real transcripts); mandatory for Flash-Next (64K fit unverified by llama.cpp). Flash-Next and Qwen3.6 candidate probes passed via the remote gateway; see `evaluations/engx/QUALIFICATION-FLASHNEXT-2026-10-08.md` and `evaluations/engx/QUALIFICATION-QWEN36-2026-10-09.md`.
 - [x] Tool-calling / multi-turn agentic qualification (replay Nexus sessions). Both selected models passed the synthetic checks and 20 recorded replay cut points; see the qualification reports above.
 - [x] Flash-Next mmap n-gram table: page-cache residency and major-fault monitoring. Before/after snapshots are retained in `evaluations/engx/results/qmmap-20261008/`; see `evaluations/engx/QUALIFICATION-FLASHNEXT-2026-10-08.md`.

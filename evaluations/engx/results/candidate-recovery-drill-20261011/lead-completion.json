@@ -1,0 +1,1 @@
+{"status": 200, "request_id": "e07821e7-552b-4532-9669-48a31f88c03f", "route": "rule=alias:engineering/lead;pool=lead;worker=b0-live-llama-worker1;fallback=false", "served_model": "Qwen3.6-35B-A3B-UD-Q4_K_M", "finish": "stop", "content": "RESTORED"}

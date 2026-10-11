@@ -1,0 +1,242 @@
+
+PLAY [Converge Ubuntu host baseline] *******************************************
+
+PLAY [Converge optional host services] *****************************************
+
+TASK [Include OS tuning role for tuning-managed nodes] *************************
+included: os_tuning for ai-5820-01
+
+TASK [os_tuning : Run tuning input and profile assertions] *********************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/assert_inputs.yml for ai-5820-01
+
+TASK [os_tuning : Validate os_tuning inputs] ***********************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Load version-controlled OS tuning profile] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate loaded OS tuning profile structure] *****************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Validate tuning values against host allowlists] **************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Set resolved tuning facts] ***********************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Discover live OS tuning state without mutation] **************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/discovery.yml for ai-5820-01
+
+TASK [os_tuning : Ensure os_tuning work directory exists] **********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Ensure tuning helper install directory exists] ***************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Ensure tuning evidence directory exists] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Install read-only OS tuning telemetry collector] *************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Install CPU power enforcement helper] ************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Collect OS tuning telemetry without mutation] ****************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Parse collected telemetry snapshot] **************************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Persist tuning evidence documents] ***************************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/persist_evidence.yml for ai-5820-01
+
+TASK [os_tuning : Persist tuning evidence documents] ***************************
+ok: [ai-5820-01] => (item=numa.json)
+ok: [ai-5820-01] => (item=interrupts.json)
+ok: [ai-5820-01] => (item=cpu-power.json)
+ok: [ai-5820-01] => (item=memory-policy.json)
+ok: [ai-5820-01] => (item=hugepages.json)
+ok: [ai-5820-01] => (item=io.json)
+ok: [ai-5820-01] => (item=kernel.json)
+
+TASK [os_tuning : Persist resolved tuning profile as machine-readable evidence] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Record active profile state for validation and drift classification] ***
+changed: [ai-5820-01]
+
+TASK [os_tuning : Enforce tuning safety gates before any mutation] *************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/safety_gates.yml for ai-5820-01
+
+TASK [os_tuning : Validate hugepages capacity safety] **************************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified IRQ affinity changes] *********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified NUMA runtime binding] *********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Reject uncertified custom kernel deployment] *****************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [os_tuning : Validate declared custom kernel artifact reference] **********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Install NUMA discovery packages when enabled] ****************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute managed sysctl mapping from the profile] *************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute managed kernel command-line parameters] **************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate managed kernel command-line parameters against allowlist] ***
+ok: [ai-5820-01] => (item=transparent_hugepage=always) => 
+    ansible_loop_var: param
+    changed: false
+    msg: All assertions passed
+    param: transparent_hugepage=always
+ok: [ai-5820-01] => (item=pcie_aspm.policy=performance) => 
+    ansible_loop_var: param
+    changed: false
+    msg: All assertions passed
+    param: pcie_aspm.policy=performance
+
+TASK [os_tuning : Apply memory sysctls owned by the tuning profile] ************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_memory.yml for ai-5820-01
+
+TASK [os_tuning : Apply managed memory sysctl values] **************************
+ok: [ai-5820-01] => (item=vm.swappiness=1)
+ok: [ai-5820-01] => (item=vm.dirty_ratio=10)
+ok: [ai-5820-01] => (item=vm.dirty_background_ratio=5)
+ok: [ai-5820-01] => (item=vm.zone_reclaim_mode=0)
+
+TASK [os_tuning : Remove stale managed sysctl keys no longer in the profile] ***
+skipping: [ai-5820-01] => (item=vm.swappiness (absent)) 
+skipping: [ai-5820-01] => (item=vm.dirty_ratio (absent)) 
+skipping: [ai-5820-01] => (item=vm.dirty_background_ratio (absent)) 
+skipping: [ai-5820-01] => (item=vm.zone_reclaim_mode (absent)) 
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Verify active sysctl values match the tuning profile] ********
+ok: [ai-5820-01] => (item=vm.swappiness)
+ok: [ai-5820-01] => (item=vm.dirty_ratio)
+ok: [ai-5820-01] => (item=vm.dirty_background_ratio)
+ok: [ai-5820-01] => (item=vm.zone_reclaim_mode)
+
+TASK [os_tuning : Compute drifted NVMe queue lists for I/O enforcement] ********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply I/O settings owned by the tuning profile] **************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_io.yml for ai-5820-01
+
+TASK [os_tuning : Render NVMe I/O udev rule] ***********************************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Remove NVMe I/O udev rule when nothing is managed] ***********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime NVMe scheduler on drifted devices] *************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime NVMe read-ahead on drifted devices] ************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply CPU power settings owned by the tuning profile] ********
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_cpu_power.yml for ai-5820-01
+
+TASK [os_tuning : Install aihost-cpu-power oneshot service] ********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Remove aihost-cpu-power service when nothing is managed] *****
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Enable aihost-cpu-power boot persistence] ********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply CPU governor and energy-performance preference at runtime] ***
+ok: [ai-5820-01]
+
+TASK [os_tuning : Validate active CPU power state matches the profile] *********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Apply transparent hugepage settings owned by the tuning profile] ***
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/apply_thp.yml for ai-5820-01
+
+TASK [os_tuning : Render tuning kernel command-line drop-in] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Remove tuning command-line drop-in when nothing is managed] ***
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime transparent hugepage mode] *********************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime transparent hugepage defrag mode] **************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Apply runtime PCIe ASPM policy] ******************************
+changed: [ai-5820-01]
+
+TASK [os_tuning : Detect kernel drift against the declared expectation] ********
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/kernel_drift.yml for ai-5820-01
+
+TASK [os_tuning : Compare running kernel against declared expectation] *********
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Install checksummed custom kernel artifact] ******************
+skipping: [ai-5820-01]
+
+TASK [os_tuning : Inspect previous NUMA topology fingerprint] ******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Read previous NUMA topology fingerprint] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compute current NUMA topology fingerprint] *******************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Compare NUMA topology against previous observation] **********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Write current NUMA topology fingerprint] *********************
+ok: [ai-5820-01]
+
+TASK [os_tuning : Emit independent tuning validation checks] *******************
+included: /home/mike/Projects/aihost/roles/os_tuning/tasks/emit_checks.yml for ai-5820-01
+
+TASK [os_tuning : Derive tuning validation checks from observed state] *********
+ok: [ai-5820-01]
+
+TASK [os_tuning : Persist tuning validation check fragment] ********************
+ok: [ai-5820-01]
+
+TASK [Install cpufrequtils for CPU frequency scaling management] ***************
+skipping: [ai-5820-01]
+
+TASK [Enforce performance scaling governor across all CPU cores] ***************
+skipping: [ai-5820-01]
+
+TASK [Force Transparent Hugepages to always at runtime] ************************
+skipping: [ai-5820-01]
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=51   changed=2    unreachable=0    failed=0    skipped=14   rescued=0    ignored=0   
+
