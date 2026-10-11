@@ -198,15 +198,24 @@ All dashboards include top-level cross-navigation links enabling immediate drill
 
 ### Operational Boundaries & Limitations
 
-1. **GPU Driver VRAM Telemetry (Intel Arc B65):**
+1. **GPU Driver VRAM Telemetry (Intel Arc B65) vs Host DRAM:**
    - The Linux kernel `xe` driver does not provide driver-level VRAM allocation statistics via sysfs or Level Zero without `xpumd` (Intel XPU Manager).
-   - *Operational Consequence:* Dashboards do not fabricate synthetic VRAM allocation. Instead, memory pressure is authoritatively observed through OS page-cache residency (`aihost:llama_model_file_cache_residency:ratio`) and worker RSS (`aihost_llama_worker_resident_file_bytes`).
+   - *Host vs GPU Memory Qualification:* Dashboards observe host system DRAM occupancy (where mmap'd GGUF weights reside and get mapped into SYCL Level Zero USM device memory) via OS page-cache residency (`aihost:llama_model_file_cache_residency:ratio`) and worker RSS (`aihost_llama_worker_resident_file_bytes`). These host metrics do **not** measure device-local GPU VRAM allocation or on-card memory bus saturation. GPU VRAM occupancy remains an explicit hardware/driver observability gap.
 2. **Distributed Tracing Pipeline Boundary:**
    - The backend tracing pipeline (Alloy OTLP ingestion on `:4317`/`:4318`, Tempo storage on `:3200`, and VictoriaMetrics service graph generation) is verified.
-   - *Operational Consequence:* In-process instrumentation across Nexus, the orchestrator gateway, and llama.cpp workers remains an unproven boundary. Telemetry spans demonstrate backend pipeline and correlation capability, not native production inference tracing.
+   - *Operational Consequence:* In-process instrumentation across Nexus, the orchestrator gateway, and llama.cpp workers remains an unproven boundary. Telemetry spans demonstrate backend pipeline and correlation capability, not native production inference tracing. Trace panels remain unpopulated during normal production inference.
 3. **Alert Notification Delivery:**
-   - Alerts are actively evaluated in `vmalert` and queryable via `ALERTS`.
-   - *Operational Consequence:* Notifications are dispatched to local audit logs (`/var/log/local-ai/alerts/`) and loopback endpoints. External paging integrations are intentionally disabled to prevent false pages during automated GPU baseline sweeps.
-4. **Reconciliation Timer Pause:**
-   - `aihost_reconciliation_timer_active` reporting `0` indicates that `scheduled_ansible_reconcile_enabled` is set to `false`.
-   - *Operational Consequence:* This is an intentional operational state to prevent automatic reconciliation runs from disturbing long-running GPU evaluations and baseline benchmarking.
+   - Alerts are actively evaluated in `vmalert` every 15s and queryable via `ALERTS`.
+   - *Operational Consequence:* Notifications are dispatched solely to local audit logs (`/var/log/local-ai/alerts/`) and loopback endpoints. External paging integrations (PagerDuty, Slack, SMTP) are intentionally unconfigured to prevent false-alarm pages during automated GPU baseline sweeps and stress benchmarks. Consequently, firing alerts will **not** page on-call personnel; alerting requires operators actively monitoring Grafana dashboards or inspecting local alert logs.
+4. **Reconciliation Timer Pause Authorization & Resumption:**
+   - `aihost_reconciliation_timer_active` reporting `0` indicates that `scheduled_ansible_reconcile_enabled` is set to `false` in `inventory/production/host_vars/ai-5820-01.yml`.
+   - *Authorization:* Configured by Mike Holownych (commit `6a039cca`) to protect the live dual-worker inference topology and long-running GPU evaluations against unintended configuration overwrites from unconstrained `site.yml` runs.
+   - *Resumption Criteria:* The reconciliation timer should resume only after: (a) a repository snapshot is deployed to `/opt/local-ai`, (b) the reconciliation unit is scoped specifically to `playbooks/inference.yml` and matching validate plays, and (c) active GPU benchmarking sweeps conclude.
+5. **Rendered Panel & Variable Drilldown Verification:**
+   - Queries evaluated: 144 targets across 113 panels in 4 dashboards.
+   - Active telemetry is verified on 94 targets; 29 targets represent healthy zero states (e.g., zero GPU throttle, zero major page faults, zero firing alerts, zero network errors).
+   - Event-dependent targets (e.g. p50/p95 duration, completion rates) populate upon request completion; during multi-minute reasoning generations, short 5m rates correctly read zero.
+   - Variable drilldown (`$worker`) has been verified via the Grafana Image Renderer (`/render/d-solo/...`) for `All` (`.*`), `b0-live-llama-worker1`, and `b0-live-llama-deep-worker2`.
+6. **Local Quality Gates vs Hosted CI Status:**
+   - Local validation checks (`make syntax`, `make check`, `make lint`, `pytest -q`) pass 100% on the local commit.
+   - Hosted GitHub Actions quality runs (`.github/workflows/quality.yml`) execute upon `git push` to `origin/main`. The last passing hosted run on `origin/main` was on commit `18cdbae` (Run ID `3810629...`).
