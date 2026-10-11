@@ -127,7 +127,8 @@ observability_loki_retention_days: 30
 observability_tempo_version: v3.1.0
 observability_tempo_sha256: 9604ab46348270a42954801bba91cd65335e16568ef886bdf71b988fdcb7ac4e
 observability_tempo_binary_inner_sha256: 1d0cccee6126ac31a3500146ac3fed9b4362002e0fbb8f1125e31b968dba20ff
-observability_tempo_archive_url: https://github.com/grafana/tempo/releases/download/v3.1.0/tempo_3.1.0_linux_amd64.tar.gz
+observability_tempo_archive_url: >-
+  https://github.com/grafana/tempo/releases/download/v3.1.0/tempo_3.1.0_linux_amd64.tar.gz
 observability_tempo_http_port: 3200
 observability_tempo_grpc_port: 9096
 observability_tempo_otlp_grpc_port: 4317
