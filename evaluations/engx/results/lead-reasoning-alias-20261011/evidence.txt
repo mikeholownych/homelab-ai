@@ -1,0 +1,4 @@
+worker_selected b0-live-llama-worker1 alias:engineering/lead thinking= False budget= 0 
+response_validated b0-live-llama-worker1  thinking= None budget= None stop
+worker_selected b0-live-llama-worker1 alias:engineering/lead-reasoning thinking= True budget= 8192 
+response_validated b0-live-llama-worker1  thinking= None budget= None stop

@@ -1,0 +1,42 @@
+{
+ "models": {
+  "engineering/lead": {
+   "reasoning": {
+    "budget": 8192,
+    "mode": "off"
+   },
+   "max_completion_tokens": 8192,
+   "serving": [
+    "b0-live-llama-worker1"
+   ]
+  },
+  "engineering/lead-reasoning": {
+   "reasoning": {
+    "budget": 8192,
+    "mode": "on"
+   },
+   "max_completion_tokens": 16384,
+   "serving": [
+    "b0-live-llama-worker1"
+   ]
+  }
+ },
+ "requests": [
+  {
+   "alias": "engineering/lead",
+   "request_id": "23093430-d136-49fc-9728-6d4677646b5f",
+   "route": "rule=alias:engineering/lead;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+   "finish": "stop",
+   "content": "ARRIVAL=12:25",
+   "reasoning_chars": 0
+  },
+  {
+   "alias": "engineering/lead-reasoning",
+   "request_id": "4e671ae5-2234-4460-9688-057e39a9df19",
+   "route": "rule=alias:engineering/lead-reasoning;pool=lead;worker=b0-live-llama-worker1;fallback=false",
+   "finish": "stop",
+   "content": "ARRIVAL=12:25",
+   "reasoning_chars": 1247
+  }
+ ]
+}
