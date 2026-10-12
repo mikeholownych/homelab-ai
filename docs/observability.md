@@ -244,12 +244,26 @@ All dashboards include top-level cross-navigation links enabling immediate drill
    - Worker 1 (`b0-live-llama-worker1`): GPU 0 (`0000:51:00.0`), port 8000, model **`Qwen3.6-35B-A3B-UD-Q4_K_M`**, alias `Qwen3.6-35B-A3B-UD-Q4_K_M`, reasoning budget 8192 (`engineering/lead-reasoning`).
    - Worker 2 (`b0-live-llama-deep-worker2`): GPU 1 (`0000:93:00.0`), port 8001, model **`Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`**, alias `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M`, reasoning budget 4096.
 9. **Quality Gates & Hosted CI Verification:**
-   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1172 passed) pass cleanly.
+   - *Local Gates:* `make syntax`, `make check`, `make lint` (0 failures, 0 warnings), and `pytest -q` (1172 passed, 16 skipped, 134 subtests) pass cleanly.
    - *Hosted GitHub Actions CI:*
      - Workflow `quality.yml` (Run ID `38110956058`) on commit `433554c` **PASSED** in 15m 19s.
      - Workflow `quality.yml` (Run ID `38113136143`) on commit `6d95874` **PASSED** in 13m 04s.
      - Workflow `quality.yml` (Run ID `38113648179`) on commit `1ad1170` **PASSED** in 14m 09s.
      - Workflow `quality.yml` (Run ID `38115197818`) on commit `b4a6155` **PASSED** in 13m 56s.
+
+10. **Inference Drilldown Telemetry & Zero/Idle Handling Remediation:**
+   - *Issue Diagnosis:* An audit of `aihost-inference` revealed that 8 panels (9 target queries) rendered "No data" during idle periods due to recording rule divisor filters (`> 0`), absent series for un-triggered counters (`outcome="rejected"`), and event-driven request latency quantiles.
+   - *Dashboard & Query Remediation:*
+     - **Panel 4 ("Provider error ratio"):** Updated query to `(max(aihost:inference_error_ratio:rate5m{worker_id=~"$worker"}) or vector(0))` and added `noDataText="0% (idle)"`.
+     - **Panel 5 ("Estimated token share (1 h)"):** Updated query to `(aihost:inference_tokens_estimated_share:rate1h or vector(0))` and added `noDataText="0% (idle)"`.
+     - **Panel 6 ("Rejected / s (caller faults)"):** Updated query to `(sum(rate(aihost_inference_completions_total{outcome="rejected",worker_id=~"$worker"}[5m])) or vector(0))` and added `noDataText="0 (idle)"`.
+     - **Panel 9 ("Decode speed") & Panel 10 ("Prompt eval speed"):** Configured `noDataText` status indicators clarifying that busy-second token rates populate during active request execution.
+     - **Panel 12 ("Prefix-cache hit ratio"):** Added Target B querying `aihost_engine_prefix_cache_hit_ratio` (engine lifetime ratio gauge) alongside Target A (`rate1h` rolling window). This ensures the engine's cache occupancy remains visible at all times, distinguishing current lifetime readings from rolling historical aggregates.
+     - **Panel 14 ("Request duration p50 / p95") & Panel 15 ("Scheduler queue wait latency"):** Added `noDataText` indicators distinguishing idle windows from exporter faults.
+     - **Panel 24 ("Route decisions by rule and pool"):** Corrected grouping to `sum by (rule, pool)` and legend to `{{rule}} -> {{pool}}`, eliminating empty parentheses `()` caused by the absent `model` label.
+     - **Overview Panel 24 ("Inference Latency p95"):** Added `noDataText="idle"` to `aihost-host-overview.json.j2`.
+   - *Telemetry Deployment:* Deployed `write-textfile-metrics.sh` to `ai-5820-01` via Ansible (`playbooks/inference.yml --tags telemetry`), activating live `aihost_gpu_vram_*` collection and populating VRAM allocation panels across all dashboards.
+   - *Verification Evidence:* 100% panel query success (27/27 query-bearing panels return data) via Grafana API (`/api/ds/query`); verified visual rendering via Grafana Image Renderer (`/render/d-solo/...`) with HTTP 200 responses across all panels; verified template variable filtering (`$worker` = `All`, `b0-live-llama-worker1`, `b0-live-llama-deep-worker2`).
 
 ### 4. Concrete Operational Proposals
 

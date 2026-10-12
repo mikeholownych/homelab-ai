@@ -44,13 +44,16 @@ class Board:
         return {"datasource": DS, "expr": expr, "legendFormat": legend, "refId": ref, "editorMode": "code", "range": True}
 
     def timeseries(self, title: str, description: str, targets: list[tuple[str, str]], unit: str = "short",
-                   w: int = 12, h: int = 8, stack: bool = False, min_: float | None = None, max_: float | None = None) -> None:
+                   w: int = 12, h: int = 8, stack: bool = False, min_: float | None = None, max_: float | None = None,
+                   no_data_text: str | None = None) -> None:
         defaults = {"unit": unit, "custom": {"fillOpacity": 25 if stack else 8, "lineWidth": 1, "showPoints": "never",
                                               "stacking": {"mode": "normal" if stack else "none"}}}
         if min_ is not None:
             defaults["min"] = min_
         if max_ is not None:
             defaults["max"] = max_
+        if no_data_text is not None:
+            defaults["noDataText"] = no_data_text
         self.panels.append({"id": self._id, "type": "timeseries", "title": title, "description": description, "datasource": DS,
                              "gridPos": self._place(w, h), "fieldConfig": {"defaults": defaults, "overrides": []},
                              "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
@@ -58,11 +61,14 @@ class Board:
         self._id += 1
 
     def stat(self, title: str, description: str, expr: str, unit: str = "short", w: int = 6, h: int = 4,
-             thresholds: list[tuple[float | None, str]] | None = None) -> None:
+             thresholds: list[tuple[float | None, str]] | None = None, no_data_text: str | None = None) -> None:
         steps = [{"color": c, "value": v} for v, c in (thresholds or [(None, "green")])]
+        defaults = {"unit": unit, "thresholds": {"mode": "absolute", "steps": steps}}
+        if no_data_text is not None:
+            defaults["noDataText"] = no_data_text
         self.panels.append({"id": self._id, "type": "stat", "title": title, "description": description, "datasource": DS,
                             "gridPos": self._place(w, h),
-                            "fieldConfig": {"defaults": {"unit": unit, "thresholds": {"mode": "absolute", "steps": steps}}, "overrides": []},
+                            "fieldConfig": {"defaults": defaults, "overrides": []},
                             "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}, "colorMode": "value"},
                             "targets": [self._target(expr, "", "A")]})
         self._id += 1
@@ -95,28 +101,29 @@ def inference() -> dict:
     b.stat("Workers healthy", "Workers the gateway currently considers healthy.", f"sum(aihost_worker_health_status{{{W}}})", thresholds=[(None, "red"), (1, "green")], w=4)
     b.stat("Requests / s", "Inference requests received by the gateway.", 'sum(rate(aihost_inference_requests_total{status="received"}[5m]))', unit="reqps", w=4)
     b.stat("Provider error ratio", "Failed or timed-out share of requests that reached a worker. Caller faults (rejected) are excluded.",
-           f"max(aihost:inference_error_ratio:rate5m{{{W}}})", unit="percentunit", thresholds=[(None, "green"), (0.05, "red")], w=4)
+           f"(max(aihost:inference_error_ratio:rate5m{{{W}}}) or vector(0))", unit="percentunit", thresholds=[(None, "green"), (0.05, "red")], no_data_text="0% (idle)", w=4)
     b.stat("Estimated token share (1 h)", "Share of counted tokens that are the gateway's estimate instead of the engine's exact usage. Should stay near 0%; a rise means an engine stopped reporting usage.",
-           "aihost:inference_tokens_estimated_share:rate1h", unit="percentunit", thresholds=[(None, "green"), (0.01, "orange")], w=4)
+           "(aihost:inference_tokens_estimated_share:rate1h or vector(0))", unit="percentunit", thresholds=[(None, "green"), (0.01, "orange")], no_data_text="0% (idle)", w=4)
     b.stat("Rejected / s (caller faults)", "Requests refused as invalid for the worker (context overflow, malformed history). Says nothing about worker health.",
-           f'sum(rate(aihost_inference_completions_total{{outcome="rejected",{W}}}[5m]))', unit="reqps", w=4)
+           f'(sum(rate(aihost_inference_completions_total{{outcome="rejected",{W}}}[5m])) or vector(0))', unit="reqps", no_data_text="0 (idle)", w=4)
     b.stat("Gateway uptime", "Elapsed time in seconds since the orchestrator gateway started.", "max(aihost_gateway_uptime_seconds)", unit="s", w=4)
 
     b.row("Throughput")
-    b.timeseries("Decode speed (tokens per busy second)", "Generated tokens divided by generation time, per worker. A decode-speed figure, not wall-clock throughput.",
-                 [(f"aihost:engine_decode_tokens_per_second:rate5m{{{W}}}", "{{worker_id}}")], unit="short")
-    b.timeseries("Prompt evaluation speed (tokens per busy second)", "Prompt tokens evaluated per second of prompt processing; cached tokens are not included.",
-                 [(f"aihost:engine_prompt_eval_tokens_per_second:rate5m{{{W}}}", "{{worker_id}}")], unit="short")
+    b.timeseries("Decode speed (tokens per busy second)", "Generated tokens divided by generation time, per worker. A decode-speed figure, not wall-clock throughput. Appears during active generation periods.",
+                 [(f"aihost:engine_decode_tokens_per_second:rate5m{{{W}}}", "{{worker_id}}")], unit="short", no_data_text="No active generations in window")
+    b.timeseries("Prompt evaluation speed (tokens per busy second)", "Prompt tokens evaluated per second of prompt processing; cached tokens are not included. Appears during active request processing.",
+                 [(f"aihost:engine_prompt_eval_tokens_per_second:rate5m{{{W}}}", "{{worker_id}}")], unit="short", no_data_text="No prompt evaluations in window")
     b.timeseries("Generated tokens / s (wall clock)", "Tokens the engine generated per wall-clock second, averaged over 5 minutes.",
                  [(f"rate(aihost_engine_generation_tokens_total{{{W}}}[5m])", "{{worker_id}}")], unit="short")
-    b.timeseries("Prefix-cache hit ratio (1 h window)", "Share of prompt tokens served from cache over the last hour.",
-                 [(f"aihost:engine_prefix_cache_hit_ratio:rate1h{{{W}}}", "{{worker_id}}")], unit="percentunit", min_=0, max_=1)
+    b.timeseries("Prefix-cache hit ratio (1 h window)", "Share of prompt tokens served from cache over the last hour alongside lifetime engine ratio.",
+                 [(f"aihost:engine_prefix_cache_hit_ratio:rate1h{{{W}}}", "{{worker_id}} (1h window)"),
+                  (f"aihost_engine_prefix_cache_hit_ratio{{{W}}}", "{{worker_id}} (lifetime)")], unit="percentunit", min_=0, max_=1)
 
     b.row("Latency and Outcomes")
     b.timeseries("Request duration p50 / p95 by pool", "Time the gateway spent on the worker call, including engine-side queueing. Measurement window: 5 minutes.",
-                 [("aihost:inference_duration_seconds:p50_5m", "p50 {{pool}}"), ("aihost:inference_duration_seconds:p95_5m", "p95 {{pool}}")], unit="s")
+                 [("aihost:inference_duration_seconds:p50_5m", "p50 {{pool}}"), ("aihost:inference_duration_seconds:p95_5m", "p95 {{pool}}")], unit="s", no_data_text="No completed requests in window")
     b.timeseries("Scheduler queue wait latency", "Average time requests spend waiting inside the gateway scheduler queue prior to worker dispatch. Measurement window: 5 minutes.",
-                 [("rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0)", "queue wait")], unit="s")
+                 [("rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0)", "queue wait")], unit="s", no_data_text="No queued requests in window")
     b.timeseries("Requests by outcome", "Completed, failed, timed-out and rejected requests per second.",
                  [(f"aihost:inference_completions:rate5m{{{W}}}", "{{worker_id}} {{outcome}}")], unit="reqps", stack=True)
     b.timeseries("Completion terminations by reason", "Completed inference requests broken down by termination reason (stop token, max length context truncation).",
@@ -133,8 +140,8 @@ def inference() -> dict:
                  [(f"aihost_worker_inflight{{{W}}}", "in flight {{worker_id}}"), (f"aihost_worker_max_concurrency{{{W}}}", "max {{worker_id}}")])
 
     b.row("Routing, Policy and Authentication")
-    b.timeseries("Route decisions by rule, pool and model", "Routing rule evaluations and destinations. Distinguishes reasoning-off lead routes from engineering/lead-reasoning at 8192 context window.",
-                 [("sum by (rule, pool, model) (rate(aihost_route_decisions_total[5m]))", "{{rule}} ({{model}}) -> {{pool}}")], unit="reqps", stack=True)
+    b.timeseries("Route decisions by rule and pool", "Routing rule evaluations and destinations. Distinguishes reasoning-off lead routes from engineering/lead-reasoning at 8192 context window.",
+                 [("sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))", "{{rule}} -> {{pool}}")], unit="reqps", stack=True)
     b.timeseries("Worker dispatches / s", "Dispatches to target inference workers, reflecting distribution, health-based eligibility, and fallback.",
                  [("sum by (target_worker) (rate(aihost_inference_dispatches_total[5m]))", "-> {{target_worker}}")], unit="reqps", stack=True)
     b.timeseries("Client authority validations", "Client authority check rate partitioned by authority and outcome (allow / deny) without exposing credentials.",

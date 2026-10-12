@@ -163,6 +163,7 @@
       "description": "Failed or timed-out share of requests that reached a worker. Caller faults (rejected) are excluded.",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0% (idle)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -204,7 +205,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max(aihost:inference_error_ratio:rate5m{worker_id=~\"$worker\"})",
+          "expr": "(max(aihost:inference_error_ratio:rate5m{worker_id=~\"$worker\"}) or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -221,6 +222,7 @@
       "description": "Share of counted tokens that are the gateway's estimate instead of the engine's exact usage. Should stay near 0%; a rise means an engine stopped reporting usage.",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0% (idle)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -262,7 +264,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:inference_tokens_estimated_share:rate1h",
+          "expr": "(aihost:inference_tokens_estimated_share:rate1h or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -279,6 +281,7 @@
       "description": "Requests refused as invalid for the worker (context overflow, malformed history). Says nothing about worker health.",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0 (idle)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -316,7 +319,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(aihost_inference_completions_total{outcome=\"rejected\",worker_id=~\"$worker\"}[5m]))",
+          "expr": "(sum(rate(aihost_inference_completions_total{outcome=\"rejected\",worker_id=~\"$worker\"}[5m])) or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -397,7 +400,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Generated tokens divided by generation time, per worker. A decode-speed figure, not wall-clock throughput.",
+      "description": "Generated tokens divided by generation time, per worker. A decode-speed figure, not wall-clock throughput. Appears during active generation periods.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -408,6 +411,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "No active generations in window",
           "unit": "short"
         },
         "overrides": []
@@ -449,7 +453,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Prompt tokens evaluated per second of prompt processing; cached tokens are not included.",
+      "description": "Prompt tokens evaluated per second of prompt processing; cached tokens are not included. Appears during active request processing.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -460,6 +464,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "No prompt evaluations in window",
           "unit": "short"
         },
         "overrides": []
@@ -553,7 +558,7 @@
         "type": "prometheus",
         "uid": "${DS_PROMETHEUS}"
       },
-      "description": "Share of prompt tokens served from cache over the last hour.",
+      "description": "Share of prompt tokens served from cache over the last hour alongside lifetime engine ratio.",
       "fieldConfig": {
         "defaults": {
           "custom": {
@@ -594,9 +599,20 @@
           },
           "editorMode": "code",
           "expr": "aihost:engine_prefix_cache_hit_ratio:rate1h{worker_id=~\"$worker\"}",
-          "legendFormat": "{{worker_id}}",
+          "legendFormat": "{{worker_id}} (1h window)",
           "range": true,
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "aihost_engine_prefix_cache_hit_ratio{worker_id=~\"$worker\"}",
+          "legendFormat": "{{worker_id}} (lifetime)",
+          "range": true,
+          "refId": "B"
         }
       ],
       "title": "Prefix-cache hit ratio (1 h window)",
@@ -631,6 +647,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "No completed requests in window",
           "unit": "s"
         },
         "overrides": []
@@ -694,6 +711,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "No queued requests in window",
           "unit": "s"
         },
         "overrides": []
@@ -1146,13 +1164,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (rule, pool, model) (rate(aihost_route_decisions_total[5m]))",
-          "legendFormat": "{{rule}} ({{model}}) -> {{pool}}",
+          "expr": "sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))",
+          "legendFormat": "{{rule}} -> {{pool}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Route decisions by rule, pool and model",
+      "title": "Route decisions by rule and pool",
       "type": "timeseries"
     },
     {
