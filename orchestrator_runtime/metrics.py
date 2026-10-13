@@ -442,6 +442,11 @@ class MetricsRegistry:
             "Routing decisions by matched rule and the pool that served the request.",
             ("rule", "pool"),
         )
+        self.circuit_breaker_state = self._register_gauge(
+            "aihost_circuit_breaker_state",
+            "Current state of circuit breaker (0 = closed, 0.5 = half-open, 1 = open).",
+            ("target_type", "target_id"),
+        )
         self.scheduler_worker_available = self._register_gauge(
             "aihost_scheduler_worker_available",
             "Current worker availability status (1 = available, 0 = unavailable).",

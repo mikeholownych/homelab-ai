@@ -3,6 +3,7 @@
 from .admission import AdmissionCancelled, AdmissionController, AdmissionRejected, PoolUnavailable
 from .capabilities import Capability
 from .capacity import CapacityState, CapacityTracker
+from .circuit_breaker import CircuitBreaker, CircuitBreakerRegistry, CircuitState
 from .clients import Client, ClientRegistry, QuotaExceeded
 from .engines import EngineObservation, LlamaCppAdapter, VllmAdapter
 from .evidence import EvidenceStore
@@ -20,6 +21,7 @@ from .runtime import (
     TaskGraph,
     WorkerRecord,
 )
+from .smart_router import ComplexityReport, CostModel, LatencyTracker, PromptComplexityAnalyzer
 from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
 
 __all__ = [
@@ -29,11 +31,18 @@ __all__ = [
     "Capability",
     "CapacityState",
     "CapacityTracker",
+    "CircuitBreaker",
+    "CircuitBreakerRegistry",
+    "CircuitState",
     "Client",
     "ClientRegistry",
+    "ComplexityReport",
+    "CostModel",
     "EngineObservation",
+    "LatencyTracker",
     "LlamaCppAdapter",
     "PoolUnavailable",
+    "PromptComplexityAnalyzer",
     "QuotaExceeded",
     "RequestCancelled",
     "VllmAdapter",

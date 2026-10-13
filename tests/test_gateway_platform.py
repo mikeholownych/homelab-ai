@@ -196,6 +196,9 @@ def test_queue_full_and_max_wait_return_429_with_retry_after(fakes, tmp_path):
     waited = runtime.complete(chat())
     assert waited["http_status"] == 429 and waited["failure_class"] == "capacity_exhausted" and waited["retry_after"] >= 1
     first.join()
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline and fake.busy != 0:
+        time.sleep(0.01)
     assert fake.busy == 0
 
 

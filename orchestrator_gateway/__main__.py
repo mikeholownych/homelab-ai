@@ -10,8 +10,9 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
-from orchestrator_gateway import GatewayServer, create_gateway
+from orchestrator_gateway import AsgiServerWrapper, GatewayServer, create_asgi_gateway, create_gateway
 from orchestrator_runtime import (
     CapabilityRegistry,
     ClientRegistry,
@@ -192,31 +193,51 @@ def main() -> None:
 
     monitoring_token = read_secret("ORCHESTRATOR_MONITORING_TOKEN", "ORCHESTRATOR_MONITORING_TOKEN_FILE") or None
     allow_worker_pinning = os.environ.get("ORCHESTRATOR_ALLOW_WORKER_PINNING") == "true"
-    servers: list[GatewayServer] = []
+    engine = os.environ.get("ORCHESTRATOR_SERVER_ENGINE", "sync").strip().lower()
+    servers: list[Any] = []
 
     # Loopback listener: monitoring only (vllm-top, node textfile, readiness). Workload here is refused.
     local_host = os.environ.get("ORCHESTRATOR_HOST", "127.0.0.1")
     local_port = int(os.environ.get("ORCHESTRATOR_PORT", "8010"))
     local_mode = os.environ.get("ORCHESTRATOR_LOCAL_LISTENER_MODE", "local")
-    servers.append(GatewayServer((local_host, local_port), create_gateway(
-        runtime, clients=runtime.clients, monitoring_token=monitoring_token,
-        require_monitoring_auth=os.environ.get("ORCHESTRATOR_REQUIRE_MONITORING_AUTH") == "true",
-        allow_worker_pinning=allow_worker_pinning, listener=local_mode)))
-
-    # Remote listener: the only workload entry point (TLS; requests from the host's own addresses are refused).
     remote_host = os.environ.get("ORCHESTRATOR_REMOTE_HOST")
-    if remote_host:
-        remote = GatewayServer((remote_host, int(os.environ.get("ORCHESTRATOR_REMOTE_PORT", "8443"))), create_gateway(
-            runtime, clients=runtime.clients, monitoring_token=monitoring_token, require_monitoring_auth=True,
-            allow_worker_pinning=allow_worker_pinning, listener="remote"))
-        cert, key = os.environ.get("ORCHESTRATOR_TLS_CERT"), os.environ.get("ORCHESTRATOR_TLS_KEY")
-        if not cert or not key:
-            raise RuntimeError("the remote listener requires ORCHESTRATOR_TLS_CERT and ORCHESTRATOR_TLS_KEY")
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.load_cert_chain(cert, key)
-        remote.socket = context.wrap_socket(remote.socket, server_side=True)
-        servers.append(remote)
+
+    if engine == "asgi":
+        local_app = create_asgi_gateway(
+            runtime, clients=runtime.clients, monitoring_token=monitoring_token,
+            require_monitoring_auth=os.environ.get("ORCHESTRATOR_REQUIRE_MONITORING_AUTH") == "true",
+            allow_worker_pinning=allow_worker_pinning, listener=local_mode)
+        servers.append(AsgiServerWrapper(local_app, local_host, local_port))
+
+        if remote_host:
+            cert, key = os.environ.get("ORCHESTRATOR_TLS_CERT"), os.environ.get("ORCHESTRATOR_TLS_KEY")
+            if not cert or not key:
+                raise RuntimeError("the remote listener requires ORCHESTRATOR_TLS_CERT and ORCHESTRATOR_TLS_KEY")
+            remote_port = int(os.environ.get("ORCHESTRATOR_REMOTE_PORT", "8443"))
+            remote_app = create_asgi_gateway(
+                runtime, clients=runtime.clients, monitoring_token=monitoring_token,
+                require_monitoring_auth=True, allow_worker_pinning=allow_worker_pinning,
+                listener="remote")
+            servers.append(AsgiServerWrapper(remote_app, remote_host, remote_port, ssl_keyfile=key, ssl_certfile=cert))
+    else:
+        servers.append(GatewayServer((local_host, local_port), create_gateway(
+            runtime, clients=runtime.clients, monitoring_token=monitoring_token,
+            require_monitoring_auth=os.environ.get("ORCHESTRATOR_REQUIRE_MONITORING_AUTH") == "true",
+            allow_worker_pinning=allow_worker_pinning, listener=local_mode)))
+
+        # Remote listener: the only workload entry point (TLS; requests from the host's own addresses are refused).
+        if remote_host:
+            remote = GatewayServer((remote_host, int(os.environ.get("ORCHESTRATOR_REMOTE_PORT", "8443"))), create_gateway(
+                runtime, clients=runtime.clients, monitoring_token=monitoring_token, require_monitoring_auth=True,
+                allow_worker_pinning=allow_worker_pinning, listener="remote"))
+            cert, key = os.environ.get("ORCHESTRATOR_TLS_CERT"), os.environ.get("ORCHESTRATOR_TLS_KEY")
+            if not cert or not key:
+                raise RuntimeError("the remote listener requires ORCHESTRATOR_TLS_CERT and ORCHESTRATOR_TLS_KEY")
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.load_cert_chain(cert, key)
+            remote.socket = context.wrap_socket(remote.socket, server_side=True)
+            servers.append(remote)
 
     grace = float(os.environ.get("ORCHESTRATOR_SHUTDOWN_GRACE_SECONDS", "600"))
 

@@ -24,6 +24,7 @@ from . import reasoning as reasoning_policy
 from .admission import AdmissionCancelled, AdmissionController, AdmissionRejected, PoolUnavailable, PRIORITIES
 from .capabilities import intersect, requirements as capability_requirements
 from .capacity import CapacityTracker
+from .circuit_breaker import CircuitBreakerRegistry
 from .clients import Client, QuotaExceeded, clamp_priority
 from .engines import adapter_for
 from .evidence import EvidenceStore, scrub
@@ -680,6 +681,10 @@ class OrchestratorRuntime:
             max_wait_seconds=float(os.environ.get("ORCHESTRATOR_QUEUE_MAX_WAIT_SECONDS", "120")),
             metrics=self.metrics,
         )
+        self.circuit_breakers = CircuitBreakerRegistry(evidence=self.evidence, metrics=self.metrics)
+        if self.router is not None and getattr(self.router, "circuit_breakers", None) is None:
+            self.router.circuit_breakers = self.circuit_breakers
+        self._shadow_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="shadow-worker")
         if engines is None:
             engines = {}
             for record in self.registry.snapshot():
@@ -790,6 +795,8 @@ class OrchestratorRuntime:
     # ================================================================== R12 graceful stop
     def begin_shutdown(self) -> None:
         self.shutting_down.set()
+        if hasattr(self, "_shadow_executor"):
+            self._shadow_executor.shutdown(wait=False, cancel_futures=True)
 
     def inflight_count(self) -> int:
         with self._inflight_lock:
@@ -931,12 +938,19 @@ class OrchestratorRuntime:
         return sorted(name for name in needs if not caps.get(name) or not caps[name].available)
 
     def _eligible(self, pool: str | None, required: frozenset[str], public_model: str | None,
-                  needs: frozenset[str], include_candidates: bool, missing: set[str]) -> list[WorkerRecord]:
+                  needs: frozenset[str], include_candidates: bool, missing: set[str],
+                  pinned_worker_id: str | None = None) -> list[WorkerRecord]:
         drained = self.admission.drained()
         out = []
         for worker in self.registry.candidates(required, pool=pool, public_model_id=public_model,
                                                include_candidates=include_candidates):
             if worker.worker_id in drained or self.capacity.blocked_reason(worker.worker_id):
+                continue
+            if (
+                pinned_worker_id != worker.worker_id
+                and self.circuit_breakers is not None
+                and not self.circuit_breakers.is_worker_available(worker.worker_id)
+            ):
                 continue
             lacking = self._requirements_ok(worker.worker_id, needs)
             if lacking:
@@ -1097,7 +1111,8 @@ class OrchestratorRuntime:
         elif self.router is not None:
             decision = self.router.decide(model=public_model, task_class=task_class, has_tools=bool(request.get("tools")),
                                           prompt_tokens=estimate, attempt=attempt,
-                                          previous_outcome=self.previous_outcome(previous_request, client_id))
+                                          previous_outcome=self.previous_outcome(previous_request, client_id),
+                                          request=request)
             if decision.scope == "qualification":
                 if client is not None and "qualification" not in client.scopes:
                     self.evidence.append("routing_rejected", request_id=request_id, client_id=client_id, failure_class="scope",
@@ -1133,7 +1148,8 @@ class OrchestratorRuntime:
         while index < len(pools):
             pool = pools[index]
             ordered_all = self._eligible(pool, capabilities, public_model if (pool is None and worker_id is None) else None,
-                                         needs, include_candidates or (pool is not None and route.get("canary") == pool), missing)
+                                         needs, include_candidates or (pool is not None and route.get("canary") == pool), missing,
+                                         pinned_worker_id=worker_id)
             if worker_id:
                 ordered_all = [w for w in ordered_all if w.worker_id == worker_id]
             ordered_all = [w for w in ordered_all if w.worker_id not in excluded]
@@ -1354,6 +1370,10 @@ class OrchestratorRuntime:
             else:
                 output = adapter.complete(plan.forwarded, timeout)
             call_duration = time.monotonic() - started
+            if self.circuit_breakers is not None:
+                self.circuit_breakers.record_success(worker.worker_id, pool_name=route.get("pool"))
+            if self.router is not None and getattr(self.router, "latency_tracker", None) is not None:
+                self.router.latency_tracker.record(worker.worker_id, route.get("pool") or worker.pool, duration=call_duration)
             self.health.record_worker_observation(worker.worker_id, healthy=True, duration=call_duration)
             release(True, duration=call_duration)
         except RequestCancelled:
@@ -1363,6 +1383,8 @@ class OrchestratorRuntime:
             return self._cancelled(request_id, client_id, route["pool"], reason, queued=False)
         except TimeoutError:
             call_duration = time.monotonic() - started
+            if self.circuit_breakers is not None:
+                self.circuit_breakers.record_failure(worker.worker_id, pool_name=route.get("pool"), error="timeout")
             release(False, distress=True)
             if hasattr(self, "telemetry"):
                 try:
@@ -1422,6 +1444,8 @@ class OrchestratorRuntime:
                         pass
                 return {"status": "rejected", "failure_class": failure_class, "request_id": request_id, "message": str(message)[:1000]}
             release(False, distress=True)
+            if self.circuit_breakers is not None:
+                self.circuit_breakers.record_failure(worker.worker_id, pool_name=route.get("pool"), error=error)
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="provider")
             self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
             self.evidence.append("execution_failed", request_id=request_id, client_id=client_id, worker_id=worker.worker_id,
@@ -1449,6 +1473,8 @@ class OrchestratorRuntime:
             return {"status": "blocked", "failure_class": "provider", "request_id": request_id}
         except Exception as error:
             call_duration = time.monotonic() - started
+            if self.circuit_breakers is not None:
+                self.circuit_breakers.record_failure(worker.worker_id, pool_name=route.get("pool"), error=error)
             release(False, distress=True)
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="worker")
             self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error=str(error))
@@ -1659,7 +1685,10 @@ class OrchestratorRuntime:
                                  shadow_finish=output.get("provider_finish_reason"),
                                  shadow_latency_ms=round((time.monotonic() - started) * 1000, 1))
 
-        threading.Thread(target=run, daemon=True, name="shadow").start()
+        if hasattr(self, "_shadow_executor"):
+            self._shadow_executor.submit(run)
+        else:
+            threading.Thread(target=run, daemon=True, name="shadow").start()
 
     def execute_tool(self, task: Task, authority: Authority, tool_name: str, arguments: dict[str, Any], executor: Any) -> dict[str, Any]:
         if not tool_name or not isinstance(arguments, dict) or not authority.allows(task, "execute"):

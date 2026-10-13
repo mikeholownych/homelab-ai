@@ -1,20 +1,29 @@
 """Deterministic, auditable model routing for the orchestrator gateway.
 
 Routing is a first-match rule table over request features (model alias, task class, tool use,
-prompt size) that selects a *pool* of workers plus an explicit fallback list. The table is
-validated when the gateway starts and an invalid table prevents start-up (fail closed). Every
-decision records the rule that matched and why, so a response can always be traced to a rule.
+prompt size, prompt complexity) that selects a *pool* of workers plus an explicit fallback list.
+Supports smart multi-factor optimization (EWMA latency, cost, load) and circuit breaker fast failover.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
+from .circuit_breaker import CircuitBreakerRegistry
 from .reasoning import RoutePolicy
+from .smart_router import CostModel, LatencyTracker, PromptComplexityAnalyzer, ComplexityReport
 
-MATCH_KEYS = {"model", "task_class", "has_tools", "min_prompt_tokens", "max_prompt_tokens", "attempt_gte", "previous_outcome"}
-RULE_KEYS = {"id", "match", "pool", "fallback", "reasoning", "fallback_on_saturation", "canary", "shadow", "evidence"}
+MATCH_KEYS = {
+    "model", "task_class", "has_tools", "min_prompt_tokens", "max_prompt_tokens",
+    "attempt_gte", "previous_outcome", "min_complexity", "max_complexity", "complexity_tier",
+}
+RULE_KEYS = {
+    "id", "match", "pool", "fallback", "reasoning", "fallback_on_saturation",
+    "canary", "shadow", "evidence", "strategy", "cost_weight",
+}
 OUTCOMES = ("pass", "fail", "partial")
+COMPLEXITY_TIERS = ("simple", "medium", "complex")
+ROUTING_STRATEGIES = ("first_match", "least_latency", "least_busy", "cost_optimized")
 
 
 class RouteConfigError(ValueError):
@@ -33,6 +42,11 @@ class RouteRule:
     max_prompt_tokens: int | None = None
     attempt_gte: int | None = None
     previous_outcomes: frozenset[str] | None = None
+    min_complexity: float | None = None
+    max_complexity: float | None = None
+    complexity_tiers: frozenset[str] | None = None
+    strategy: str = "first_match"
+    cost_weight: float = 1.0
     policy: RoutePolicy = field(default_factory=RoutePolicy)
     fallback_on_saturation: bool = False
     canary: tuple[str, float] | None = None
@@ -40,11 +54,24 @@ class RouteRule:
     evidence: tuple[str, ...] = ()
 
     def unconditional(self) -> bool:
-        return (self.models, self.task_classes, self.has_tools, self.min_prompt_tokens, self.max_prompt_tokens,
-                self.attempt_gte, self.previous_outcomes) == (None,) * 7
+        return (
+            self.models, self.task_classes, self.has_tools, self.min_prompt_tokens, self.max_prompt_tokens,
+            self.attempt_gte, self.previous_outcomes, self.min_complexity, self.max_complexity,
+            self.complexity_tiers
+        ) == (None,) * 10
 
-    def matches(self, *, model: str | None, task_class: str | None, has_tools: bool, prompt_tokens: int,
-                attempt: int = 1, previous_outcome: str | None = None) -> bool:
+    def matches(
+        self,
+        *,
+        model: str | None,
+        task_class: str | None,
+        has_tools: bool,
+        prompt_tokens: int,
+        attempt: int = 1,
+        previous_outcome: str | None = None,
+        complexity_score: float | None = None,
+        complexity_tier: str | None = None,
+    ) -> bool:
         if self.models is not None and model not in self.models:
             return False
         if self.task_classes is not None and task_class not in self.task_classes:
@@ -59,6 +86,15 @@ class RouteRule:
             return False
         if self.previous_outcomes is not None and previous_outcome not in self.previous_outcomes:
             return False
+        if self.min_complexity is not None:
+            if complexity_score is None or complexity_score < self.min_complexity:
+                return False
+        if self.max_complexity is not None:
+            if complexity_score is None or complexity_score > self.max_complexity:
+                return False
+        if self.complexity_tiers is not None:
+            if complexity_tier is None or complexity_tier not in self.complexity_tiers:
+                return False
         return True
 
     def describe(self) -> dict[str, Any]:
@@ -77,8 +113,21 @@ class RouteRule:
             match["attempt_gte"] = self.attempt_gte
         if self.previous_outcomes is not None:
             match["previous_outcome"] = sorted(self.previous_outcomes)
-        out: dict[str, Any] = {"id": self.rule_id, "match": match, "pool": self.pool, "fallback": list(self.fallback),
-                               "reasoning": self.policy.describe(), "fallback_on_saturation": self.fallback_on_saturation}
+        if self.min_complexity is not None:
+            match["min_complexity"] = self.min_complexity
+        if self.max_complexity is not None:
+            match["max_complexity"] = self.max_complexity
+        if self.complexity_tiers is not None:
+            match["complexity_tier"] = sorted(self.complexity_tiers)
+        out: dict[str, Any] = {
+            "id": self.rule_id,
+            "match": match,
+            "pool": self.pool,
+            "fallback": list(self.fallback),
+            "reasoning": self.policy.describe(),
+            "fallback_on_saturation": self.fallback_on_saturation,
+            "strategy": self.strategy,
+        }
         if self.canary:
             out["canary"] = {"pool": self.canary[0], "percent": self.canary[1]}
         if self.shadow:
@@ -108,6 +157,8 @@ class RouteDecision:
     canary: tuple[str, float] | None = None
     shadow: tuple[str, float] | None = None
     scope: str = "workload"
+    strategy: str = "first_match"
+    complexity: ComplexityReport | None = None
 
     @property
     def pools(self) -> tuple[str, ...]:
@@ -145,10 +196,24 @@ def _int(value: Any, field: str, rule_id: str) -> int:
     return value
 
 
-class Router:
-    """First-match rule table. The last rule must be an unconditional default."""
+def _float_range(value: Any, field: str, rule_id: str, low: float = 0.0, high: float = 1.0) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not (low <= float(value) <= high):
+        raise RouteConfigError(f"rule '{rule_id}': '{field}' must be a number between {low} and {high}")
+    return float(value)
 
-    def __init__(self, rules: list[RouteRule], aliases: dict[str, str] | None = None) -> None:
+
+class Router:
+    """First-match rule table with multi-factor optimization and circuit breaker failover."""
+
+    def __init__(
+        self,
+        rules: list[RouteRule],
+        aliases: dict[str, str] | None = None,
+        *,
+        circuit_breakers: CircuitBreakerRegistry | None = None,
+        latency_tracker: LatencyTracker | None = None,
+        cost_model: CostModel | None = None,
+    ) -> None:
         if not rules:
             raise RouteConfigError("route table must contain at least one rule")
         ids = [r.rule_id for r in rules]
@@ -162,9 +227,20 @@ class Router:
             self.alias_specs[name] = spec if isinstance(spec, Alias) else Alias(spec)
         # name -> pool, kept for callers that only need the mapping
         self.aliases = {name: spec.pool for name, spec in self.alias_specs.items()}
+        self.circuit_breakers = circuit_breakers
+        self.latency_tracker = latency_tracker or LatencyTracker()
+        self.cost_model = cost_model or CostModel()
 
     @classmethod
-    def from_config(cls, rules_cfg: Any, aliases: Any = None) -> "Router":
+    def from_config(
+        cls,
+        rules_cfg: Any,
+        aliases: Any = None,
+        *,
+        circuit_breakers: CircuitBreakerRegistry | None = None,
+        latency_tracker: LatencyTracker | None = None,
+        cost_model: CostModel | None = None,
+    ) -> "Router":
         if not isinstance(rules_cfg, list):
             raise RouteConfigError("routes must be a list of rules")
         parsed_aliases: dict[str, Alias] = {}
@@ -207,6 +283,21 @@ class Router:
             previous = _strings(match["previous_outcome"], "previous_outcome", rule_id) if "previous_outcome" in match else None
             if previous is not None and not previous <= set(OUTCOMES):
                 raise RouteConfigError(f"rule '{rule_id}': previous_outcome must be within {list(OUTCOMES)}")
+
+            min_complexity = _float_range(match["min_complexity"], "min_complexity", rule_id) if "min_complexity" in match else None
+            max_complexity = _float_range(match["max_complexity"], "max_complexity", rule_id) if "max_complexity" in match else None
+            if min_complexity is not None and max_complexity is not None and min_complexity > max_complexity:
+                raise RouteConfigError(f"rule '{rule_id}': min_complexity exceeds max_complexity")
+
+            complexity_tiers = _strings(match["complexity_tier"], "complexity_tier", rule_id) if "complexity_tier" in match else None
+            if complexity_tiers is not None and not complexity_tiers <= set(COMPLEXITY_TIERS):
+                raise RouteConfigError(f"rule '{rule_id}': complexity_tier must be within {list(COMPLEXITY_TIERS)}")
+
+            strategy = raw.get("strategy", "first_match")
+            if strategy not in ROUTING_STRATEGIES:
+                raise RouteConfigError(f"rule '{rule_id}': strategy must be one of {list(ROUTING_STRATEGIES)}")
+
+            cost_weight = float(raw.get("cost_weight", 1.0))
             saturation = raw.get("fallback_on_saturation", False)
             if not isinstance(saturation, bool):
                 raise RouteConfigError(f"rule '{rule_id}': 'fallback_on_saturation' must be a boolean")
@@ -223,11 +314,13 @@ class Router:
                 task_classes=_strings(match["task_class"], "task_class", rule_id) if "task_class" in match else None,
                 has_tools=has_tools, min_prompt_tokens=lo, max_prompt_tokens=hi,
                 attempt_gte=attempt_gte, previous_outcomes=previous,
+                min_complexity=min_complexity, max_complexity=max_complexity, complexity_tiers=complexity_tiers,
+                strategy=strategy, cost_weight=cost_weight,
                 policy=_policy(raw.get("reasoning"), f"rule '{rule_id}'"), fallback_on_saturation=saturation,
                 canary=_split(raw.get("canary"), "canary", rule_id), shadow=_split(raw.get("shadow"), "shadow", rule_id),
                 evidence=tuple(evidence),
             ))
-        return cls(rules, parsed_aliases)
+        return cls(rules, parsed_aliases, circuit_breakers=circuit_breakers, latency_tracker=latency_tracker, cost_model=cost_model)
 
     def referenced_pools(self) -> set[str]:
         pools = set(self.aliases.values())
@@ -239,19 +332,113 @@ class Router:
                     pools.add(split[0])
         return pools
 
-    def decide(self, *, model: str | None, task_class: str | None, has_tools: bool, prompt_tokens: int,
-               attempt: int = 1, previous_outcome: str | None = None) -> RouteDecision:
+    def decide(
+        self,
+        *,
+        model: str | None,
+        task_class: str | None,
+        has_tools: bool,
+        prompt_tokens: int,
+        attempt: int = 1,
+        previous_outcome: str | None = None,
+        request: dict[str, Any] | None = None,
+        complexity_score: float | None = None,
+    ) -> RouteDecision:
         # A model name that is an alias for a pool is an explicit client choice and bypasses the table.
         if model is not None and model in self.alias_specs:
             spec = self.alias_specs[model]
             return RouteDecision(f"alias:{model}", spec.pool, (), f"model alias '{model}'", spec.policy, scope=spec.scope)
+
+        # 1. Compute complexity report if request or score is available
+        complexity: ComplexityReport | None = None
+        if request is not None:
+            complexity = PromptComplexityAnalyzer.analyze(request, prompt_tokens)
+        elif complexity_score is not None:
+            tier = "simple" if complexity_score < 0.3 else ("medium" if complexity_score < 0.7 else "complex")
+            complexity = ComplexityReport(score=complexity_score, tier=tier)
+
+        c_score = complexity.score if complexity else None
+        c_tier = complexity.tier if complexity else None
+
         for rule in self.rules:
-            if rule.matches(model=model, task_class=task_class, has_tools=has_tools, prompt_tokens=prompt_tokens,
-                            attempt=attempt, previous_outcome=previous_outcome):
-                return RouteDecision(rule.rule_id, rule.pool, rule.fallback, f"matched rule '{rule.rule_id}'",
-                                     rule.policy, rule.fallback_on_saturation, rule.canary, rule.shadow)
+            if rule.matches(
+                model=model,
+                task_class=task_class,
+                has_tools=has_tools,
+                prompt_tokens=prompt_tokens,
+                attempt=attempt,
+                previous_outcome=previous_outcome,
+                complexity_score=c_score,
+                complexity_tier=c_tier,
+            ):
+                target_pool = rule.pool
+                fallback_pools = list(rule.fallback)
+                reason = f"matched rule '{rule.rule_id}'"
+
+                # 2. Circuit Breaker Fast-Failover: if target pool is OPEN, immediately promote first healthy fallback
+                if self.circuit_breakers is not None and not self.circuit_breakers.is_pool_available(target_pool):
+                    available_fallback = None
+                    for fb in fallback_pools:
+                        if self.circuit_breakers.is_pool_available(fb):
+                            available_fallback = fb
+                            break
+                    if available_fallback:
+                        fallback_pools.remove(available_fallback)
+                        fallback_pools.append(target_pool)
+                        reason = f"matched rule '{rule.rule_id}' (pool '{target_pool}' circuit breaker open; fast failover to '{available_fallback}')"
+                        target_pool = available_fallback
+
+                # 3. Strategy Optimization
+                if rule.strategy == "least_latency" and self.latency_tracker is not None:
+                    # Sort available pools by EWMA duration
+                    all_candidate_pools = [target_pool, *fallback_pools]
+                    if self.circuit_breakers is not None:
+                        healthy_candidates = [p for p in all_candidate_pools if self.circuit_breakers.is_pool_available(p)]
+                    else:
+                        healthy_candidates = all_candidate_pools
+
+                    if healthy_candidates:
+                        healthy_candidates.sort(key=lambda p: self.latency_tracker.pool_duration(p))
+                        best_pool = healthy_candidates[0]
+                        if best_pool != target_pool:
+                            fallback_pools = [p for p in all_candidate_pools if p != best_pool]
+                            target_pool = best_pool
+                            reason += f"; optimized for least latency ({self.latency_tracker.pool_duration(best_pool)*1000:.0f}ms)"
+
+                elif rule.strategy == "cost_optimized" and self.cost_model is not None and complexity is not None:
+                    # For simple tasks, prefer the lower-cost pool
+                    if complexity.tier == "simple":
+                        all_candidate_pools = [target_pool, *fallback_pools]
+                        all_candidate_pools.sort(key=lambda p: self.cost_model.cost_weight(p))
+                        cheapest_pool = all_candidate_pools[0]
+                        if cheapest_pool != target_pool:
+                            fallback_pools = [p for p in all_candidate_pools if p != cheapest_pool]
+                            target_pool = cheapest_pool
+                            reason += f"; optimized for cost (simple tier task routed to '{cheapest_pool}')"
+
+                return RouteDecision(
+                    rule_id=rule.rule_id,
+                    pool=target_pool,
+                    fallback=tuple(fallback_pools),
+                    reason=reason,
+                    policy=rule.policy,
+                    fallback_on_saturation=rule.fallback_on_saturation,
+                    canary=rule.canary,
+                    shadow=rule.shadow,
+                    strategy=rule.strategy,
+                    complexity=complexity,
+                )
+
         raise RouteConfigError("no route rule matched")  # unreachable: the last rule is unconditional
 
     def describe(self) -> dict[str, Any]:
         aliases = {name: {"pool": a.pool, "scope": a.scope, "reasoning": a.policy.describe()} for name, a in self.alias_specs.items()}
-        return {"aliases": aliases, "rules": [r.describe() for r in self.rules]}
+        res: dict[str, Any] = {
+            "aliases": aliases,
+            "rules": [r.describe() for r in self.rules],
+        }
+        if self.circuit_breakers is not None:
+            res["circuit_breakers"] = self.circuit_breakers.snapshot()
+        if self.latency_tracker is not None:
+            res["latency"] = self.latency_tracker.snapshot()
+        return res
