@@ -152,16 +152,16 @@ def inference() -> dict:
                  [('sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))', "prompt {{source}}"),
                   ('sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))', "completion {{source}}")], stack=True)
     b.timeseries("Circuit breaker state by worker and pool", "Current circuit breaker state: 0 = CLOSED (healthy), 0.5 = HALF-OPEN (probing), 1 = OPEN (tripped).",
-                 [("max by (target_type, target_id) (aihost_circuit_breaker_state)", "{{target_type}}: {{target_id}}")], unit="short", min_=0, max_=1, no_data_text="0 (all closed/healthy)")
+                 [('(max by (target_type, target_id) (aihost_circuit_breaker_state)) or label_replace(label_replace(vector(0), "target_type", "all", "", ""), "target_id", "closed", "", "")', "{{target_type}}: {{target_id}}")], unit="short", min_=0, max_=1, no_data_text="0 (all closed/healthy)")
     b.timeseries("Response cache performance (hits vs misses / s)", "Sub-millisecond response cache hits vs misses.",
-                 [("sum by (model) (rate(aihost_gateway_cache_hits_total[5m]))", "hits {{model}}"),
-                  ("sum by (model) (rate(aihost_gateway_cache_misses_total[5m]))", "misses {{model}}")], unit="reqps", stack=True, no_data_text="0 (no cache activity in window)")
+                 [('(sum by (model) (rate(aihost_gateway_cache_hits_total[5m]))) or (sum by (model) (0 * aihost_worker_info))', "hits {{model}}"),
+                  ('(sum by (model) (rate(aihost_gateway_cache_misses_total[5m]))) or (sum by (model) (0 * aihost_worker_info))', "misses {{model}}")], unit="reqps", stack=True, no_data_text="0 (no cache activity in window)")
     b.timeseries("Security & Guardrail Activity (violations / s)", "Rate of detected prompt injection and sensitive secret DLP violations on ingress and egress.",
-                 [("sum by (direction, action, violation_type) (rate(aihost_guardrail_violations_total[5m]))", "{{direction}} {{action}}: {{violation_type}}")], unit="events/s", stack=True, no_data_text="0 (no violations in window)")
+                 [('(sum by (direction, action, violation_type) (rate(aihost_guardrail_violations_total[5m]))) or label_replace(label_replace(label_replace(vector(0), "direction", "ingress/egress", "", ""), "action", "violations", "", ""), "violation_type", "none", "", "")', "{{direction}} {{action}}: {{violation_type}}")], unit="events/s", stack=True, no_data_text="0 (no violations in window)")
     b.timeseries("Streaming slow consumer disconnects (/s)", "Rate of slow consumer disconnections triggered by streaming backpressure timeouts.",
-                 [("sum by (worker_id) (rate(aihost_streaming_slow_consumer_disconnects_total[5m]))", "{{worker_id}}")], unit="events/s", stack=True, no_data_text="0 (no slow consumer disconnects)")
+                 [('(sum by (worker_id) (rate(aihost_streaming_slow_consumer_disconnects_total{worker_id=~"$worker"}[5m]))) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~"$worker"}))', "{{worker_id}}")], unit="events/s", stack=True, no_data_text="0 (no slow consumer disconnects)")
     b.timeseries("Prompt complexity tier distribution (/s)", "Inference request rate segmented by evaluated prompt complexity tier (simple, medium, complex).",
-                 [("sum by (tier) (rate(aihost_requests_by_complexity_tier_total[5m]))", "tier: {{tier}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
+                 [('(sum by (tier) (rate(aihost_requests_by_complexity_tier_total[5m]))) or label_replace(vector(0), "tier", "idle", "", "")', "tier: {{tier}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
 
     b.row("Production Lifecycle")
     b.stat("Evidence chain valid", "Release evidence chain verification state (1 = cryptographically valid, 0 = failed).",

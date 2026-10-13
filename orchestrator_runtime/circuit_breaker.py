@@ -238,6 +238,11 @@ class CircuitBreakerRegistry:
                     recovery_timeout=self.recovery_timeout,
                     on_state_change=self._on_state_change,
                 )
+                if self.metrics is not None and hasattr(self.metrics, "circuit_breaker_state"):
+                    try:
+                        self.metrics.circuit_breaker_state.set(0.0, target_type="worker", target_id=worker_id)
+                    except Exception:  # noqa: BLE001
+                        pass
             return self._worker_breakers[worker_id]
 
     def pool_breaker(self, pool_name: str) -> CircuitBreaker:
@@ -249,6 +254,11 @@ class CircuitBreakerRegistry:
                     recovery_timeout=self.recovery_timeout,
                     on_state_change=self._on_state_change,
                 )
+                if self.metrics is not None and hasattr(self.metrics, "circuit_breaker_state"):
+                    try:
+                        self.metrics.circuit_breaker_state.set(0.0, target_type="pool", target_id=pool_name)
+                    except Exception:  # noqa: BLE001
+                        pass
             return self._pool_breakers[pool_name]
 
     def is_worker_available(self, worker_id: str) -> bool:

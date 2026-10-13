@@ -703,6 +703,30 @@ class OrchestratorRuntime:
         self.circuit_breakers = CircuitBreakerRegistry(evidence=self.evidence, metrics=self.metrics)
         if self.router is not None and getattr(self.router, "circuit_breakers", None) is None:
             self.router.circuit_breakers = self.circuit_breakers
+        for record in self.registry.snapshot():
+            wid = record.get("worker_id")
+            model = record.get("model")
+            if wid:
+                self.circuit_breakers.worker_breaker(wid)
+                if hasattr(self.metrics, "streaming_slow_consumer_disconnects_total"):
+                    try:
+                        self.metrics.streaming_slow_consumer_disconnects_total.inc(0, worker_id=wid)
+                    except Exception:
+                        pass
+            if model:
+                if hasattr(self.metrics, "gateway_cache_hits_total"):
+                    try:
+                        self.metrics.gateway_cache_hits_total.inc(0, model=model)
+                    except Exception:
+                        pass
+                if hasattr(self.metrics, "gateway_cache_misses_total"):
+                    try:
+                        self.metrics.gateway_cache_misses_total.inc(0, model=model)
+                    except Exception:
+                        pass
+        if self.router is not None and hasattr(self.router, "route_table") and getattr(self.router.route_table, "pools", None):
+            for pool_name in self.router.route_table.pools.keys():
+                self.circuit_breakers.pool_breaker(pool_name)
         self._shadow_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="shadow-worker")
         if engines is None:
             engines = {}

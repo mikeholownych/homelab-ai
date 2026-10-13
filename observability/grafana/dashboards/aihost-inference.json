@@ -1437,7 +1437,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max by (target_type, target_id) (aihost_circuit_breaker_state)",
+          "expr": "(max by (target_type, target_id) (aihost_circuit_breaker_state)) or label_replace(label_replace(vector(0), \"target_type\", \"all\", \"\", \"\"), \"target_id\", \"closed\", \"\", \"\")",
           "legendFormat": "{{target_type}}: {{target_id}}",
           "range": true,
           "refId": "A"
@@ -1490,7 +1490,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (model) (rate(aihost_gateway_cache_hits_total[5m]))",
+          "expr": "(sum by (model) (rate(aihost_gateway_cache_hits_total[5m]))) or (sum by (model) (0 * aihost_worker_info))",
           "legendFormat": "hits {{model}}",
           "range": true,
           "refId": "A"
@@ -1501,7 +1501,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (model) (rate(aihost_gateway_cache_misses_total[5m]))",
+          "expr": "(sum by (model) (rate(aihost_gateway_cache_misses_total[5m]))) or (sum by (model) (0 * aihost_worker_info))",
           "legendFormat": "misses {{model}}",
           "range": true,
           "refId": "B"
@@ -1554,7 +1554,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (direction, action, violation_type) (rate(aihost_guardrail_violations_total[5m]))",
+          "expr": "(sum by (direction, action, violation_type) (rate(aihost_guardrail_violations_total[5m]))) or label_replace(label_replace(label_replace(vector(0), \"direction\", \"ingress/egress\", \"\", \"\"), \"action\", \"violations\", \"\", \"\"), \"violation_type\", \"none\", \"\", \"\")",
           "legendFormat": "{{direction}} {{action}}: {{violation_type}}",
           "range": true,
           "refId": "A"
@@ -1607,7 +1607,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (worker_id) (rate(aihost_streaming_slow_consumer_disconnects_total[5m]))",
+          "expr": "(sum by (worker_id) (rate(aihost_streaming_slow_consumer_disconnects_total{worker_id=~\"$worker\"}[5m]))) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "{{worker_id}}",
           "range": true,
           "refId": "A"
@@ -1660,7 +1660,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (tier) (rate(aihost_requests_by_complexity_tier_total[5m]))",
+          "expr": "(sum by (tier) (rate(aihost_requests_by_complexity_tier_total[5m]))) or label_replace(vector(0), \"tier\", \"idle\", \"\", \"\")",
           "legendFormat": "tier: {{tier}}",
           "range": true,
           "refId": "A"
