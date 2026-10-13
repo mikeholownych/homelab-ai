@@ -716,7 +716,7 @@ class OrchestratorRuntime:
             self.router.circuit_breakers = self.circuit_breakers
         for record in self.registry.snapshot():
             wid = record.get("worker_id")
-            model = record.get("model")
+            model = record.get("public_model_id") or record.get("model_id") or record.get("model")
             if wid:
                 self.circuit_breakers.worker_breaker(wid)
                 if hasattr(self.metrics, "streaming_slow_consumer_disconnects_total"):
@@ -724,15 +724,15 @@ class OrchestratorRuntime:
                         self.metrics.streaming_slow_consumer_disconnects_total.inc(0, worker_id=wid)
                     except Exception:
                         pass
-            if model:
+            for m in filter(None, {model, record.get("model_id"), record.get("public_model_id")}):
                 if hasattr(self.metrics, "gateway_cache_hits_total"):
                     try:
-                        self.metrics.gateway_cache_hits_total.inc(0, model=model)
+                        self.metrics.gateway_cache_hits_total.inc(0, model=m)
                     except Exception:
                         pass
                 if hasattr(self.metrics, "gateway_cache_misses_total"):
                     try:
-                        self.metrics.gateway_cache_misses_total.inc(0, model=model)
+                        self.metrics.gateway_cache_misses_total.inc(0, model=m)
                     except Exception:
                         pass
         if self.router is not None and hasattr(self.router, "route_table") and getattr(self.router.route_table, "pools", None):

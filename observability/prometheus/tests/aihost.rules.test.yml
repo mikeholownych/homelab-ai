@@ -253,3 +253,48 @@ tests:
         exp_samples:
           - labels: 'aihost:gpu_vram_usage_ratio:ratio{gpu="0",bdf="0000:51:00.0"}'
             value: 0.5
+
+  - name: circuit breaker alert fires when circuit breaker state is 1 for 1 minute
+    interval: 1m
+    input_series:
+      - series: 'aihost_circuit_breaker_state{target_type="worker",target_id="w1"}'
+        values: '0 0 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: AihostCircuitBreakerOpen
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: AihostCircuitBreakerOpen
+        exp_alerts:
+          - exp_labels: {severity: critical, target_type: worker, target_id: w1}
+            exp_annotations: {summary: "Circuit breaker for worker 'w1' has tripped to OPEN"}
+
+  - name: guardrail violation alert fires on sustained high rate of violations
+    interval: 1m
+    input_series:
+      - series: 'aihost_guardrail_violations_total{direction="ingress",action="block",violation_type="injection"}'
+        values: '0+10x15'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: AihostHighGuardrailViolationRate
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AihostHighGuardrailViolationRate
+        exp_alerts:
+          - exp_labels: {severity: warning, direction: ingress, action: block, violation_type: injection}
+            exp_annotations: {summary: "Anomalous rate of security guardrail or DLP secret violations detected"}
+
+  - name: slow consumer spike alert fires when disconnect rate exceeds threshold
+    interval: 1m
+    input_series:
+      - series: 'aihost_streaming_slow_consumer_disconnects_total{worker_id="w1"}'
+        values: '0+6x15'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: AihostStreamingSlowConsumerSpike
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: AihostStreamingSlowConsumerSpike
+        exp_alerts:
+          - exp_labels: {severity: warning, worker_id: w1}
+            exp_annotations: {summary: "Anomalous rate of slow consumer disconnects on worker 'w1'"}
