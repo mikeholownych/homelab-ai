@@ -34,6 +34,7 @@ class Span:
     attributes: dict[str, Any] = field(default_factory=dict)
     status_code: int = 1  # 1 = OK, 2 = ERROR, 0 = UNSET
     status_message: str = ""
+    kind: int = 1  # 1 = INTERNAL, 2 = SERVER, 3 = CLIENT
 
     def end(self, end_time_ns: int | None = None, status_code: int | None = None, status_message: str = "") -> None:
         self.end_time_ns = end_time_ns or time.time_ns()
@@ -60,7 +61,7 @@ class Span:
             "traceId": self.trace_id,
             "spanId": self.span_id,
             "name": self.name,
-            "kind": 1,  # SPAN_KIND_INTERNAL
+            "kind": self.kind,
             "startTimeUnixNano": str(self.start_time_ns),
             "endTimeUnixNano": str(self.end_time_ns or time.time_ns()),
             "attributes": otlp_attrs,

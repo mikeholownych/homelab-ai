@@ -58,6 +58,11 @@ orchestrator_gateway_reasoning_budget_message: >-
 orchestrator_gateway_client_token_file: /etc/local-ai/orchestrator/client-token
 orchestrator_gateway_client_token_extra_file: /etc/local-ai/orchestrator/opencode-client-token
 orchestrator_gateway_worker_token_file: /etc/local-ai/vllm/vllm-api-key
+orchestrator_gateway_otlp_endpoint: ""
+orchestrator_gateway_otlp_service_name: "aihost-gateway"
+orchestrator_gateway_syslog_host: ""
+orchestrator_gateway_syslog_port: 514
+orchestrator_gateway_syslog_protocol: "udp"
 orchestrator_gateway_service_path: /etc/systemd/system/aihost-orchestrator-gateway.service
 orchestrator_gateway_readiness_path: /usr/local/libexec/aihost-gateway-readiness
 orchestrator_gateway_env_file: /etc/local-ai/orchestrator/gateway.env

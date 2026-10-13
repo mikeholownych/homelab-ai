@@ -259,6 +259,8 @@ inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
 orchestrator_gateway_release_id: t5820-gateway-65c1a97
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-65c1a97
+orchestrator_gateway_otlp_endpoint: "http://10.0.8.2:4318/v1/traces"
+orchestrator_gateway_otlp_service_name: "aihost-gateway"
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
 orchestrator_gateway_capability_evidence:
   # Rollback target (pre-promotion deep model, Qwen3.5-27B). Its chat template sets neither llama.cpp reasoning flag,

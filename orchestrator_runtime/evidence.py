@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import socket
 import sys
 import threading
 import time
@@ -77,10 +79,59 @@ def scrub(text: str, policy: str) -> str:
 class SyslogEvidenceStreamer:
     """Streams evidence records to a stream/file/socket in RFC 5424 structured syslog format."""
 
-    def __init__(self, stream: Any = None, app_name: str = "aihost-gateway", facility: int = 16) -> None:
+    def __init__(
+        self,
+        stream: Any = None,
+        app_name: str = "aihost-gateway",
+        facility: int = 16,
+        *,
+        host: str | None = None,
+        port: int = 514,
+        protocol: str = "udp",
+    ) -> None:
         self.stream = stream if stream is not None else sys.stderr
         self.app_name = app_name
         self.facility = facility  # local0 by default
+        self.host = host
+        self.port = port
+        self.protocol = protocol.lower()
+        self._sock: socket.socket | None = None
+        self._sock_lock = threading.Lock()
+
+    @classmethod
+    def from_env(cls) -> "SyslogEvidenceStreamer" | None:
+        host = os.environ.get("ORCHESTRATOR_SYSLOG_HOST")
+        if not host:
+            if os.environ.get("ORCHESTRATOR_SYSLOG_ENABLED") == "true":
+                return cls()
+            return None
+        port = int(os.environ.get("ORCHESTRATOR_SYSLOG_PORT", "514"))
+        protocol = os.environ.get("ORCHESTRATOR_SYSLOG_PROTOCOL", "udp")
+        app_name = os.environ.get("ORCHESTRATOR_SYSLOG_APP_NAME", "aihost-gateway")
+        facility = int(os.environ.get("ORCHESTRATOR_SYSLOG_FACILITY", "16"))
+        return cls(host=host, port=port, protocol=protocol, app_name=app_name, facility=facility)
+
+    def _send_network(self, data: bytes) -> None:
+        with self._sock_lock:
+            try:
+                if self.protocol == "tcp":
+                    if self._sock is None:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(2.0)
+                        sock.connect((self.host, self.port))
+                        self._sock = sock
+                    self._sock.sendall(data)
+                else:
+                    if self._sock is None:
+                        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    self._sock.sendto(data, (self.host, self.port))
+            except Exception:
+                if self._sock:
+                    try:
+                        self._sock.close()
+                    except Exception:
+                        pass
+                self._sock = None
 
     def __call__(self, record: dict[str, Any]) -> None:
         severity = 4 if ("failed" in record.get("event", "") or "rejected" in record.get("event", "")) else 6
@@ -89,11 +140,23 @@ class SyslogEvidenceStreamer:
         event_name = record.get("event", "event")
         payload = canonical(record)
         msg = f"<{pri}>1 {ts} - {self.app_name} - {event_name} - {payload}\n"
-        try:
-            self.stream.write(msg)
-            self.stream.flush()
-        except Exception:
-            pass
+        if self.host:
+            self._send_network(msg.encode("utf-8"))
+        else:
+            try:
+                self.stream.write(msg)
+                self.stream.flush()
+            except Exception:
+                pass
+
+    def close(self) -> None:
+        with self._sock_lock:
+            if self._sock:
+                try:
+                    self._sock.close()
+                except Exception:
+                    pass
+                self._sock = None
 
 
 class EvidenceStore:
@@ -108,6 +171,9 @@ class EvidenceStore:
         self._anchored_at = time.monotonic()
         self.chain_valid = True
         self.chain_problems: list[str] = []
+        env_streamer = SyslogEvidenceStreamer.from_env()
+        if env_streamer:
+            self.add_streamer(env_streamer)
         if self.path and self.path.exists():
             self._resume()
 

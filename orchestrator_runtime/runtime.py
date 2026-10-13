@@ -672,6 +672,17 @@ class OrchestratorRuntime:
         cache: ResponseCache | None = None,
         tracer: OTLPTraceExporter | None = None,
     ) -> None:
+        if tracer is None:
+            otlp_ep = (
+                os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+                or os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+                or os.environ.get("ORCHESTRATOR_OTLP_ENDPOINT")
+            )
+            if otlp_ep:
+                tracer = OTLPTraceExporter(
+                    otlp_ep,
+                    service_name=os.environ.get("OTEL_SERVICE_NAME", "aihost-gateway"),
+                )
         self.guardrails = guardrails
         self.tracer = tracer
         self.cache = cache if cache is not None else ResponseCache(
@@ -1140,6 +1151,7 @@ class OrchestratorRuntime:
         trace_context: TraceContext | None = None,
     ) -> dict[str, Any]:
         trace_context = trace_context or TraceContext.new_root()
+        t0_ns = time.time_ns()
         timeout = self.upstream_timeout if timeout is None else timeout
         request_id = request.get("request_id") or str(uuid.uuid4())
         client_id = client.client_id if client else "default"
@@ -1272,6 +1284,7 @@ class OrchestratorRuntime:
                 )
                 if self.tracer is not None:
                     self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "HIT", "model": public_model or "unknown"}))
+                    self.tracer.record_span(Span("request", trace_context.trace_id, trace_context.span_id, trace_context.parent_span_id, start_time_ns=t0_ns, end_time_ns=time.time_ns(), attributes={"gen_ai.system": "aihost", "client.id": client_id, "aihost.cache.status": "HIT", "status": "ok"}, kind=2))
                 return {
                     "status": "ok",
                     "request_id": request_id,
@@ -1451,7 +1464,8 @@ class OrchestratorRuntime:
             route_now = {**route, "pool": target_pool, "fallback_used": index > 0 and not route.get("canary")}
             outcome = self._dispatch(request_id, plan, route_now, client, client_id, priority, timeout, cancel, entry,
                                      clamped_fields, deadline, decision, request, on_stream_start, on_stream_chunk,
-                                     ticket=ticket, stream_timing=stream_timing, trace_context=trace_context)
+                                     ticket=ticket, stream_timing=stream_timing, trace_context=trace_context,
+                                     t0_ns=t0_ns)
             if outcome.get("status") == "retry" and not retried:
                 retried = True
                 excluded.add(worker.worker_id)
@@ -1552,7 +1566,9 @@ class OrchestratorRuntime:
                   original: dict[str, Any], on_stream_start: Callable[[dict[str, Any]], None] | None = None,
                   on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
                   ticket: Any = None, stream_timing: dict[str, Any] | None = None,
-                  trace_context: TraceContext | None = None) -> dict[str, Any]:
+                  trace_context: TraceContext | None = None,
+                  t0_ns: int | None = None) -> dict[str, Any]:
+        t0_ns = t0_ns or time.time_ns()
         worker = plan.worker
         clamped = tuple(clamped_fields) + plan.clamped
         for name in clamped:
@@ -2007,6 +2023,26 @@ class OrchestratorRuntime:
             headers.update(trace_context.to_headers())
         if decision is not None and decision.shadow and _split_hit("shadow:" + request_id, decision.shadow[1]):
             self._shadow(decision.shadow[0], request_id, original, response, plan, decision)
+        if self.tracer is not None:
+            self.tracer.record_span(Span(
+                "request",
+                trace_context.trace_id,
+                trace_context.span_id,
+                trace_context.parent_span_id,
+                start_time_ns=t0_ns,
+                end_time_ns=time.time_ns(),
+                attributes={
+                    "gen_ai.system": "aihost",
+                    "client.id": client_id,
+                    "gen_ai.response.model": worker.public_model_id,
+                    "aihost.worker_id": worker.worker_id,
+                    "aihost.route.pool": pool_label,
+                    "gen_ai.usage.prompt_tokens": prompt_tokens,
+                    "gen_ai.usage.completion_tokens": completion_tokens,
+                    "status": "ok",
+                },
+                kind=2,
+            ))
         return {"status": "ok", "request_id": request_id, "response": response,
                 "route": {**route, "worker_id": worker.worker_id}, "headers": headers,
                 "trace_context": trace_context}
