@@ -33,6 +33,21 @@ class Client:
     max_priority: str = "interactive"
     requests_per_minute: int | None = None
     tokens_per_day: int | None = None
+    allowed_models: frozenset[str] | None = None
+    allowed_pools: frozenset[str] | None = None
+    max_context_tokens: int | None = None
+
+    def permits_model(self, model_id: str | None) -> bool:
+        """Check if this client is authorized for the given model ID / alias under RBAC policy."""
+        if self.allowed_models is None or model_id is None:
+            return True
+        return model_id in self.allowed_models
+
+    def permits_pool(self, pool_id: str | None) -> bool:
+        """Check if this client is authorized for the given compute pool under RBAC policy."""
+        if self.allowed_pools is None or pool_id is None:
+            return True
+        return pool_id in self.allowed_pools
 
 
 class QuotaExceeded(Exception):
@@ -50,11 +65,26 @@ class _Usage:
 
 
 class ClientRegistry:
-    def __init__(self, clients: Iterable[Client], *, state_path: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        clients: Iterable[Client],
+        *,
+        state_path: str | Path | None = None,
+        jwt_secret: str | None = None,
+        jwt_public_key: str | None = None,
+        jwt_issuer: str | None = None,
+        jwt_audience: str | None = None,
+        jwt_algorithms: tuple[str, ...] = ("HS256", "RS256"),
+    ) -> None:
         self._clients = {c.client_id: c for c in clients}
         self._usage: dict[str, _Usage] = {}
         self._lock = threading.Lock()
         self.state_path = Path(state_path) if state_path else None
+        self.jwt_secret = jwt_secret
+        self.jwt_public_key = jwt_public_key
+        self.jwt_issuer = jwt_issuer
+        self.jwt_audience = jwt_audience
+        self.jwt_algorithms = jwt_algorithms
         self._load_state()
 
     # ------------------------------------------------------------------ construction
@@ -71,14 +101,26 @@ class ClientRegistry:
             if len(digest) != 64:
                 raise ValueError(f"client {entry.get('client_id')!r}: token_sha256 must be a sha256 hex digest")
             quota = entry.get("quota") or {}
+            allowed_models = frozenset(entry["allowed_models"]) if "allowed_models" in entry else None
+            allowed_pools = frozenset(entry["allowed_pools"]) if "allowed_pools" in entry else None
             clients.append(Client(
                 str(entry["client_id"]), digest, scopes, entry.get("default_priority", "interactive"),
                 entry.get("max_priority", entry.get("default_priority", "interactive")),
                 quota.get("requests_per_minute"), quota.get("tokens_per_day"),
+                allowed_models=allowed_models,
+                allowed_pools=allowed_pools,
+                max_context_tokens=entry.get("max_context_tokens"),
             ))
         if len({c.client_id for c in clients}) != len(clients):
             raise ValueError("duplicate client_id in client registry")
-        return cls(clients, state_path=state_path)
+        return cls(
+            clients,
+            state_path=state_path,
+            jwt_secret=raw.get("jwt_secret"),
+            jwt_public_key=raw.get("jwt_public_key"),
+            jwt_issuer=raw.get("jwt_issuer"),
+            jwt_audience=raw.get("jwt_audience"),
+        )
 
     @classmethod
     def from_tokens(cls, tokens: Iterable[tuple[str, str]], *, scopes: Iterable[str] = ("workload", "monitoring")) -> "ClientRegistry":
@@ -89,13 +131,47 @@ class ClientRegistry:
     def authenticate(self, authorization: str) -> Client | None:
         if not authorization.startswith("Bearer "):
             return None
-        presented = token_digest(authorization[len("Bearer "):].strip())
+        token_str = authorization[len("Bearer "):].strip()
+        presented = token_digest(token_str)
         match = None
         for client in self._clients.values():
             # compare every entry (constant work regardless of which one matches)
             if hmac.compare_digest(presented, client.token_sha256):
                 match = client
-        return match
+        if match is not None:
+            return match
+
+        # Attempt JWT validation if configured
+        verification_key = self.jwt_public_key or self.jwt_secret
+        if verification_key and token_str.count(".") == 2:
+            try:
+                import jwt
+                kwargs: dict[str, Any] = {"algorithms": list(self.jwt_algorithms)}
+                if self.jwt_issuer:
+                    kwargs["issuer"] = self.jwt_issuer
+                if self.jwt_audience:
+                    kwargs["audience"] = self.jwt_audience
+                payload = jwt.decode(token_str, verification_key, **kwargs)
+                client_id = str(payload.get("sub") or payload.get("client_id") or "jwt-client")
+                scopes_raw = payload.get("scopes") or payload.get("roles") or ["workload"]
+                scopes = frozenset(s for s in scopes_raw if s in SCOPES)
+                allowed_models = frozenset(payload["allowed_models"]) if "allowed_models" in payload else None
+                allowed_pools = frozenset(payload["allowed_pools"]) if "allowed_pools" in payload else None
+                return Client(
+                    client_id=client_id,
+                    token_sha256=presented,
+                    scopes=scopes if scopes else frozenset({"workload"}),
+                    default_priority=str(payload.get("default_priority", "interactive")),
+                    max_priority=str(payload.get("max_priority", "interactive")),
+                    requests_per_minute=payload.get("requests_per_minute"),
+                    tokens_per_day=payload.get("tokens_per_day"),
+                    allowed_models=allowed_models,
+                    allowed_pools=allowed_pools,
+                    max_context_tokens=payload.get("max_context_tokens"),
+                )
+            except Exception:
+                return None
+        return None
 
     def clients(self) -> list[Client]:
         return list(self._clients.values())

@@ -20,7 +20,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 ANCHOR_EVERY = 100
 ANCHOR_SECONDS = 300.0
@@ -74,10 +74,33 @@ def scrub(text: str, policy: str) -> str:
     return f"[sha256:{digest} len:{len(text)}]"
 
 
+class SyslogEvidenceStreamer:
+    """Streams evidence records to a stream/file/socket in RFC 5424 structured syslog format."""
+
+    def __init__(self, stream: Any = None, app_name: str = "aihost-gateway", facility: int = 16) -> None:
+        self.stream = stream if stream is not None else sys.stderr
+        self.app_name = app_name
+        self.facility = facility  # local0 by default
+
+    def __call__(self, record: dict[str, Any]) -> None:
+        severity = 4 if ("failed" in record.get("event", "") or "rejected" in record.get("event", "")) else 6
+        pri = (self.facility * 8) + severity
+        ts = record.get("recorded_at") or datetime.now(timezone.utc).isoformat()
+        event_name = record.get("event", "event")
+        payload = canonical(record)
+        msg = f"<{pri}>1 {ts} - {self.app_name} - {event_name} - {payload}\n"
+        try:
+            self.stream.write(msg)
+            self.stream.flush()
+        except Exception:
+            pass
+
+
 class EvidenceStore:
     def __init__(self, path: str | Path | None = None, *, anchor_stream=None) -> None:
         self.path = Path(path) if path else None
         self._records: list[dict[str, Any]] = []
+        self._streamers: list[Callable[[dict[str, Any]], None]] = []
         self._lock = threading.Lock()
         self._anchor_stream = anchor_stream if anchor_stream is not None else sys.stderr
         self._head: str | None = None
@@ -87,6 +110,11 @@ class EvidenceStore:
         self.chain_problems: list[str] = []
         if self.path and self.path.exists():
             self._resume()
+
+    def add_streamer(self, streamer: Callable[[dict[str, Any]], None]) -> None:
+        """Register an external streamer (e.g. SyslogEvidenceStreamer or SIEM forwarder)."""
+        with self._lock:
+            self._streamers.append(streamer)
 
     def genesis(self, **fields: Any) -> str:
         """Start a new chain explicitly (e.g. after sealing a legacy file); only valid on an empty store."""
@@ -137,6 +165,11 @@ class EvidenceStore:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 with self.path.open("a", encoding="utf-8") as stream:
                     stream.write(canonical(record) + "\n")
+            for streamer in self._streamers:
+                try:
+                    streamer(record)
+                except Exception:
+                    pass
             self._since_anchor += 1
             if self._since_anchor >= ANCHOR_EVERY or time.monotonic() - self._anchored_at >= ANCHOR_SECONDS:
                 self._emit_anchor(self._since_anchor)

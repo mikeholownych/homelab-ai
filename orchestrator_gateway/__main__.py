@@ -213,12 +213,19 @@ def main() -> None:
             cert, key = os.environ.get("ORCHESTRATOR_TLS_CERT"), os.environ.get("ORCHESTRATOR_TLS_KEY")
             if not cert or not key:
                 raise RuntimeError("the remote listener requires ORCHESTRATOR_TLS_CERT and ORCHESTRATOR_TLS_KEY")
+            ca_cert = os.environ.get("ORCHESTRATOR_TLS_CA_CERT")
+            require_client_cert = os.environ.get("ORCHESTRATOR_TLS_REQUIRE_CLIENT_CERT") == "true"
+            cert_reqs = ssl.CERT_REQUIRED if require_client_cert else (ssl.CERT_OPTIONAL if ca_cert else None)
             remote_port = int(os.environ.get("ORCHESTRATOR_REMOTE_PORT", "8443"))
             remote_app = create_asgi_gateway(
                 runtime, clients=runtime.clients, monitoring_token=monitoring_token,
                 require_monitoring_auth=True, allow_worker_pinning=allow_worker_pinning,
                 listener="remote")
-            servers.append(AsgiServerWrapper(remote_app, remote_host, remote_port, ssl_keyfile=key, ssl_certfile=cert))
+            servers.append(AsgiServerWrapper(
+                remote_app, remote_host, remote_port,
+                ssl_keyfile=key, ssl_certfile=cert,
+                ssl_ca_certs=ca_cert, ssl_cert_reqs=cert_reqs,
+            ))
     else:
         servers.append(GatewayServer((local_host, local_port), create_gateway(
             runtime, clients=runtime.clients, monitoring_token=monitoring_token,
@@ -233,9 +240,14 @@ def main() -> None:
             cert, key = os.environ.get("ORCHESTRATOR_TLS_CERT"), os.environ.get("ORCHESTRATOR_TLS_KEY")
             if not cert or not key:
                 raise RuntimeError("the remote listener requires ORCHESTRATOR_TLS_CERT and ORCHESTRATOR_TLS_KEY")
+            ca_cert = os.environ.get("ORCHESTRATOR_TLS_CA_CERT")
+            require_client_cert = os.environ.get("ORCHESTRATOR_TLS_REQUIRE_CLIENT_CERT") == "true"
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.minimum_version = ssl.TLSVersion.TLSv1_2
             context.load_cert_chain(cert, key)
+            if ca_cert:
+                context.load_verify_locations(cafile=ca_cert)
+                context.verify_mode = ssl.CERT_REQUIRED if require_client_cert else ssl.CERT_OPTIONAL
             remote.socket = context.wrap_socket(remote.socket, server_side=True)
             servers.append(remote)
 

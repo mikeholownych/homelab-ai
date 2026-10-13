@@ -6,7 +6,8 @@ from .capacity import CapacityState, CapacityTracker
 from .circuit_breaker import CircuitBreaker, CircuitBreakerRegistry, CircuitState
 from .clients import Client, ClientRegistry, QuotaExceeded
 from .engines import EngineObservation, LlamaCppAdapter, VllmAdapter
-from .evidence import EvidenceStore
+from .evidence import EvidenceStore, SyslogEvidenceStreamer
+from .guardrails import GuardrailResult, GuardrailScanner, GuardrailViolation
 from .health import HealthManager, WorkerHealthState
 from .metrics import Counter, Gauge, Histogram, MetricsRegistry
 from .routing import RouteConfigError, RouteDecision, Router, RouteRule
@@ -21,8 +22,9 @@ from .runtime import (
     TaskGraph,
     WorkerRecord,
 )
-from .smart_router import ComplexityReport, CostModel, LatencyTracker, PromptComplexityAnalyzer
+from .smart_router import ComplexityReport, CostModel, EscalationPolicy, LatencyTracker, PromptComplexityAnalyzer
 from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
+from .tracing import TraceContext
 
 __all__ = [
     "AdmissionCancelled",
@@ -39,12 +41,18 @@ __all__ = [
     "ComplexityReport",
     "CostModel",
     "EngineObservation",
+    "EscalationPolicy",
+    "GuardrailResult",
+    "GuardrailScanner",
+    "GuardrailViolation",
     "LatencyTracker",
     "LlamaCppAdapter",
     "PoolUnavailable",
     "PromptComplexityAnalyzer",
     "QuotaExceeded",
     "RequestCancelled",
+    "SyslogEvidenceStreamer",
+    "TraceContext",
     "VllmAdapter",
     "RouteConfigError",
     "RouteDecision",

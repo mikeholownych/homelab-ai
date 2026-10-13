@@ -28,10 +28,12 @@ from .circuit_breaker import CircuitBreakerRegistry
 from .clients import Client, QuotaExceeded, clamp_priority
 from .engines import adapter_for
 from .evidence import EvidenceStore, scrub
+from .guardrails import GuardrailScanner
 from .health import HealthManager
 from .metrics import MetricsRegistry
 from .routing import RouteDecision, Router
 from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
+from .tracing import TraceContext
 
 # Tokens kept free between prompt + completion and the context window (template/stop tokens the count may not see).
 SAFETY_MARGIN_TOKENS = 16
@@ -352,7 +354,8 @@ class OpenAIProviderAdapter:
 
     def complete(self, request: dict[str, Any], timeout: float, cancel: threading.Event | None = None,
                  on_stream_start: Callable[[], None] | None = None,
-                 on_stream_chunk: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
+                 on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
+                 trace_context: Any = None) -> dict[str, Any]:
         provider_request = dict(request)
         if self.model_id is not None:
             provider_request["model"] = self.model_id
@@ -361,10 +364,12 @@ class OpenAIProviderAdapter:
         if streaming:
             if on_stream_start is None or on_stream_chunk is None:
                 raise ProviderError("streaming requires gateway stream callbacks")
-            return self._complete_stream(provider_request, timeout, cancel, on_stream_start, on_stream_chunk)
+            return self._complete_stream(provider_request, timeout, cancel, on_stream_start, on_stream_chunk, trace_context=trace_context)
         provider_request.pop("stream_options", None)
         payload = json.dumps(provider_request).encode()
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.auth_token}"}
+        if trace_context is not None and hasattr(trace_context, "to_headers"):
+            headers.update(trace_context.to_headers())
         status, raw = self._send("/v1/chat/completions", payload, headers, timeout, cancel)
         if status >= 400:
             body = raw.decode(errors="replace")[:512]
@@ -391,12 +396,15 @@ class OpenAIProviderAdapter:
 
     def _complete_stream(self, provider_request: dict[str, Any], timeout: float,
                          cancel: threading.Event | None, on_start: Callable[[], None],
-                         on_chunk: Callable[[dict[str, Any]], None]) -> dict[str, Any]:
+                         on_chunk: Callable[[dict[str, Any]], None],
+                         trace_context: Any = None) -> dict[str, Any]:
         """Read real OpenAI-compatible SSE while forwarding deltas and retaining the full response for validation."""
         parts = urllib.parse.urlsplit(self.endpoint.rstrip("/") + "/v1/chat/completions")
         connection_cls = http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
         connection = connection_cls(parts.hostname, parts.port, timeout=timeout)
         headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.auth_token}"}
+        if trace_context is not None and hasattr(trace_context, "to_headers"):
+            headers.update(trace_context.to_headers())
         payload = json.dumps(provider_request).encode()
         reader: threading.Thread | None = None
         messages: queue.Queue[tuple[str, Any]] = queue.Queue()
@@ -659,7 +667,9 @@ class OrchestratorRuntime:
         prompt_policy: str | None = None,
         state_path: str | Path | None = None,
         budget_message: str | None = None,
+        guardrails: GuardrailScanner | None = None,
     ) -> None:
+        self.guardrails = guardrails
         self.router = router
         self.registry = registry
         self.adapters = adapters
@@ -1060,7 +1070,9 @@ class OrchestratorRuntime:
         on_stream_start: Callable[[dict[str, Any]], None] | None = None,
         on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
         stream_timing: dict[str, Any] | None = None,
+        trace_context: TraceContext | None = None,
     ) -> dict[str, Any]:
+        trace_context = trace_context or TraceContext.new_root()
         timeout = self.upstream_timeout if timeout is None else timeout
         request_id = request.get("request_id") or str(uuid.uuid4())
         client_id = client.client_id if client else "default"
@@ -1068,12 +1080,90 @@ class OrchestratorRuntime:
         self.metrics.inference_requests_total.inc(status="received")
         if self.shutting_down.is_set():
             return {"status": "unavailable", "failure_class": "gateway_restarting", "request_id": request_id,
-                    "http_status": 503, "retry_after": 15, "message": "gateway is restarting; retry shortly"}
+                    "http_status": 503, "retry_after": 15, "message": "gateway is restarting; retry shortly",
+                    "trace_context": trace_context}
+
+        # Enterprise inline DLP & prompt guardrails
+        if self.guardrails is not None:
+            guard_result = self.guardrails.inspect(request)
+            if guard_result.rejected:
+                self.evidence.append(
+                    "guardrail_violation",
+                    request_id=request_id,
+                    client_id=client_id,
+                    violation_type=guard_result.violation_type,
+                    reason=guard_result.reason,
+                    trace_id=trace_context.trace_id,
+                    span_id=trace_context.span_id,
+                )
+                return {
+                    "status": "rejected",
+                    "failure_class": "guardrail_violation",
+                    "request_id": request_id,
+                    "http_status": 400,
+                    "message": f"Request blocked by security guardrails: {guard_result.reason}",
+                    "details": {"violation_type": guard_result.violation_type},
+                    "trace_context": trace_context,
+                }
+            if guard_result.redacted and guard_result.sanitized_request is not None:
+                request = guard_result.sanitized_request
+            if guard_result.flagged:
+                self.evidence.append(
+                    "guardrail_flagged",
+                    request_id=request_id,
+                    client_id=client_id,
+                    violation_type=guard_result.violation_type,
+                    reason=guard_result.reason,
+                    trace_id=trace_context.trace_id,
+                    span_id=trace_context.span_id,
+                )
+
         messages = request.get("messages")
         if not isinstance(messages, list) or not messages:
             self.metrics.inference_requests_total.inc(status="rejected")
             self.metrics.scheduler_admission_backpressure_total.inc(reason="request_shape")
-            return {"status": "rejected", "failure_class": "request_shape", "request_id": request_id}
+            return {"status": "rejected", "failure_class": "request_shape", "request_id": request_id,
+                    "trace_context": trace_context}
+
+        # Model-level RBAC & Quotas
+        estimate = _conservative_prompt_estimate(request)
+        public_model = request.get("model")
+        if client is not None:
+            if not client.permits_model(public_model):
+                self.evidence.append(
+                    "authorization_rejected",
+                    request_id=request_id,
+                    client_id=client_id,
+                    failure_class="model_forbidden",
+                    model=public_model,
+                    trace_id=trace_context.trace_id,
+                    span_id=trace_context.span_id,
+                )
+                return {
+                    "status": "forbidden",
+                    "failure_class": "model_forbidden",
+                    "request_id": request_id,
+                    "http_status": 403,
+                    "message": f"client {client_id!r} is not authorized for model {public_model!r}",
+                    "trace_context": trace_context,
+                }
+            if client.max_context_tokens is not None and estimate > client.max_context_tokens:
+                self.evidence.append(
+                    "admission_rejected",
+                    request_id=request_id,
+                    client_id=client_id,
+                    failure_class="context_limit_exceeded",
+                    trace_id=trace_context.trace_id,
+                    span_id=trace_context.span_id,
+                )
+                return {
+                    "status": "rejected",
+                    "failure_class": "context_limit_exceeded",
+                    "request_id": request_id,
+                    "http_status": 400,
+                    "message": f"request prompt tokens ({estimate}) exceed client limit ({client.max_context_tokens})",
+                    "trace_context": trace_context,
+                }
 
         # R6 quotas, R2 priority (monotonic), R7 deadline
         clamped_fields: list[str] = []
@@ -1082,9 +1172,10 @@ class OrchestratorRuntime:
                 self.registry_clients_admit(client)
             except QuotaExceeded as error:
                 self.metrics.admission_rejections_total.inc(code="quota_exceeded", pool="-")
-                self.evidence.append("admission_rejected", request_id=request_id, client_id=client_id, failure_class="quota_exceeded")
+                self.evidence.append("admission_rejected", request_id=request_id, client_id=client_id, failure_class="quota_exceeded",
+                                     trace_id=trace_context.trace_id, span_id=trace_context.span_id)
                 return {"status": "limited", "failure_class": "quota_exceeded", "request_id": request_id, "http_status": 429,
-                        "retry_after": error.retry_after, "message": str(error)}
+                        "retry_after": error.retry_after, "message": str(error), "trace_context": trace_context}
             priority, was_clamped = clamp_priority(priority, client, PRIORITIES)
             if was_clamped:
                 clamped_fields.append("priority")
@@ -1095,8 +1186,6 @@ class OrchestratorRuntime:
             deadline = time.monotonic() + max(0, deadline_ms) / 1000.0
             timeout = min(timeout, max(0.001, deadline_ms / 1000.0))
 
-        estimate = _conservative_prompt_estimate(request)
-        public_model = request.get("model")
         affinity_key = _affinity_key(request, affinity)
         include_candidates = False
         policy = reasoning_policy.RoutePolicy()
@@ -1105,6 +1194,10 @@ class OrchestratorRuntime:
             pinned = self.registry.record(worker_id)
             if pinned is None or not pinned.eligible(capabilities, 0, 1):
                 return self._capability_reject(request_id, client_id)
+            if client is not None and not client.permits_pool(pinned.pool):
+                return {"status": "forbidden", "failure_class": "pool_forbidden", "request_id": request_id,
+                        "http_status": 403, "message": f"client {client_id!r} is not authorized for pool {pinned.pool!r}",
+                        "trace_context": trace_context}
             pools: list[str | None] = [pinned.pool]
             route: dict[str, Any] = {"rule_id": "pinned", "pool": pinned.pool, "fallback_used": False, "reason": "explicit worker pin"}
             include_candidates = True
@@ -1113,12 +1206,17 @@ class OrchestratorRuntime:
                                           prompt_tokens=estimate, attempt=attempt,
                                           previous_outcome=self.previous_outcome(previous_request, client_id),
                                           request=request)
+            if client is not None and not client.permits_pool(decision.pool):
+                return {"status": "forbidden", "failure_class": "pool_forbidden", "request_id": request_id,
+                        "http_status": 403, "message": f"client {client_id!r} is not authorized for pool {decision.pool!r}",
+                        "trace_context": trace_context}
             if decision.scope == "qualification":
                 if client is not None and "qualification" not in client.scopes:
                     self.evidence.append("routing_rejected", request_id=request_id, client_id=client_id, failure_class="scope",
-                                         route_rule=decision.rule_id)
+                                         route_rule=decision.rule_id, trace_id=trace_context.trace_id, span_id=trace_context.span_id)
                     return {"status": "forbidden", "failure_class": "scope", "request_id": request_id, "http_status": 403,
-                            "message": f"model {public_model!r} requires the qualification scope"}
+                            "message": f"model {public_model!r} requires the qualification scope",
+                            "trace_context": trace_context}
                 include_candidates = True
             policy = decision.policy
             pools = list(decision.pools)
@@ -1212,7 +1310,7 @@ class OrchestratorRuntime:
             route_now = {**route, "pool": pool if pool is not None else worker.pool, "fallback_used": index > 0 and not route.get("canary")}
             outcome = self._dispatch(request_id, plan, route_now, client, client_id, priority, timeout, cancel, entry,
                                      clamped_fields, deadline, decision, request, on_stream_start, on_stream_chunk,
-                                     ticket=ticket, stream_timing=stream_timing)
+                                     ticket=ticket, stream_timing=stream_timing, trace_context=trace_context)
             if outcome.get("status") == "retry" and not retried:
                 retried = True
                 excluded.add(worker.worker_id)
@@ -1303,7 +1401,8 @@ class OrchestratorRuntime:
                   clamped_fields: list[str], deadline: float | None, decision: RouteDecision | None,
                   original: dict[str, Any], on_stream_start: Callable[[dict[str, Any]], None] | None = None,
                   on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
-                  ticket: Any = None, stream_timing: dict[str, Any] | None = None) -> dict[str, Any]:
+                  ticket: Any = None, stream_timing: dict[str, Any] | None = None,
+                  trace_context: TraceContext | None = None) -> dict[str, Any]:
         worker = plan.worker
         clamped = tuple(clamped_fields) + plan.clamped
         for name in clamped:
@@ -1316,8 +1415,11 @@ class OrchestratorRuntime:
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="failed", failure_class="adapter_unavailable")
             self.health.record_worker_observation(worker.worker_id, healthy=False, error="adapter_unavailable")
             self.evidence.append("routing_rejected", request_id=request_id, client_id=client_id,
-                                 failure_class="adapter_unavailable", worker_id=worker.worker_id)
-            return {"status": "blocked", "failure_class": "adapter_unavailable", "request_id": request_id}
+                                 failure_class="adapter_unavailable", worker_id=worker.worker_id,
+                                 trace_id=trace_context.trace_id if trace_context else None,
+                                 span_id=trace_context.span_id if trace_context else None)
+            return {"status": "blocked", "failure_class": "adapter_unavailable", "request_id": request_id,
+                    "trace_context": trace_context}
 
         self.metrics.scheduler_dispatch_decisions_total.inc(worker_id=worker.worker_id, decision="dispatched")
         self.metrics.inference_dispatches_total.inc(worker_id=worker.worker_id, model=worker.public_model_id)
@@ -1331,6 +1433,8 @@ class OrchestratorRuntime:
             clamped=list(clamped), request_hash=_hash({k: original.get(k) for k in ("messages", "tools")}),
             message_count=len(original.get("messages") or []), tools=[(t.get("function") or {}).get("name")
                                                                        for t in original.get("tools") or [] if isinstance(t, dict)],
+            trace_id=trace_context.trace_id if trace_context else None,
+            span_id=trace_context.span_id if trace_context else None,
         )
 
         started = time.monotonic()
@@ -1347,26 +1451,43 @@ class OrchestratorRuntime:
                 self.admission.release(worker.worker_id, ok=ok, duration=duration, distress=distress)
 
         try:
+            child_trace = trace_context.child_span() if trace_context is not None else None
+            adapter_kwargs: dict[str, Any] = {}
+            if getattr(adapter, "supports_cancel", False):
+                adapter_kwargs["cancel"] = cancel
+            try:
+                import inspect
+                sig = inspect.signature(adapter.complete)
+                if "trace_context" in sig.parameters or any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
+                    adapter_kwargs["trace_context"] = child_trace
+            except Exception:
+                pass
+
             if original.get("stream"):
                 if not getattr(adapter, "supports_streaming", False) or on_stream_start is None or on_stream_chunk is None:
                     release(False)
                     return {"status": "unsupported", "failure_class": "streaming_unavailable", "request_id": request_id,
-                            "http_status": 422, "message": "the selected worker adapter does not support streaming"}
+                            "http_status": 422, "message": "the selected worker adapter does not support streaming",
+                            "trace_context": trace_context}
 
                 def start_stream() -> None:
                     if on_stream_start is not None:
+                        stream_headers = _completion_headers(plan, worker)
+                        if trace_context is not None:
+                            stream_headers.update(trace_context.to_headers())
                         on_stream_start({
                             "id": "chatcmpl-" + request_id.replace("-", "")[:24],
                             "created": int(time.time()), "model": worker.public_model_id,
-                            "headers": _completion_headers(plan, worker),
+                            "headers": stream_headers,
                             "route": {**route, "worker_id": worker.worker_id},
                             "worker_id": worker.worker_id,
                         })
 
-                output = adapter.complete(plan.forwarded, timeout, cancel=cancel,
-                                          on_stream_start=start_stream, on_stream_chunk=on_stream_chunk)
-            elif getattr(adapter, "supports_cancel", False):
-                output = adapter.complete(plan.forwarded, timeout, cancel=cancel)
+                adapter_kwargs["on_stream_start"] = start_stream
+                adapter_kwargs["on_stream_chunk"] = on_stream_chunk
+                output = adapter.complete(plan.forwarded, timeout, **adapter_kwargs)
+            elif adapter_kwargs:
+                output = adapter.complete(plan.forwarded, timeout, **adapter_kwargs)
             else:
                 output = adapter.complete(plan.forwarded, timeout)
             call_duration = time.monotonic() - started
@@ -1633,10 +1754,13 @@ class OrchestratorRuntime:
         headers["X-AIHost-Termination"] = termination + (";reasoning_budget_exhausted" if exhausted else "")
         if clamped:
             headers["X-AIHost-Clamped"] = ",".join(clamped)
+        if trace_context is not None:
+            headers.update(trace_context.to_headers())
         if decision is not None and decision.shadow and _split_hit("shadow:" + request_id, decision.shadow[1]):
             self._shadow(decision.shadow[0], request_id, original, response, plan, decision)
         return {"status": "ok", "request_id": request_id, "response": response,
-                "route": {**route, "worker_id": worker.worker_id}, "headers": headers}
+                "route": {**route, "worker_id": worker.worker_id}, "headers": headers,
+                "trace_context": trace_context}
 
     # ================================================================== R4 shadow
     def _shadow(self, pool: str, request_id: str, original: dict[str, Any], primary: dict[str, Any], plan: _Plan,

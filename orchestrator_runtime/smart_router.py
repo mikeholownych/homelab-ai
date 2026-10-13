@@ -201,3 +201,32 @@ class CostModel:
 
     def cost_weight(self, pool: str) -> float:
         return self.weights.get(pool, 1.0)
+
+
+class EscalationPolicy:
+    """Configurable multi-attempt fallback escalation policy with jittered exponential backoff."""
+
+    def __init__(
+        self,
+        *,
+        initial_backoff: float = 0.1,
+        multiplier: float = 2.0,
+        max_backoff: float = 3.0,
+        jitter_ratio: float = 0.2,
+    ) -> None:
+        self.initial_backoff = max(0.0, float(initial_backoff))
+        self.multiplier = max(1.0, float(multiplier))
+        self.max_backoff = max(self.initial_backoff, float(max_backoff))
+        self.jitter_ratio = min(1.0, max(0.0, float(jitter_ratio)))
+
+    def compute_backoff(self, attempt: int, seed: float | None = None) -> float:
+        """Calculate exponential backoff with bounded jitter for the given attempt index (1-based)."""
+        if attempt <= 1:
+            return 0.0
+        exponent = max(0, attempt - 2)
+        base = min(self.max_backoff, self.initial_backoff * (self.multiplier ** exponent))
+        if self.jitter_ratio <= 0.0:
+            return base
+        import random
+        jitter_factor = 1.0 + (random.uniform(-self.jitter_ratio, self.jitter_ratio) if seed is None else ((seed % 1.0) * 2.0 - 1.0) * self.jitter_ratio)
+        return max(0.0, min(self.max_backoff, base * jitter_factor))

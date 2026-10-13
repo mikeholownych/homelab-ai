@@ -22,6 +22,7 @@ from starlette.routing import Route
 
 from orchestrator_runtime import OrchestratorRuntime
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
+from orchestrator_runtime.tracing import TraceContext
 from .server import MONITORING_ROUTES, _is_local, _route_headers, host_addresses
 
 _STATUS = {
@@ -252,6 +253,8 @@ def create_asgi_gateway(
         if not client.scopes & {"workload", "qualification"}:
             return forbidden_response(req_id, "workload or qualification scope required")
 
+        trace_context = TraceContext.from_headers(request.headers)
+
         try:
             body = await request.json()
         except Exception:
@@ -343,6 +346,7 @@ def create_asgi_gateway(
                         on_stream_start=begin_stream,
                         on_stream_chunk=send_stream_delta,
                         stream_timing=stream_timing,
+                        trace_context=trace_context,
                     )
                 except Exception as err:
                     return {"status": "error", "error": str(err)}
@@ -417,6 +421,7 @@ def create_asgi_gateway(
                 "Content-Type": "text/event-stream",
                 "Cache-Control": "no-cache",
                 "X-Request-ID": req_id,
+                **trace_context.to_headers(),
                 **_route_headers(meta.get("route")),
                 **(meta.get("headers") or {}),
             }
@@ -437,9 +442,15 @@ def create_asgi_gateway(
             previous_request=request.headers.get("X-AIHost-Previous-Request"),
             reasoning_profile=reasoning_profile,
             cancel=sync_cancel,
+            trace_context=trace_context,
         )
 
-        headers = {"X-Request-ID": req_id, **_route_headers(result.get("route")), **(result.get("headers") or {})}
+        headers = {
+            "X-Request-ID": req_id,
+            **trace_context.to_headers(),
+            **_route_headers(result.get("route")),
+            **(result.get("headers") or {}),
+        }
         status_str = result.get("status", "ok")
         if status_str == "cancelled":
             return Response(status_code=499, headers=headers)
@@ -481,6 +492,8 @@ class AsgiServerWrapper:
         port: int,
         ssl_keyfile: str | None = None,
         ssl_certfile: str | None = None,
+        ssl_ca_certs: str | None = None,
+        ssl_cert_reqs: int | None = None,
         log_level: str = "info",
     ) -> None:
         import uvicorn
@@ -493,6 +506,8 @@ class AsgiServerWrapper:
             port=port,
             ssl_keyfile=ssl_keyfile,
             ssl_certfile=ssl_certfile,
+            ssl_ca_certs=ssl_ca_certs,
+            ssl_cert_reqs=ssl_cert_reqs,
             log_level=log_level,
             access_log=False,
         )
