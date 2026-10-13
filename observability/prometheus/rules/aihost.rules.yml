@@ -177,3 +177,10 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "Anomalous rate of security guardrail or DLP secret violations detected"
+      - alert: AihostStreamingSlowConsumerSpike
+        expr: sum by (worker_id) (rate(aihost_streaming_slow_consumer_disconnects_total[5m])) > 0.05
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "Anomalous rate of slow consumer disconnects on worker '{{ $labels.worker_id }}'"
+

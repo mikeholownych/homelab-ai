@@ -29,7 +29,7 @@ from .circuit_breaker import CircuitBreakerRegistry
 from .clients import Client, QuotaExceeded, clamp_priority
 from .engines import adapter_for
 from .evidence import EvidenceStore, scrub
-from .guardrails import GuardrailScanner
+from .guardrails import GuardrailScanner, SECRET_PATTERNS
 from .health import HealthManager
 from .metrics import MetricsRegistry
 from .routing import RouteDecision, Router
@@ -1439,7 +1439,8 @@ class OrchestratorRuntime:
                     if isinstance(resp_obj, dict):
                         self.cache.set(cache_key, resp_obj)
                         self.metrics.gateway_cache_entries.set(self.cache.size())
-                if "headers" in outcome and "X-AIHost-Cache" not in outcome["headers"]:
+                outcome.setdefault("headers", {})
+                if "X-AIHost-Cache" not in outcome["headers"]:
                     outcome["headers"]["X-AIHost-Cache"] = "MISS" if cache_key else "BYPASS"
             return outcome
 
@@ -1593,7 +1594,7 @@ class OrchestratorRuntime:
                             "http_status": 422, "message": "the selected worker adapter does not support streaming",
                             "trace_context": trace_context}
 
-                def start_stream() -> None:
+                def start_stream(*args: Any, **kwargs: Any) -> None:
                     if on_stream_start is not None:
                         stream_headers = _completion_headers(plan, worker)
                         if trace_context is not None:
@@ -1606,8 +1607,28 @@ class OrchestratorRuntime:
                             "worker_id": worker.worker_id,
                         })
 
+                stream_chunk_handler = on_stream_chunk
+                if self.guardrails is not None:
+                    raw_on_chunk = on_stream_chunk
+                    def sanitized_chunk(chunk: dict[str, Any]) -> None:
+                        if self.guardrails.action != "none" and self.guardrails.detect_secrets:
+                            for choice in chunk.get("choices") or []:
+                                delta = choice.get("delta") or {}
+                                content = delta.get("content")
+                                if isinstance(content, str):
+                                    for name, pattern in SECRET_PATTERNS + self.guardrails.custom_patterns:
+                                        if pattern.search(content):
+                                            delta["content"] = pattern.sub(self.guardrails.redaction_mask, content)
+                                            self.metrics.guardrail_violations_total.inc(
+                                                direction="egress",
+                                                action="redact",
+                                                violation_type=name,
+                                            )
+                        raw_on_chunk(chunk)
+                    stream_chunk_handler = sanitized_chunk
+
                 adapter_kwargs["on_stream_start"] = start_stream
-                adapter_kwargs["on_stream_chunk"] = on_stream_chunk
+                adapter_kwargs["on_stream_chunk"] = stream_chunk_handler
                 output = adapter.complete(plan.forwarded, timeout, **adapter_kwargs)
             elif adapter_kwargs:
                 output = adapter.complete(plan.forwarded, timeout, **adapter_kwargs)

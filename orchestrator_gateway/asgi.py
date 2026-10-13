@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import queue
 import threading
 import time
 import urllib.parse
@@ -288,21 +289,17 @@ def create_asgi_gateway(
         cancel = asyncio.Event()
 
         if is_streaming:
-            # High-performance async SSE streaming with backpressure
-            queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue(maxsize=max_stream_queue_size)
+            # High-performance async SSE streaming with thread-safe backpressure
+            stream_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=max_stream_queue_size)
             stream_state: dict[str, Any] = {}
             stream_timing: dict[str, Any] = {}
-            loop = asyncio.get_running_loop()
+            stream_started = threading.Event()
             sync_cancel = threading.Event()
 
             def begin_stream(meta: dict[str, Any]) -> None:
                 stream_state["meta"] = meta
                 stream_state["started"] = True
-                try:
-                    fut = asyncio.run_coroutine_threadsafe(queue.put(("start", meta)), loop)
-                    fut.result(timeout=stream_queue_timeout)
-                except Exception:
-                    sync_cancel.set()
+                stream_started.set()
 
             def send_stream_delta(event: dict[str, Any]) -> None:
                 if sync_cancel.is_set():
@@ -335,9 +332,8 @@ def create_asgi_gateway(
                     "choices": choices,
                 }
                 try:
-                    fut = asyncio.run_coroutine_threadsafe(queue.put(("chunk", chunk)), loop)
-                    fut.result(timeout=stream_queue_timeout)
-                except Exception:
+                    stream_queue.put(chunk, timeout=stream_queue_timeout)
+                except queue.Full:
                     runtime.metrics.streaming_slow_consumer_disconnects_total.inc(worker_id=worker_id or "unknown")
                     sync_cancel.set()
 
@@ -369,17 +365,11 @@ def create_asgi_gateway(
 
             async def sse_generator() -> AsyncGenerator[bytes, None]:
                 try:
-                    while not future.done() or not queue.empty():
-                        # Check native ASGI client disconnect
-                        if await request.is_disconnected():
-                            sync_cancel.set()
-                            break
-
+                    while not future.done() or not stream_queue.empty():
                         try:
-                            msg_type, item = await asyncio.wait_for(queue.get(), timeout=0.1)
-                            if msg_type == "chunk":
-                                yield f"data: {json.dumps(item, separators=(',', ':'))}\n\n".encode("utf-8")
-                        except asyncio.TimeoutError:
+                            item = await asyncio.to_thread(stream_queue.get, timeout=0.05)
+                            yield f"data: {json.dumps(item, separators=(',', ':'))}\n\n".encode("utf-8")
+                        except queue.Empty:
                             continue
 
                     res = await future
@@ -405,16 +395,8 @@ def create_asgi_gateway(
                     sync_cancel.set()
 
             # Wait for stream start headers or early exit
-            while not stream_state.get("started") and not future.done():
-                if await request.is_disconnected():
-                    sync_cancel.set()
-                    return Response(status_code=499)
-                try:
-                    msg_type, item = await asyncio.wait_for(queue.get(), timeout=0.05)
-                    if msg_type == "start":
-                        break
-                except asyncio.TimeoutError:
-                    pass
+            while not stream_started.is_set() and not future.done():
+                await asyncio.sleep(0.01)
 
             if future.done() and not stream_state.get("started"):
                 res = future.result()

@@ -26,7 +26,8 @@ class InfiniteStreamAdapter:
     def complete(self, request, timeout, cancel=None, on_stream_start=None, on_stream_chunk=None, **kwargs):
         if on_stream_start:
             on_stream_start()
-        while True:
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
             if cancel and cancel.is_set():
                 self.cancelled = True
                 break

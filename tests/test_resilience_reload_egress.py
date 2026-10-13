@@ -11,6 +11,7 @@ from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 from orchestrator_runtime.guardrails import GuardrailScanner
 from orchestrator_runtime.metrics import MetricsRegistry
 from orchestrator_runtime.routing import RouteRule, Router
+from orchestrator_runtime import CapabilityRegistry, EvidenceStore
 from orchestrator_runtime.runtime import OrchestratorRuntime
 
 
@@ -182,3 +183,43 @@ def test_runtime_reload_configuration(tmp_path: Path):
         clients_count=1,
         rules_count=1,
     )
+
+
+def test_runtime_streaming_egress_dlp_redaction(tmp_path: Path):
+    from tests.test_orchestrator_runtime import worker
+    w1 = worker("w1")
+
+    class LeakyStreamingAdapter:
+        supports_cancel = False
+        supports_streaming = True
+
+        def complete(self, request, timeout, on_stream_start=None, on_stream_chunk=None, **kwargs):
+            if on_stream_start:
+                on_stream_start({})
+            if on_stream_chunk:
+                on_stream_chunk({"choices": [{"delta": {"content": "Your token is "}}]})
+                on_stream_chunk({"choices": [{"delta": {"content": "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}}]})
+            return {"choices": [{"message": {"content": "done"}}], "usage": {}}
+
+    scanner = GuardrailScanner(action="redact", detect_secrets=True)
+    runtime = OrchestratorRuntime(
+        CapabilityRegistry([w1]),
+        {"w1": LeakyStreamingAdapter()},
+        EvidenceStore(tmp_path / "evidence.jsonl"),
+        guardrails=scanner,
+    )
+
+    received_chunks = []
+    def record_chunk(c):
+        received_chunks.append(c["choices"][0]["delta"]["content"])
+
+    res = runtime.complete(
+        {"model": "engineering/w1", "messages": [{"role": "user", "content": "give key"}], "stream": True},
+        on_stream_start=lambda m: None,
+        on_stream_chunk=record_chunk,
+    )
+    assert res["status"] == "ok"
+    assert "Your token is " in received_chunks
+    assert "[REDACTED_SECRET]" in received_chunks
+    assert "ghp_" not in "".join(received_chunks)
+
