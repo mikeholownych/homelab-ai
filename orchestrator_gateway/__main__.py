@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from orchestrator_gateway import AsgiServerWrapper, GatewayServer, create_asgi_gateway, create_gateway
+from orchestrator_gateway.server import GatewayServer, create_gateway
 from orchestrator_runtime import (
     CapabilityRegistry,
     ClientRegistry,
@@ -203,6 +203,7 @@ def main() -> None:
     remote_host = os.environ.get("ORCHESTRATOR_REMOTE_HOST")
 
     if engine == "asgi":
+        from orchestrator_gateway.asgi import AsgiServerWrapper, create_asgi_gateway
         local_app = create_asgi_gateway(
             runtime, clients=runtime.clients, monitoring_token=monitoring_token,
             require_monitoring_auth=os.environ.get("ORCHESTRATOR_REQUIRE_MONITORING_AUTH") == "true",
