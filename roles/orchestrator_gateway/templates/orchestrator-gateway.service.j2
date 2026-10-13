@@ -21,7 +21,7 @@ Environment=ORCHESTRATOR_TLS_KEY=%d/gateway-tls-key
 Environment=ORCHESTRATOR_TLS_CERT=%d/gateway-tls-cert
 {% endif %}
 ExecStartPre={{ orchestrator_gateway_readiness_path }}
-ExecStart=/usr/bin/python3 -m orchestrator_gateway
+ExecStart={{ orchestrator_gateway_python_bin }} -m orchestrator_gateway
 Restart=on-failure
 RestartSec=10s
 RestartPreventExitStatus=78

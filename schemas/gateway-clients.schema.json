@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/gateway-clients.schema.json",
+  "title": "AIHost Gateway Client Registry Schema",
+  "description": "Declarative JSON schema validating client registry definitions, authentication tokens, scopes, and tiered quotas for the AIHost orchestrator gateway.",
+  "type": "object",
+  "required": [
+    "clients"
+  ],
+  "properties": {
+    "jwt_secret": {
+      "type": "string"
+    },
+    "jwt_public_key": {
+      "type": "string"
+    },
+    "jwt_issuer": {
+      "type": "string"
+    },
+    "jwt_audience": {
+      "type": "string"
+    },
+    "clients": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/client_definition"
+      }
+    }
+  },
+  "$defs": {
+    "quota_spec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests_per_minute": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tokens_per_day": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "client_quota": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests_per_minute": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tokens_per_day": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/quota_spec"
+          }
+        },
+        "pools": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/quota_spec"
+          }
+        }
+      }
+    },
+    "client_definition": {
+      "type": "object",
+      "required": [
+        "client_id"
+      ],
+      "properties": {
+        "client_id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "description": "Unique alphanumeric client identifier."
+        },
+        "token_sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$",
+          "description": "SHA-256 digest of client bearer token."
+        },
+        "legacy_token_file": {
+          "type": "string",
+          "description": "Path to legacy token file."
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["workload", "qualification", "monitoring", "admin", "telemetry"]
+          }
+        },
+        "default_priority": {
+          "type": "string",
+          "enum": ["interactive", "batch", "critical"]
+        },
+        "max_priority": {
+          "type": "string",
+          "enum": ["interactive", "batch", "critical"]
+        },
+        "allowed_models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowed_pools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "max_context_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "quota": {
+          "$ref": "#/$defs/client_quota"
+        }
+      }
+    }
+  }
+}

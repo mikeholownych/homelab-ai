@@ -46,6 +46,8 @@ def create_asgi_gateway(
     clients: ClientRegistry | None = None,
     listener: str = "any",
     local_addresses: Callable[[], set[str]] | None = None,
+    max_stream_queue_size: int = 64,
+    stream_queue_timeout: float = 5.0,
 ) -> Starlette:
     """Construct a high-performance Starlette ASGI application for the gateway."""
     if clients is None:
@@ -286,17 +288,25 @@ def create_asgi_gateway(
         cancel = asyncio.Event()
 
         if is_streaming:
-            # High-performance async SSE streaming
-            queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+            # High-performance async SSE streaming with backpressure
+            queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue(maxsize=max_stream_queue_size)
             stream_state: dict[str, Any] = {}
             stream_timing: dict[str, Any] = {}
+            loop = asyncio.get_running_loop()
+            sync_cancel = threading.Event()
 
             def begin_stream(meta: dict[str, Any]) -> None:
                 stream_state["meta"] = meta
                 stream_state["started"] = True
-                queue.put_nowait(("start", meta))
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(queue.put(("start", meta)), loop)
+                    fut.result(timeout=stream_queue_timeout)
+                except Exception:
+                    sync_cancel.set()
 
             def send_stream_delta(event: dict[str, Any]) -> None:
+                if sync_cancel.is_set():
+                    return
                 meta = stream_state.get("meta")
                 now = time.monotonic()
                 choices = event.get("choices", [])
@@ -324,10 +334,14 @@ def create_asgi_gateway(
                     "model": meta.get("model", body.get("model")) if meta else body.get("model"),
                     "choices": choices,
                 }
-                queue.put_nowait(("chunk", chunk))
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(queue.put(("chunk", chunk)), loop)
+                    fut.result(timeout=stream_queue_timeout)
+                except Exception:
+                    runtime.metrics.streaming_slow_consumer_disconnects_total.inc(worker_id=worker_id or "unknown")
+                    sync_cancel.set()
 
             # Run synchronous completion dispatcher in worker thread
-            sync_cancel = threading.Event()
 
             def run_sync() -> dict[str, Any]:
                 try:

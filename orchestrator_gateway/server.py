@@ -420,6 +420,10 @@ def create_gateway(
                     self.send_header(name, value)
                 self.end_headers()
                 self.close_connection = True
+                try:
+                    self.connection.settimeout(5.0)
+                except (OSError, AttributeError):
+                    pass
                 stream_state["meta"] = meta
                 stream_state["started"] = True
                 stream_state["last_chunk_time"] = None
@@ -458,6 +462,9 @@ def create_gateway(
                 try:
                     self.wfile.write(f"data: {json.dumps(chunk, separators=(',', ':'))}\n\n".encode())
                     self.wfile.flush()
+                except (socket.timeout, TimeoutError):
+                    runtime.metrics.streaming_slow_consumer_disconnects_total.inc(worker_id=worker_id or "unknown")
+                    cancel.set()
                 except OSError:
                     # The client went away mid-stream: that is a cancellation (R1), never a worker failure.
                     cancel.set()
@@ -521,6 +528,10 @@ def create_gateway(
                         self.wfile.write(f"event: error\ndata: {json.dumps(error, separators=(',', ':'))}\n\n".encode())
                         runtime.metrics.inference_streaming_requests_total.inc(worker_id=worker_used, outcome="failure")
                     self.wfile.flush()
+                except (socket.timeout, TimeoutError):
+                    runtime.metrics.streaming_slow_consumer_disconnects_total.inc(worker_id=worker_used)
+                    runtime.metrics.inference_streaming_requests_total.inc(worker_id=worker_used, outcome="failure")
+                    cancel.set()
                 except OSError:
                     runtime.metrics.inference_streaming_requests_total.inc(worker_id=worker_used, outcome="failure")
                     cancel.set()

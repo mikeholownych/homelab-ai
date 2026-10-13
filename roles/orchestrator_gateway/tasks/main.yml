@@ -44,9 +44,34 @@
   become: false
   changed_when: false
   check_mode: false
+- name: Validate gateway declarative routes and clients against JSON schemas (fail before deploying)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import json, os, jsonschema
+        from pathlib import Path
+        root = Path(os.environ["PLAYBOOK_DIR"]).resolve().parents[0]
+        routes_schema = json.loads((root / "schemas/gateway-routes.schema.json").read_text(encoding="utf-8"))
+        clients_schema = json.loads((root / "schemas/gateway-clients.schema.json").read_text(encoding="utf-8"))
+        routes_data = {"routes": json.loads(os.environ["R"]), "model_aliases": json.loads(os.environ["A"])}
+        jsonschema.Draft202012Validator(routes_schema).validate(routes_data)
+        clients_data = {"clients": json.loads(os.environ["C"])}
+        jsonschema.Draft202012Validator(clients_schema).validate(clients_data)
+        print("ok declarative schemas valid")
+  environment:
+    PLAYBOOK_DIR: "{{ playbook_dir }}"
+    R: "{{ orchestrator_gateway_routes | to_json }}"
+    A: "{{ orchestrator_gateway_model_aliases | to_json }}"
+    C: "{{ orchestrator_gateway_clients | to_json }}"
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
   when:
     - orchestrator_gateway_enabled | bool
-    - orchestrator_gateway_routes | length > 0
+    - orchestrator_gateway_routes | length > 0 or orchestrator_gateway_clients | length > 0
 
 - name: Create gateway directories
   ansible.builtin.file:
@@ -288,6 +313,65 @@
     group: root
     mode: "0644"
   when: orchestrator_gateway_enabled | bool
+
+- name: Create gateway ASGI virtual environment
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - venv
+      - "{{ orchestrator_gateway_venv_dir }}"
+    creates: "{{ orchestrator_gateway_venv_dir }}/bin/python3"
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_venv_enabled | bool
+
+- name: Set permissions on gateway virtual environment directory
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_venv_dir }}"
+    owner: "{{ orchestrator_gateway_user }}"
+    group: "{{ orchestrator_gateway_group }}"
+    state: directory
+    recurse: true
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_venv_enabled | bool
+
+- name: Install gateway ASGI dependencies into virtual environment
+  ansible.builtin.pip:
+    name: "{{ orchestrator_gateway_venv_packages }}"
+    virtualenv: "{{ orchestrator_gateway_venv_dir }}"
+    state: present
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_venv_enabled | bool
+  notify: Restart gateway service
+
+- name: Discover historical gateway releases for retention pruning
+  ansible.builtin.find:
+    paths: "{{ orchestrator_gateway_release_dir | dirname }}"
+    file_type: directory
+    patterns: "t5820-gateway-*"
+  register: _historical_gateway_releases
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+
+- name: Prune older historical gateway releases exceeding retention count
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: >-
+    {{
+      (_historical_gateway_releases.files | default([])
+       | rejectattr('path', 'equalto', orchestrator_gateway_release_dir)
+       | sort(attribute='mtime', reverse=true))[orchestrator_gateway_releases_retention_count | int:]
+      | default([])
+    }}
+  when:
+    - orchestrator_gateway_enabled | bool
+    - not ansible_check_mode
+    - _historical_gateway_releases.files is defined
 
 - name: Create private gateway evidence directory
   ansible.builtin.file:

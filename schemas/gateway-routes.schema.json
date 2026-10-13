@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/gateway-routes.schema.json",
+  "title": "AIHost Gateway Route Configuration Schema",
+  "description": "Declarative JSON schema validating model routes and routing rules for the AIHost orchestrator gateway.",
+  "type": "object",
+  "properties": {
+    "routes": {
+      "type": "array",
+      "description": "Ordered route rules. First matching rule directs the request.",
+      "items": {
+        "$ref": "#/$defs/route_rule"
+      }
+    },
+    "model_aliases": {
+      "type": "object",
+      "description": "Direct model aliases mapping to specific compute pools and reasoning policies.",
+      "additionalProperties": {
+        "$ref": "#/$defs/alias_spec"
+      }
+    }
+  },
+  "required": [
+    "routes"
+  ],
+  "$defs": {
+    "route_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "pool",
+        "match"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for this route rule."
+        },
+        "pool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Primary compute pool targeted by this rule."
+        },
+        "fallback": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Ordered list of fallback compute pools."
+        },
+        "match": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Predicate matching criteria for request attributes.",
+          "properties": {
+            "model": {
+              "oneOf": [
+                {"type": "string"},
+                {"type": "array", "items": {"type": "string"}}
+              ]
+            },
+            "task_class": {
+              "oneOf": [
+                {"type": "string"},
+                {"type": "array", "items": {"type": "string"}}
+              ]
+            },
+            "has_tools": {
+              "type": "boolean"
+            },
+            "min_prompt_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "max_prompt_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "attempt_gte": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "previous_outcome": {
+              "oneOf": [
+                {"type": "string", "enum": ["pass", "fail", "partial"]},
+                {"type": "array", "items": {"type": "string", "enum": ["pass", "fail", "partial"]}}
+              ]
+            },
+            "min_complexity": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0
+            },
+            "max_complexity": {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0
+            },
+            "complexity_tier": {
+              "oneOf": [
+                {"type": "string", "enum": ["simple", "medium", "complex"]},
+                {"type": "array", "items": {"type": "string", "enum": ["simple", "medium", "complex"]}}
+              ]
+            }
+          }
+        },
+        "reasoning": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["on", "off", "standard", "max"]
+            },
+            "budget": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "answer_allowance": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "strategy": {
+          "type": "string",
+          "enum": ["first_match", "least_latency", "least_busy", "cost_optimized"]
+        },
+        "cost_weight": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "fallback_on_saturation": {
+          "type": "boolean"
+        },
+        "canary": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "shadow": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "evidence": {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      }
+    },
+    "alias_spec": {
+      "type": "object",
+      "required": ["pool"],
+      "properties": {
+        "pool": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasoning": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["on", "off", "standard", "max"]
+            },
+            "budget": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "answer_allowance": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "scope": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

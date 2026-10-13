@@ -36,6 +36,8 @@ class Client:
     allowed_models: frozenset[str] | None = None
     allowed_pools: frozenset[str] | None = None
     max_context_tokens: int | None = None
+    model_quotas: dict[str, dict[str, Any]] = field(default_factory=dict)
+    pool_quotas: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def permits_model(self, model_id: str | None) -> bool:
         """Check if this client is authorized for the given model ID / alias under RBAC policy."""
@@ -62,6 +64,12 @@ class _Usage:
     refilled_at: float = field(default_factory=time.monotonic)
     day: str = ""
     tokens_today: int = 0
+    pool_buckets: dict[str, float] = field(default_factory=dict)
+    pool_refilled_at: dict[str, float] = field(default_factory=dict)
+    pool_tokens_today: dict[str, int] = field(default_factory=dict)
+    model_buckets: dict[str, float] = field(default_factory=dict)
+    model_refilled_at: dict[str, float] = field(default_factory=dict)
+    model_tokens_today: dict[str, int] = field(default_factory=dict)
 
 
 class ClientRegistry:
@@ -107,6 +115,8 @@ class ClientRegistry:
             quota = entry.get("quota") or {}
             allowed_models = frozenset(entry["allowed_models"]) if "allowed_models" in entry else None
             allowed_pools = frozenset(entry["allowed_pools"]) if "allowed_pools" in entry else None
+            model_quotas = quota.get("models") or {}
+            pool_quotas = quota.get("pools") or {}
             clients.append(Client(
                 str(entry["client_id"]), digest, scopes, entry.get("default_priority", "interactive"),
                 entry.get("max_priority", entry.get("default_priority", "interactive")),
@@ -114,6 +124,8 @@ class ClientRegistry:
                 allowed_models=allowed_models,
                 allowed_pools=allowed_pools,
                 max_context_tokens=entry.get("max_context_tokens"),
+                model_quotas=model_quotas,
+                pool_quotas=pool_quotas,
             ))
         if len({c.client_id for c in clients}) != len(clients):
             raise ValueError("duplicate client_id in client registry")
@@ -161,17 +173,22 @@ class ClientRegistry:
                 scopes = frozenset(s for s in scopes_raw if s in SCOPES)
                 allowed_models = frozenset(payload["allowed_models"]) if "allowed_models" in payload else None
                 allowed_pools = frozenset(payload["allowed_pools"]) if "allowed_pools" in payload else None
+                quota = payload.get("quota") or {}
+                model_quotas = quota.get("models") or {}
+                pool_quotas = quota.get("pools") or {}
                 return Client(
                     client_id=client_id,
                     token_sha256=presented,
                     scopes=scopes if scopes else frozenset({"workload"}),
                     default_priority=str(payload.get("default_priority", "interactive")),
                     max_priority=str(payload.get("max_priority", "interactive")),
-                    requests_per_minute=payload.get("requests_per_minute"),
-                    tokens_per_day=payload.get("tokens_per_day"),
+                    requests_per_minute=payload.get("requests_per_minute") or quota.get("requests_per_minute"),
+                    tokens_per_day=payload.get("tokens_per_day") or quota.get("tokens_per_day"),
                     allowed_models=allowed_models,
                     allowed_pools=allowed_pools,
                     max_context_tokens=payload.get("max_context_tokens"),
+                    model_quotas=model_quotas,
+                    pool_quotas=pool_quotas,
                 )
             except Exception:
                 return None
@@ -184,34 +201,91 @@ class ClientRegistry:
     def _usage_for(self, client: Client) -> _Usage:
         usage = self._usage.get(client.client_id)
         if usage is None:
-            usage = _Usage(bucket=float(client.requests_per_minute or 0))
+            usage = _Usage(
+                bucket=float(client.requests_per_minute or 0),
+                model_buckets={m: float(q.get("requests_per_minute", 0)) for m, q in client.model_quotas.items() if q.get("requests_per_minute")},
+                pool_buckets={p: float(q.get("requests_per_minute", 0)) for p, q in client.pool_quotas.items() if q.get("requests_per_minute")},
+            )
             self._usage[client.client_id] = usage
         return usage
 
-    def admit(self, client: Client) -> None:
-        """Charge one request; raise QuotaExceeded (429) when the RPM bucket or daily token budget is spent."""
+    def admit(self, client: Client, *, model: str | None = None, pool: str | None = None) -> None:
+        """Charge one request; raise QuotaExceeded (429) when global, per-model, or per-pool limits are spent."""
         with self._lock:
             usage = self._usage_for(client)
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             if usage.day != today:
                 usage.day, usage.tokens_today = today, 0
+                usage.model_tokens_today.clear()
+                usage.pool_tokens_today.clear()
+
+            now_dt = datetime.now(timezone.utc)
+            seconds_left = max(1, 86400 - (now_dt.hour * 3600 + now_dt.minute * 60 + now_dt.second))
+            now = time.monotonic()
+
+            # Global daily tokens
             if client.tokens_per_day is not None and usage.tokens_today >= client.tokens_per_day:
-                now = datetime.now(timezone.utc)
-                seconds_left = 86400 - (now.hour * 3600 + now.minute * 60 + now.second)
-                raise QuotaExceeded("daily token budget exhausted", max(1, seconds_left))
+                raise QuotaExceeded("daily token budget exhausted", seconds_left)
+
+            # Global RPM
             if client.requests_per_minute:
-                now = time.monotonic()
                 rate = client.requests_per_minute / 60.0
                 usage.bucket = min(float(client.requests_per_minute), usage.bucket + (now - usage.refilled_at) * rate)
                 usage.refilled_at = now
                 if usage.bucket < 1.0:
                     raise QuotaExceeded("request rate limit exceeded", max(1, int((1.0 - usage.bucket) / rate) + 1))
-                usage.bucket -= 1.0
 
-    def charge_tokens(self, client: Client, tokens: int, sync: bool = False) -> None:
+            # Per-model quota check
+            if model and model in client.model_quotas:
+                mq = client.model_quotas[model]
+                m_tokens_limit = mq.get("tokens_per_day")
+                m_tokens_spent = usage.model_tokens_today.get(model, 0)
+                if m_tokens_limit is not None and m_tokens_spent >= m_tokens_limit:
+                    raise QuotaExceeded(f"daily token budget for model '{model}' exhausted", seconds_left)
+                m_rpm = mq.get("requests_per_minute")
+                if m_rpm:
+                    m_rate = m_rpm / 60.0
+                    m_bucket = usage.model_buckets.get(model, float(m_rpm))
+                    m_refilled = usage.model_refilled_at.get(model, now)
+                    m_bucket = min(float(m_rpm), m_bucket + (now - m_refilled) * m_rate)
+                    usage.model_refilled_at[model] = now
+                    if m_bucket < 1.0:
+                        raise QuotaExceeded(f"request rate limit for model '{model}' exceeded", max(1, int((1.0 - m_bucket) / m_rate) + 1))
+
+            # Per-pool quota check
+            if pool and pool in client.pool_quotas:
+                pq = client.pool_quotas[pool]
+                p_tokens_limit = pq.get("tokens_per_day")
+                p_tokens_spent = usage.pool_tokens_today.get(pool, 0)
+                if p_tokens_limit is not None and p_tokens_spent >= p_tokens_limit:
+                    raise QuotaExceeded(f"daily token budget for pool '{pool}' exhausted", seconds_left)
+                p_rpm = pq.get("requests_per_minute")
+                if p_rpm:
+                    p_rate = p_rpm / 60.0
+                    p_bucket = usage.pool_buckets.get(pool, float(p_rpm))
+                    p_refilled = usage.pool_refilled_at.get(pool, now)
+                    p_bucket = min(float(p_rpm), p_bucket + (now - p_refilled) * p_rate)
+                    usage.pool_refilled_at[pool] = now
+                    if p_bucket < 1.0:
+                        raise QuotaExceeded(f"request rate limit for pool '{pool}' exceeded", max(1, int((1.0 - p_bucket) / p_rate) + 1))
+
+            # Deduct from buckets only after all checks pass
+            if client.requests_per_minute:
+                usage.bucket -= 1.0
+            if model and model in client.model_quotas and client.model_quotas[model].get("requests_per_minute"):
+                usage.model_buckets[model] = usage.model_buckets.get(model, 0.0) - 1.0
+            if pool and pool in client.pool_quotas and client.pool_quotas[pool].get("requests_per_minute"):
+                usage.pool_buckets[pool] = usage.pool_buckets.get(pool, 0.0) - 1.0
+
+    def charge_tokens(self, client: Client, tokens: int, *, model: str | None = None, pool: str | None = None, sync: bool = False) -> None:
         with self._lock:
             usage = self._usage_for(client)
-            usage.tokens_today += max(0, int(tokens))
+            qty = max(0, int(tokens))
+            usage.tokens_today += qty
+            if model:
+                usage.model_tokens_today[model] = usage.model_tokens_today.get(model, 0) + qty
+            if pool:
+                usage.pool_tokens_today[pool] = usage.pool_tokens_today.get(pool, 0) + qty
             self._dirty = True
         now = time.monotonic()
         if sync or (now - self._last_saved >= self.flush_interval_seconds):
@@ -220,7 +294,14 @@ class ClientRegistry:
     def usage(self, client_id: str) -> dict[str, Any]:
         with self._lock:
             usage = self._usage.get(client_id)
-            return {"day": usage.day, "tokens_today": usage.tokens_today} if usage else {"day": "", "tokens_today": 0}
+            if not usage:
+                return {"day": "", "tokens_today": 0, "models": {}, "pools": {}}
+            return {
+                "day": usage.day,
+                "tokens_today": usage.tokens_today,
+                "models": dict(usage.model_tokens_today),
+                "pools": dict(usage.pool_tokens_today),
+            }
 
     # ------------------------------------------------------------------ dynamic reload
     def reload_clients(self, clients: Iterable[Client]) -> None:
@@ -247,8 +328,13 @@ class ClientRegistry:
             return
         for client_id, entry in (raw.get("usage") or {}).items():
             if client_id in self._clients:
-                self._usage[client_id] = _Usage(bucket=float(self._clients[client_id].requests_per_minute or 0),
-                                                day=entry.get("day", ""), tokens_today=int(entry.get("tokens_today", 0)))
+                self._usage[client_id] = _Usage(
+                    bucket=float(self._clients[client_id].requests_per_minute or 0),
+                    day=entry.get("day", ""),
+                    tokens_today=int(entry.get("tokens_today", 0)),
+                    model_tokens_today=dict(entry.get("models", {})),
+                    pool_tokens_today=dict(entry.get("pools", {})),
+                )
 
     def save_state(self, force: bool = False) -> None:
         if not self.state_path:
@@ -256,7 +342,17 @@ class ClientRegistry:
         with self._lock:
             if not self._dirty and not force:
                 return
-            payload = {"usage": {cid: {"day": u.day, "tokens_today": u.tokens_today} for cid, u in self._usage.items()}}
+            payload = {
+                "usage": {
+                    cid: {
+                        "day": u.day,
+                        "tokens_today": u.tokens_today,
+                        "models": u.model_tokens_today,
+                        "pools": u.pool_tokens_today,
+                    }
+                    for cid, u in self._usage.items()
+                }
+            }
             self._dirty = False
             self._last_saved = time.monotonic()
         tmp = self.state_path.with_suffix(".tmp")

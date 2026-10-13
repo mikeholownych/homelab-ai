@@ -34,7 +34,7 @@ from .health import HealthManager
 from .metrics import MetricsRegistry
 from .routing import RouteDecision, Router
 from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
-from .tracing import TraceContext
+from .tracing import OTLPTraceExporter, Span, TraceContext
 
 # Tokens kept free between prompt + completion and the context window (template/stop tokens the count may not see).
 SAFETY_MARGIN_TOKENS = 16
@@ -670,8 +670,10 @@ class OrchestratorRuntime:
         budget_message: str | None = None,
         guardrails: GuardrailScanner | None = None,
         cache: ResponseCache | None = None,
+        tracer: OTLPTraceExporter | None = None,
     ) -> None:
         self.guardrails = guardrails
+        self.tracer = tracer
         self.cache = cache if cache is not None else ResponseCache(
             max_entries=int(os.environ.get("ORCHESTRATOR_CACHE_MAX_ENTRIES", "1024")),
             default_ttl=float(os.environ.get("ORCHESTRATOR_CACHE_TTL_SECONDS", "3600")),
@@ -1244,6 +1246,8 @@ class OrchestratorRuntime:
                     trace_id=trace_context.trace_id if trace_context else None,
                     span_id=trace_context.span_id if trace_context else None,
                 )
+                if self.tracer is not None:
+                    self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "HIT", "model": public_model or "unknown"}))
                 return {
                     "status": "ok",
                     "request_id": request_id,
@@ -1255,13 +1259,20 @@ class OrchestratorRuntime:
                 }
             else:
                 self.metrics.gateway_cache_misses_total.inc(model=public_model or "unknown")
+                if self.tracer is not None:
+                    self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "MISS", "model": public_model or "unknown"}))
+        else:
+            if self.tracer is not None:
+                self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "BYPASS", "model": public_model or "unknown"}))
 
         # R6 quotas, R2 priority (monotonic), R7 deadline
         clamped_fields: list[str] = []
         if client is not None:
             try:
-                self.registry_clients_admit(client)
+                self.registry_clients_admit(client, model=public_model)
             except QuotaExceeded as error:
+                if self.tracer is not None:
+                    self.tracer.record_span(Span("admission", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"status": "REJECTED", "code": "quota_exceeded"}, status_code=2, status_message=str(error)))
                 self.metrics.admission_rejections_total.inc(code="quota_exceeded", pool="-")
                 self.evidence.append("admission_rejected", request_id=request_id, client_id=client_id, failure_class="quota_exceeded",
                                      trace_id=trace_context.trace_id, span_id=trace_context.span_id)
@@ -1272,6 +1283,9 @@ class OrchestratorRuntime:
                 clamped_fields.append("priority")
         elif priority not in PRIORITIES:
             priority = "interactive"
+
+        if self.tracer is not None:
+            self.tracer.record_span(Span("admission", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"status": "ADMITTED", "priority": priority}))
         deadline = None
         if deadline_ms is not None:
             deadline = time.monotonic() + max(0, deadline_ms) / 1000.0
@@ -1398,7 +1412,17 @@ class OrchestratorRuntime:
                     index += 1
                     continue
                 plan = replanned
-            route_now = {**route, "pool": pool if pool is not None else worker.pool, "fallback_used": index > 0 and not route.get("canary")}
+            target_pool = pool if pool is not None else worker.pool
+            if client is not None and client.pool_quotas and target_pool in client.pool_quotas:
+                try:
+                    self.registry_clients_admit(client, pool=target_pool)
+                except QuotaExceeded as error:
+                    self.metrics.admission_rejections_total.inc(code="pool_quota_exceeded", pool=target_pool)
+                    self.evidence.append("admission_rejected", request_id=request_id, client_id=client_id, failure_class="pool_quota_exceeded",
+                                         trace_id=trace_context.trace_id if trace_context else None, span_id=trace_context.span_id if trace_context else None)
+                    return {"status": "limited", "failure_class": "pool_quota_exceeded", "request_id": request_id, "http_status": 429,
+                            "retry_after": error.retry_after, "message": str(error), "trace_context": trace_context}
+            route_now = {**route, "pool": target_pool, "fallback_used": index > 0 and not route.get("canary")}
             outcome = self._dispatch(request_id, plan, route_now, client, client_id, priority, timeout, cancel, entry,
                                      clamped_fields, deadline, decision, request, on_stream_start, on_stream_chunk,
                                      ticket=ticket, stream_timing=stream_timing, trace_context=trace_context)
@@ -1439,10 +1463,10 @@ class OrchestratorRuntime:
                     "route": {"rule_id": decision.rule_id, "pool": decision.pool, "fallback_used": False, "reason": decision.reason}}
         return self._capability_reject(request_id, client_id)
 
-    def registry_clients_admit(self, client: Client) -> None:
+    def registry_clients_admit(self, client: Client, *, model: str | None = None, pool: str | None = None) -> None:
         clients = getattr(self, "clients", None)
         if clients is not None:
-            clients.admit(client)
+            clients.admit(client, model=model, pool=pool)
 
     def _capability_reject(self, request_id: str, client_id: str) -> dict[str, Any]:
         self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_capability")
@@ -1743,7 +1767,21 @@ class OrchestratorRuntime:
         self.metrics.inference_prompt_tokens_total.inc(prompt_tokens, worker_id=worker.worker_id, model=worker.public_model_id, source=usage_source[0])
         self.metrics.inference_completion_tokens_total.inc(completion_tokens, worker_id=worker.worker_id, model=worker.public_model_id, source=usage_source[1])
         if client is not None and getattr(self, "clients", None) is not None:
-            self.clients.charge_tokens(client, prompt_tokens + completion_tokens)
+            self.clients.charge_tokens(client, prompt_tokens + completion_tokens, model=worker.public_model_id, pool=worker.pool)
+        if self.tracer is not None:
+            self.tracer.record_span(Span(
+                "inference",
+                trace_context.trace_id,
+                os.urandom(8).hex(),
+                trace_context.span_id,
+                attributes={
+                    "gen_ai.request.model": worker.public_model_id,
+                    "aihost.worker_id": worker.worker_id,
+                    "aihost.route.pool": pool_label,
+                    "gen_ai.usage.prompt_tokens": prompt_tokens,
+                    "gen_ai.usage.completion_tokens": completion_tokens,
+                },
+            ))
 
         termination, exhausted = reasoning_policy.classify(output, budget=plan.reasoning_budget, budget_message=self.budget_message)
         self.metrics.completion_terminations_total.inc(worker_id=worker.worker_id, pool=pool_label, termination=termination)

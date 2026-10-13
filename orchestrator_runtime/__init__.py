@@ -25,9 +25,11 @@ from .runtime import (
 )
 from .smart_router import ComplexityReport, CostModel, EscalationPolicy, LatencyTracker, PromptComplexityAnalyzer
 from .telemetry import RequestTelemetryBuffer, RequestTelemetryRecord, TelemetryService
-from .tracing import TraceContext
+from .tracing import OTLPTraceExporter, Span, TraceContext
 
 __all__ = [
+    "OTLPTraceExporter",
+    "Span",
     "AdmissionCancelled",
     "AdmissionController",
     "AdmissionRejected",

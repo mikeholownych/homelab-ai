@@ -413,6 +413,11 @@ class MetricsRegistry:
             "Total number of streaming inference requests by outcome.",
             ("worker_id", "outcome"),
         )
+        self.streaming_slow_consumer_disconnects_total = self._register_counter(
+            "aihost_streaming_slow_consumer_disconnects_total",
+            "Total number of streaming responses aborted due to slow or stalled consumers.",
+            ("worker_id",),
+        )
 
         # ---------------------------------------------------------------------
         # 3. Scheduler
