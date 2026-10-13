@@ -1409,6 +1409,7 @@
           },
           "max": 1,
           "min": 0,
+          "noDataText": "0 (all closed/healthy)",
           "unit": "short"
         },
         "overrides": []
@@ -1461,6 +1462,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (no cache activity in window)",
           "unit": "reqps"
         },
         "overrides": []
@@ -1524,6 +1526,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (no violations in window)",
           "unit": "events/s"
         },
         "overrides": []
@@ -1576,6 +1579,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (no slow consumer disconnects)",
           "unit": "events/s"
         },
         "overrides": []
@@ -1586,7 +1590,7 @@
         "x": 0,
         "y": 93
       },
-      "id": 35,
+      "id": 32,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1628,6 +1632,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "reqps"
         },
         "overrides": []
@@ -1638,7 +1643,7 @@
         "x": 12,
         "y": 93
       },
-      "id": 36,
+      "id": 33,
       "options": {
         "legend": {
           "displayMode": "list",
@@ -1672,7 +1677,7 @@
         "x": 0,
         "y": 101
       },
-      "id": 32,
+      "id": 34,
       "panels": [],
       "title": "Production Lifecycle",
       "type": "row"
@@ -1706,9 +1711,9 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 94
+        "y": 102
       },
-      "id": 33,
+      "id": 35,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1764,9 +1769,9 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 94
+        "y": 102
       },
-      "id": 34,
+      "id": 36,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1822,9 +1827,9 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 94
+        "y": 102
       },
-      "id": 35,
+      "id": 37,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1880,9 +1885,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 94
+        "y": 102
       },
-      "id": 36,
+      "id": 38,
       "options": {
         "colorMode": "value",
         "reduceOptions": {

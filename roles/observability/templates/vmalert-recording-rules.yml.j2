@@ -224,6 +224,33 @@ groups:
         annotations:
           summary: "Model & cache storage /var/lib/local-ai below 10% free space"
           description: "LVM volume free space on /var/lib/local-ai is below 10% on {{ $labels.instance }}."
+
+      - alert: AihostCircuitBreakerOpen
+        expr: aihost_circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker for {{ $labels.target_type }} '{{ $labels.target_id }}' has tripped to OPEN"
+          description: "Circuit breaker for target '{{ $labels.target_id }}' tripped to OPEN state."
+
+      - alert: AihostHighGuardrailViolationRate
+        expr: rate(aihost_guardrail_violations_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Anomalous rate of security guardrail or DLP secret violations detected"
+          description: "Guardrail violations exceed 0.1 events/s on {{ $labels.instance }}."
+
+      - alert: AihostStreamingSlowConsumerSpike
+        expr: sum by (worker_id) (rate(aihost_streaming_slow_consumer_disconnects_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Anomalous rate of slow consumer disconnects on worker '{{ $labels.worker_id }}'"
+          description: "Slow consumer disconnections exceed 0.05/s on worker '{{ $labels.worker_id }}'."
 {% endraw %}
 {% if observability_vllm_recording_rules_enabled | bool %}
   # Enabled only after the live vLLM /metrics series names are validated at

@@ -418,6 +418,11 @@ class MetricsRegistry:
             "Total number of streaming responses aborted due to slow or stalled consumers.",
             ("worker_id",),
         )
+        self.requests_by_complexity_tier_total = self._register_counter(
+            "aihost_requests_by_complexity_tier_total",
+            "Inference requests counted by prompt complexity tier.",
+            ("tier",),
+        )
 
         # ---------------------------------------------------------------------
         # 3. Scheduler

@@ -1311,6 +1311,8 @@ class OrchestratorRuntime:
                                           prompt_tokens=estimate, attempt=attempt,
                                           previous_outcome=self.previous_outcome(previous_request, client_id),
                                           request=request)
+            if getattr(decision, "complexity", None) is not None:
+                self.metrics.requests_by_complexity_tier_total.inc(tier=decision.complexity.tier)
             if client is not None and not client.permits_pool(decision.pool):
                 return {"status": "forbidden", "failure_class": "pool_forbidden", "request_id": request_id,
                         "http_status": 403, "message": f"client {client_id!r} is not authorized for pool {decision.pool!r}",
