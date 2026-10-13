@@ -1466,6 +1466,17 @@ fn draw_orchestrator_panel(frame: &mut Frame, app: &App, orch: &crate::orchestra
         if let Some(engine) = &w.engine {
             spans.push(Span::styled(format!("/{engine}"), Style::default().fg(DIM)));
         }
+        if let Some(cb) = &w.circuit_breaker {
+            let (cb_text, cb_color) = match cb.as_str() {
+                "open" => (" [CB:OPEN]", BAD),
+                "half_open" | "half-open" => (" [CB:HALF-OPEN]", WARN),
+                _ => (" [CB:OK]", GOOD),
+            };
+            spans.push(Span::styled(cb_text, Style::default().fg(cb_color)));
+        }
+        if let Some(ewma) = w.ewma_duration {
+            spans.push(Span::styled(format!("  {:.0}ms", ewma * 1000.0), Style::default().fg(DIM)));
+        }
         lines.push(Line::from(spans));
         // Engine statistics the gateway republished. Unknown values are shown as "–", never as zero.
         if let Some(es) = &w.engine_stats {
@@ -2325,11 +2336,11 @@ mod tests {
         let mut workers = BTreeMap::new();
         workers.insert(
             "b0-live-tp1-worker1".to_string(),
-            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, endpoint: None, engine_stats: None },
+            WorkerHealth { status: "healthy".into(), healthy: true, consecutive_failures: 0, pool: None, engine: None, endpoint: None, circuit_breaker: Some("closed".into()), ewma_duration: Some(0.045), engine_stats: None },
         );
         workers.insert(
             "b0-live-tp1-worker2".to_string(),
-            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, endpoint: None, engine_stats: None },
+            WorkerHealth { status: "stale".into(), healthy: false, consecutive_failures: 3, pool: None, engine: None, endpoint: None, circuit_breaker: Some("open".into()), ewma_duration: None, engine_stats: None },
         );
         Snapshot {
             health: Health {

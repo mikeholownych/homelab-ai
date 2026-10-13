@@ -22,6 +22,7 @@ from orchestrator_contract import Authority, Task
 
 from . import reasoning as reasoning_policy
 from .admission import AdmissionCancelled, AdmissionController, AdmissionRejected, PoolUnavailable, PRIORITIES
+from .cache import ResponseCache
 from .capabilities import intersect, requirements as capability_requirements
 from .capacity import CapacityTracker
 from .circuit_breaker import CircuitBreakerRegistry
@@ -668,8 +669,14 @@ class OrchestratorRuntime:
         state_path: str | Path | None = None,
         budget_message: str | None = None,
         guardrails: GuardrailScanner | None = None,
+        cache: ResponseCache | None = None,
     ) -> None:
         self.guardrails = guardrails
+        self.cache = cache if cache is not None else ResponseCache(
+            max_entries=int(os.environ.get("ORCHESTRATOR_CACHE_MAX_ENTRIES", "1024")),
+            default_ttl=float(os.environ.get("ORCHESTRATOR_CACHE_TTL_SECONDS", "3600")),
+            enabled=os.environ.get("ORCHESTRATOR_CACHE_ENABLED", "true").lower() in ("true", "1", "yes"),
+        )
         self.router = router
         self.registry = registry
         self.adapters = adapters
@@ -741,14 +748,41 @@ class OrchestratorRuntime:
                 self.admission.drain(worker_id)
 
     def save_state(self) -> None:
-        if not self.state_path:
-            return
-        tmp = self.state_path.with_suffix(".tmp")
-        try:
-            tmp.write_text(json.dumps({"drained": self.admission.drained()}), encoding="utf-8")
-            tmp.replace(self.state_path)
-        except OSError:
-            pass
+        if self.state_path:
+            tmp = self.state_path.with_suffix(".tmp")
+            try:
+                tmp.write_text(json.dumps({"drained": self.admission.drained()}), encoding="utf-8")
+                tmp.replace(self.state_path)
+            except OSError:
+                pass
+        if getattr(self, "clients", None) is not None:
+            self.clients.save_state()
+
+    def reload_configuration(
+        self,
+        *,
+        clients_file: str | Path | None = None,
+        routes: list[dict[str, Any]] | None = None,
+        aliases: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Hot-reload client registry and routing table in-place without dropping in-flight requests."""
+        reloaded: dict[str, Any] = {}
+        if clients_file is not None and getattr(self, "clients", None) is not None:
+            self.clients.reload_from_file(clients_file)
+            reloaded["clients_count"] = len(self.clients.clients())
+        if routes is not None:
+            new_router = Router.from_config(routes, aliases or {})
+            if self.router is not None:
+                self.router.update_rules(list(new_router.rules), new_router.alias_specs)
+            else:
+                self.router = new_router
+            reloaded["rules_count"] = len(self.router.rules)
+        self.evidence.append(
+            "configuration_reloaded",
+            clients_count=reloaded.get("clients_count"),
+            rules_count=reloaded.get("rules_count"),
+        )
+        return reloaded
 
     def worker_detail(self, worker_id: str) -> dict[str, Any]:
         """Per-worker fields for /health: what the gateway observes and enforces (Design 01 section 6)."""
@@ -781,6 +815,11 @@ class OrchestratorRuntime:
             "drain": {"state": "drained" if worker_id in drained else "active",
                       "since": drained.get(worker_id), "inflight": self.admission.inflight(worker_id)},
         }
+        if self.circuit_breakers is not None:
+            cb = self.circuit_breakers.worker_breaker(worker_id)
+            detail["circuit_breaker"] = cb.state.value.lower()
+        if self.router is not None and getattr(self.router, "latency_tracker", None) is not None:
+            detail["ewma_duration"] = round(self.router.latency_tracker.worker_duration(worker_id), 4)
         return detail
 
     # ================================================================== R5 drain
@@ -807,6 +846,8 @@ class OrchestratorRuntime:
         self.shutting_down.set()
         if hasattr(self, "_shadow_executor"):
             self._shadow_executor.shutdown(wait=False, cancel_futures=True)
+        if getattr(self, "clients", None) is not None:
+            self.clients.save_state(force=True)
 
     def inflight_count(self) -> int:
         with self._inflight_lock:
@@ -1087,6 +1128,11 @@ class OrchestratorRuntime:
         if self.guardrails is not None:
             guard_result = self.guardrails.inspect(request)
             if guard_result.rejected:
+                self.metrics.guardrail_violations_total.inc(
+                    direction="ingress",
+                    action="reject",
+                    violation_type=guard_result.violation_type or "unknown",
+                )
                 self.evidence.append(
                     "guardrail_violation",
                     request_id=request_id,
@@ -1106,8 +1152,18 @@ class OrchestratorRuntime:
                     "trace_context": trace_context,
                 }
             if guard_result.redacted and guard_result.sanitized_request is not None:
+                self.metrics.guardrail_violations_total.inc(
+                    direction="ingress",
+                    action="redact",
+                    violation_type=guard_result.violation_type or "unknown",
+                )
                 request = guard_result.sanitized_request
             if guard_result.flagged:
+                self.metrics.guardrail_violations_total.inc(
+                    direction="ingress",
+                    action="flag",
+                    violation_type=guard_result.violation_type or "unknown",
+                )
                 self.evidence.append(
                     "guardrail_flagged",
                     request_id=request_id,
@@ -1164,6 +1220,41 @@ class OrchestratorRuntime:
                     "message": f"request prompt tokens ({estimate}) exceed client limit ({client.max_context_tokens})",
                     "trace_context": trace_context,
                 }
+
+        # Deterministic Response Cache lookup
+        cache_key = None
+        if self.cache is not None and self.cache.is_cacheable(request):
+            cache_key = self.cache.compute_key(request, public_model, reasoning_profile)
+            cached_resp = self.cache.get(cache_key)
+            if cached_resp is not None:
+                self.metrics.gateway_cache_hits_total.inc(model=public_model or "unknown")
+                self.metrics.inference_requests_total.inc(status="cached")
+                headers = {
+                    "X-AIHost-Cache": "HIT",
+                    "X-Request-ID": request_id,
+                }
+                if trace_context is not None:
+                    headers.update(trace_context.to_headers())
+                self.evidence.append(
+                    "cache_hit",
+                    request_id=request_id,
+                    client_id=client_id,
+                    model=public_model,
+                    cache_key=cache_key,
+                    trace_id=trace_context.trace_id if trace_context else None,
+                    span_id=trace_context.span_id if trace_context else None,
+                )
+                return {
+                    "status": "ok",
+                    "request_id": request_id,
+                    "response": cached_resp,
+                    "route": {"rule_id": "cache", "pool": "cache", "worker_id": "cache", "fallback_used": False},
+                    "headers": headers,
+                    "trace_context": trace_context,
+                    "cached": True,
+                }
+            else:
+                self.metrics.gateway_cache_misses_total.inc(model=public_model or "unknown")
 
         # R6 quotas, R2 priority (monotonic), R7 deadline
         clamped_fields: list[str] = []
@@ -1318,6 +1409,14 @@ class OrchestratorRuntime:
                 continue  # same pool first (other workers), then fallbacks
             if outcome.get("status") == "retry":
                 outcome = {"status": "blocked", "failure_class": "provider", "request_id": request_id}
+            if outcome.get("status") == "ok":
+                if cache_key and self.cache is not None and not request.get("stream"):
+                    resp_obj = outcome.get("response")
+                    if isinstance(resp_obj, dict):
+                        self.cache.set(cache_key, resp_obj)
+                        self.metrics.gateway_cache_entries.set(self.cache.size())
+                if "headers" in outcome and "X-AIHost-Cache" not in outcome["headers"]:
+                    outcome["headers"]["X-AIHost-Cache"] = "MISS" if cache_key else "BYPASS"
             return outcome
 
         if context_reject is not None:
@@ -1671,6 +1770,71 @@ class OrchestratorRuntime:
             response["usage"] = output["usage"]
         if isinstance(output.get("timings"), dict):
             response["timings"] = output["timings"]
+
+        # Egress DLP output inspection
+        if self.guardrails is not None:
+            egress_result = self.guardrails.inspect_output(response)
+            if egress_result.rejected:
+                self.metrics.guardrail_violations_total.inc(
+                    direction="egress",
+                    action="reject",
+                    violation_type=egress_result.violation_type or "unknown",
+                )
+                self.evidence.append(
+                    "egress_guardrail_violation",
+                    request_id=request_id,
+                    client_id=client_id,
+                    violation_type=egress_result.violation_type,
+                    reason=egress_result.reason,
+                    detected_patterns=egress_result.detected_patterns,
+                    trace_id=trace_context.trace_id if trace_context else None,
+                    span_id=trace_context.span_id if trace_context else None,
+                )
+                self.metrics.inference_completions_total.inc(
+                    worker_id=worker.worker_id,
+                    outcome="failed",
+                    failure_class="egress_guardrail_violation",
+                )
+                return {
+                    "status": "blocked",
+                    "failure_class": "egress_guardrail_violation",
+                    "request_id": request_id,
+                    "http_status": 500,
+                    "message": f"Generated output blocked by security guardrails: {egress_result.reason}",
+                    "details": {"violation_type": egress_result.violation_type},
+                    "trace_context": trace_context,
+                }
+            if egress_result.redacted and egress_result.sanitized_request is not None:
+                self.metrics.guardrail_violations_total.inc(
+                    direction="egress",
+                    action="redact",
+                    violation_type=egress_result.violation_type or "unknown",
+                )
+                response = egress_result.sanitized_request
+                self.evidence.append(
+                    "egress_guardrail_redacted",
+                    request_id=request_id,
+                    client_id=client_id,
+                    violation_type=egress_result.violation_type,
+                    detected_patterns=egress_result.detected_patterns,
+                    trace_id=trace_context.trace_id if trace_context else None,
+                    span_id=trace_context.span_id if trace_context else None,
+                )
+            elif egress_result.flagged:
+                self.metrics.guardrail_violations_total.inc(
+                    direction="egress",
+                    action="flag",
+                    violation_type=egress_result.violation_type or "unknown",
+                )
+                self.evidence.append(
+                    "egress_guardrail_flagged",
+                    request_id=request_id,
+                    client_id=client_id,
+                    violation_type=egress_result.violation_type,
+                    detected_patterns=egress_result.detected_patterns,
+                    trace_id=trace_context.trace_id if trace_context else None,
+                    span_id=trace_context.span_id if trace_context else None,
+                )
         if self.diagnostic_lineage:
             self.evidence.append(
                 "response_lineage",

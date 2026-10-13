@@ -632,10 +632,7 @@ mod linux {
             .ok()
             .filter(|r| r.status().is_success())
             .and_then(|r| r.json().ok());
-        let engine = fingerprint_engine(&metrics_body, props.as_ref(), &client, base);
-        let Some(engine) = engine else {
-            return None;
-        };
+        let engine = fingerprint_engine(&metrics_body, props.as_ref(), &client, base)?;
 
         let mut req = client.get(format!("{base}/v1/models"));
         // The supplied credential is used only after a vLLM-specific fingerprint. It is never

@@ -231,6 +231,22 @@ class Router:
         self.latency_tracker = latency_tracker or LatencyTracker()
         self.cost_model = cost_model or CostModel()
 
+    def update_rules(self, rules: list[RouteRule], aliases: dict[str, str] | None = None) -> None:
+        """Atomically update rules and aliases while preserving tracker and circuit breaker state."""
+        if not rules:
+            raise RouteConfigError("route table must contain at least one rule")
+        ids = [r.rule_id for r in rules]
+        if len(set(ids)) != len(ids):
+            raise RouteConfigError("route rule ids must be unique")
+        if not rules[-1].unconditional():
+            raise RouteConfigError("the last route rule must be an unconditional default (empty match)")
+        new_alias_specs: dict[str, Alias] = {}
+        for name, spec in (aliases or {}).items():
+            new_alias_specs[name] = spec if isinstance(spec, Alias) else Alias(spec)
+        self.rules = tuple(rules)
+        self.alias_specs = new_alias_specs
+        self.aliases = {name: spec.pool for name, spec in new_alias_specs.items()}
+
     @classmethod
     def from_config(
         cls,

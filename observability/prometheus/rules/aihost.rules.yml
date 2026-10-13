@@ -165,3 +165,15 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "Less than 5% of host memory is available"
+      - alert: AihostCircuitBreakerOpen
+        expr: aihost_circuit_breaker_state == 1
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "Circuit breaker for {{ $labels.target_type }} '{{ $labels.target_id }}' has tripped to OPEN"
+      - alert: AihostHighGuardrailViolationRate
+        expr: rate(aihost_guardrail_violations_total[5m]) > 0.1
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "Anomalous rate of security guardrail or DLP secret violations detected"

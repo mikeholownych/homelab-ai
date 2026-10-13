@@ -265,25 +265,59 @@ def main() -> None:
         evidence.append("gateway_stopped", graceful=drained, inflight_at_exit=runtime.inflight_count())
         health.stop()
 
-    serve_until_stopped(servers, stop_sequence)
+    def reload_sequence() -> None:
+        reloaded_clients = None
+        registry_file = os.environ.get("ORCHESTRATOR_CLIENTS_FILE")
+        if registry_file and runtime.clients is not None:
+            try:
+                runtime.clients.reload_from_file(registry_file)
+                reloaded_clients = len(runtime.clients.clients())
+            except Exception as e:
+                print(f"Failed to hot-reload clients from {registry_file}: {e}", file=sys.stderr, flush=True)
+
+        reloaded_rules = None
+        raw_routes = os.environ.get("ORCHESTRATOR_ROUTES")
+        if raw_routes and runtime.router is not None:
+            try:
+                new_router = load_router(workers)
+                if new_router is not None:
+                    runtime.router.update_rules(list(new_router.rules), new_router.alias_specs)
+                    reloaded_rules = len(runtime.router.rules)
+            except Exception as e:
+                print(f"Failed to hot-reload routes: {e}", file=sys.stderr, flush=True)
+
+        evidence.append("configuration_reloaded", clients_count=reloaded_clients, rules_count=reloaded_rules)
+
+    serve_until_stopped(servers, stop_sequence, reload_sequence=reload_sequence)
     sys.exit(0)
 
 
-def serve_until_stopped(servers: list, stop_sequence, poll_seconds: float = 0.5) -> None:
+def serve_until_stopped(servers: list, stop_sequence, reload_sequence=None, poll_seconds: float = 0.5) -> None:
     """Run every listener until SIGTERM/SIGINT, then run ``stop_sequence`` on the main thread.
 
     The signal handler only records the signal: starting a thread (or touching any lock) inside a handler can deadlock
     when the signal interrupts the main thread while it holds a threading lock, which once left a stop hanging until
     systemd's SIGKILL (2026-10-09). The main thread waits in bounded steps, so a pending handler always runs promptly.
-    SIGUSR1 dumps every thread's stack to stderr (the journal) for diagnosing a stuck process."""
+    SIGUSR1 dumps every thread's stack to stderr (the journal) for diagnosing a stuck process.
+    SIGHUP requests dynamic configuration hot-reloading on the main thread."""
     received: list[int] = []
+    reload_requested: list[int] = []
     signal.signal(signal.SIGTERM, lambda signum, frame: received.append(signum))
     signal.signal(signal.SIGINT, lambda signum, frame: received.append(signum))
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, lambda signum, frame: reload_requested.append(signum))
     faulthandler.register(signal.SIGUSR1, all_threads=True)
     threads = [threading.Thread(target=s.serve_forever, name=f"listener-{i}") for i, s in enumerate(servers)]
     for thread in threads:
         thread.start()
     while not received and any(thread.is_alive() for thread in threads):
+        if reload_requested:
+            reload_requested.clear()
+            if reload_sequence is not None:
+                try:
+                    reload_sequence()
+                except Exception as ex:
+                    print(f"Error executing hot configuration reload: {ex}", file=sys.stderr, flush=True)
         time.sleep(poll_seconds)
     if received:
         stop_sequence()

@@ -1,6 +1,7 @@
 """Fail-closed runtime primitives for cooperative engineering inference."""
 
 from .admission import AdmissionCancelled, AdmissionController, AdmissionRejected, PoolUnavailable
+from .cache import CacheEntry, ResponseCache
 from .capabilities import Capability
 from .capacity import CapacityState, CapacityTracker
 from .circuit_breaker import CircuitBreaker, CircuitBreakerRegistry, CircuitState
@@ -30,6 +31,7 @@ __all__ = [
     "AdmissionCancelled",
     "AdmissionController",
     "AdmissionRejected",
+    "CacheEntry",
     "Capability",
     "CapacityState",
     "CapacityTracker",
@@ -51,6 +53,7 @@ __all__ = [
     "PromptComplexityAnalyzer",
     "QuotaExceeded",
     "RequestCancelled",
+    "ResponseCache",
     "SyslogEvidenceStreamer",
     "TraceContext",
     "VllmAdapter",

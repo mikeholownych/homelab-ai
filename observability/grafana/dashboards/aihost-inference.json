@@ -1392,14 +1392,183 @@
       "type": "timeseries"
     },
     {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Current circuit breaker state: 0 = CLOSED (healthy), 0.5 = HALF-OPEN (probing), 1 = OPEN (tripped).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "max": 1,
+          "min": 0,
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 77
+      },
+      "id": 29,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "max by (target_type, target_id) (aihost_circuit_breaker_state)",
+          "legendFormat": "{{target_type}}: {{target_id}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Circuit breaker state by worker and pool",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Sub-millisecond response cache hits vs misses.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 85
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (model) (rate(aihost_gateway_cache_hits_total[5m]))",
+          "legendFormat": "hits {{model}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (model) (rate(aihost_gateway_cache_misses_total[5m]))",
+          "legendFormat": "misses {{model}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Response cache performance (hits vs misses / s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Rate of detected prompt injection and sensitive secret DLP violations on ingress and egress.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "unit": "events/s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 85
+      },
+      "id": 31,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (direction, action, violation_type) (rate(aihost_guardrail_violations_total[5m]))",
+          "legendFormat": "{{direction}} {{action}}: {{violation_type}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Security & Guardrail Activity (violations / s)",
+      "type": "timeseries"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 93
       },
-      "id": 29,
+      "id": 32,
       "panels": [],
       "title": "Production Lifecycle",
       "type": "row"
@@ -1433,9 +1602,9 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 86
+        "y": 94
       },
-      "id": 30,
+      "id": 33,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1491,9 +1660,9 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 86
+        "y": 94
       },
-      "id": 31,
+      "id": 34,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1549,9 +1718,9 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 86
+        "y": 94
       },
-      "id": 32,
+      "id": 35,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1607,9 +1776,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 86
+        "y": 94
       },
-      "id": 33,
+      "id": 36,
       "options": {
         "colorMode": "value",
         "reduceOptions": {

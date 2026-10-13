@@ -80,6 +80,12 @@ pub struct WorkerHealth {
     /// Loopback endpoint registered by the gateway, used to deduplicate local socket discovery.
     #[serde(default)]
     pub endpoint: Option<String>,
+    /// Circuit breaker state ("closed", "half_open", "open").
+    #[serde(default)]
+    pub circuit_breaker: Option<String>,
+    /// Tracked EWMA latency in seconds.
+    #[serde(default)]
+    pub ewma_duration: Option<f64>,
     /// Engine statistics the *gateway* collected and republished in a neutral shape — vllm-top never
     /// talks to workers (or needs their credentials) for this. `None` when unknown or stale.
     #[serde(default)]

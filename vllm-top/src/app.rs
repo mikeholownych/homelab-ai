@@ -507,7 +507,7 @@ impl App {
                         && rt.last_ok.is_none();
                     let now_gateway_managed = rt.def.kind == crate::config::SourceKind::Direct
                         && registered.contains(rt.def.url.trim_end_matches('/'));
-                    !(is_placeholder && !defs.is_empty()) && !now_gateway_managed
+                    (!is_placeholder || defs.is_empty()) && !now_gateway_managed
                 });
                 for def in defs {
                     if self.runtimes.iter().any(|rt| rt.def.url.trim_end_matches('/') == def.url.trim_end_matches('/')) {

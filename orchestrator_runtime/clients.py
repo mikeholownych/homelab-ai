@@ -75,6 +75,7 @@ class ClientRegistry:
         jwt_issuer: str | None = None,
         jwt_audience: str | None = None,
         jwt_algorithms: tuple[str, ...] = ("HS256", "RS256"),
+        flush_interval_seconds: float = 5.0,
     ) -> None:
         self._clients = {c.client_id: c for c in clients}
         self._usage: dict[str, _Usage] = {}
@@ -85,6 +86,9 @@ class ClientRegistry:
         self.jwt_issuer = jwt_issuer
         self.jwt_audience = jwt_audience
         self.jwt_algorithms = jwt_algorithms
+        self.flush_interval_seconds = max(0.1, float(flush_interval_seconds))
+        self._dirty = False
+        self._last_saved = time.monotonic()
         self._load_state()
 
     # ------------------------------------------------------------------ construction
@@ -204,16 +208,34 @@ class ClientRegistry:
                     raise QuotaExceeded("request rate limit exceeded", max(1, int((1.0 - usage.bucket) / rate) + 1))
                 usage.bucket -= 1.0
 
-    def charge_tokens(self, client: Client, tokens: int) -> None:
+    def charge_tokens(self, client: Client, tokens: int, sync: bool = False) -> None:
         with self._lock:
             usage = self._usage_for(client)
             usage.tokens_today += max(0, int(tokens))
-        self.save_state()
+            self._dirty = True
+        now = time.monotonic()
+        if sync or (now - self._last_saved >= self.flush_interval_seconds):
+            self.save_state()
 
     def usage(self, client_id: str) -> dict[str, Any]:
         with self._lock:
             usage = self._usage.get(client_id)
             return {"day": usage.day, "tokens_today": usage.tokens_today} if usage else {"day": "", "tokens_today": 0}
+
+    # ------------------------------------------------------------------ dynamic reload
+    def reload_clients(self, clients: Iterable[Client]) -> None:
+        """Atomically update registered clients without losing in-memory usage tracking."""
+        new_map = {c.client_id: c for c in clients}
+        with self._lock:
+            self._clients = new_map
+            for cid in list(self._usage.keys()):
+                if cid not in self._clients:
+                    self._usage.pop(cid, None)
+
+    def reload_from_file(self, path: str | Path) -> None:
+        """Hot-reload registered clients from configuration file."""
+        new_reg = self.from_file(path, state_path=self.state_path)
+        self.reload_clients(new_reg.clients())
 
     # ------------------------------------------------------------------ persistence
     def _load_state(self) -> None:
@@ -228,11 +250,15 @@ class ClientRegistry:
                 self._usage[client_id] = _Usage(bucket=float(self._clients[client_id].requests_per_minute or 0),
                                                 day=entry.get("day", ""), tokens_today=int(entry.get("tokens_today", 0)))
 
-    def save_state(self) -> None:
+    def save_state(self, force: bool = False) -> None:
         if not self.state_path:
             return
         with self._lock:
+            if not self._dirty and not force:
+                return
             payload = {"usage": {cid: {"day": u.day, "tokens_today": u.tokens_today} for cid, u in self._usage.items()}}
+            self._dirty = False
+            self._last_saved = time.monotonic()
         tmp = self.state_path.with_suffix(".tmp")
         try:
             tmp.write_text(json.dumps(payload), encoding="utf-8")

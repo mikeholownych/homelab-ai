@@ -447,6 +447,25 @@ class MetricsRegistry:
             "Current state of circuit breaker (0 = closed, 0.5 = half-open, 1 = open).",
             ("target_type", "target_id"),
         )
+        self.gateway_cache_hits_total = self._register_counter(
+            "aihost_gateway_cache_hits_total",
+            "Total number of deterministic requests served from response cache.",
+            ("model",),
+        )
+        self.gateway_cache_misses_total = self._register_counter(
+            "aihost_gateway_cache_misses_total",
+            "Total number of cacheable requests that missed response cache.",
+            ("model",),
+        )
+        self.gateway_cache_entries = self._register_gauge(
+            "aihost_gateway_cache_entries",
+            "Current number of cached responses stored in memory.",
+        )
+        self.guardrail_violations_total = self._register_counter(
+            "aihost_guardrail_violations_total",
+            "Total security guardrail violations detected on ingress or egress.",
+            ("direction", "action", "violation_type"),
+        )
         self.scheduler_worker_available = self._register_gauge(
             "aihost_scheduler_worker_available",
             "Current worker availability status (1 = available, 0 = unavailable).",

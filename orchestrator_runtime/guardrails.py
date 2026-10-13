@@ -166,3 +166,58 @@ class GuardrailScanner:
             reason=reason,
             detected_patterns=all_detected,
         )
+
+    def inspect_output(self, text_or_response: Any) -> GuardrailResult:
+        """Inspect generated completion text for data leakage before client delivery."""
+        if self.action == "none" or not self.detect_secrets:
+            return GuardrailResult()
+
+        texts = self._extract_texts(text_or_response)
+        matched_secrets: list[str] = []
+        patterns_to_redact: list[re.Pattern[str]] = []
+
+        for name, pattern in SECRET_PATTERNS:
+            for text in texts:
+                if pattern.search(text):
+                    matched_secrets.append(name)
+                    patterns_to_redact.append(pattern)
+                    break
+
+        for name, pattern in self.custom_patterns:
+            for text in texts:
+                if pattern.search(text):
+                    matched_secrets.append(name)
+                    patterns_to_redact.append(pattern)
+                    break
+
+        if not matched_secrets:
+            return GuardrailResult()
+
+        violation_type = "output_secret_detected"
+        reason = f"Generated output contained sensitive secret pattern: {matched_secrets[0]}"
+
+        if self.action == "reject":
+            return GuardrailResult(
+                rejected=True,
+                violation_type=violation_type,
+                reason=reason,
+                detected_patterns=matched_secrets,
+            )
+
+        if self.action == "redact":
+            sanitized = self._sanitize_data(text_or_response, patterns_to_redact)
+            return GuardrailResult(
+                redacted=True,
+                violation_type=violation_type,
+                reason=reason,
+                detected_patterns=matched_secrets,
+                sanitized_request=sanitized,
+            )
+
+        # action == "flag"
+        return GuardrailResult(
+            flagged=True,
+            violation_type=violation_type,
+            reason=reason,
+            detected_patterns=matched_secrets,
+        )
