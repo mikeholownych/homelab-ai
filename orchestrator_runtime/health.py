@@ -89,6 +89,12 @@ class HealthManager:
         self.cycle_hooks: list[Any] = []
         # Extra per-worker fields for /health supplied by the runtime (capacity, capabilities, drain, endpoint).
         self.worker_detail: Any = None
+        self.cache_stats_supplier: Any = None
+        self.warmup_enabled = os.environ.get("ORCHESTRATOR_WARMUP_PROBING_ENABLED", "true").lower() in ("true", "1", "yes")
+        self.auto_recovery_threshold = int(os.environ.get("ORCHESTRATOR_AUTO_RECOVERY_THRESHOLD", "3"))
+        self.auto_recovery_cooldown = float(os.environ.get("ORCHESTRATOR_AUTO_RECOVERY_COOLDOWN_SECONDS", "120.0"))
+        self._last_recovery_time: dict[str, float] = {}
+        self.recovery_hook: Any = None
 
         # Initialize health states for all workers currently registered
         self._sync_registered_workers()
@@ -159,6 +165,43 @@ class HealthManager:
             if not healthy and error:
                 err_type = "timeout" if ("timeout" in error.lower() or "timed out" in error.lower()) else "connection_error"
                 self.metrics.provider_errors_total.inc(worker_id=worker_id, error_type=err_type)
+
+        if not healthy and consecutive >= self.auto_recovery_threshold:
+            last_rec = self._last_recovery_time.get(worker_id, 0.0)
+            if now - last_rec >= self.auto_recovery_cooldown:
+                self._last_recovery_time[worker_id] = now
+                threading.Thread(
+                    target=self.recover_worker,
+                    args=(worker_id, f"consecutive_failures_{consecutive}"),
+                    name=f"auto-recover-{worker_id}",
+                    daemon=True,
+                ).start()
+
+    def recover_worker(self, worker_id: str, reason: str = "manual") -> dict[str, Any]:
+        """Trigger worker recovery action via configured command or handler."""
+        result = {"worker_id": worker_id, "triggered": False, "reason": reason, "timestamp": time.time()}
+        recovery_cmd = os.environ.get("ORCHESTRATOR_AUTO_RECOVERY_COMMAND")
+        if recovery_cmd:
+            cmd = recovery_cmd.replace("{worker_id}", worker_id)
+            import subprocess
+            try:
+                subprocess.Popen(cmd, shell=True)
+                result["triggered"] = True
+                result["command"] = cmd
+            except Exception as e:
+                result["error"] = str(e)
+        if self.recovery_hook is not None:
+            try:
+                self.recovery_hook(worker_id, reason)
+                result["triggered"] = True
+            except Exception as e:
+                result["error"] = str(e)
+        if result["triggered"] and self.metrics and hasattr(self.metrics, "worker_auto_recoveries_total"):
+            try:
+                self.metrics.worker_auto_recoveries_total.inc(worker_id=worker_id)
+            except Exception:
+                pass
+        return result
 
     def check(self, *, strict: bool = False) -> tuple[int, dict[str, Any]]:
         """Evaluate non-blocking operational health and return (http_status, json_dict).
@@ -317,7 +360,30 @@ class HealthManager:
             },
         }
 
+        if getattr(self, "cache_stats_supplier", None) is not None:
+            try:
+                payload["cache"] = self.cache_stats_supplier()
+            except Exception:
+                pass
+
         return int(http_status), payload
+
+    def _warmup_worker(self, worker_record: dict[str, Any], endpoint: str, headers: dict[str, str]) -> bool:
+        """Issue a synthetic 1-token prompt to warm up engine memory/kernels before admitting traffic."""
+        model_id = worker_record.get("model_id") or worker_record.get("public_model_id") or "default"
+        payload = json.dumps({
+            "model": model_id,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1,
+        }).encode("utf-8")
+        warmup_headers = {**headers, "Content-Type": "application/json"}
+        url = endpoint.rstrip("/") + "/v1/chat/completions"
+        req = urllib.request.Request(url, data=payload, headers=warmup_headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=5.0) as resp:
+                return 200 <= resp.status < 300
+        except Exception:
+            return False
 
     def probe_worker(self, worker_id: str) -> bool:
         """Probe a single worker via lightweight non-inference /v1/models call or adapter check."""
@@ -347,6 +413,13 @@ class HealthManager:
                 with urllib.request.urlopen(req, timeout=2.0) as resp:
                     elapsed = time.monotonic() - t0
                     if 200 <= resp.status < 300:
+                        prev = self._states.get(worker_id)
+                        was_down = (prev is None) or (not prev.healthy)
+                        if was_down and self.warmup_enabled:
+                            warm_ok = self._warmup_worker(worker_record, endpoint, headers)
+                            if not warm_ok:
+                                self.record_worker_observation(worker_id, healthy=False, duration=elapsed, error="warmup_failed")
+                                return False
                         self.record_worker_observation(worker_id, healthy=True, duration=elapsed)
                         self._collect_engine_stats(worker_record, endpoint, headers)
                         return True

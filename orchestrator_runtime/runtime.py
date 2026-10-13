@@ -26,7 +26,7 @@ from .cache import ResponseCache
 from .capabilities import intersect, requirements as capability_requirements
 from .capacity import CapacityTracker
 from .circuit_breaker import CircuitBreakerRegistry
-from .clients import Client, QuotaExceeded, clamp_priority
+from .clients import Client, ClientRegistry, QuotaExceeded, clamp_priority
 from .engines import adapter_for
 from .evidence import EvidenceStore, scrub
 from .guardrails import GuardrailScanner, SECRET_PATTERNS
@@ -202,9 +202,14 @@ class CapabilityRegistry:
         return self.prefer(candidates, affinity_key, public_model_id)[0]
 
     def prefer(self, candidates: list[WorkerRecord], affinity_key: str | None, cursor_key: str | None) -> list[WorkerRecord]:
-        """Order candidates by preference: rendezvous hashing on the conversation (keeps its prefix cache warm and only
-        remaps a lost worker's conversations), else round robin."""
+        """Order candidates by preference: prefix cache affinity if warm, rendezvous hashing on the conversation, else round robin."""
         if affinity_key:
+            warm_worker = getattr(self, "_prefix_affinity", {}).get(affinity_key)
+            if warm_worker:
+                matching = [w for w in candidates if w.worker_id == warm_worker]
+                others = [w for w in candidates if w.worker_id != warm_worker]
+                if matching:
+                    return matching + sorted(others, key=lambda worker: _hash([affinity_key, worker.worker_id]), reverse=True)
             return sorted(candidates, key=lambda worker: _hash([affinity_key, worker.worker_id]), reverse=True)
         ordered = sorted(candidates, key=lambda worker: worker.worker_id)
         with self._lock:
@@ -749,6 +754,7 @@ class OrchestratorRuntime:
                                         verified=capability_evidence)
         self.state_path = Path(state_path) if state_path else None
         self.shutting_down = threading.Event()
+        self._lock = threading.RLock()
         self._inflight: dict[str, dict[str, Any]] = {}
         self._inflight_lock = threading.Lock()
         self._outcome_index: OrderedDict[str, dict[str, Any]] = OrderedDict()
@@ -757,11 +763,64 @@ class OrchestratorRuntime:
         self.telemetry = RequestTelemetryBuffer(max_size=10_000)
         self.telemetry_service = TelemetryService(self, self.telemetry)
         self.metrics.evidence_chain_valid.set(1.0 if getattr(self.evidence, "chain_valid", True) else 0.0)
+        self._worker_prefix_affinity: OrderedDict[str, str] = OrderedDict()
+        setattr(self.registry, "_prefix_affinity", self._worker_prefix_affinity)
+        if self.health is not None:
+            self.health.cache_stats_supplier = self.cache.stats if self.cache else None
+            self.health.recovery_hook = (
+                lambda wid, reason: self.evidence.append("worker_auto_recovery", worker_id=wid, reason=reason)
+                if self.evidence else None
+            )
         self._load_state()
         self.refresh_capacity()
         if hasattr(self.health, "cycle_hooks"):
             self.health.cycle_hooks.append(self.refresh_capacity)
             self.health.worker_detail = self.worker_detail
+
+    def reload_config(self) -> dict[str, Any]:
+        """Hot-reload route rules, model aliases, and client registries in-memory without restarting."""
+        reloaded = {"timestamp": time.time(), "rules_count": 0, "aliases_count": 0, "clients_count": 0}
+        with self._lock:
+            raw_routes = os.environ.get("ORCHESTRATOR_ROUTES")
+            raw_aliases = os.environ.get("ORCHESTRATOR_MODEL_ALIASES", "{}")
+            if raw_routes:
+                routes_data = json.loads(raw_routes)
+                aliases_data = json.loads(raw_aliases)
+                new_router = Router.from_config(routes_data, aliases_data)
+                known_pools = {w["pool"] for w in self.registry.snapshot()}
+                missing = new_router.referenced_pools() - known_pools
+                if missing:
+                    raise ValueError(f"new route table references unregistered pools: {sorted(missing)}")
+                new_router.circuit_breakers = self.circuit_breakers
+                self.router = new_router
+                reloaded["rules_count"] = len(new_router.rules)
+                reloaded["aliases_count"] = len(new_router.alias_specs)
+
+            clients_file = os.environ.get("ORCHESTRATOR_CLIENTS_FILE")
+            state_dir = os.environ.get("ORCHESTRATOR_STATE_DIR")
+            state_path = Path(state_dir) / "client-usage.json" if state_dir else None
+            if clients_file and Path(clients_file).exists():
+                new_clients = ClientRegistry.from_file(clients_file, state_path=state_path)
+                self.clients = new_clients
+                reloaded["clients_count"] = len(new_clients.clients())
+            elif getattr(self, "clients", None) is not None:
+                reloaded["clients_count"] = len(self.clients.clients())
+
+            if self.evidence is not None:
+                try:
+                    self.evidence.append(
+                        "config_reloaded",
+                        rules_count=reloaded["rules_count"],
+                        aliases_count=reloaded["aliases_count"],
+                        clients_count=reloaded["clients_count"],
+                    )
+                except Exception:
+                    pass
+
+            if hasattr(self.metrics, "gateway_config_reloads_total"):
+                self.metrics.gateway_config_reloads_total.inc()
+
+        return reloaded
 
     # ================================================================== capacity / state
     def refresh_capacity(self) -> None:
@@ -1264,6 +1323,41 @@ class OrchestratorRuntime:
         if self.cache is not None and self.cache.is_cacheable(request):
             cache_key = self.cache.compute_key(request, public_model, reasoning_profile)
             cached_resp = self.cache.get(cache_key)
+            if cached_resp is None and getattr(self.cache, "semantic_enabled", False):
+                cached_resp, sim_score = self.cache.get_semantic(request, public_model, reasoning_profile)
+                if cached_resp is not None:
+                    if hasattr(self.metrics, "gateway_semantic_cache_hits_total"):
+                        self.metrics.gateway_semantic_cache_hits_total.inc(model=public_model or "unknown")
+                    self.metrics.gateway_cache_hits_total.inc(model=public_model or "unknown")
+                    self.metrics.inference_requests_total.inc(status="cached")
+                    headers = {
+                        "X-AIHost-Cache": "SEMANTIC_HIT",
+                        "X-AIHost-Cache-Similarity": f"{sim_score:.3f}",
+                        "X-Request-ID": request_id,
+                    }
+                    if trace_context is not None:
+                        headers.update(trace_context.to_headers())
+                    self.evidence.append(
+                        "semantic_cache_hit",
+                        request_id=request_id,
+                        client_id=client_id,
+                        model=public_model,
+                        similarity=round(sim_score, 4),
+                        trace_id=trace_context.trace_id if trace_context else None,
+                        span_id=trace_context.span_id if trace_context else None,
+                    )
+                    if self.tracer is not None:
+                        self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "SEMANTIC_HIT", "model": public_model or "unknown", "similarity": round(sim_score, 4)}))
+                        self.tracer.record_span(Span("request", trace_context.trace_id, trace_context.span_id, trace_context.parent_span_id, start_time_ns=t0_ns, end_time_ns=time.time_ns(), attributes={"gen_ai.system": "aihost", "client.id": client_id, "aihost.cache.status": "SEMANTIC_HIT", "status": "ok"}, kind=2))
+                    return {
+                        "status": "ok",
+                        "request_id": request_id,
+                        "response": cached_resp,
+                        "route": {"rule_id": "semantic_cache", "pool": "cache", "worker_id": "cache", "fallback_used": False},
+                        "headers": headers,
+                        "trace_context": trace_context,
+                        "cached": True,
+                    }
             if cached_resp is not None:
                 self.metrics.gateway_cache_hits_total.inc(model=public_model or "unknown")
                 self.metrics.inference_requests_total.inc(status="cached")
@@ -1474,10 +1568,20 @@ class OrchestratorRuntime:
             if outcome.get("status") == "retry":
                 outcome = {"status": "blocked", "failure_class": "provider", "request_id": request_id}
             if outcome.get("status") == "ok":
+                if affinity_key and worker:
+                    self._worker_prefix_affinity[affinity_key] = worker.worker_id
+                    if len(self._worker_prefix_affinity) > 1024:
+                        self._worker_prefix_affinity.popitem(last=False)
                 if cache_key and self.cache is not None and not request.get("stream"):
                     resp_obj = outcome.get("response")
                     if isinstance(resp_obj, dict):
-                        self.cache.set(cache_key, resp_obj)
+                        self.cache.set(
+                            cache_key,
+                            resp_obj,
+                            request=request,
+                            model_id=public_model,
+                            reasoning_effort=reasoning_profile,
+                        )
                         self.metrics.gateway_cache_entries.set(self.cache.size())
                 outcome.setdefault("headers", {})
                 if "X-AIHost-Cache" not in outcome["headers"]:

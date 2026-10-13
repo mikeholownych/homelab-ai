@@ -1446,6 +1446,26 @@ fn draw_orchestrator_panel(frame: &mut Frame, app: &App, orch: &crate::orchestra
             ),
         ]),
     ];
+    if let Some(c) = &h.cache {
+        if c.enabled {
+            let sem_str = if c.semantic_enabled { " · sem on" } else { "" };
+            lines.push(Line::from(vec![
+                Span::styled("cache     ", Style::default().fg(DIM)),
+                Span::styled(
+                    format!(
+                        "entries {}/{} · hit ratio {:.1}% (hits {} · sem {}{})",
+                        c.entries,
+                        c.max_entries,
+                        c.hit_ratio * 100.0,
+                        c.hits,
+                        c.semantic_hits,
+                        sem_str
+                    ),
+                    Style::default().fg(ratatui::style::Color::White),
+                ),
+            ]));
+        }
+    }
     for (name, w) in &h.workers {
         let color = if w.status == "stopped" { DIM } else if w.healthy { GOOD } else { BAD };
         let mut spans = vec![
@@ -2356,6 +2376,7 @@ mod tests {
                     total_workers: 2,
                 },
                 workers,
+                cache: None,
             },
             metrics: MetricsTotals {
                 dispatches_total: 10.0,

@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import queue
+import socket
 import threading
 import time
 import urllib.parse
@@ -18,7 +19,7 @@ from typing import Any, AsyncGenerator, Callable, Iterable
 from starlette.applications import Starlette
 from starlette.datastructures import Headers
 from starlette.requests import Request
-from starlette.responses import JSONResponse, PlainTextResponse, Response, StreamingResponse
+from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 from starlette.routing import Route
 
 from orchestrator_runtime import OrchestratorRuntime
@@ -59,7 +60,8 @@ def create_asgi_gateway(
     if getattr(runtime, "clients", None) is None:
         runtime.clients = clients
 
-    monitoring_digest = token_digest(monitoring_token) if monitoring_token else None
+    env_mon = monitoring_token or os.environ.get("ORCHESTRATOR_MONITORING_TOKEN")
+    monitoring_digest = token_digest(env_mon) if env_mon else None
     if listener not in ("any", "local", "remote"):
         raise ValueError("listener must be any|local|remote")
 
@@ -74,7 +76,18 @@ def create_asgi_gateway(
     # ------------------------------------------------------------------ Auth & Origin helpers
     def get_client(request: Request) -> Client | None:
         auth_header = request.headers.get("Authorization", "")
-        return clients.authenticate(auth_header)
+        active_clients = getattr(runtime, "clients", None) or clients
+        return active_clients.authenticate(auth_header)
+
+    def is_admin_authorized(request: Request) -> bool:
+        presented = request.headers.get("Authorization", "")
+        if not presented and "token" in request.query_params:
+            presented = f"Bearer {request.query_params['token']}"
+        if monitoring_digest and presented.startswith("Bearer ") and \
+                token_digest(presented[7:].strip()) == monitoring_digest:
+            return True
+        client = get_client(request)
+        return client is not None and bool(client.scopes & {"admin"})
 
     def is_monitoring_authorized(request: Request) -> bool:
         if not require_monitoring_auth:
@@ -466,6 +479,164 @@ def create_asgi_gateway(
 
         return JSONResponse(status_code=200, content=result["response"], headers=headers)
 
+    async def handle_admin_reload(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if not is_admin_authorized(request):
+            return unauthorized_response(req_id, "admin_reload")
+        try:
+            result = runtime.reload_config()
+            return JSONResponse(status_code=200, content={"status": "ok", "reloaded": result}, headers={"X-Request-ID": req_id})
+        except Exception as err:
+            return JSONResponse(status_code=400, content={"status": "error", "message": str(err)}, headers={"X-Request-ID": req_id})
+
+    async def handle_admin_status(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if not is_admin_authorized(request):
+            return unauthorized_response(req_id, "admin_status")
+        _, health_payload = runtime.health.check()
+        cache_stats = runtime.cache.stats() if runtime.cache else {}
+        evidence_info = {
+            "chain_valid": getattr(runtime.evidence, "chain_valid", True),
+            "head": getattr(runtime.evidence, "head", None),
+        }
+        reloads_count = runtime.metrics.gateway_config_reloads_total.get() if hasattr(runtime.metrics, "gateway_config_reloads_total") else 0
+        status_payload = {
+            "status": health_payload.get("status"),
+            "ready": health_payload.get("ready"),
+            "timestamp": health_payload.get("timestamp"),
+            "gateway": health_payload.get("gateway"),
+            "scheduler": health_payload.get("scheduler"),
+            "workers": health_payload.get("workers"),
+            "cache": cache_stats,
+            "evidence": evidence_info,
+            "reloads_count": reloads_count,
+        }
+        return JSONResponse(status_code=200, content=status_payload, headers={"X-Request-ID": req_id})
+
+    async def handle_admin_worker_recover(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if not is_admin_authorized(request):
+            return unauthorized_response(req_id, "admin_worker_recover")
+        worker_id = request.path_params.get("worker_id", "")
+        res = runtime.health.recover_worker(worker_id, reason="admin_api")
+        return JSONResponse(status_code=200, content={"status": "ok", "recovery": res}, headers={"X-Request-ID": req_id})
+
+    def _render_admin_html(health_payload: dict[str, Any], cache_stats: dict[str, Any]) -> str:
+        status_color = "#10b981" if health_payload.get("ready") else "#ef4444"
+        workers = health_payload.get("workers", {})
+        workers_html = ""
+        for wid, w in workers.items():
+            w_status = w.get("status", "unknown")
+            w_color = "#10b981" if w.get("healthy") else ("#6b7280" if w_status == "stopped" else "#ef4444")
+            cb = w.get("circuit_breaker", "closed")
+            cb_color = "#10b981" if cb == "closed" else ("#f59e0b" if "half" in cb else "#ef4444")
+            ewma = f"{w.get('ewma_duration', 0.0) * 1000.0:.0f} ms" if w.get("ewma_duration") else "N/A"
+            workers_html += f"""
+            <div class="card worker-card">
+                <div class="card-header" style="margin-bottom:0.75rem;">
+                    <span class="badge" style="background:{w_color}22; color:{w_color}; border:1px solid {w_color}44;">{w_status.upper()}</span>
+                    <span class="badge" style="background:{cb_color}22; color:{cb_color}; border:1px solid {cb_color}44;">CB: {cb.upper()}</span>
+                    <h3 style="margin:0.5rem 0 0 0; font-size:1.1rem;">{wid}</h3>
+                </div>
+                <div class="card-body" style="font-size:0.9rem;">
+                    <p style="margin:0.25rem 0;"><strong>Pool:</strong> {w.get('pool', 'lead')} &nbsp;|&nbsp; <strong>Engine:</strong> {w.get('engine', 'unknown')}</p>
+                    <p style="margin:0.25rem 0;"><strong>Model:</strong> <code>{w.get('model_id', '-')}</code></p>
+                    <p style="margin:0.25rem 0;"><strong>EWMA Latency:</strong> {ewma} &nbsp;|&nbsp; <strong>Failures:</strong> {w.get('consecutive_failures', 0)}</p>
+                </div>
+            </div>"""
+
+        c_size = cache_stats.get("size", 0)
+        c_max = cache_stats.get("max_entries", 0)
+        c_hits = cache_stats.get("hits", 0)
+        c_sem_hits = cache_stats.get("semantic_hits", 0)
+        c_miss = cache_stats.get("misses", 0)
+        c_rate = f"{cache_stats.get('hit_rate', 0.0) * 100.0:.1f}%"
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AIHost Enterprise Appliance Console</title>
+    <style>
+        :root {{ --bg: #0f172a; --surface: #1e293b; --border: #334155; --text: #f8fafc; --text-dim: #94a3b8; --primary: #38bdf8; }}
+        body {{ margin: 0; padding: 2rem; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem; }}
+        .title-group h1 {{ margin: 0 0 0.25rem 0; font-size: 1.75rem; }}
+        .title-group p {{ margin: 0; color: var(--text-dim); font-size: 0.9rem; }}
+        .badge {{ display: inline-block; padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; }}
+        .btn {{ background: #0284c7; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600; }}
+        .btn:hover {{ background: #0369a1; }}
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }}
+        .card {{ background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }}
+        .card h2 {{ margin-top: 0; font-size: 1.15rem; color: var(--primary); }}
+        .stat-val {{ font-size: 1.75rem; font-weight: 700; color: #fff; margin: 0.25rem 0; }}
+        .stat-desc {{ font-size: 0.85rem; color: var(--text-dim); margin: 0; }}
+        code {{ background: #090d16; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.85rem; color: #38bdf8; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title-group">
+            <h1>AIHost Enterprise Appliance</h1>
+            <p>Host: <code>{socket.gethostname()}</code> &nbsp;|&nbsp; Release: <code>{os.environ.get('ORCHESTRATOR_RELEASE_ID', 'dev')}</code> &nbsp;|&nbsp; Uptime: {health_payload.get('gateway', {}).get('uptime_seconds', 0):.0f}s</p>
+        </div>
+        <div>
+            <span class="badge" style="background:{status_color}22; color:{status_color}; border:1px solid {status_color}44; font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                ● {health_payload.get('status', 'UNKNOWN').upper()}
+            </span>
+            <button class="btn" style="margin-left: 1rem;" onclick="reloadConfig()">Hot Reload Config</button>
+        </div>
+    </div>
+    <div class="grid">
+        <div class="card">
+            <h2>Scheduler & Queuing</h2>
+            <div class="stat-val">{health_payload.get('scheduler', {}).get('available_workers', 0)} / {health_payload.get('scheduler', {}).get('total_workers', 0)}</div>
+            <p class="stat-desc">Workers Available · Mode: {health_payload.get('scheduler', {}).get('scheduling_mode', 'B+')}</p>
+            <p style="margin-top:0.75rem; font-size: 0.85rem; color: var(--text-dim);">Queued: {health_payload.get('scheduler', {}).get('queued_work', 0)} · Active: {health_payload.get('scheduler', {}).get('active_work', 0)}</p>
+        </div>
+        <div class="card">
+            <h2>Response Cache</h2>
+            <div class="stat-val">{c_rate}</div>
+            <p class="stat-desc">Hit Rate ({c_hits} hits, {c_miss} misses)</p>
+            <p style="margin-top:0.75rem; font-size: 0.85rem; color: var(--text-dim);">{c_size} / {c_max} entries · Semantic hits: <strong style="color:var(--primary);">{c_sem_hits}</strong></p>
+        </div>
+        <div class="card">
+            <h2>Evidence Ledger</h2>
+            <div class="stat-val" style="font-size: 1.1rem; word-break: break-all; font-family: monospace; color: #a7f3d0;">
+                {str(health_payload.get('evidence', {}).get('head', 'GENESIS'))[:24]}...
+            </div>
+            <p class="stat-desc">Cryptographic Head Hash · Chain Valid: {str(health_payload.get('evidence', {}).get('chain_valid', True)).upper()}</p>
+        </div>
+    </div>
+    <h2 style="color: #cbd5e1; margin-bottom: 1rem;">Worker Fleet & Hardware Status</h2>
+    <div class="grid">
+        {workers_html}
+    </div>
+    <script>
+        async function reloadConfig() {{
+            try {{
+                const res = await fetch('/v1/admin/reload', {{ method: 'POST' }});
+                const data = await res.json();
+                alert('Config Reloaded: ' + JSON.stringify(data));
+                window.location.reload();
+            }} catch (e) {{
+                alert('Reload failed: ' + e);
+            }}
+        }}
+    </script>
+</body>
+</html>"""
+
+    async def handle_admin_ui(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if not is_admin_authorized(request):
+            return unauthorized_response(req_id, "admin_ui")
+        _, health_payload = runtime.health.check()
+        cache_stats = runtime.cache.stats() if runtime.cache else {}
+        html = _render_admin_html(health_payload, cache_stats)
+        return HTMLResponse(content=html, headers={"X-Request-ID": req_id})
+
     routes = [
         Route("/health", handle_health, methods=["GET"]),
         Route("/metrics", handle_metrics, methods=["GET"]),
@@ -473,6 +644,10 @@ def create_asgi_gateway(
         Route("/v1/routes", handle_routes, methods=["GET"]),
         Route("/v1/tokenize", handle_tokenize, methods=["POST"]),
         Route("/v1/chat/completions", handle_chat_completions, methods=["POST"]),
+        Route("/v1/admin/reload", handle_admin_reload, methods=["POST"]),
+        Route("/v1/admin/status", handle_admin_status, methods=["GET"]),
+        Route("/v1/admin/workers/{worker_id}/recover", handle_admin_worker_recover, methods=["POST"]),
+        Route("/admin", handle_admin_ui, methods=["GET"]),
     ]
 
     return Starlette(routes=routes)

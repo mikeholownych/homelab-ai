@@ -471,6 +471,20 @@ class MetricsRegistry:
             "aihost_gateway_cache_entries",
             "Current number of cached responses stored in memory.",
         )
+        self.gateway_semantic_cache_hits_total = self._register_counter(
+            "aihost_gateway_semantic_cache_hits_total",
+            "Total number of requests served via semantic similarity response cache.",
+            ("model",),
+        )
+        self.gateway_config_reloads_total = self._register_counter(
+            "aihost_gateway_config_reloads_total",
+            "Total number of successful zero-downtime configuration reloads.",
+        )
+        self.worker_auto_recoveries_total = self._register_counter(
+            "aihost_worker_auto_recoveries_total",
+            "Total automated worker recovery actions initiated by supervisor watchdog.",
+            ("worker_id",),
+        )
         self.guardrail_violations_total = self._register_counter(
             "aihost_guardrail_violations_total",
             "Total security guardrail violations detected on ingress or egress.",

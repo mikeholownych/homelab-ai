@@ -41,6 +41,8 @@ pub struct Health {
     pub scheduler: Scheduler,
     #[serde(default)]
     pub workers: BTreeMap<String, WorkerHealth>,
+    #[serde(default)]
+    pub cache: Option<CacheStats>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -63,6 +65,28 @@ pub struct Scheduler {
     pub active_work: f64,
     pub available_workers: u64,
     pub total_workers: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct CacheStats {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub semantic_enabled: bool,
+    #[serde(default)]
+    pub semantic_threshold: Option<f64>,
+    #[serde(default)]
+    pub entries: u64,
+    #[serde(default)]
+    pub max_entries: u64,
+    #[serde(default)]
+    pub hits: u64,
+    #[serde(default)]
+    pub semantic_hits: u64,
+    #[serde(default)]
+    pub misses: u64,
+    #[serde(default)]
+    pub hit_ratio: f64,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -329,6 +353,37 @@ aihost_authority_validations_total{outcome="accepted"} 2
         assert_eq!(h.scheduler.available_workers, 2);
         assert_eq!(h.workers.len(), 2);
         assert!(h.workers["b0-live-tp1-worker1"].healthy);
+        assert_eq!(h.cache, None);
+    }
+
+    #[test]
+    fn parses_payload_with_cache_stats() {
+        let payload = r#"{
+            "status": "healthy",
+            "ready": true,
+            "gateway": {"status": "alive", "uptime_seconds": 100.0},
+            "scheduler": {"ready": true, "status": "ready", "queued_work": 0, "active_work": 0, "available_workers": 1, "total_workers": 1},
+            "workers": {},
+            "cache": {
+                "enabled": true,
+                "semantic_enabled": true,
+                "semantic_threshold": 0.95,
+                "entries": 42,
+                "max_entries": 1000,
+                "hits": 10,
+                "semantic_hits": 5,
+                "misses": 20,
+                "hit_ratio": 0.4286
+            }
+        }"#;
+        let h: Health = serde_json::from_str(payload).expect("parses with cache");
+        let cache = h.cache.expect("cache present");
+        assert!(cache.enabled);
+        assert!(cache.semantic_enabled);
+        assert_eq!(cache.entries, 42);
+        assert_eq!(cache.hits, 10);
+        assert_eq!(cache.semantic_hits, 5);
+        assert_eq!(cache.hit_ratio, 0.4286);
     }
 
     #[test]
