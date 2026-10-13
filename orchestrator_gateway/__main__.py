@@ -216,7 +216,7 @@ def main() -> None:
                 raise RuntimeError("the remote listener requires ORCHESTRATOR_TLS_CERT and ORCHESTRATOR_TLS_KEY")
             ca_cert = os.environ.get("ORCHESTRATOR_TLS_CA_CERT")
             require_client_cert = os.environ.get("ORCHESTRATOR_TLS_REQUIRE_CLIENT_CERT") == "true"
-            cert_reqs = ssl.CERT_REQUIRED if require_client_cert else (ssl.CERT_OPTIONAL if ca_cert else None)
+            cert_reqs = ssl.CERT_REQUIRED if require_client_cert else (ssl.CERT_OPTIONAL if ca_cert else ssl.CERT_NONE)
             remote_port = int(os.environ.get("ORCHESTRATOR_REMOTE_PORT", "8443"))
             remote_app = create_asgi_gateway(
                 runtime, clients=runtime.clients, monitoring_token=monitoring_token,
@@ -310,7 +310,7 @@ def serve_until_stopped(servers: list, stop_sequence, reload_sequence=None, poll
     threads = [threading.Thread(target=s.serve_forever, name=f"listener-{i}") for i, s in enumerate(servers)]
     for thread in threads:
         thread.start()
-    while not received and any(thread.is_alive() for thread in threads):
+    while not received and all(thread.is_alive() for thread in threads):
         if reload_requested:
             reload_requested.clear()
             if reload_sequence is not None:
@@ -319,7 +319,9 @@ def serve_until_stopped(servers: list, stop_sequence, reload_sequence=None, poll
                 except Exception as ex:
                     print(f"Error executing hot configuration reload: {ex}", file=sys.stderr, flush=True)
         time.sleep(poll_seconds)
-    if received:
+    if not all(thread.is_alive() for thread in threads) and not received:
+        print("One or more listener threads terminated unexpectedly, shutting down gateway", file=sys.stderr, flush=True)
+    if received or not all(thread.is_alive() for thread in threads):
         stop_sequence()
     for thread in threads:
         thread.join()

@@ -317,3 +317,16 @@ def test_asgi_server_wrapper_lifecycle(tmp_path):
         wrapper.shutdown()
         thread.join(timeout=3.0)
         assert not thread.is_alive()
+
+
+def test_asgi_server_wrapper_ssl_config():
+    import ssl
+    wrapper = AsgiServerWrapper(
+        None, "0.0.0.0", 8443,
+        ssl_keyfile="/path/to/key.pem",
+        ssl_certfile="/path/to/cert.pem",
+    )
+    assert wrapper.config.ssl_keyfile == "/path/to/key.pem"
+    assert wrapper.config.ssl_certfile == "/path/to/cert.pem"
+    assert wrapper.config.ssl_cert_reqs == ssl.CERT_NONE
+

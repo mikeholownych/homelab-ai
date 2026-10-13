@@ -510,21 +510,26 @@ class AsgiServerWrapper:
         ssl_cert_reqs: int | None = None,
         log_level: str = "info",
     ) -> None:
+        import ssl
         import uvicorn
 
         self.host = host
         self.port = port
-        self.config = uvicorn.Config(
-            app=app,
-            host=host,
-            port=port,
-            ssl_keyfile=ssl_keyfile,
-            ssl_certfile=ssl_certfile,
-            ssl_ca_certs=ssl_ca_certs,
-            ssl_cert_reqs=ssl_cert_reqs,
-            log_level=log_level,
-            access_log=False,
-        )
+        config_kwargs: dict[str, Any] = {
+            "app": app,
+            "host": host,
+            "port": port,
+            "log_level": log_level,
+            "access_log": False,
+        }
+        if ssl_keyfile and ssl_certfile:
+            config_kwargs["ssl_keyfile"] = ssl_keyfile
+            config_kwargs["ssl_certfile"] = ssl_certfile
+            if ssl_ca_certs:
+                config_kwargs["ssl_ca_certs"] = ssl_ca_certs
+            config_kwargs["ssl_cert_reqs"] = ssl_cert_reqs if ssl_cert_reqs is not None else ssl.CERT_NONE
+
+        self.config = uvicorn.Config(**config_kwargs)
         self.server = uvicorn.Server(self.config)
 
     def serve_forever(self) -> None:
