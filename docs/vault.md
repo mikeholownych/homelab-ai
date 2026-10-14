@@ -413,3 +413,43 @@ and never an Ansible Vault fallback.
 Only `approle` is implemented today. If you add another auth method, extend the
 allowlist, implement the flow, and expand `tests/test_vault_contract.py` before
 changing any consumer role.
+
+## Disaster recovery: Vault VM reboot and emergency unsealing
+
+In the event of a Vault VM reboot, power interruption, or service restart, Vault starts in a sealed state and refuses all read/write requests until unsealed:
+
+1. **Verify Vault Health & Sealed Posture**:
+   ```bash
+   curl -ks https://10.0.8.109:8200/v1/sys/health | jq .
+   ```
+   Expected state when sealed: HTTP 503 with `"sealed": true, "initialized": true`.
+
+2. **Retrieve Out-of-Band Shamir Unseal Keys**:
+   Retrieve the operator unseal key(s) from secure offline storage (hardware token, encrypted password manager, or physical safe). Do not store unseal keys on either the controller or the inference appliance.
+
+3. **Execute Unseal Operation**:
+   Using the Vault CLI against the control-plane endpoint:
+   ```bash
+   export VAULT_ADDR="https://10.0.8.109:8200"
+   export VAULT_CACERT="/etc/ssl/certs/ca-certificates.crt"
+   vault operator unseal
+   ```
+   Or perform via direct authenticated HTTPS API call:
+   ```bash
+   curl -ks --request POST \
+     --data "{\"key\": \"$(cat /path/to/operator-unseal.key)\"}" \
+     https://10.0.8.109:8200/v1/sys/unseal | jq .
+   ```
+
+4. **Verify Restored Posture & Service Continuity**:
+   ```bash
+   curl -ks https://10.0.8.109:8200/v1/sys/health | jq .
+   ```
+   Expected state: HTTP 200 with `"sealed": false, "initialized": true`.
+
+5. **Test Controller Secret Retrieval**:
+   Verify that controller AppRole authentication recovers immediately:
+   ```bash
+   ansible-playbook playbooks/site.yml --tags vault_preflight
+   ```
+

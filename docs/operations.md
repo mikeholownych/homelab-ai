@@ -152,11 +152,17 @@ Note: Ubuntu Server acceptance is evidence-based and linear LVM is not redundant
 
 
 ### Scheduled reconciliation (controller-side)
-Reconciliation runs hourly **from the controller**, never on the inference appliance: `playbooks/inference.yml` signs the
-gateway TLS leaf with the CA key that only the controller holds. `roles/reconcile_controller` checks out a pinned snapshot
-commit, bootstraps its hash-pinned tools and builds its own `vllm-top`, then installs a user systemd timer
-(`aihost-reconcile.timer`, operator account) that runs `scripts/run-ansible-snapshot ... --playbook reconcile.yml`.
-The timer re-applies that snapshot; it never pulls `main`. Deploy or move the snapshot explicitly:
+Reconciliation runs hourly **from the controller**, never on the inference appliance. This enforces a strict security boundary: the controller `mike-dev` holds the private CA key and Vault AppRole SecretID, while the appliance is treated as an isolated workload runner. Consequently, appliance lifecycle timers (`scheduled_ansible_reconcile_enabled`) remain explicitly disabled on `ai-5820-01` to prevent credential exposure or autonomous mutation from the appliance.
+
+`roles/reconcile_controller` checks out a pinned snapshot commit, bootstraps its hash-pinned tools, builds its own locked tools, and installs a user systemd timer (`aihost-reconcile.timer`, operator account) that executes `scripts/run-ansible-snapshot ... --playbook reconcile.yml`. The timer re-applies exactly that snapshot; it never pulls `main`.
+
+To inspect the controller reconciliation status:
+```bash
+systemctl --user status aihost-reconcile.timer
+systemctl --user status aihost-reconcile.service
+```
+
+Deploy or move the snapshot explicitly:
 ```bash
 ansible-playbook playbooks/reconcile-controller.yml -e reconcile_controller_snapshot_ref=$(git rev-parse HEAD)
 systemctl --user start aihost-reconcile.service   # optional immediate run
