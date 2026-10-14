@@ -323,13 +323,13 @@
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "max(aihost:inference_duration_seconds:p95_5m)",
+          "expr": "(max(aihost:inference_duration_seconds:p95_5m)) or vector(0)",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "noDataText": "idle",
+          "noDataText": "0 s (idle)",
           "unit": "s"
         }
       }

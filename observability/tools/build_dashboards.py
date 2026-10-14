@@ -99,7 +99,7 @@ def inference() -> dict:
     W = 'worker_id=~"$worker"'
     b.row("Overview")
     b.stat("Workers healthy", "Workers the gateway currently considers healthy.", f"sum(aihost_worker_health_status{{{W}}})", thresholds=[(None, "red"), (1, "green")], w=4)
-    b.stat("Requests / s", "Inference requests received by the gateway.", 'sum(rate(aihost_inference_requests_total{status="received"}[5m]))', unit="reqps", w=4)
+    b.stat("Requests / s", "Inference requests received by the gateway.", f'(sum(rate(aihost_inference_requests_total{{status="received"}}[5m])) or vector(0))', unit="reqps", no_data_text="0 (idle)", w=4)
     b.stat("Provider error ratio", "Failed or timed-out share of requests that reached a worker. Caller faults (rejected) are excluded.",
            f"(max(aihost:inference_error_ratio:rate5m{{{W}}}) or vector(0))", unit="percentunit", thresholds=[(None, "green"), (0.05, "red")], no_data_text="0% (idle)", w=4)
     b.stat("Estimated token share (1 h)", "Share of counted tokens that are the gateway's estimate instead of the engine's exact usage. Should stay near 0%; a rise means an engine stopped reporting usage.",
@@ -110,24 +110,25 @@ def inference() -> dict:
 
     b.row("Throughput")
     b.timeseries("Decode speed (tokens per busy second)", "Generated tokens divided by generation time, per worker. A decode-speed figure, not wall-clock throughput. Appears during active generation periods.",
-                 [(f"aihost:engine_decode_tokens_per_second:rate5m{{{W}}}", "{{worker_id}}")], unit="short", no_data_text="No active generations in window")
+                 [(f"(aihost:engine_decode_tokens_per_second:rate5m{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}}")], unit="short", no_data_text="No active generations in window")
     b.timeseries("Prompt evaluation speed (tokens per busy second)", "Prompt tokens evaluated per second of prompt processing; cached tokens are not included. Appears during active request processing.",
-                 [(f"aihost:engine_prompt_eval_tokens_per_second:rate5m{{{W}}}", "{{worker_id}}")], unit="short", no_data_text="No prompt evaluations in window")
+                 [(f"(aihost:engine_prompt_eval_tokens_per_second:rate5m{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}}")], unit="short", no_data_text="No prompt evaluations in window")
     b.timeseries("Generated tokens / s (wall clock)", "Tokens the engine generated per wall-clock second, averaged over 5 minutes.",
-                 [(f"rate(aihost_engine_generation_tokens_total{{{W}}}[5m])", "{{worker_id}}")], unit="short")
+                 [(f"(rate(aihost_engine_generation_tokens_total{{{W}}}[5m])) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}}")], unit="short", no_data_text="0 (idle)")
     b.timeseries("Prefix-cache hit ratio (1 h window)", "Share of prompt tokens served from cache over the last hour alongside lifetime engine ratio.",
-                 [(f"aihost:engine_prefix_cache_hit_ratio:rate1h{{{W}}}", "{{worker_id}} (1h window)"),
-                  (f"aihost_engine_prefix_cache_hit_ratio{{{W}}}", "{{worker_id}} (lifetime)")], unit="percentunit", min_=0, max_=1)
+                 [(f"(aihost:engine_prefix_cache_hit_ratio:rate1h{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}} (1h window)"),
+                  (f"aihost_engine_prefix_cache_hit_ratio{{{W}}}", "{{worker_id}} (lifetime)")], unit="percentunit", min_=0, max_=1, no_data_text="0% (idle)")
 
     b.row("Latency and Outcomes")
     b.timeseries("Request duration p50 / p95 by pool", "Time the gateway spent on the worker call, including engine-side queueing. Measurement window: 5 minutes.",
-                 [("aihost:inference_duration_seconds:p50_5m", "p50 {{pool}}"), ("aihost:inference_duration_seconds:p95_5m", "p95 {{pool}}")], unit="s", no_data_text="No completed requests in window")
+                 [("(aihost:inference_duration_seconds:p50_5m) or (0 * sum by (pool) (aihost_worker_info))", "p50 {{pool}}"),
+                  ("(aihost:inference_duration_seconds:p95_5m) or (0 * sum by (pool) (aihost_worker_info))", "p95 {{pool}}")], unit="s", no_data_text="No completed requests in window")
     b.timeseries("Scheduler queue wait latency", "Average time requests spend waiting inside the gateway scheduler queue prior to worker dispatch. Measurement window: 5 minutes.",
-                 [("rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0)", "queue wait")], unit="s", no_data_text="No queued requests in window")
+                 [("((rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0))) or vector(0)", "queue wait")], unit="s", no_data_text="0 (idle)")
     b.timeseries("Requests by outcome", "Completed, failed, timed-out and rejected requests per second.",
-                 [(f"aihost:inference_completions:rate5m{{{W}}}", "{{worker_id}} {{outcome}}")], unit="reqps", stack=True)
+                 [(f'(sum by (worker_id, outcome) (aihost:inference_completions:rate5m{{{W}}})) or label_replace(sum by (worker_id) (0 * aihost_worker_info{{{W}}}), "outcome", "completed", "", "")', "{{worker_id}} {{outcome}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
     b.timeseries("Completion terminations by reason", "Completed inference requests broken down by termination reason (stop token, max length context truncation).",
-                 [('sum by (model, reason) (rate(aihost_completion_terminations_total[5m]))', "{{model}} - {{reason}}")], unit="short", stack=True)
+                 [('(sum by (termination) (rate(aihost_completion_terminations_total[5m]))) or label_replace(vector(0), "termination", "none", "", "")', "{{termination}}")], unit="short", stack=True, no_data_text="0 (idle)")
 
     b.row("Engine state")
     b.timeseries("Running / waiting requests", "Requests being processed and requests deferred inside the engine. Sustained waiting means queueing.",
@@ -137,20 +138,21 @@ def inference() -> dict:
     b.timeseries("In-flight tokens", "Tokens decoded / prompt tokens evaluated so far by requests still running.",
                  [(f"aihost_engine_generation_tokens_in_flight{{{W}}}", "decoded {{worker_id}}"), (f"aihost_engine_prompt_tokens_in_flight{{{W}}}", "prompt {{worker_id}}")])
     b.timeseries("Requests outstanding vs configured concurrency", "Requests the gateway has on a worker versus its max concurrency; the excess waits inside the engine.",
-                 [(f"aihost_worker_inflight{{{W}}}", "in flight {{worker_id}}"), (f"aihost_worker_max_concurrency{{{W}}}", "max {{worker_id}}")])
+                 [(f"(aihost_worker_inflight{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "in flight {{worker_id}}"),
+                  (f"(aihost_worker_max_concurrency{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "max {{worker_id}}")], no_data_text="0 (idle)")
 
     b.row("Routing, Policy and Authentication")
     b.timeseries("Route decisions by rule and pool", "Routing rule evaluations and destinations. Distinguishes reasoning-off lead routes from engineering/lead-reasoning at 8192 context window.",
-                 [("sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))", "{{rule}} -> {{pool}}")], unit="reqps", stack=True)
+                 [('(sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))) or label_replace(label_replace(vector(0), "rule", "default", "", ""), "pool", "lead", "", "")', "{{rule}} -> {{pool}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
     b.timeseries("Worker dispatches / s", "Dispatches to target inference workers, reflecting distribution, health-based eligibility, and fallback.",
-                 [("sum by (target_worker) (rate(aihost_inference_dispatches_total[5m]))", "-> {{target_worker}}")], unit="reqps", stack=True)
+                 [('(sum by (target_worker) (rate(aihost_inference_dispatches_total[5m]))) or label_replace(vector(0), "target_worker", "none", "", "")', "-> {{target_worker}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
     b.timeseries("Client authority validations", "Client authority check rate partitioned by authority and outcome (allow / deny) without exposing credentials.",
-                 [("sum by (authority, result) (rate(aihost_authority_validations_total[5m]))", "{{authority}} ({{result}})")], unit="reqps", stack=True)
+                 [('(sum by (outcome) (rate(aihost_authority_validations_total[5m]))) or label_replace(vector(0), "outcome", "accepted", "", "")', "{{outcome}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
     b.timeseries("HTTP requests by status code", "Gateway HTTP ingress request outcomes grouped by response status code.",
-                 [("sum by (code) (rate(aihost_http_requests_total[5m]))", "HTTP {{code}}")], unit="reqps", stack=True)
+                 [('(sum by (code) (rate(aihost_http_requests_total[5m]))) or label_replace(vector(0), "code", "200", "", "")', "HTTP {{code}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
     b.timeseries("Token accounting by source (tokens / s)", "Tokens the gateway counted: provider = the engine's exact usage, estimated = the gateway's fallback.",
-                 [('sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))', "prompt {{source}}"),
-                  ('sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))', "completion {{source}}")], stack=True)
+                 [('(sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))) or label_replace(vector(0), "source", "provider", "", "")', "prompt {{source}}"),
+                  ('(sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))) or label_replace(vector(0), "source", "provider", "", "")', "completion {{source}}")], stack=True, no_data_text="0 (idle)")
     b.timeseries("Circuit breaker state by worker and pool", "Current circuit breaker state: 0 = CLOSED (healthy), 0.5 = HALF-OPEN (probing), 1 = OPEN (tripped).",
                  [('(max by (target_type, target_id) (aihost_circuit_breaker_state)) or label_replace(label_replace(vector(0), "target_type", "all", "", ""), "target_id", "closed", "", "")', "{{target_type}}: {{target_id}}")], unit="short", min_=0, max_=1, no_data_text="0 (all closed/healthy)")
     b.timeseries("Response cache performance (hits vs misses / s)", "Sub-millisecond response cache hits vs misses.",
@@ -167,11 +169,11 @@ def inference() -> dict:
     b.stat("Evidence chain valid", "Release evidence chain verification state (1 = cryptographically valid, 0 = failed).",
            "min(aihost_evidence_chain_valid)", thresholds=[(None, "red"), (1, "green")])
     b.stat("Evidence verification failures / s", "Rate of release evidence verification failures.",
-           "sum(rate(aihost_evidence_verification_failures_total[5m]))", thresholds=[(None, "green"), (0.01, "red")])
+           "(sum(rate(aihost_evidence_verification_failures_total[5m])) or vector(0))", thresholds=[(None, "green"), (0.01, "red")], no_data_text="0 (idle)")
     b.stat("Reconciliation timer active", "State of scheduled Ansible reconciliation timer (0 = paused, 1 = active). Value 0 is an expected operational pause during benchmark sweeps.",
            "max(aihost_reconciliation_timer_active)", thresholds=[(None, "blue"), (1, "green")])
     b.stat("Workers drained", "Count of workers marked as drained for scheduled maintenance.",
-           f"sum(aihost_worker_drained{{{W}}})", thresholds=[(None, "green"), (1, "orange")])
+           f"(sum(aihost_worker_drained{{{W}}}) or vector(0))", thresholds=[(None, "green"), (1, "orange")], no_data_text="0")
     return b.build()
 
 
@@ -187,7 +189,7 @@ def host() -> dict:
     b.stat("Host metrics age", "Seconds since the textfile exporter last wrote its file (it runs every minute).", "time() - max(aihost_metrics_last_success_timestamp_seconds)", unit="s",
            thresholds=[(None, "green"), (180, "orange"), (300, "red")], w=4)
     b.stat("Host uptime", "Seconds elapsed since the host kernel booted.", "time() - min(node_boot_time_seconds)", unit="s", w=4)
-    b.stat("GPU throttle active", "Hardware frequency throttling state (0 = normal, 1 = throttled).", "max(aihost_gpu_throttle_status)", thresholds=[(None, "green"), (1, "red")], w=4)
+    b.stat("GPU throttle active", "Hardware frequency throttling state (0 = normal, 1 = throttled).", "(max(aihost_gpu_throttle_status) or vector(0))", thresholds=[(None, "green"), (1, "red")], no_data_text="0 (normal)", w=4)
 
     b.row("Dual Intel Arc B65 GPUs")
     b.timeseries("GPU utilisation (awake share)", "1 minus the share of time the graphics tile sat in RC6 idle: busy or not, not execution-unit occupancy.",
@@ -195,7 +197,7 @@ def host() -> dict:
     b.timeseries("GPU power (W) and cap", "Whole-card power from the energy counter versus configured card power cap.",
                  [("aihost:gpu_power_watts:rate5m", "power gpu{{gpu}}"), ("aihost_gpu_power_cap_watts", "cap gpu{{gpu}}")], unit="watt")
     b.timeseries("Energy per generated token, idle included (J)", "Card energy over 15 minutes divided by tokens generated, idle time included, so it falls as utilisation rises.",
-                 [("aihost:joules_per_generated_token_incl_idle:rate15m", "{{worker_id}}")], unit="joule")
+                 [("(aihost:joules_per_generated_token_incl_idle:rate15m) or (sum by (worker_id) (0 * aihost_worker_info))", "{{worker_id}}")], unit="joule", no_data_text="0 (idle)")
     b.timeseries("Temperature: sensors vs limit", "Package, VRAM, PCIe, and memory controller sensors with kernel-reported critical limits.",
                  [('aihost_gpu_temperature_celsius{sensor=~"pkg|vram|pcie|mctrl"}', "{{sensor}} gpu{{gpu}}"),
                   ('aihost_gpu_temperature_limit_celsius{sensor=~"pkg|vram"}', "limit {{sensor}} gpu{{gpu}}")], unit="celsius")
@@ -259,6 +261,10 @@ if __name__ == "__main__":
         print("dashboards are up to date" if not stale else f"stale dashboards: {stale}")
         sys.exit(1 if stale else 0)
     OUT.mkdir(parents=True, exist_ok=True)
+    templates_dir = Path(__file__).resolve().parents[2] / "roles" / "observability" / "templates"
     for name, text in files.items():
         (OUT / name).write_text(text)
         print("wrote", OUT / name)
+        j2_path = templates_dir / f"{name}.j2"
+        j2_path.write_text(f"{{% raw %}}\n{text}{{% endraw %}}\n")
+        print("wrote", j2_path)

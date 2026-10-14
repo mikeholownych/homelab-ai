@@ -108,6 +108,7 @@
       "description": "Inference requests received by the gateway.",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0 (idle)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -145,7 +146,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(aihost_inference_requests_total{status=\"received\"}[5m]))",
+          "expr": "(sum(rate(aihost_inference_requests_total{status=\"received\"}[5m])) or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -438,7 +439,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:engine_decode_tokens_per_second:rate5m{worker_id=~\"$worker\"}",
+          "expr": "(aihost:engine_decode_tokens_per_second:rate5m{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "{{worker_id}}",
           "range": true,
           "refId": "A"
@@ -491,7 +492,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:engine_prompt_eval_tokens_per_second:rate5m{worker_id=~\"$worker\"}",
+          "expr": "(aihost:engine_prompt_eval_tokens_per_second:rate5m{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "{{worker_id}}",
           "range": true,
           "refId": "A"
@@ -516,6 +517,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "short"
         },
         "overrides": []
@@ -543,7 +545,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(aihost_engine_generation_tokens_total{worker_id=~\"$worker\"}[5m])",
+          "expr": "(rate(aihost_engine_generation_tokens_total{worker_id=~\"$worker\"}[5m])) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "{{worker_id}}",
           "range": true,
           "refId": "A"
@@ -570,6 +572,7 @@
           },
           "max": 1,
           "min": 0,
+          "noDataText": "0% (idle)",
           "unit": "percentunit"
         },
         "overrides": []
@@ -597,7 +600,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:engine_prefix_cache_hit_ratio:rate1h{worker_id=~\"$worker\"}",
+          "expr": "(aihost:engine_prefix_cache_hit_ratio:rate1h{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "{{worker_id}} (1h window)",
           "range": true,
           "refId": "A"
@@ -674,7 +677,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:inference_duration_seconds:p50_5m",
+          "expr": "(aihost:inference_duration_seconds:p50_5m) or (0 * sum by (pool) (aihost_worker_info))",
           "legendFormat": "p50 {{pool}}",
           "range": true,
           "refId": "A"
@@ -685,7 +688,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:inference_duration_seconds:p95_5m",
+          "expr": "(aihost:inference_duration_seconds:p95_5m) or (0 * sum by (pool) (aihost_worker_info))",
           "legendFormat": "p95 {{pool}}",
           "range": true,
           "refId": "B"
@@ -710,7 +713,7 @@
               "mode": "none"
             }
           },
-          "noDataText": "No queued requests in window",
+          "noDataText": "0 (idle)",
           "unit": "s"
         },
         "overrides": []
@@ -738,7 +741,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0)",
+          "expr": "((rate(aihost_scheduler_queue_wait_seconds_sum[5m]) / (rate(aihost_scheduler_queue_wait_seconds_count[5m]) > 0))) or vector(0)",
           "legendFormat": "queue wait",
           "range": true,
           "refId": "A"
@@ -763,6 +766,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "reqps"
         },
         "overrides": []
@@ -790,7 +794,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:inference_completions:rate5m{worker_id=~\"$worker\"}",
+          "expr": "(sum by (worker_id, outcome) (aihost:inference_completions:rate5m{worker_id=~\"$worker\"})) or label_replace(sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}), \"outcome\", \"completed\", \"\", \"\")",
           "legendFormat": "{{worker_id}} {{outcome}}",
           "range": true,
           "refId": "A"
@@ -815,6 +819,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "short"
         },
         "overrides": []
@@ -842,8 +847,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (model, reason) (rate(aihost_completion_terminations_total[5m]))",
-          "legendFormat": "{{model}} - {{reason}}",
+          "expr": "(sum by (termination) (rate(aihost_completion_terminations_total[5m]))) or label_replace(vector(0), \"termination\", \"none\", \"\", \"\")",
+          "legendFormat": "{{termination}}",
           "range": true,
           "refId": "A"
         }
@@ -1060,6 +1065,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "short"
         },
         "overrides": []
@@ -1087,7 +1093,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_worker_inflight{worker_id=~\"$worker\"}",
+          "expr": "(aihost_worker_inflight{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "in flight {{worker_id}}",
           "range": true,
           "refId": "A"
@@ -1098,7 +1104,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_worker_max_concurrency{worker_id=~\"$worker\"}",
+          "expr": "(aihost_worker_max_concurrency{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
           "legendFormat": "max {{worker_id}}",
           "range": true,
           "refId": "B"
@@ -1136,6 +1142,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "reqps"
         },
         "overrides": []
@@ -1163,7 +1170,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))",
+          "expr": "(sum by (rule, pool) (rate(aihost_route_decisions_total[5m]))) or label_replace(label_replace(vector(0), \"rule\", \"default\", \"\", \"\"), \"pool\", \"lead\", \"\", \"\")",
           "legendFormat": "{{rule}} -> {{pool}}",
           "range": true,
           "refId": "A"
@@ -1188,6 +1195,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "reqps"
         },
         "overrides": []
@@ -1215,7 +1223,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (target_worker) (rate(aihost_inference_dispatches_total[5m]))",
+          "expr": "(sum by (target_worker) (rate(aihost_inference_dispatches_total[5m]))) or label_replace(vector(0), \"target_worker\", \"none\", \"\", \"\")",
           "legendFormat": "-> {{target_worker}}",
           "range": true,
           "refId": "A"
@@ -1240,6 +1248,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "reqps"
         },
         "overrides": []
@@ -1267,8 +1276,8 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (authority, result) (rate(aihost_authority_validations_total[5m]))",
-          "legendFormat": "{{authority}} ({{result}})",
+          "expr": "(sum by (outcome) (rate(aihost_authority_validations_total[5m]))) or label_replace(vector(0), \"outcome\", \"accepted\", \"\", \"\")",
+          "legendFormat": "{{outcome}}",
           "range": true,
           "refId": "A"
         }
@@ -1292,6 +1301,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "reqps"
         },
         "overrides": []
@@ -1319,7 +1329,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (code) (rate(aihost_http_requests_total[5m]))",
+          "expr": "(sum by (code) (rate(aihost_http_requests_total[5m]))) or label_replace(vector(0), \"code\", \"200\", \"\", \"\")",
           "legendFormat": "HTTP {{code}}",
           "range": true,
           "refId": "A"
@@ -1344,6 +1354,7 @@
               "mode": "normal"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "short"
         },
         "overrides": []
@@ -1371,7 +1382,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))",
+          "expr": "(sum by (source) (rate(aihost_inference_prompt_tokens_total[5m]))) or label_replace(vector(0), \"source\", \"provider\", \"\", \"\")",
           "legendFormat": "prompt {{source}}",
           "range": true,
           "refId": "A"
@@ -1382,7 +1393,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))",
+          "expr": "(sum by (source) (rate(aihost_inference_completion_tokens_total[5m]))) or label_replace(vector(0), \"source\", \"provider\", \"\", \"\")",
           "legendFormat": "completion {{source}}",
           "range": true,
           "refId": "B"
@@ -1748,6 +1759,7 @@
       "description": "Rate of release evidence verification failures.",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0 (idle)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1789,7 +1801,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(rate(aihost_evidence_verification_failures_total[5m]))",
+          "expr": "(sum(rate(aihost_evidence_verification_failures_total[5m])) or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -1864,6 +1876,7 @@
       "description": "Count of workers marked as drained for scheduled maintenance.",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -1905,7 +1918,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "sum(aihost_worker_drained{worker_id=~\"$worker\"})",
+          "expr": "(sum(aihost_worker_drained{worker_id=~\"$worker\"}) or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"

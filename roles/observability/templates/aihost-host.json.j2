@@ -349,6 +349,7 @@
       "description": "Hardware frequency throttling state (0 = normal, 1 = throttled).",
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0 (normal)",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -390,7 +391,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "max(aihost_gpu_throttle_status)",
+          "expr": "(max(aihost_gpu_throttle_status) or vector(0))",
           "legendFormat": "",
           "range": true,
           "refId": "A"
@@ -545,6 +546,7 @@
               "mode": "none"
             }
           },
+          "noDataText": "0 (idle)",
           "unit": "joule"
         },
         "overrides": []
@@ -572,7 +574,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost:joules_per_generated_token_incl_idle:rate15m",
+          "expr": "(aihost:joules_per_generated_token_incl_idle:rate15m) or (sum by (worker_id) (0 * aihost_worker_info))",
           "legendFormat": "{{worker_id}}",
           "range": true,
           "refId": "A"

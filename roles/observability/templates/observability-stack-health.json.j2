@@ -305,13 +305,14 @@
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "sum by (client, server) (traces_service_graph_request_total)",
+          "expr": "(sum by (client, server) (traces_service_graph_request_total)) or label_replace(label_replace(vector(0), \"client\", \"none\", \"\", \"\"), \"server\", \"none\", \"\", \"\")",
           "legendFormat": "{{client}} -> {{server}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
+          "noDataText": "0 (idle)",
           "unit": "ops"
         }
       }
@@ -358,7 +359,7 @@
       "datasource": { "type": "loki", "uid": "loki" },
       "targets": [
         {
-          "expr": "{job=~\"systemd-journal|nexus-client\"}",
+          "expr": "{job=~\"systemd-journal|loki.source.journal.system|aihost|nexus-client|orchestrator-gateway\"}",
           "refId": "A"
         }
       ]
