@@ -2,42 +2,41 @@
 
 ## Fleet Scope
 
-Every procedure below targets `ai-p620-01` by example; each applies identically
-to the Precision 5820 node `ai-5820-01` (same roles, playbooks, and pins), or to
-the whole production group by omitting `--limit` or using `--limit 'ai-*'`. The
-host-specific deltas live in host variables (`hardware_profile`, benchmarking
-PSU/TDP budgets, storage mount points).
+Every procedure below targets the active production appliance `ai-5820-01` by example.
+Future commissioning of `ai-p620-01` follows the identical operational runbooks once
+physical connectivity is established. Host-specific overrides live in host variables
+(`hardware_profile`, benchmarking PSU/TDP budgets, storage mount points).
 
 ## Common Operator Procedures
 
 ### 1. Host Bootstrap
-Bootstrap a freshly installed Ubuntu 24.04 node:
+Bootstrap a freshly installed node:
 ```bash
-ansible-playbook playbooks/bootstrap.yml --limit ai-p620-01 --ask-become-pass --tags bootstrap,vault
+ansible-playbook playbooks/bootstrap.yml --limit ai-5820-01 --ask-become-pass --tags bootstrap,vault
 ```
 
 ### 2. Baseline Convergence
 Apply baseline OS hardening, user management, and security policies:
 ```bash
-ansible-playbook playbooks/baseline.yml --limit ai-p620-01
+ansible-playbook playbooks/baseline.yml --limit ai-5820-01
 ```
 
 ### 3. Full Authoritative Convergence
 Run full end-to-end site convergence:
 ```bash
-ansible-playbook playbooks/site.yml --limit ai-p620-01
+ansible-playbook playbooks/site.yml --limit ai-5820-01
 ```
 
 ### 4. Drift Assessment
 Check for host configuration drift in check mode:
 ```bash
-ansible-playbook playbooks/drift-check.yml --limit ai-p620-01 --check
+ansible-playbook playbooks/drift-check.yml --limit ai-5820-01 --check
 ```
 
 ### 5. Independent State Validation
 Run independent validation probes and produce structured evidence:
 ```bash
-ansible-playbook playbooks/validate.yml --limit ai-p620-01
+ansible-playbook playbooks/validate.yml --limit ai-5820-01
 ```
 
 ### 6. Performance Benchmarking
@@ -118,13 +117,13 @@ drift time, but only once `observability_stack_status` is set to
 `docs/observability.md` for the pre-flight checklist and the Vault secret
 `secret/local-ai/observability/grafana-admin`).
 ```bash
-ansible-playbook playbooks/site.yml --limit ai-p620-01 --tags observability
+ansible-playbook playbooks/site.yml --limit ai-5820-01 --tags observability
 ```
-Components: Alloy scrapes node + vLLM `/metrics` and the GPU textfile
-directory, remote-writes to VictoriaMetrics, and forwards logs to Loki; vmalert
-evaluates recording rules (host-level GPU thermal/severity always, per-tuning
-profile series once live `/metrics` names are validated); Grafana serves the
-host overview dashboard. All services bind loopback only.
+Components: Alloy scrapes node + orchestrator gateway `/metrics`, llama.cpp worker
+metrics, and the GPU textfile directory, remote-writes to VictoriaMetrics, and
+forwards logs to Loki; vmalert evaluates recording rules (host-level GPU
+thermal/severity always, per-tuning profile series once live `/metrics` names are
+validated); Grafana serves the host overview dashboard. All services bind loopback only.
 
 ### 14. Phase-Gated Host Commissioning
 For initial node commissioning or major baseline re-acceptance, use the ordered entrypoint `playbooks/commission.yml`:

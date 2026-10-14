@@ -23,7 +23,17 @@ size_gib / recommended_tensor_parallel + model_catalog_kv_cache_reserve_gib
     <= model_catalog_per_device_vram_gib
 ```
 
-## Current catalog
+## Active Production Serving Models (dual-B65 appliance)
+
+On the commissioned Dell Precision 5820 appliance, models are served as GGUF artifacts via two independent containerized `llama.cpp` SYCL workers coordinated by `orchestrator_gateway`:
+
+| Role / Pool | Model Identifier | Quantization | Est. Size | Target GPU | Port | Context / Reasoning Budget | Notes |
+|---|---|---|---|---|---|---|---|
+| **Lead Pool** | `Qwen3.6-35B-A3B-UD-Q4_K_M` | Q4_K_M | 20.8 GiB | GPU 0 | 8000 | 65,536 ctx / 8,192 reasoning | Primary agentic & tool-calling model (`engineering/b0`) |
+| **Deep Pool** | `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M` | IQ1_M (1.75 bpw) | 14.2 GiB | GPU 1 | 8001 | 65,536 ctx / 4,096 reasoning | High-throughput fast reasoning model (`engineering/deep`) |
+| **Rollback Target** | `Qwen3.5-27B-UD-Q4_K_M` | Q4_K_M | 17.1 GiB | Alternate | — | 65,536 ctx / 4,096 reasoning | Fully qualified rollback pin |
+
+## Curated Advisory Catalog (HF Hub Starting Points)
 
 | Model | Quant | Est. size | TP | Per-device fit | Notes |
 |---|---|---|---|---|---|

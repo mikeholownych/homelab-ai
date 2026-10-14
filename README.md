@@ -21,9 +21,24 @@ Production-quality Configuration-as-Code (CaC) repository using Ansible for mana
 
 ## 2. Supported Host Profile
 
-The fleet consists of two production nodes, both running the dual-B65 inference stack:
+The v1.0.0 release qualifies the **Dell Precision 5820 Tower** (`ai-5820-01`) as the primary commissioned dual-B65 inference appliance. The Lenovo ThinkStation P620 (`ai-p620-01`) profile is retained as an uncommissioned future node under `uncommissioned_hosts`.
 
-**Lenovo ThinkStation P620** (`ai-p620-01`):
+**Dell Precision 5820 Tower** (`ai-5820-01` — Active Production Appliance):
+- **Model**: Dell Precision 5820 Tower
+- **CPU**: Intel Xeon W-2123 (4C / 8T)
+- **RAM**: 32 GB ECC DDR4 (8 DIMM slots; Xeon W RDIMMs support up to 256 GB)
+- **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 mounted via linear LVM at `/var/lib/local-ai`)
+- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness)
+- **Network**: 1 GbE onboard (`10.0.8.5`)
+- **GPUs**: 2 × ASRock Intel Arc Pro B65 Creator (32 GB VRAM each, Xe2 Battlemage architecture, Level Zero backend), PCIe Gen3 x16 link negotiation on Intel C422 platform
+- **Hardware Profile**: `profiles/hardware/d5820_dual_b65.yml`
+- **Serving Architecture**: Two independent containerized `llama.cpp` SYCL instances (one per GPU) coordinated by `orchestrator_gateway` reverse proxy:
+  - **Worker 1 (Lead Pool, GPU 0)**: `Qwen3.6-35B-A3B-UD-Q4_K_M` (port 8000, 64k context, 8k reasoning budget).
+  - **Worker 2 (Deep Pool, GPU 1)**: `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M` (port 8001, 64k context, 4k reasoning budget).
+  - **Gateway**: Authenticated reverse proxy on port 8443 providing bearer token authentication, circuit breaking, request queueing, semantic caching, and W3C distributed tracing.
+  - **Engine Selection**: `vLLM` was retired on this platform after empirical qualification showed `llama.cpp` SYCL delivers over 4x higher throughput and significantly reduced memory overhead on Intel Xe2 Battlemage architecture.
+
+**Lenovo ThinkStation P620** (`ai-p620-01` — Uncommissioned Future Profile):
 - **Model**: Lenovo ThinkStation P620 `30E1S7NJ00`
 - **CPU**: AMD Ryzen Threadripper PRO 3945WX (12C / 24T)
 - **RAM**: 48 GB ECC DDR4-3200
@@ -32,18 +47,9 @@ The fleet consists of two production nodes, both running the dual-B65 inference 
 - **Network**: 10 GbE onboard NIC
 - **GPUs**: 2 × ASRock Intel Arc Pro B65 (32 GB VRAM each, 64 GB aggregate VRAM, PCIe Gen4 link negotiation on P620 WRX80 platform)
 - **Hardware Profile**: `profiles/hardware/p620_dual_b65.yml`
+- **Inventory Group**: `uncommissioned_hosts` (pending physical hardware delivery and commissioning)
 
-**Dell Precision 5820 Tower** (`ai-5820-01`):
-- **Model**: Dell Precision 5820 Tower
-- **CPU**: Intel Xeon W-2123 (4C / 8T)
-- **RAM**: 32 GB ECC DDR4 (8 DIMM slots; Xeon W RDIMMs support up to 256 GB; exact DIMM population recorded at commissioning)
-- **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 via `storage` role) — `storage_mounts` scaffolded commented until identity capture
-- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required; each B65 draws via a single 12V-2×6 connector, 2×8-pin adapter included)
-- **Network**: 1 GbE onboard
-- **GPUs**: 2 × ASRock Intel Arc Pro B65 Creator (32 GB VRAM each), PCIe Gen3 x16 link negotiation on the Intel C422 (LGA2066) Dell Precision 5820 platform
-- **Hardware Profile**: `profiles/hardware/d5820_dual_b65.yml`
-
-> **Aggregate VRAM caveat**: 64 GB is a *multi-device memory pool* (two independent 32 GB device-local memory spaces), not a single transparent 64 GB device. Whether a single inference request or model execution can address memory on both devices depends on the runtime's model-parallel implementation; TP=2 exists precisely to span a single model across both GPUs. Default model sizing respects per-device 32 GB limits.
+> **Aggregate VRAM caveat**: 64 GB is a *multi-device memory pool* (two independent 32 GB device-local memory spaces), not a single transparent 64 GB device. In our dual-worker architecture, each GPU runs an independent model worker with dedicated VRAM, maximizing concurrent throughput without cross-device synchronization overhead. Default model sizing respects per-device 32 GB limits.
 
 ---
 

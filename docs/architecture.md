@@ -11,9 +11,17 @@ The repository implements strict configuration-as-code boundaries:
 
 ## 2. Infrastructure and Hardware Topology
 
-The fleet is a two-node production group (`inventory/production/hosts.yml`), each node a dual-B65 inference host running the same enforced software stack:
+The v1.0.0 production deployment targets the **Dell Precision 5820 Tower** (`ai-5820-01`) as the primary qualified dual-B65 appliance. The Lenovo ThinkStation P620 (`ai-p620-01`) is maintained as an uncommissioned future profile in the `uncommissioned_hosts` inventory group.
 
-**`ai-p620-01`** — Lenovo ThinkStation P620:
+**`ai-5820-01`** — Dell Precision 5820 Tower (`profiles/hardware/d5820_dual_b65.yml` — Active Production Appliance):
+- **CPU**: Intel Xeon W-2123 (4 cores / 8 threads)
+- **Memory**: 32 GB ECC DDR4 (8 DIMM slots; Xeon W RDIMMs support up to 256 GB)
+- **GPUs**: 2 × ASRock Intel Arc Pro B65 Creator 32 GB (Xe2 Battlemage architecture, Level Zero backend), PCIe Gen3 x16 link negotiation on Intel C422 platform
+- **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 mounted via linear LVM at `/var/lib/local-ai`)
+- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness; each B65 draws via a single 12V-2×6 connector)
+- **Network**: 1 GbE onboard (`10.0.8.5`)
+
+**`ai-p620-01`** — Lenovo ThinkStation P620 (`profiles/hardware/p620_dual_b65.yml` — Uncommissioned Future Profile):
 - **Model**: Lenovo ThinkStation P620 `30E1S7NJ00`
 - **CPU**: AMD Ryzen Threadripper PRO 3945WX (12 cores / 24 threads)
 - **Memory**: 48 GB ECC DDR4-3200 (expandable across 8 memory channels)
@@ -22,36 +30,32 @@ The fleet is a two-node production group (`inventory/production/hosts.yml`), eac
 - **PSU**: 1000 W Platinum internal power supply
 - **Network**: 10 GbE onboard
 
-**`ai-5820-01`** — Dell Precision 5820 Tower (`profiles/hardware/d5820_dual_b65.yml`):
-- **CPU**: Intel Xeon W-2123 (4 cores / 8 threads)
-- **Memory**: 32 GB ECC DDR4 today (8 DIMM slots; exact population captured at commissioning; Xeon W RDIMMs support up to 256 GB)
-- **GPUs**: 2 × ASRock Intel Arc Pro B65 Creator 32 GB, PCIe Gen3 x16 link negotiation; host bridge reports Gen5 capability so link-speed warnings must be evaluated against the platform's real physical Gen3 topology
-- **Storage**: 2 × NVMe M.2 (OS on #1, models/cache on #2 mounted via the `storage` role)
-- **PSU**: 950 W internal (Dell 10-pin → dual 8-pin GPU harness required; each B65 draws via a single 12V-2×6 connector, 2×8-pin adapter included)
-- **Network**: 1 GbE onboard
+> **Aggregate VRAM caveat**: Both nodes expose 64 GB aggregate VRAM as a *multi-device memory pool* (2 × 32 GB independent buffers). In our serving architecture, each GPU runs an independent model worker with dedicated VRAM, maximizing concurrent throughput without cross-device synchronization overhead. Default model sizing respects per-device 32 GB limits.
 
-> **Aggregate VRAM caveat**: both nodes expose 64 GB aggregate VRAM as a *multi-device memory pool* (2 × 32 GB independent buffers). Tensor-parallel deployment (TP=2) spans a model across both GPUs; the pool is not a single transparent 64 GB device and per-device 32 GB limits govern model sizing.
-
-Curated candidate models/quantizations with per-device TP sizing for this pool
+Curated candidate models/quantizations with per-device sizing for this pool
 are maintained in the [model catalog](model-catalog.md) (advisory; desired-state
 pins live in the model registry role).
 
 ## 3. Inference Software Stack
 
-Both nodes are converged to release-aware pinned stacks:
+The production appliance is converged to a release-aware pinned serving stack:
 
 - **OS Platforms**:
-  - **Ubuntu 24.04 LTS (Noble Numbat)**: Baseline qualified release with kernel >= 6.17 HWE (used on `ai-p620-01`).
-  - **Ubuntu 26.04 LTS (Resolute Raccoon)**: Commissioning target release with kernel >= 7.0 (used on `ai-5820-01`).
+  - **Ubuntu 26.04 LTS (Resolute Raccoon)**: Production release with kernel >= 7.0 (used on `ai-5820-01`).
+  - **Ubuntu 24.04 LTS (Noble Numbat)**: Baseline qualified release with kernel >= 6.17 HWE (target for `ai-p620-01`).
 - **Compute Driver**:
-  - On Ubuntu 24.04: Intel Compute Runtime + Level Zero loader/runtime (`libze-intel-gpu1`), fail-closed before mutation (`ppa:kobuk-team/intel-graphics` forbidden).
   - On Ubuntu 26.04: Official upstream Intel OMIX 0.3.0 unified stack (`intel-omix=0.3.0-9~26.04`, `intel-omix-dev=0.3.0-9~26.04`) from `https://repositories.intel.com/gpu/ubuntu` suite `resolute/intel-omix/0.3.0` signed with key `E0258B57D9C442D5DB1855C271740E4DE392BFE3`.
-- **OMIX Server Qualification Caveat**: Official upstream Intel documentation qualifies Ubuntu Desktop releases; running on Ubuntu Server operates under qualification caveats, mandating structured evidence generation across PCI, DRM, Level Zero, and PyTorch acceptance checks.
-- **PyTorch**: PyTorch 2.12.1+xpu in pinned virtual environment with immutable dependency lock and SHA-256 validation.
-- **Primary Serving**: vLLM 0.7.3 with Intel XPU backend, OpenAI-compatible API, support for single-GPU (TP=1) and dual-GPU (TP=2).
-- **Fallback Serving**: llama.cpp with SYCL acceleration, pinned to exact Git commit, supporting GGUF offload.
+  - On Ubuntu 24.04: Intel Compute Runtime + Level Zero loader/runtime (`libze-intel-gpu1`), fail-closed before mutation.
+- **Primary Serving Architecture**:
+  - Two independent containerized `llama.cpp` SYCL instances running via rootless Podman (Level Zero backend), pinned to Git commit `b11347-5fc4f3c8c`.
+  - **Worker 1 (Lead Pool, GPU 0)**: `Qwen3.6-35B-A3B-UD-Q4_K_M` serving general reasoning and tool-calling on port 8000.
+  - **Worker 2 (Deep Pool, GPU 1)**: `Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M` serving fast deep reasoning on port 8001.
+- **Orchestration Gateway**:
+  - Authenticated reverse proxy (`orchestrator_gateway`) running as a systemd service (`aihost-orchestrator-gateway.service`) on port 8443 with TLS encryption.
+  - Features include: bearer token client authentication, per-pool routing, reasoning budget enforcement, circuit breakers, semantic caching, request queueing, and W3C distributed tracing (`traceparent`).
+- **Serving Engine Selection**:
+  - `vLLM` with Intel XPU backend was evaluated and retired on this platform; empirical qualification established that `llama.cpp` SYCL delivers over 4x higher throughput and significantly reduced memory overhead on the Intel Xe2 Battlemage architecture.
 - **Secret Management**: HashiCorp Vault AppRole integration, runtime secret retrieval.
-- **Runtime selection** is per-host: TP=2 is the primary serve path on both nodes; llama.cpp SYCL split is the fallback. `llama_cpp_sycl_dual_gpu_support_certified` remains `false` until dual-GPU SYCL split is proven on B65 (certification is a manual commissioning step).
 
 ## 4. Operational Boundaries and Future Integration
 
