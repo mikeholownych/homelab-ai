@@ -86,5 +86,8 @@ orchestrator_gateway_venv_packages:
   - "uvicorn[standard]>=0.30.0"
   - "httpx>=0.27.0"
   - "pyjwt>=2.8.0"
-orchestrator_gateway_python_bin: "{{ (orchestrator_gateway_venv_dir ~ '/bin/python3') if orchestrator_gateway_venv_enabled | bool else '/usr/bin/python3' }}"
+orchestrator_gateway_python_bin: >-
+  {{ (orchestrator_gateway_venv_dir ~ '/bin/python3')
+     if orchestrator_gateway_venv_enabled | bool
+     else '/usr/bin/python3' }}
 orchestrator_gateway_releases_retention_count: 3

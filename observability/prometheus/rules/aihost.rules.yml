@@ -183,4 +183,3 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "Anomalous rate of slow consumer disconnects on worker '{{ $labels.worker_id }}'"
-

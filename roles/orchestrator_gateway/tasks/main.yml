@@ -352,7 +352,7 @@
     paths: "{{ orchestrator_gateway_release_dir | dirname }}"
     file_type: directory
     patterns: "t5820-gateway-*"
-  register: _historical_gateway_releases
+  register: _orchestrator_gateway_historical_releases
   when:
     - orchestrator_gateway_enabled | bool
     - not ansible_check_mode
@@ -363,7 +363,7 @@
     state: absent
   loop: >-
     {{
-      (_historical_gateway_releases.files | default([])
+      (_orchestrator_gateway_historical_releases.files | default([])
        | rejectattr('path', 'equalto', orchestrator_gateway_release_dir)
        | sort(attribute='mtime', reverse=true))[orchestrator_gateway_releases_retention_count | int:]
       | default([])
@@ -371,7 +371,7 @@
   when:
     - orchestrator_gateway_enabled | bool
     - not ansible_check_mode
-    - _historical_gateway_releases.files is defined
+    - _orchestrator_gateway_historical_releases.files is defined
 
 - name: Create private gateway evidence directory
   ansible.builtin.file:
