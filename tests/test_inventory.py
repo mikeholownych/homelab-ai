@@ -23,6 +23,7 @@ PRODUCTION_GROUP_VARS = PRODUCTION_ROOT / "group_vars"
 INVENTORY_README = REPO_ROOT / "inventory" / "README.md"
 
 PRODUCTION_HOSTS = ("ai-p620-01", "ai-5820-01")
+ACTIVE_PRODUCTION_HOSTS = ("ai-5820-01",)
 
 REQUIRED_PATHS = (
     INVENTORY_README,
@@ -193,8 +194,11 @@ class InventoryContractTests(unittest.TestCase):
 
         self.assertEqual(["production", "inference", "gpu", "cluster", "monitoring"], inventory["ai_hosts"]["children"])
         for group in ("production", "inference", "gpu", "cluster", "monitoring"):
-            self.assertEqual(set(PRODUCTION_HOSTS), set(inventory[group]["hosts"]))
-            self.assertEqual(2, len(inventory[group]["hosts"]))
+            self.assertEqual(set(ACTIVE_PRODUCTION_HOSTS), set(inventory[group]["hosts"]))
+            self.assertEqual(1, len(inventory[group]["hosts"]))
+
+        self.assertEqual(["ai-p620-01"], inventory["uncommissioned_hosts"]["hosts"])
+        self.assertEqual(["vault-vm"], inventory["vault_servers"]["hosts"])
 
         hostvars = inventory["_meta"]["hostvars"]["ai-p620-01"]
         self.assertEqual("production", hostvars["node_metadata"]["environment"])
@@ -203,16 +207,9 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual(False, hostvars["features"]["clustering"])
         self.assertEqual(False, hostvars["features"]["ray_enabled"])
         self.assertEqual(False, hostvars["features"]["distributed_vllm_enabled"])
-        self.assertIn("inference_secret_paths", hostvars)
-        self.assertIn("gpu_secret_paths", hostvars)
-        self.assertIn("cluster_secret_paths", hostvars)
-        self.assertIn("monitoring_secret_paths", hostvars)
-        self.assertIn("cluster_defaults", hostvars)
+        self.assertIn("secret_paths", hostvars)
+        self.assertNotIn("inference_secret_paths", hostvars)
         self.assertEqual("worker", hostvars["cluster"]["node_role"])
-        self.assertEqual("unselected", hostvars["model_selection_controls"]["serving_model"]["selection_state"])
-        self.assertIsNone(hostvars["model_selection_controls"]["serving_model"]["model_id"])
-        self.assertEqual("disabled", hostvars["model_selection_controls"]["benchmark_model"]["execution_state"])
-        self.assertIsNone(hostvars["cluster"]["endpoints"]["api_base_url"])
 
         hostvars_5820 = inventory["_meta"]["hostvars"]["ai-5820-01"]
         self.assertEqual("production", hostvars_5820["node_metadata"]["environment"])
@@ -222,6 +219,11 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual(False, hostvars_5820["features"]["clustering"])
         self.assertEqual(False, hostvars_5820["features"]["ray_enabled"])
         self.assertEqual(False, hostvars_5820["features"]["distributed_vllm_enabled"])
+        self.assertIn("inference_secret_paths", hostvars_5820)
+        self.assertIn("gpu_secret_paths", hostvars_5820)
+        self.assertIn("cluster_secret_paths", hostvars_5820)
+        self.assertIn("monitoring_secret_paths", hostvars_5820)
+        self.assertIn("cluster_defaults", hostvars_5820)
         self.assertEqual("worker", hostvars_5820["cluster"]["node_role"])
         self.assertEqual("unselected", hostvars_5820["model_selection_controls"]["serving_model"]["selection_state"])
         self.assertIsNone(hostvars_5820["model_selection_controls"]["serving_model"]["model_id"])
@@ -232,8 +234,9 @@ class InventoryContractTests(unittest.TestCase):
 
     def test_production_site_playbook_list_hosts_resolves_ai_hosts(self) -> None:
         output = run_playbook_list_hosts(PRODUCTION_INVENTORY, REPO_ROOT / "playbooks" / "site.yml")
-        for hostname in PRODUCTION_HOSTS:
+        for hostname in ACTIVE_PRODUCTION_HOSTS:
             self.assertIn(hostname, output)
+        self.assertNotIn("ai-p620-01", output)
 
     def test_lab_inventory_parses_and_mirrors_production_structure(self) -> None:
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
