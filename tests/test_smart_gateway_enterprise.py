@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import json
 import pytest
+
+pytest.importorskip("starlette")
+pytest.importorskip("httpx")
 import httpx
 from starlette.testclient import TestClient
 

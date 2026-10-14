@@ -8,6 +8,9 @@ import time
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("starlette")
+pytest.importorskip("httpx")
 from starlette.testclient import TestClient
 
 from orchestrator_gateway import AsgiServerWrapper, create_asgi_gateway

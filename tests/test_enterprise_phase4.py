@@ -11,6 +11,9 @@ import hashlib
 import json
 import unittest.mock
 import pytest
+
+pytest.importorskip("starlette")
+pytest.importorskip("httpx")
 from starlette.testclient import TestClient
 
 from orchestrator_gateway import create_asgi_gateway
