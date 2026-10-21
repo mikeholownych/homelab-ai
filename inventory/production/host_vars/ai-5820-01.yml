@@ -359,13 +359,13 @@ orchestrator_gateway_model_aliases:
 # Every client token below is a Vault record (roles/vault_platform_credentials); rotate through Vault.
 orchestrator_gateway_vault_managed_clients: [nexus, opencode, operator, qualification, ansible-admin]
 orchestrator_gateway_clients:
-  - {client_id: nexus, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/client-token}
+  - {client_id: nexus, scopes: [workload], legacy_token_file: /etc/local-ai/orchestrator/client-token}
   - client_id: opencode
-    scopes: [workload, telemetry]
+    scopes: [workload]
     legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token
-  - {client_id: operator, scopes: [workload, qualification, monitoring, telemetry]}
+  - {client_id: operator, scopes: [workload, qualification, monitoring]}
   - {client_id: qualification, scopes: [qualification], default_priority: batch, max_priority: batch}
-  - {client_id: ansible-admin, scopes: [admin, monitoring, telemetry]}
+  - {client_id: ansible-admin, scopes: [admin, monitoring]}
 orchestrator_gateway_workers:
   - worker_id: b0-live-llama-worker1
     credential_name: worker-lead-token
