@@ -7,6 +7,19 @@
     fail_msg: llama.cpp workers require an image pinned by sha256 digest and at least one declared worker.
   when: llama_cpp_container_enabled | bool
 
+# BEGIN immutable candidate image selection
+- name: Require per-worker image overrides to be content-addressed
+  ansible.builtin.assert:
+    that:
+      - item.value.image_ref is match('^.+@sha256:[0-9a-f]{64}$')
+    fail_msg: Per-worker image overrides must use an immutable sha256 reference.
+  loop: "{{ llama_cpp_container_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - llama_cpp_container_enabled | bool
+    - item.value.image_ref is defined
+# END immutable candidate image selection
 - name: Verify the declared model files exist
   ansible.builtin.stat:
     path: "{{ llama_cpp_container_model_dir }}/{{ item.value.model_file }}"
