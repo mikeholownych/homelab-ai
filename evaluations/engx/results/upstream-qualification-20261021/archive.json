@@ -1,0 +1,7 @@
+{
+  "path": "evaluations/engx/evidence/upstream-qualification-20261021.tar.gz",
+  "sha256": "f381015fb6a25f857ca84490b9f1d85ba956eade93a9fcfcb6414305335b6d70",
+  "bytes": 766044,
+  "files": 141,
+  "branch": "feat/t5820-upstream-qualification-20261021"
+}
