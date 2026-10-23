@@ -120,6 +120,19 @@ def test_independent_failure_observation_still_blocks_dispatch(tmp_path):
     assert rt.complete(request())["status"] == "ok"
 
 
+def test_stream_start_reports_cache_bypass_before_any_tokens(tmp_path):
+    from tests.test_orchestrator_gateway import StreamingAdapter
+
+    rt, _ = runtime(tmp_path)
+    rt.adapters["w1"] = StreamingAdapter(content="READY")
+    events = []
+    result = rt.complete({**request(), "stream": True}, on_stream_start=lambda meta: events.append(meta),
+                         on_stream_chunk=lambda chunk: None)
+    assert result["status"] == "ok"
+    assert events[0]["headers"]["X-AIHost-Cache"] == "BYPASS"
+    assert rt.cache.size() == 0
+
+
 @pytest.mark.parametrize("transport", ["sync", "asgi"])
 def test_http_bypass_reaches_runtime_even_when_a_response_is_cached(tmp_path, transport):
     from orchestrator_gateway import GatewayServer, create_gateway

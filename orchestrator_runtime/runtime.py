@@ -1725,6 +1725,7 @@ class OrchestratorRuntime:
                 def start_stream(*args: Any, **kwargs: Any) -> None:
                     if on_stream_start is not None:
                         stream_headers = _completion_headers(plan, worker)
+                        stream_headers["X-AIHost-Cache"] = "BYPASS"
                         if trace_context is not None:
                             stream_headers.update(trace_context.to_headers())
                         on_stream_start({
