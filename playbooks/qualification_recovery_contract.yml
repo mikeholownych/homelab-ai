@@ -1,0 +1,64 @@
+---
+# Local execution proof only: this play never loads production inventory or roles.
+- name: Qualify candidate recovery control flow against isolated localhost doubles
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    recovery_python: /usr/bin/python3
+  tasks:
+    - name: Require executable Ansible and flock rather than accepting skipped tests
+      ansible.builtin.command:
+        argv:
+          - "{{ recovery_python }}"
+          - -c
+          - >-
+            import shutil;
+            assert shutil.which('ansible-playbook'), 'ansible-playbook is required';
+            assert shutil.which('flock'), 'flock is required'
+      changed_when: false
+
+    - name: Execute swap failure cancellation crash and ownership contracts
+      ansible.builtin.command:
+        argv:
+          - "{{ recovery_python }}"
+          - -m
+          - unittest
+          - discover
+          - -s
+          - tests
+          - -p
+          - test_candidate_failure_execution.py
+          - -v
+        chdir: "{{ playbook_dir }}/.."
+      changed_when: false
+      register: recovery_contract
+
+    - name: Report the local evidence boundary
+      ansible.builtin.debug:
+        msg:
+          scope: Real Ansible control flow with file-backed role doubles and real local process locks
+          physical_gpu_recovery: Not exercised
+          automatic_controller_crash_recovery: Not established; explicit restoration is required in this fixture
+          test_output: "{{ recovery_contract.stderr_lines }}"
+
+    - name: Qualify durable transaction recovery with real isolated Ansible runs
+      ansible.builtin.command:
+        argv:
+          - "{{ recovery_python }}"
+          - -m
+          - unittest
+          - discover
+          - -s
+          - tests
+          - -p
+          - test_candidate_recovery_transaction.py
+          - -v
+        chdir: "{{ playbook_dir }}/.."
+      changed_when: false
+      register: recovery_transaction_contract
+
+    - name: Report transaction fixture evidence
+      ansible.builtin.debug:
+        var: recovery_transaction_contract.stderr_lines

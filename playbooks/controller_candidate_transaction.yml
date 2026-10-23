@@ -1,0 +1,44 @@
+---
+# Explicit entrypoint only. This does not install a timer or a crash supervisor.
+- name: Run or recover a durable candidate transaction on the controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    candidate_transaction_action: recover
+    candidate_transaction_python: /usr/bin/python3
+    candidate_transaction_source: "{{ playbook_dir }}/.."
+  tasks:
+    - name: Require explicit controller ownership and verification inputs
+      ansible.builtin.assert:
+        that:
+          - candidate_transaction_action in ['run', 'recover']
+          - candidate_transaction_inventory is defined
+          - candidate_transaction_state is defined
+          - candidate_transaction_lock is defined
+          - candidate_transaction_action == 'recover' or candidate_transaction_profile is defined
+          - candidate_transaction_action == 'recover' or candidate_transaction_verify_playbook is defined
+    - name: Execute the recorded transaction under the reconciliation lock
+      ansible.builtin.command:
+        argv:
+          - "{{ candidate_transaction_python }}"
+          - "{{ playbook_dir }}/../evaluations/engx/candidate_recovery.py"
+          - "{{ candidate_transaction_action }}"
+          - --source
+          - "{{ candidate_transaction_source }}"
+          - --inventory
+          - "{{ candidate_transaction_inventory }}"
+          - --state
+          - "{{ candidate_transaction_state }}"
+          - --lock
+          - "{{ candidate_transaction_lock }}"
+          - --candidate
+          - "{{ candidate_transaction_profile | default('') }}"
+          - --verify-playbook
+          - "{{ candidate_transaction_verify_playbook | default('') }}"
+          - --experiment-playbook
+          - "{{ candidate_transaction_experiment_playbook | default('') }}"
+          - --ansible
+          - "{{ candidate_transaction_ansible | default('ansible-playbook') }}"
+      changed_when: true

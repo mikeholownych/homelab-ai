@@ -30,6 +30,8 @@ PLAYBOOKS := \
 	playbooks/commission.yml \
 	playbooks/inference.yml \
 	playbooks/candidate.yml \
+	playbooks/controller_candidate_transaction.yml \
+	playbooks/qualification_recovery_contract.yml \
 	playbooks/vault-backup-controller.yml \
 	playbooks/vault-platform-credentials.yml \
 	playbooks/vault-post-init.yml \
