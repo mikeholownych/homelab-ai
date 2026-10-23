@@ -370,6 +370,7 @@ def create_asgi_gateway(
                         on_stream_chunk=send_stream_delta,
                         stream_timing=stream_timing,
                         trace_context=trace_context,
+                        cache_headers=dict(request.headers),
                     )
                 except Exception as err:
                     return {"status": "error", "error": str(err)}
@@ -451,6 +452,7 @@ def create_asgi_gateway(
             previous_request=request.headers.get("X-AIHost-Previous-Request"),
             reasoning_profile=reasoning_profile,
             cancel=sync_cancel,
+            cache_headers=dict(request.headers),
             trace_context=trace_context,
         )
 

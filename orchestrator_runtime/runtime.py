@@ -695,6 +695,8 @@ class OrchestratorRuntime:
             default_ttl=float(os.environ.get("ORCHESTRATOR_CACHE_TTL_SECONDS", "3600")),
             enabled=os.environ.get("ORCHESTRATOR_CACHE_ENABLED", "true").lower() in ("true", "1", "yes"),
         )
+        # A shared cache must not bridge gateway configurations or model reloads.
+        self._cache_namespace = uuid.uuid4().hex
         self.router = router
         self.registry = registry
         self.adapters = adapters
@@ -805,6 +807,10 @@ class OrchestratorRuntime:
                 reloaded["clients_count"] = len(new_clients.clients())
             elif getattr(self, "clients", None) is not None:
                 reloaded["clients_count"] = len(self.clients.clients())
+
+            self._cache_namespace = uuid.uuid4().hex
+            if self.cache is not None:
+                self.cache.clear()
 
             if self.evidence is not None:
                 try:
@@ -1208,6 +1214,7 @@ class OrchestratorRuntime:
         on_stream_chunk: Callable[[dict[str, Any]], None] | None = None,
         stream_timing: dict[str, Any] | None = None,
         trace_context: TraceContext | None = None,
+        cache_headers: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         trace_context = trace_context or TraceContext.new_root()
         t0_ns = time.time_ns()
@@ -1320,44 +1327,19 @@ class OrchestratorRuntime:
 
         # Deterministic Response Cache lookup
         cache_key = None
-        if self.cache is not None and self.cache.is_cacheable(request):
-            cache_key = self.cache.compute_key(request, public_model, reasoning_profile)
+        if self.cache is not None and self.cache.is_cacheable(request, cache_headers):
+            identities = [{k: w.get(k) for k in (
+                "worker_id", "revision", "artifact_digest", "runtime_image_digest",
+                "model_id", "context_limit", "reasoning_budget", "pool",
+            )} for w in self.registry.snapshot()]
+            cache_key = self.cache.compute_key(request, public_model, reasoning_profile, scope={
+                "runtime": self._cache_namespace, "client": client_id, "worker": worker_id,
+                "client_context_limit": client.max_context_tokens if client else None,
+                "client_allowed_pools": sorted(client.allowed_pools) if client and client.allowed_pools is not None else None,
+                "capabilities": sorted(capabilities), "task_class": task_class,
+                "identities": sorted(identities, key=lambda w: w["worker_id"]),
+            })
             cached_resp = self.cache.get(cache_key)
-            if cached_resp is None and getattr(self.cache, "semantic_enabled", False):
-                cached_resp, sim_score = self.cache.get_semantic(request, public_model, reasoning_profile)
-                if cached_resp is not None:
-                    if hasattr(self.metrics, "gateway_semantic_cache_hits_total"):
-                        self.metrics.gateway_semantic_cache_hits_total.inc(model=public_model or "unknown")
-                    self.metrics.gateway_cache_hits_total.inc(model=public_model or "unknown")
-                    self.metrics.inference_requests_total.inc(status="cached")
-                    headers = {
-                        "X-AIHost-Cache": "SEMANTIC_HIT",
-                        "X-AIHost-Cache-Similarity": f"{sim_score:.3f}",
-                        "X-Request-ID": request_id,
-                    }
-                    if trace_context is not None:
-                        headers.update(trace_context.to_headers())
-                    self.evidence.append(
-                        "semantic_cache_hit",
-                        request_id=request_id,
-                        client_id=client_id,
-                        model=public_model,
-                        similarity=round(sim_score, 4),
-                        trace_id=trace_context.trace_id if trace_context else None,
-                        span_id=trace_context.span_id if trace_context else None,
-                    )
-                    if self.tracer is not None:
-                        self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "SEMANTIC_HIT", "model": public_model or "unknown", "similarity": round(sim_score, 4)}))
-                        self.tracer.record_span(Span("request", trace_context.trace_id, trace_context.span_id, trace_context.parent_span_id, start_time_ns=t0_ns, end_time_ns=time.time_ns(), attributes={"gen_ai.system": "aihost", "client.id": client_id, "aihost.cache.status": "SEMANTIC_HIT", "status": "ok"}, kind=2))
-                    return {
-                        "status": "ok",
-                        "request_id": request_id,
-                        "response": cached_resp,
-                        "route": {"rule_id": "semantic_cache", "pool": "cache", "worker_id": "cache", "fallback_used": False},
-                        "headers": headers,
-                        "trace_context": trace_context,
-                        "cached": True,
-                    }
             if cached_resp is not None:
                 self.metrics.gateway_cache_hits_total.inc(model=public_model or "unknown")
                 self.metrics.inference_requests_total.inc(status="cached")
@@ -1794,8 +1776,9 @@ class OrchestratorRuntime:
             return self._cancelled(request_id, client_id, route["pool"], reason, queued=False)
         except TimeoutError:
             call_duration = time.monotonic() - started
-            if self.circuit_breakers is not None:
-                self.circuit_breakers.record_failure(worker.worker_id, pool_name=route.get("pool"), error="timeout")
+            # A request exhausting its time budget is not a worker liveness
+            # observation. Keep bounded capacity backoff, but let independent
+            # health probes identify an unavailable worker. Never replay it.
             release(False, distress=True)
             if hasattr(self, "telemetry"):
                 try:
@@ -1815,8 +1798,8 @@ class OrchestratorRuntime:
                     pass
             if deadline is not None and time.monotonic() >= deadline - 0.05:
                 return self._cancelled(request_id, client_id, route["pool"], "deadline", queued=False)
+            self.metrics.provider_errors_total.inc(worker_id=worker.worker_id, error_type="timeout")
             self.metrics.inference_completions_total.inc(worker_id=worker.worker_id, outcome="timed_out", failure_class="timeout")
-            self.health.record_worker_observation(worker.worker_id, healthy=False, duration=call_duration, error="timeout")
             self.evidence.append("execution_failed", request_id=request_id, client_id=client_id, worker_id=worker.worker_id,
                                  failure_class="timeout")
             return {"status": "blocked", "failure_class": "timeout", "request_id": request_id}

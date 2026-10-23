@@ -57,7 +57,7 @@ def test_semantic_shingles_and_jaccard():
     assert sim_unrelated == 0.0
 
 
-def test_response_cache_semantic_hit():
+def test_response_cache_similarity_does_not_substitute_a_response():
     cache = ResponseCache(
         max_entries=10,
         default_ttl=60.0,
@@ -101,13 +101,12 @@ def test_response_cache_semantic_hit():
     assert key2 != key1  # Hash differs!
 
     sem_hit, sim = cache.get_semantic(req2)
-    assert sem_hit is not None
-    assert sim >= 0.85
-    assert sem_hit["choices"][0]["message"]["content"] == resp1["choices"][0]["message"]["content"]
+    assert sem_hit is None
+    assert sim == 0.0
 
     stats = cache.stats()
-    assert stats["hits"] == 2
-    assert stats["semantic_hits"] == 1
+    assert stats["hits"] == 1
+    assert stats["semantic_hits"] == 0
 
 
 def test_response_cache_semantic_disabled():

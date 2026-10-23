@@ -1,0 +1,118 @@
+---
+- name: Run bounded gateway qualification from the authorized controller
+  hosts: ai-5820-01
+  gather_facts: false
+  vars:
+    probe_controller: localhost
+    probe_source_root: "{{ playbook_dir }}/.."
+    probe_output_root: /home/mike/work/correctness-20261023
+    probe_python: /home/mike/.local/share/aihost/reconcile/snapshot/.venv/bin/python
+    probe_ca: /home/mike/.config/nexus/t5820-gateway-ca.crt
+    probe_base: https://10.0.8.5:8443
+    probe_models: [engineering/lead, engineering/deep]
+    probe_label: sequential
+    probe_concurrency: 1
+    probe_repeats: 3
+  tasks:
+    - name: Require the declared bounded workload
+      ansible.builtin.assert:
+        that:
+          - probe_concurrency | int in [1, 2]
+          - probe_repeats | int >= 1
+          - probe_repeats | int <= 5
+          - probe_models | difference(['engineering/lead', 'engineering/deep']) | length == 0
+          - probe_label is match('^[a-z0-9-]+$')
+    - name: Create private controller evidence directory
+      ansible.builtin.file:
+        path: "{{ probe_output_root }}"
+        state: directory
+        mode: '0700'
+      delegate_to: "{{ probe_controller }}"
+      become: false
+    - name: Read existing scoped qualification credential
+      ansible.builtin.slurp:
+        src: /etc/local-ai/orchestrator/clients/qualification.token
+      become: true
+      no_log: true
+      register: probe_token
+    - name: Prepare appliance sampler directory
+      ansible.builtin.file:
+        path: /var/lib/local-ai/qualification/correctness-20261023
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      become: true
+    - name: Install read-only sampler
+      ansible.builtin.copy:
+        src: "{{ probe_source_root }}/evaluations/engx/sample_drm_memory.py"
+        dest: /var/lib/local-ai/qualification/correctness-20261023/sample_drm_memory.py
+        mode: '0600'
+      become: true
+    - name: Clear this run's sampler stop file
+      ansible.builtin.file:
+        path: "/var/lib/local-ai/qualification/correctness-20261023/{{ probe_label }}.stop"
+        state: absent
+      become: true
+    - name: Start bounded half-second DRM sampling
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - /var/lib/local-ai/qualification/correctness-20261023/sample_drm_memory.py
+          - --output
+          - "/var/lib/local-ai/qualification/correctness-20261023/{{ probe_label }}-drm.jsonl"
+          - --stop-file
+          - "/var/lib/local-ai/qualification/correctness-20261023/{{ probe_label }}.stop"
+          - --seconds
+          - '1800'
+      become: true
+      async: 1810
+      poll: 0
+      changed_when: false
+      register: probe_sampler
+    - name: Exercise model aliases and always stop the sampler
+      block:
+        - name: Run latency and synthetic multi-turn qualification through authenticated TLS
+          ansible.builtin.command:
+            argv:
+              - "{{ probe_python }}"
+              - "{{ probe_source_root }}/evaluations/engx/controlled_probe.py"
+              - --base
+              - "{{ probe_base }}"
+              - --model
+              - "{{ item }}"
+              - --ca
+              - "{{ probe_ca }}"
+              - --output
+              - "{{ probe_output_root }}/{{ probe_label }}-{{ item | replace('/', '-') }}.json"
+              - --concurrency
+              - "{{ probe_concurrency | string }}"
+              - --repeats
+              - "{{ probe_repeats | string }}"
+            stdin: "{{ {'qualification': probe_token.content | b64decode | trim} | to_json }}"
+          delegate_to: "{{ probe_controller }}"
+          become: false
+          changed_when: false
+          no_log: true
+          loop: "{{ probe_models }}"
+      always:
+        - name: Stop this run's resource sampler
+          ansible.builtin.copy:
+            content: stopped
+            dest: "/var/lib/local-ai/qualification/correctness-20261023/{{ probe_label }}.stop"
+            mode: '0600'
+          become: true
+        - name: Wait for sampler output to close before collection
+          ansible.builtin.async_status:
+            jid: "{{ probe_sampler.ansible_job_id }}"
+          register: probe_sampler_status
+          until: probe_sampler_status.finished
+          retries: 5
+          delay: 1
+          become: true
+        - name: Retain fresh DRM observations on the controller
+          ansible.builtin.fetch:
+            src: "/var/lib/local-ai/qualification/correctness-20261023/{{ probe_label }}-drm.jsonl"
+            dest: "{{ probe_output_root }}/{{ probe_label }}-drm.jsonl"
+            flat: true
+          become: true

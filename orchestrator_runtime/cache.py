@@ -72,6 +72,7 @@ class CacheEntry:
     shingles: set[str] = field(default_factory=set)
     tools_hash: str = ""
     reasoning_effort: str | None = None
+    request_key: str = ""
 
 
 class ResponseCache:
@@ -83,7 +84,7 @@ class ResponseCache:
         default_ttl: float = 3600.0,
         *,
         enabled: bool = True,
-        semantic_enabled: bool = True,
+        semantic_enabled: bool = False,
         semantic_threshold: float = 0.95,
     ) -> None:
         self.max_entries = max(1, int(max_entries))
@@ -106,14 +107,18 @@ class ResponseCache:
         if request.get("stream"):
             return False
 
-        # Respect standard Cache-Control and X-AIHost-Cache bypass headers
+        if request.get("cache") is False:
+            return False
+
+        # HTTP field names are case-insensitive, including Starlette Headers.
         if headers:
-            cc = headers.get("Cache-Control", "").lower()
+            headers = {k.lower(): v for k, v in headers.items()}
+            cc = headers.get("cache-control", "").lower()
             if "no-cache" in cc or "no-store" in cc:
                 return False
-            if headers.get("X-AIHost-Cache", "").lower() in ("bypass", "off"):
+            if headers.get("x-aihost-cache", "").lower() in ("bypass", "off"):
                 return False
-            if headers.get("X-AIHost-Cache", "").lower() in ("force", "on"):
+            if headers.get("x-aihost-cache", "").lower() in ("force", "on"):
                 return True
 
         if request.get("cache") is True:
@@ -135,18 +140,19 @@ class ResponseCache:
         request: dict[str, Any],
         model_id: str | None = None,
         reasoning_effort: str | None = None,
+        *,
+        scope: Any = None,
     ) -> str:
         """Generate a deterministic 64-character SHA-256 cache key for the request."""
         target_model = model_id or request.get("model") or ""
-        messages = request.get("messages") or []
-        tools = request.get("tools") or []
-        seed = request.get("seed")
+        # Include unknown controls conservatively. Similar prompts, token limits,
+        # tool choices and output schemas are not interchangeable responses.
         payload = {
+            "version": 2,
             "model": target_model,
-            "messages": messages,
-            "tools": tools,
+            "request": {k: v for k, v in request.items() if k not in ("request_id", "cache")},
             "reasoning_effort": reasoning_effort,
-            "seed": seed,
+            "scope": scope,
         }
         serialized = _canonical_json(payload)
         return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
@@ -188,7 +194,11 @@ class ResponseCache:
         reasoning_effort: str | None = None,
         threshold: float | None = None,
     ) -> tuple[dict[str, Any] | None, float]:
-        """Search for a semantically equivalent cached response using Jaccard shingle similarity."""
+        """Compatibility lookup: textual similarity never proves response equivalence.
+
+        Even explicitly enabled callers must supply an identical full request.
+        This prevents punctuation, negation, schema and tool-control substitutions.
+        """
         if not self.enabled or not self.semantic_enabled:
             return None, 0.0
 
@@ -197,6 +207,7 @@ class ResponseCache:
         target_tools_hash = hashlib.sha256(_canonical_json(request.get("tools") or []).encode("utf-8")).hexdigest()
         query_text = extract_prompt_text(request)
         query_shingles = compute_shingles(query_text)
+        request_key = self.compute_key(request, model_id, reasoning_effort)
 
         if not query_shingles:
             return None, 0.0
@@ -207,6 +218,8 @@ class ResponseCache:
 
         with self._lock:
             for entry in reversed(self._entries.values()):
+                if entry.request_key != request_key:
+                    continue
                 if entry.model_id and entry.model_id != target_model:
                     continue
                 if entry.tools_hash and entry.tools_hash != target_tools_hash:
@@ -280,6 +293,7 @@ class ResponseCache:
                 shingles=shingles,
                 tools_hash=tools_hash,
                 reasoning_effort=reasoning_effort,
+                request_key=self.compute_key(request, model_id, reasoning_effort) if request is not None else "",
             )
 
     def size(self) -> int:

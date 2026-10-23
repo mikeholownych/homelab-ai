@@ -494,6 +494,7 @@ def create_gateway(
                     priority=self.headers.get("X-AIHost-Priority"), deadline_ms=header_int("X-AIHost-Deadline-Ms"),
                     attempt=header_int("X-AIHost-Attempt") or 1, previous_request=self.headers.get("X-AIHost-Previous-Request"),
                     reasoning_profile=reasoning_profile, cancel=cancel,
+                    cache_headers=dict(self.headers),
                     on_stream_start=begin_stream if request.get("stream") else None,
                     on_stream_chunk=send_stream_delta if request.get("stream") else None,
                     stream_timing=stream_timing if request.get("stream") else None,
