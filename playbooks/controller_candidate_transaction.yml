@@ -39,6 +39,8 @@
           - "{{ candidate_transaction_verify_playbook | default('') }}"
           - --experiment-playbook
           - "{{ candidate_transaction_experiment_playbook | default('') }}"
+          - --baseline-playbook
+          - "{{ candidate_transaction_baseline_playbook | default('') }}"
           - --ansible
           - "{{ candidate_transaction_ansible | default('ansible-playbook') }}"
       changed_when: true

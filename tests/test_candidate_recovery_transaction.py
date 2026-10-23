@@ -82,6 +82,21 @@ class DurableRecovery(unittest.TestCase):
         self.assertEqual(self.record()["phase"], "restored_verified")
         self.fixture.assert_restored()
 
+    def test_partial_and_complete_swap_faults_restore_and_archive_failed_runs(self):
+        previous = None
+        for point in ("after-workers", "after-swap"):
+            with self.subTest(point=point):
+                result = self.run_tool("run", "--fault-point", point)
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                record = self.record()
+                self.assertEqual(record["experiment_outcome"], "failed")
+                self.assertEqual(record["phase"], "restored_verified")
+                self.assertNotEqual(record["deploy_returncode"], 0)
+                self.fixture.assert_restored()
+                if previous:
+                    self.assertEqual(json.loads((self.journal / (previous["run_id"] + ".json")).read_text()), previous)
+                previous = record
+
     def test_verification_failure_blocks_new_run_and_can_be_recovered(self):
         marker = self.fixture.state / "verification-fail"
         marker.touch()
@@ -101,6 +116,15 @@ class DurableRecovery(unittest.TestCase):
         result = self.run_tool()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("clean committed checkout", result.stderr)
+        self.assertFalse((self.journal / "active.json").exists())
+        self.assertEqual(list(self.fixture.state.iterdir()), [])
+
+    def test_scheduler_preflight_without_record_is_a_noop(self):
+        command = self.command()
+        command[2] = "recover-if-present"
+        result = subprocess.run(command, env=self.fixture.environment(),
+                                capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse((self.journal / "active.json").exists())
         self.assertEqual(list(self.fixture.state.iterdir()), [])
 

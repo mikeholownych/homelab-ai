@@ -87,6 +87,8 @@ def execute(args) -> int:
             raise RuntimeError("reconciliation/candidate lock is busy") from error
         current = identity(root, inventory)
         old = json.loads(record_path.read_text()) if record_path.exists() else None
+        if args.action == "recover-if-present" and old is None:
+            return 0
         if args.action == "run":
             if old and old["phase"] not in TERMINAL:
                 raise RuntimeError("unresolved run exists; recover it before starting a candidate")
@@ -98,6 +100,8 @@ def execute(args) -> int:
                 source_path(root, name)
             if args.experiment_playbook:
                 source_path(root, args.experiment_playbook)
+            if args.baseline_playbook:
+                source_path(root, args.baseline_playbook)
             executable = Path(shutil.which(args.ansible) or args.ansible).resolve()
             if not executable.is_file() or not os.access(executable, os.X_OK):
                 raise RuntimeError("Ansible executable is unavailable")
@@ -110,6 +114,9 @@ def execute(args) -> int:
                 "candidate_playbook": args.candidate_playbook,
                 "verify_playbook": args.verify_playbook,
                 "experiment_playbook": args.experiment_playbook,
+                "baseline_playbook": args.baseline_playbook,
+                "fault_point": args.fault_point,
+                "allow_restore_fault": args.allow_restore_fault,
                 "ansible": str(executable), "timeout": args.timeout,
                 "ansible_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
                 "experiment_outcome": "not_completed", "events": [],
@@ -137,6 +144,13 @@ def execute(args) -> int:
             if hashlib.sha256(Path(record["ansible"]).read_bytes()).hexdigest() != record["ansible_sha256"]:
                 raise RuntimeError("Ansible executable changed since preparation")
             path = source_path(root, name)
+            evidence = state / record["run_id"]
+            evidence.mkdir(mode=0o700, exist_ok=True)
+            variables = {"candidate": record["candidate"], **variables, "candidate_run_id": record["run_id"],
+                         "candidate_evidence_root": str(evidence)}
+            if variables.get("candidate_state") == "absent":
+                variables["candidate_drill_fail_restore"] = (
+                    record.get("allow_restore_fault", False) and (state / "restore-fault").exists())
             command = [record["ansible"], "-i", str(inventory), str(path), "-e", json.dumps(variables)]
             # Ansible inherits ownership. Killing this wrapper alone cannot
             # release the lock while its Ansible child continues mutating state.
@@ -170,9 +184,16 @@ def execute(args) -> int:
         experiment_rc = 1
         try:
             if args.action == "run":
+                if record["baseline_playbook"]:
+                    transition("baseline")
+                    baseline_rc = play(record["baseline_playbook"], {"verification_stage": "baseline"})
+                    if baseline_rc:
+                        raise RuntimeError("baseline production verification failed")
                 transition("deploying")
                 experiment_rc = play(record["candidate_playbook"],
-                                     {"candidate": record["candidate"], "candidate_state": "present"})
+                                     {"candidate": record["candidate"], "candidate_state": "present",
+                                      "candidate_drill_fail_after_workers": record["fault_point"] == "after-workers",
+                                      "candidate_drill_fail_after_swap": record["fault_point"] == "after-swap"})
                 record["deploy_returncode"] = experiment_rc
                 if experiment_rc == 0 and record["experiment_playbook"]:
                     transition("experiment")
@@ -197,12 +218,12 @@ def execute(args) -> int:
                 transition("verification_failed")
                 return 3
             transition("restored_verified")
-        return 0 if args.action == "recover" else (0 if experiment_rc == 0 else 1)
+        return 0 if args.action != "run" else (0 if experiment_rc == 0 else 1)
 
 
 def parser():
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("action", choices=["run", "recover"])
+    result.add_argument("action", choices=["run", "recover", "recover-if-present"])
     result.add_argument("--source", required=True)
     result.add_argument("--inventory", required=True)
     result.add_argument("--state", required=True)
@@ -211,6 +232,9 @@ def parser():
     result.add_argument("--candidate-playbook", default="playbooks/candidate.yml")
     result.add_argument("--verify-playbook")
     result.add_argument("--experiment-playbook")
+    result.add_argument("--baseline-playbook")
+    result.add_argument("--fault-point", choices=["none", "after-workers", "after-swap"], default="none")
+    result.add_argument("--allow-restore-fault", action="store_true")
     result.add_argument("--ansible", default="ansible-playbook")
     result.add_argument("--timeout", type=int, default=1800)
     return result
@@ -223,4 +247,7 @@ if __name__ == "__main__":
     try:
         raise SystemExit(execute(arguments))
     except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as error:
+        if "lock is busy" in str(error):
+            print(str(error), file=sys.stderr)
+            raise SystemExit(73)
         raise SystemExit(str(error))

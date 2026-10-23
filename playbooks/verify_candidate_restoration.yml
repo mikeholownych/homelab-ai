@@ -1,0 +1,75 @@
+---
+- name: Independently verify restored production services routing and fresh inference
+  hosts: inference
+  gather_facts: false
+  become: true
+  vars:
+    verification_stage: restored
+  tasks:
+    - name: Require a transaction evidence directory
+      ansible.builtin.assert:
+        that:
+          - candidate_evidence_root is defined
+          - verification_stage in ['baseline', 'restored']
+    - name: Create private controller verification evidence
+      ansible.builtin.file:
+        path: "{{ candidate_evidence_root }}"
+        state: directory
+        mode: '0700'
+      delegate_to: localhost
+      become: false
+    - name: Verify the actual production appliance
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "{{ lookup('file', playbook_dir ~ '/../evaluations/engx/verify_production_recovery.py') }}"
+        stdin: >-
+          {{ {'workers': llama_cpp_container_workers, 'gateway_port': orchestrator_gateway_port,
+              'gateway_release': orchestrator_gateway_release_dir,
+              'replaced_service': llama_cpp_container_workers[
+                llama_cpp_container_candidate_profiles[candidate].replaces].service_name,
+              'baseline': (lookup('file', candidate_evidence_root ~ '/baseline.json') | from_json)
+                          if verification_stage == 'restored' else none} | to_json }}
+      changed_when: false
+      register: production_verification
+      retries: 6
+      delay: 10
+      until: production_verification.rc == 0
+    - name: Read the existing scoped gateway verification credentials
+      ansible.builtin.slurp:
+        src: "/etc/local-ai/orchestrator/clients/{{ item }}.token"
+      loop: [qualification, ansible-admin]
+      register: verification_credentials
+      no_log: true
+    - name: Verify TLS routing admission aliases and fresh model responses from the controller
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "{{ lookup('file', playbook_dir ~ '/../evaluations/engx/verify_production_gateway.py') }}"
+        stdin: >-
+          {{ {'qualification': verification_credentials.results[0].content | b64decode | trim,
+              'admin': verification_credentials.results[1].content | b64decode | trim,
+              'base': 'https://' ~ orchestrator_gateway_remote_host ~ ':' ~ orchestrator_gateway_remote_port,
+              'ca': '/home/mike/.config/nexus/t5820-gateway-ca.crt',
+              'worker_ids': orchestrator_gateway_workers | map(attribute='worker_id') | list,
+              'appliance': production_verification.stdout | from_json} | to_json }}
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+      register: gateway_verification
+      failed_when: false
+    - name: Require the credential-free gateway verification result
+      ansible.builtin.assert:
+        that:
+          - gateway_verification.rc == 0
+        fail_msg: "{{ gateway_verification.stderr | default('Gateway verification did not complete') }}"
+    - name: Retain credential-free verification evidence
+      ansible.builtin.copy:
+        content: "{{ gateway_verification.stdout }}\n"
+        dest: "{{ candidate_evidence_root }}/{{ verification_stage }}.json"
+        mode: '0600'
+      delegate_to: localhost
+      become: false

@@ -17,6 +17,7 @@
     - "{{ reconcile_controller_root }}"
     - "{{ reconcile_controller_evidence_dir }}"
     - "{{ reconcile_controller_lock_dir }}"
+    - "{{ reconcile_controller_candidate_state_dir }}"
     - "{{ reconcile_controller_unit_dir }}"
   tags: [reconcile]
 

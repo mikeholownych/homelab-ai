@@ -441,6 +441,23 @@ install -d -m 0750 "$lock_root"
 acquire_lock_file
 trap finalize_on_exit EXIT
 
+# Check under ownership as well as in the scheduled recovery preflight: a
+# candidate can start between ExecStartPre and this runner obtaining its lock.
+candidate_state_root="${AIHOST_CANDIDATE_STATE_ROOT:-$(parent_path "$lock_root")/candidate}"
+if ! python3 -I - "$candidate_state_root/active.json" <<'PY'
+import json
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+if path.exists():
+    record = json.loads(path.read_text())
+    if record.get("phase") != "restored_verified":
+        raise SystemExit("unresolved candidate transaction; scheduled recovery must finish first")
+PY
+then
+  exit 75
+fi
+
 git_sha="$(git -C "$repo_root" rev-parse HEAD)"
 git_status_output="$(git -C "$repo_root" status --porcelain --untracked-files=all)"
 dirty_entries=()

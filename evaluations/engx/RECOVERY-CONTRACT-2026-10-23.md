@@ -1,5 +1,10 @@
 # Candidate recovery control-flow qualification
 
+Historical initial-package report for commit `8a6111123ca4bc360c3599d3c53bb4e634e1de45`.
+The scheduler and production-verifier integration added afterward is described in
+`RECOVERY-OPERATIONS.md`. Statements below about missing integration describe that
+initial package, not the subsequently integrated implementation.
+
 Base source: `f841d880f55ebc729e174da5e0a7bad7873dd5b6`.
 
 The Guaardvark review suggested testing resource ownership across cancellation,

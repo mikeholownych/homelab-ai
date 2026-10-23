@@ -8,6 +8,7 @@ reconcile_controller_root: "{{ ansible_facts.env.HOME }}/.local/share/aihost/rec
 reconcile_controller_snapshot_dir: "{{ reconcile_controller_root }}/snapshot"
 reconcile_controller_evidence_dir: "{{ reconcile_controller_root }}/evidence"
 reconcile_controller_lock_dir: "{{ reconcile_controller_root }}/lock"
+reconcile_controller_candidate_state_dir: "{{ reconcile_controller_root }}/candidate"
 reconcile_controller_unit_dir: "{{ ansible_facts.env.HOME }}/.config/systemd/user"
 reconcile_controller_target: ai-5820-01
 reconcile_controller_schedule: hourly

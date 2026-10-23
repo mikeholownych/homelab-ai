@@ -6,6 +6,13 @@ After=network-online.target
 Type=oneshot
 WorkingDirectory={{ reconcile_controller_snapshot_dir }}
 Environment=PATH={{ reconcile_controller_snapshot_dir }}/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=AIHOST_CANDIDATE_STATE_ROOT={{ reconcile_controller_candidate_state_dir }}
+# An interrupted transaction is restored and independently verified before normal reconciliation.
+ExecStartPre={{ reconcile_controller_snapshot_dir }}/.venv/bin/python {{ reconcile_controller_snapshot_dir }}/evaluations/engx/candidate_recovery.py recover-if-present \
+  --source {{ reconcile_controller_snapshot_dir }} \
+  --inventory inventory/production/hosts.yml \
+  --state {{ reconcile_controller_candidate_state_dir }} \
+  --lock {{ reconcile_controller_lock_dir }}/ansible-snapshot.lock
 ExecStart={{ reconcile_controller_snapshot_dir }}/scripts/run-ansible-snapshot \
   --repo-root {{ reconcile_controller_snapshot_dir }} \
   --schema-root {{ reconcile_controller_snapshot_dir }}/schemas \
