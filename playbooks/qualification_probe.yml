@@ -14,6 +14,23 @@
     probe_concurrency: 1
     probe_repeats: 3
   tasks:
+    - name: Require external reconciliation ownership before sampling or inference
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            import fcntl
+            with open('/home/mike/.local/share/aihost/reconcile/lock/ansible-snapshot.lock', 'r+') as lock:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    print('Reconciliation lock is held; use controller_qualification_probe.yml as the entrypoint')
+                else:
+                    raise SystemExit('Run through controller_qualification_probe.yml; reconciliation is not excluded')
+      delegate_to: "{{ probe_controller }}"
+      become: false
+      changed_when: false
     - name: Require the declared bounded workload
       ansible.builtin.assert:
         that:

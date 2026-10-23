@@ -1,0 +1,7 @@
+{
+    "ansible_lint": "",
+    "archive_hashes": "pass",
+    "gateway_code_sha": "3fa01154308805e080bb6e42b4f82d5875fd09fd",
+    "native_runtime_promoted": false,
+    "tests": ".............................................                            [100%]\n=============================== warnings summary ===============================\ntests/test_qualification_correctness.py::test_http_bypass_reaches_runtime_even_when_a_response_is_cached[asgi]\n  /home/mike/work/homelab-correctness-20261023/tests/test_qualification_correctness.py:145: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.\n    from starlette.testclient import TestClient\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n45 passed, 1 warning in 6.72s"
+}

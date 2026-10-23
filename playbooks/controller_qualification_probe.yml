@@ -1,0 +1,37 @@
+---
+- name: Own reconciliation lock while running bounded gateway qualification
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    qualification_source_root: "{{ playbook_dir }}/.."
+    qualification_ansible: /home/mike/.local/share/aihost/reconcile/snapshot/.venv/bin/ansible-playbook
+    qualification_lock: /home/mike/.local/share/aihost/reconcile/lock/ansible-snapshot.lock
+    probe_label: sequential
+    probe_concurrency: 1
+    probe_repeats: 3
+    probe_models: [engineering/lead, engineering/deep]
+  tasks:
+    - name: Run qualification with bounded exclusive ownership
+      ansible.builtin.command:
+        argv:
+          - flock
+          - --wait
+          - '60'
+          - "{{ qualification_lock }}"
+          - "{{ qualification_ansible }}"
+          - -i
+          - "{{ qualification_source_root }}/inventory/production/hosts.yml"
+          - "{{ qualification_source_root }}/playbooks/qualification_probe.yml"
+          - -e
+          - ansible_python_interpreter=/usr/bin/python3
+          - -e
+          - "{{ {'probe_label': probe_label, 'probe_concurrency': probe_concurrency,
+                  'probe_repeats': probe_repeats, 'probe_models': probe_models} | to_json }}"
+        chdir: "{{ qualification_source_root }}"
+      environment:
+        ANSIBLE_CONFIG: "{{ qualification_source_root }}/ansible.cfg"
+      changed_when: false
+      async: 7200
+      poll: 5
