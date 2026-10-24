@@ -75,6 +75,17 @@ class DurableRecovery(unittest.TestCase):
     def record(self):
         return json.loads((self.journal / "active.json").read_text())
 
+    def test_contended_lock_returns_73_without_mutation_or_traceback(self):
+        import fcntl
+        with self.lock.open("a+") as owner:
+            fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = self.run_tool()
+        self.assertEqual(result.returncode, 73, result.stdout + result.stderr)
+        self.assertIn("lock is busy", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse((self.journal / "active.json").exists())
+        self.assertEqual(list(self.fixture.state.iterdir()), [])
+
     def test_failed_experiment_stays_failed_after_verified_restoration(self):
         result = self.run_tool("run", "--experiment-playbook", "experiment.yml")
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
@@ -231,6 +242,7 @@ class DurableRecovery(unittest.TestCase):
                 refused = self.run_tool("recover")
                 self.assertNotEqual(refused.returncode, 0)
                 self.assertIn("lock is busy", refused.stderr)
+                self.assertEqual(refused.returncode, 73, refused.stdout + refused.stderr)
                 (self.fixture.state / "continue").touch()
                 deadline = time.monotonic() + 30
                 while time.monotonic() < deadline:
