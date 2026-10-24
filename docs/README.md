@@ -32,4 +32,5 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 ## Reference and integration
 - [`model-catalog.md`](model-catalog.md) — Model catalog for the dual-B65 inference hosts.
 - [`security-controls.md`](security-controls.md) — Baseline host security controls.
+- [`enhancement-analysis.md`](enhancement-analysis.md) — Enhancement opportunities and roadmap analysis.
 - [`vault.md`](vault.md) — HashiCorp Vault runtime integration.
