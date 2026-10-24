@@ -451,7 +451,7 @@ import sys
 path = pathlib.Path(sys.argv[1])
 if path.exists():
     record = json.loads(path.read_text())
-    if record.get("phase") != "restored_verified":
+    if record.get("phase") not in {"restored_verified", "baseline_rejected"}:
         raise SystemExit("unresolved candidate transaction; scheduled recovery must finish first")
 PY
 then

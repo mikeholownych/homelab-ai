@@ -128,6 +128,24 @@ class DurableRecovery(unittest.TestCase):
         self.assertFalse((self.journal / "active.json").exists())
         self.assertEqual(list(self.fixture.state.iterdir()), [])
 
+    def test_rejected_baseline_never_swaps_or_restores_and_survives_snapshot_upgrade(self):
+        result = self.run_tool("run", "--baseline-playbook", "experiment.yml")
+        self.assertEqual(result.returncode, 4, result.stdout + result.stderr)
+        record = self.record()
+        self.assertEqual(record["phase"], "baseline_rejected")
+        self.assertEqual(record["experiment_outcome"], "not_started")
+        self.assertNotIn("deploying", [event["phase"] for event in record["events"]])
+        self.assertNotIn("restoring", [event["phase"] for event in record["events"]])
+        self.assertEqual(list(self.fixture.state.iterdir()), [])
+        (self.root / "new-snapshot.txt").write_text("new snapshot")
+        subprocess.run(["git", "-C", str(self.root), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.root), "-c", "user.name=Fixture", "-c",
+                        "user.email=fixture@localhost", "commit", "-qm", "upgraded snapshot"], check=True)
+        result = self.run_tool("recover")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.record(), record)
+        self.assertEqual(list(self.fixture.state.iterdir()), [])
+
     def test_restore_failure_retains_record_and_requires_recovery(self):
         role = self.root / "roles/llama_cpp_container/tasks/main.yml"
         content = role.read_text()

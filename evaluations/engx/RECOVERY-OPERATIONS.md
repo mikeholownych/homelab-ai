@@ -12,6 +12,11 @@ and runs the pinned independent verifier. The normal snapshot runner rechecks th
 journal after acquiring its lock, closing the race between recovery preflight
 and normal reconciliation. Pending or malformed journals block convergence.
 Lock contention returns 73; an unresolved normal-convergence guard returns 75.
+Rejected read-only baselines are recorded as `baseline_rejected` with experiment
+`not_started`. No candidate deployment or restoration runs on that path, and
+normal reconciliation remains available to repair existing production issues.
+Completed historical records do not need replay when the pinned snapshot is
+upgraded; unresolved transactions still require their exact recorded identity.
 
 For physical transactions, supply `--baseline-playbook` and `--verify-playbook`
 as `playbooks/verify_candidate_restoration.yml`. Evidence is written under the
@@ -21,6 +26,12 @@ the unaffected worker's PID/start/restart identity, client registry digest,
 gateway release, kernel identity, admitted workers, aliases, trusted-controller
 TLS and fresh completions from both production models. Credentials stay on stdin
 and credential-bearing Ansible tasks use `no_log`.
+The readiness request is fixed per run, bypasses response caching, and constrains
+decoding to the literal `READY`. It qualifies end-to-end service operation, not
+unconstrained instruction following or engineering quality. Output mismatches
+retain hashes, lengths, finish reasons, and request identities without response
+text. The initial unconstrained probe's extra-period mismatch remains separate
+model-compliance evidence; it is not erased by a constrained readiness result.
 
 Use `controller_candidate_transaction.yml` for normal operator entry or the
 recorded runner for externally managed drill units. Direct administrative calls

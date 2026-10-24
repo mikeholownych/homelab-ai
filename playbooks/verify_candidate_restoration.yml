@@ -54,6 +54,7 @@
               'base': 'https://' ~ orchestrator_gateway_remote_host ~ ':' ~ orchestrator_gateway_remote_port,
               'ca': '/home/mike/.config/nexus/t5820-gateway-ca.crt',
               'worker_ids': orchestrator_gateway_workers | map(attribute='worker_id') | list,
+              'probe_id': candidate_run_id | default('standalone-recovery-verification'),
               'appliance': production_verification.stdout | from_json} | to_json }}
       delegate_to: localhost
       become: false

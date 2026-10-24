@@ -19,7 +19,7 @@ import time
 import uuid
 
 
-TERMINAL = {"restored_verified"}
+TERMINAL = {"restored_verified", "baseline_rejected"}
 
 
 def atomic_record(path: Path, record: dict) -> None:
@@ -88,6 +88,10 @@ def execute(args) -> int:
         current = identity(root, inventory)
         old = json.loads(record_path.read_text()) if record_path.exists() else None
         if args.action == "recover-if-present" and old is None:
+            return 0
+        # Completed transactions do not need to be replayed under a newer
+        # snapshot. Unresolved transactions below still require exact identity.
+        if args.action != "run" and old and old.get("phase") in TERMINAL:
             return 0
         if args.action == "run":
             if old and old["phase"] not in TERMINAL:
@@ -181,14 +185,19 @@ def execute(args) -> int:
                 raise
 
         transition("prepared" if args.action == "run" else "recovering")
+        if args.action == "run" and record["baseline_playbook"]:
+            transition("baseline")
+            baseline_rc = play(record["baseline_playbook"], {"verification_stage": "baseline"})
+            record["baseline_returncode"] = baseline_rc
+            if baseline_rc:
+                # No candidate swap has begun. Preserve rejection without
+                # mutating production or requiring an absent baseline artifact.
+                record["experiment_outcome"] = "not_started"
+                transition("baseline_rejected")
+                return 4
         experiment_rc = 1
         try:
             if args.action == "run":
-                if record["baseline_playbook"]:
-                    transition("baseline")
-                    baseline_rc = play(record["baseline_playbook"], {"verification_stage": "baseline"})
-                    if baseline_rc:
-                        raise RuntimeError("baseline production verification failed")
                 transition("deploying")
                 experiment_rc = play(record["candidate_playbook"],
                                      {"candidate": record["candidate"], "candidate_state": "present",
