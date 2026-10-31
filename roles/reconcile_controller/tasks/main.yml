@@ -3,6 +3,9 @@
   ansible.builtin.assert:
     that:
       - reconcile_controller_snapshot_ref is match('^[0-9a-f]{40}$')
+      - reconcile_controller_gateway_backup_keep | int >= 2
+      - reconcile_controller_gateway_backup_keep | int <= 30
+      - reconcile_controller_gateway_backup_host is match('^[A-Za-z0-9_.@:-]+$')
     fail_msg: >-
       Set reconcile_controller_snapshot_ref to the full commit to deploy (git rev-parse <ref>). The timer re-applies
       exactly that snapshot until an operator deploys another.
@@ -76,3 +79,29 @@
     enabled: "{{ reconcile_controller_timer_enabled | bool }}"
     state: "{{ 'started' if reconcile_controller_timer_enabled | bool else 'stopped' }}"
   tags: [reconcile]
+
+- name: Create the private gateway backup directory
+  ansible.builtin.file:
+    path: "{{ reconcile_controller_gateway_backup_root }}"
+    state: directory
+    mode: "0700"
+  when: reconcile_controller_gateway_backup_enabled | bool
+  tags: [reconcile, gateway_backup]
+
+- name: Install the gateway backup units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ reconcile_controller_unit_dir }}/{{ item }}"
+    mode: "0644"
+  loop: [aihost-gateway-backup.service, aihost-gateway-backup.timer]
+  register: reconcile_controller_gateway_backup_units
+  tags: [reconcile, gateway_backup]
+
+- name: Establish the gateway backup timer state
+  ansible.builtin.systemd_service:
+    name: aihost-gateway-backup.timer
+    scope: user
+    daemon_reload: "{{ reconcile_controller_gateway_backup_units.changed }}"
+    enabled: "{{ reconcile_controller_gateway_backup_enabled | bool }}"
+    state: "{{ 'started' if (reconcile_controller_gateway_backup_enabled | bool) else 'stopped' }}"
+  tags: [reconcile, gateway_backup]
