@@ -71,11 +71,13 @@ def test_http_error_retains_health_payload_in_memory_but_scrubs_receipt(monkeypa
     monkeypatch.setattr(ssl, 'create_default_context', lambda **kwargs: None)
     body = io.BytesIO(b'{"status":"degraded","ready":true}')
     def fail(*args, **kwargs):
-        raise urllib.error.HTTPError('https://fixture/health', 503, 'degraded', {}, body)
+        assert any(k.lower() == 'x-request-id' for k, v in args[0].header_items())
+        raise urllib.error.HTTPError('https://fixture/health', 503, 'degraded', {'X-Request-ID': 'fixture-id'}, body)
     monkeypatch.setattr(urllib.request, 'urlopen', fail)
     probe = Probe('https://fixture', 'fixture-ca', {'operator': 'fixture-token'}, 'fixture')
     result = probe.request('/health')
     assert result['status'] == 503
+    assert result['request_id'] and result['response_request_id'] == 'fixture-id'
     assert result['body'] == {'status': 'degraded', 'ready': True}
     assert 'body' not in scrub(result)
     assert body.closed

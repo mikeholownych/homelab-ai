@@ -19,6 +19,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
@@ -71,14 +72,16 @@ class Probe:
         data = json.dumps(body).encode() if body is not None else None
         headers = {'Authorization': 'Bearer ' + self.tokens[client], 'Content-Type': 'application/json',
                    'Cache-Control': 'no-store', 'X-AIHost-Cache': 'bypass',
-                   'X-AIHost-Reasoning': 'off', 'X-AIHost-Deadline-Ms': '30000'}
+                   'X-AIHost-Reasoning': 'off', 'X-AIHost-Deadline-Ms': '30000', 'X-Request-ID': str(uuid.uuid4())}
         headers.update(extra_headers or {})
         req = urllib.request.Request(self.base + path, data=data, headers=headers)
         start = time.monotonic()
-        result: dict[str, Any] = {'status': 0}
+        result: dict[str, Any] = {'status': 0, 'request_id': headers['X-Request-ID'],
+                                  'started_at': datetime.now(timezone.utc).isoformat()}
         try:
             with urllib.request.urlopen(req, timeout=40, context=self.context) as response:
                 result['status'] = response.status
+                result['response_request_id'] = response.headers.get('X-Request-ID')
                 result['headers_seconds'] = time.monotonic() - start
                 if body and body.get('stream'):
                     chunks = []
@@ -108,7 +111,8 @@ class Probe:
         except urllib.error.HTTPError as error:
             with error:
                 raw = error.read(8192)
-                result.update({'status': error.code, 'error_body_sha256': hashlib.sha256(raw).hexdigest()})
+                result.update({'status': error.code, 'error_body_sha256': hashlib.sha256(raw).hexdigest(),
+                               'response_request_id': error.headers.get('X-Request-ID')})
                 try:
                     result['body'] = json.loads(raw)
                 except ValueError:
