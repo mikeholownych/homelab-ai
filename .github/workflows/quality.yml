@@ -92,6 +92,7 @@ jobs:
       - name: Install the locked gateway validation environment
         run: |
           python -m venv .venv-gateway-test
-          .venv-gateway-test/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements-gateway-test.lock
+          .venv-gateway-test/bin/python -m pip install --require-hashes --only-binary=:all: \
+            -r requirements-gateway-test.lock
       - name: Run gateway checks with every warning treated as an error
         run: sh scripts/check-gateway-quality
