@@ -94,3 +94,20 @@ For `manual_attention`, inspect the private journal and service logs before taki
 remove the journal merely to bypass the guard. Retained prior releases plus their original pinned
 snapshot remain the manual rollback path after a transaction has already committed. Automatic
 recovery is not a substitute for tested host backup, reboot procedures or external alert delivery.
+
+## Distribution unit compatibility
+
+The production `systemd_compat` role runs before inference roles. On systemd 258 or newer it
+regenerates two locally owned XFS unit shadows from the currently installed vendor files, removing
+only `CPUAccounting=` declarations. This setting has no effect on unified cgroups; systemd 259 on
+the appliance logs it as removed. See the upstream [resource-control history](https://www.freedesktop.org/software/systemd/man/258/systemd.resource-control.html).
+All other bytes, including XFS commands, CPU quota, IO priority and confinement, are preserved.
+The role does not disable XFS scrub or change package-owned files. Drop-ins cannot prevent the
+manager from parsing the obsolete vendor declaration, so full regenerated shadows are required.
+
+The helper refuses unmanaged overrides and masks before changing either unit. Reconciliation
+refreshes shadows after vendor changes, removes its own shadows when upstream fixes/removes the
+unit or systemd is downgraded, and reloads the manager only after actual shadow changes. Ansible
+check mode predicts the changes without writing or reloading. This is a compatibility workaround
+for the installed xfsprogs 6.18.0-3 package, not a claim that all distribution unit warnings are fixed.
+Inspect future reload journals; any new obsolete declaration is a new failed warning gate.

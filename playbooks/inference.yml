@@ -27,6 +27,9 @@
           -e candidate_state=absent, before converging serving with this play.
       tags: [inference, runtime, llama, orchestrator, security, inference_policy]
   roles:
+    - role: systemd_compat
+      when: systemd_compat_enabled | default(false) | bool
+      tags: [inference, operations, systemd_compat]
     - role: users
       tags: [inference, users]
     - role: inference_origin

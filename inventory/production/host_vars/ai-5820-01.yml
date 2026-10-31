@@ -602,3 +602,6 @@ cluster:
     coordinator: null
     peer_hosts: []
     quorum_size: null
+
+# Regenerate vendor XFS units without systemd 258+ no-op CPUAccounting declarations.
+systemd_compat_enabled: true
