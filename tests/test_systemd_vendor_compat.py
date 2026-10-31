@@ -64,3 +64,32 @@ def test_check_mode_and_older_systemd_do_not_mutate(tree):
     assert compat.reconcile(source, target, 259, check=True)['changed']
     assert not list(target.iterdir())
     assert not compat.reconcile(source, target, 257)['changed']
+
+@pytest.mark.parametrize('name', ['cpufrequtils', 'loadcpufreq', 'openipmi'])
+def test_native_units_preserve_foreground_package_actions_without_generator(name):
+    unit = Path(__file__).resolve().parents[1] / 'roles/systemd_compat/files' / ('native-' + name + '.service')
+    text = unit.read_text()
+    assert 'Type=oneshot' in text and 'RemainAfterExit=yes' in text
+    assert 'ExecStart=/etc/init.d/' + name + ' start' in text
+    assert 'ExecStop=/etc/init.d/' + name + ' stop' in text
+    assert 'WantedBy=multi-user.target' in text
+    assert 'systemd-sysv-generator' not in text and 'SourcePath=' not in text
+    assert 'CPUAccounting=' not in text and 'KillMode=process' not in text
+    assert 'Environment=SYSTEMCTL_SKIP_REDIRECT=1' in text
+    assert 'SuccessExitStatus=' not in text
+    if name == 'cpufrequtils':
+        assert 'After=remote-fs.target loadcpufreq.service' in text
+        assert 'ExecReload=/etc/init.d/cpufrequtils reload' in text
+
+
+def test_native_migration_keeps_observed_boot_policy_and_has_no_live_start():
+    import yaml
+    root = Path(__file__).resolve().parents[1]
+    inventory = yaml.safe_load((root / 'inventory/production/host_vars/ai-5820-01.yml').read_text())
+    assert {s['name']: s['enabled'] for s in inventory['systemd_compat_native_services']} == {
+        'cpufrequtils': True, 'loadcpufreq': True, 'openipmi': False}
+    tasks = (root / 'roles/systemd_compat/tasks/main.yml').read_text()
+    assert 'state: started' not in tasks and 'state: restarted' not in tasks
+    assert 'Refusing to replace an unmanaged native unit or mask' in tasks
+    assert 'systemd_compat_retired_native.changed | default(false)' in tasks
+    assert 'systemd_compat_enabled_native.changed | default(false)' in tasks

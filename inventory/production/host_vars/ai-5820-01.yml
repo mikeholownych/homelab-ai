@@ -605,3 +605,7 @@ cluster:
 
 # Regenerate vendor XFS units without systemd 258+ no-op CPUAccounting declarations.
 systemd_compat_enabled: true
+systemd_compat_native_services:
+  - {name: loadcpufreq, enabled: true}
+  - {name: cpufrequtils, enabled: true}
+  - {name: openipmi, enabled: false}

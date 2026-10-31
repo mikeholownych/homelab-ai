@@ -111,3 +111,13 @@ unit or systemd is downgraded, and reloads the manager only after actual shadow 
 check mode predicts the changes without writing or reloading. This is a compatibility workaround
 for the installed xfsprogs 6.18.0-3 package, not a claim that all distribution unit warnings are fixed.
 Inspect future reload journals; any new obsolete declaration is a new failed warning gate.
+
+The same role installs explicit native oneshot units for the installed cpufrequtils, loadcpufreq
+and OpenIPMI package actions. It preserves package start/stop/reload scripts and their configuration
+rather than reimplementing hardware detection. CPU-frequency services retain enabled boot policy;
+OpenIPMI remains disabled. No service is started/restarted and no governor/module state is changed
+by migration. This removes dependency on deprecated `systemd-sysv-generator` conversion; the packaged
+shell actions remain an explicit dependency. Owned wrappers yield to future vendor native units or
+are removed when their package action disappears. Operator units/masks are refused. Native boot
+links are managed directly, avoiding SysV enablement conversion. Cold-boot execution remains an
+unqualified gate. Warning acceptance must inspect generator/kernel records as well as PID 1.

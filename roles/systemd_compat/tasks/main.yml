@@ -1,4 +1,117 @@
 ---
+- name: Inspect packaged service actions
+  ansible.builtin.stat:
+    path: "/etc/init.d/{{ item.name }}"
+  loop: "{{ systemd_compat_native_services }}"
+  register: systemd_compat_scripts
+
+- name: Inspect package-provided native units
+  ansible.builtin.stat:
+    path: "/usr/lib/systemd/system/{{ item.name }}.service"
+  loop: "{{ systemd_compat_native_services }}"
+  register: systemd_compat_vendor_native
+
+- name: Inspect existing local native units
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ item.name }}.service"
+  loop: "{{ systemd_compat_native_services }}"
+  register: systemd_compat_local_native
+
+- name: Read existing local native unit ownership markers
+  ansible.builtin.slurp:
+    src: "/etc/systemd/system/{{ item.name }}.service"
+  loop: "{{ systemd_compat_native_services }}"
+  loop_control:
+    index_var: systemd_compat_index
+  when:
+    - systemd_compat_local_native.results[systemd_compat_index].stat.exists
+    - not (systemd_compat_local_native.results[systemd_compat_index].stat.islnk | default(false))
+  register: systemd_compat_native_content
+
+- name: Preserve operator-managed units and masks
+  ansible.builtin.assert:
+    that:
+      - not (systemd_compat_local_native.results[systemd_compat_index].stat.islnk | default(false))
+      - >-
+        not systemd_compat_local_native.results[systemd_compat_index].stat.exists
+        or ((systemd_compat_native_content.results[systemd_compat_index].content | default('') | b64decode)
+            .startswith('# Managed by aihost systemd_compat native service;'))
+    fail_msg: "Refusing to replace an unmanaged native unit or mask: {{ item.name }}"
+  loop: "{{ systemd_compat_native_services }}"
+  loop_control:
+    index_var: systemd_compat_index
+
+- name: Install explicit native units for packaged actions
+  ansible.builtin.copy:
+    src: "native-{{ item.name }}.service"
+    dest: "/etc/systemd/system/{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ systemd_compat_native_services }}"
+  loop_control:
+    index_var: systemd_compat_index
+  when:
+    - systemd_compat_scripts.results[systemd_compat_index].stat.exists
+    - not systemd_compat_vendor_native.results[systemd_compat_index].stat.exists
+  register: systemd_compat_native_units
+
+- name: Retire owned wrappers when upstream supplies a native unit or removes the action
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ item.name }}.service"
+    state: absent
+  loop: "{{ systemd_compat_native_services }}"
+  loop_control:
+    index_var: systemd_compat_index
+  when:
+    - systemd_compat_local_native.results[systemd_compat_index].stat.exists
+    - >-
+      systemd_compat_vendor_native.results[systemd_compat_index].stat.exists
+      or not systemd_compat_scripts.results[systemd_compat_index].stat.exists
+  register: systemd_compat_retired_native
+
+- name: Create the native multi-user enablement directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/multi-user.target.wants
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: systemd_compat_native_services | length > 0
+
+- name: Preserve declared enabled services without invoking SysV enablement
+  ansible.builtin.file:
+    src: >-
+      {{ ('/usr/lib/systemd/system/' if systemd_compat_vendor_native.results[systemd_compat_index].stat.exists
+          else '/etc/systemd/system/') ~ item.name ~ '.service' }}
+    dest: "/etc/systemd/system/multi-user.target.wants/{{ item.name }}.service"
+    state: link
+    force: true
+    owner: root
+    group: root
+  loop: "{{ systemd_compat_native_services }}"
+  loop_control:
+    index_var: systemd_compat_index
+  when:
+    - item.enabled | bool
+    - >-
+      systemd_compat_scripts.results[systemd_compat_index].stat.exists
+      or systemd_compat_vendor_native.results[systemd_compat_index].stat.exists
+  register: systemd_compat_enabled_native
+
+- name: Preserve declared disabled services or remove obsolete enablement
+  ansible.builtin.file:
+    path: "/etc/systemd/system/multi-user.target.wants/{{ item.name }}.service"
+    state: absent
+  loop: "{{ systemd_compat_native_services }}"
+  loop_control:
+    index_var: systemd_compat_index
+  when: >-
+    not (item.enabled | bool)
+    or (not systemd_compat_scripts.results[systemd_compat_index].stat.exists
+        and not systemd_compat_vendor_native.results[systemd_compat_index].stat.exists)
+  register: systemd_compat_disabled_native
+
 - name: Reconcile compatibility shadows from the installed XFS vendor units
   ansible.builtin.script:
     cmd: "systemd-vendor-compat.py {{ '--check' if ansible_check_mode else '' }}"
@@ -12,5 +125,10 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
   when:
-    - systemd_compat_result.changed | default(false) | bool
+    - >-
+      (systemd_compat_result.changed | default(false) | bool)
+      or (systemd_compat_native_units.changed | default(false) | bool)
+      or (systemd_compat_retired_native.changed | default(false) | bool)
+      or (systemd_compat_enabled_native.changed | default(false) | bool)
+      or (systemd_compat_disabled_native.changed | default(false) | bool)
     - not ansible_check_mode
