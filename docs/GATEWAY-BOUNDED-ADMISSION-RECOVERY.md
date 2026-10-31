@@ -121,3 +121,15 @@ shell actions remain an explicit dependency. Owned wrappers yield to future vend
 are removed when their package action disappears. Operator units/masks are refused. Native boot
 links are managed directly, avoiding SysV enablement conversion. Cold-boot execution remains an
 unqualified gate. Warning acceptance must inspect generator/kernel records as well as PID 1.
+
+`evaluations/qualify_systemd_reload.py` is the root-only read-only acceptance checker for a specified
+timezone-qualified window of at most one hour. It reads all journal transports without a PID filter,
+retains generator/kernel and application deprecation diagnostics, and checks both reload requests and
+completions against `--expected-reloads` (zero by default). It never initiates a reload. For example:
+
+```sh
+sudo python3 evaluations/qualify_systemd_reload.py --since START_ISO_UTC --until END_ISO_UTC --expected-reloads 0 --output receipt.json
+```
+
+The checker excludes audit command text from runtime diagnostics; it does not filter actual warnings.
+Native package-action units explicitly bypass LSB redirection, and all nonzero action exits fail.
