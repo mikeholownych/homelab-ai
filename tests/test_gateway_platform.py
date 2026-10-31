@@ -6,6 +6,7 @@ Most tests run the real runtime against tests/fake_llama.py, an HTTP stand-in fo
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 import json
 import signal
 import subprocess
@@ -66,7 +67,7 @@ def chat(content="hello world", **extra):
 
 # ============================================================ engines / capacity (Design 01 sections 1-2)
 def test_llama_props_fixture_parses_identity_limits_and_declared_capabilities():
-    props = json.load(open("vllm-top/tests/fixtures/llamacpp/props.json"))
+    props = json.loads(Path("vllm-top/tests/fixtures/llamacpp/props.json").read_text())
     obs = LlamaCppAdapter.parse_props(props)
     assert (obs.engine, obs.ctx_per_slot, obs.slots_total) == ("llama.cpp", 65536, 1)
     assert obs.engine_version == "b11347-5fc4f3c8c" and obs.quantization.startswith("IQ1_M")
@@ -287,6 +288,7 @@ def test_streaming_forwards_upstream_deltas_and_disconnect_aborts_generation(fak
         assert not any(r["event"] == "execution_failed" for r in runtime.evidence.records())
     finally:
         server.shutdown()
+        server.server_close()
 
 
 def test_streaming_completes_with_real_upstream_frames_and_terminal_chunk(fakes, tmp_path):
@@ -311,6 +313,7 @@ def test_streaming_completes_with_real_upstream_frames_and_terminal_chunk(fakes,
         assert fake.completed == 1 and fake.aborted == 0
     finally:
         server.shutdown()
+        server.server_close()
 
 
 def test_client_disconnect_aborts_generation_and_frees_the_slot(fakes, tmp_path):
@@ -333,6 +336,7 @@ def test_client_disconnect_aborts_generation_and_frees_the_slot(fakes, tmp_path)
         assert any(r["event"] == "request_cancelled" and r["reason"] == "client_disconnect" for r in runtime.evidence.records())
     finally:
         server.shutdown()
+        server.server_close()
 
 
 # ============================================================ R3 escalation, R10 outcomes
@@ -526,7 +530,7 @@ def test_evidence_chain_continues_across_restarts_and_breaks_are_detected(tmp_pa
     path.write_text("\n".join([lines[0], json.dumps(tampered), *lines[2:]]) + "\n")
     third = EvidenceStore(path)
     assert not third.chain_valid and third.records()[-1]["event"] == "chain_break_detected"
-    cli = subprocess.run([sys.executable, "-m", "orchestrator_runtime.evidence", "verify", str(path)], capture_output=True, text=True)
+    cli = subprocess.run([sys.executable, "-m", "orchestrator_runtime.evidence_cli", "verify", str(path)], capture_output=True, text=True)
     assert cli.returncode == 1 and '"intact": false' in cli.stdout
 
 
@@ -569,8 +573,11 @@ def test_local_listener_serves_monitoring_only_and_remote_listener_refuses_host_
             conn.request("GET", "/health")
             health = conn.getresponse()
             assert health.status in (200, 503) if mode == "local" else health.status == 403
+            health.read()
+            conn.close()
         finally:
             server.shutdown()
+            server.server_close()
     assert runtime.metrics.local_origin_refused_total.get(listener="local") >= 1
 
 
@@ -599,6 +606,7 @@ print(servers[0].server_address[1], servers[1].server_address[1], flush=True)
 def stop():
     for server in servers:
         server.shutdown()
+        server.server_close()
     print("stop-sequence-ran", flush=True)
 
 serve_until_stopped(servers, stop, poll_seconds=0.1)
@@ -615,7 +623,10 @@ def _serving_process():
             try:
                 conn = HTTPConnection("127.0.0.1", port, timeout=1)
                 conn.request("GET", "/")
-                assert conn.getresponse().status == 200
+                response = conn.getresponse()
+                assert response.status == 200
+                response.read()
+                conn.close()
                 break
             except OSError:
                 assert time.monotonic() < deadline, "listener never came up"

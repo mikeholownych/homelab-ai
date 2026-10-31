@@ -7,7 +7,7 @@ cannot rewrite, so editing the file is detectable even if the attacker recompute
 
 Data policy (default ``hash``): evidence never stores prompt text unless explicitly configured to.
 
-    python3 -m orchestrator_runtime.evidence verify <file>     # exit 0 when the chain is intact
+    python3 -m orchestrator_runtime.evidence_cli verify <file>     # exit 0 when the chain is intact
 """
 from __future__ import annotations
 
@@ -346,7 +346,7 @@ class EvidenceStore:
 
 def _main(argv: list[str]) -> int:
     if len(argv) != 2 or argv[0] != "verify":
-        print("usage: python3 -m orchestrator_runtime.evidence verify <file>", file=sys.stderr)
+        print("usage: python3 -m orchestrator_runtime.evidence_cli verify <file>", file=sys.stderr)
         return 2
     intact, count, head, problems = verify_file(Path(argv[1]))
     print(json.dumps({"intact": intact, "records": count, "head": head, "problems": problems[:50]}, indent=1))

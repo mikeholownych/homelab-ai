@@ -41,7 +41,8 @@ def host_addresses() -> set[str]:
     """
     addresses = {"127.0.0.1", "::1"}
     try:
-        lines = open("/proc/net/fib_trie", encoding="utf-8").read().splitlines()
+        with open("/proc/net/fib_trie", encoding="utf-8") as stream:
+            lines = stream.read().splitlines()
         for previous, line in zip(lines, lines[1:]):
             if line.strip() == "/32 host LOCAL" and "--" in previous:
                 addresses.add(previous.split("--")[-1].strip())

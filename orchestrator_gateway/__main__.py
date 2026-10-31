@@ -137,7 +137,8 @@ def seal_predecessors(paths: str) -> list[dict[str, object]]:
     for path in paths.split():
         try:
             digest = hashlib.sha256(Path(path).read_bytes()).hexdigest()
-            lines = sum(1 for _ in Path(path).open(encoding="utf-8", errors="replace"))
+            with Path(path).open(encoding="utf-8", errors="replace") as stream:
+                lines = sum(1 for _ in stream)
             sealed.append({"path": path, "sha256": digest, "records": lines})
         except OSError as error:
             sealed.append({"path": path, "unreadable": type(error).__name__})
@@ -262,6 +263,10 @@ def main() -> None:
         for server in servers:
             server.shutdown()  # stop accepting; in-flight handler threads continue
         drained = runtime.wait_idle(grace)
+        for server in servers:
+            close = getattr(server, "server_close", None)
+            if close is not None:
+                close()
         for executor_name in ("http_dispatch", "http_tokenize"):
             executor = getattr(runtime, executor_name, None)
             if executor is not None:

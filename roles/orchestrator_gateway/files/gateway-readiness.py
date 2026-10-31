@@ -15,7 +15,8 @@ def ready(spec):
             return False
         token_path = os.path.join(root, token_path)
     try:
-        token = open(token_path, encoding="utf-8").read().strip()
+        with open(token_path, encoding="utf-8") as stream:
+            token = stream.read().strip()
         endpoint = spec["endpoint"].rstrip("/") + "/v1/models"
         request = urllib.request.Request(endpoint, headers={"Authorization": "Bearer " + token})
         with urllib.request.urlopen(request, timeout=5) as response:

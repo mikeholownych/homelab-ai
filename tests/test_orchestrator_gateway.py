@@ -96,6 +96,7 @@ def test_gateway_auth_models_and_chat(tmp_path):
         connection.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -142,6 +143,7 @@ def test_gateway_stream_preserves_tool_call_and_terminal_finish_reason(tmp_path)
         assert events[-1]["choices"][0]["finish_reason"] == "tool_calls"
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -206,6 +208,7 @@ def test_gateway_stream_gives_parallel_tool_calls_distinct_indexes(tmp_path):
         assert [c["function"]["name"] for c in streamed] == ["find_files", "list_dir"]
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -240,5 +243,6 @@ def test_gateway_reasoning_effort_mapping(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
