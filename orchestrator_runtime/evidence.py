@@ -218,6 +218,8 @@ class EvidenceStore:
         self._records = deque(maxlen=max(1, int(os.environ.get("ORCHESTRATOR_EVIDENCE_RING_SIZE", "1024"))))
         self._streamers: list[Callable[[dict[str, Any]], None]] = []
         self._lock = threading.Lock()
+        # Health must never wait for file writes, rotation fsync or external streamers.
+        self._head_lock = threading.Lock()
         self._anchor_stream = anchor_stream if anchor_stream is not None else sys.stderr
         self._head: str | None = None
         self._since_anchor = 0
@@ -303,7 +305,8 @@ class EvidenceStore:
         finally:
             if temporary and temporary.exists():
                 temporary.unlink()
-        self._head = genesis["record_hash"]
+        with self._head_lock:
+            self._head = genesis["record_hash"]
         self._records.append(genesis)
         self._emit_anchor(1)
 
@@ -318,12 +321,13 @@ class EvidenceStore:
                 **fields,
             }
             record["record_hash"] = record_hash(record)
-            self._records.append(record)
-            self._head = record["record_hash"]
             if self.path:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 with self.path.open("a", encoding="utf-8") as stream:
                     stream.write(canonical(record) + "\n")
+            self._records.append(record)
+            with self._head_lock:
+                self._head = record["record_hash"]
             for streamer in self._streamers:
                 try:
                     streamer(record)
@@ -336,7 +340,7 @@ class EvidenceStore:
 
     @property
     def head(self) -> str | None:
-        with self._lock:
+        with self._head_lock:
             return self._head
 
     def records(self) -> list[dict[str, Any]]:

@@ -298,3 +298,56 @@ def test_per_client_dispatch_limit_preserves_other_client_capacity():
     finally:
         stop.set()
         executor.shutdown()
+
+
+def test_health_head_does_not_wait_for_evidence_file_io(tmp_path, monkeypatch):
+    path = tmp_path / 'evidence.jsonl'
+    evidence = EvidenceStore(path)
+    evidence.append('baseline')
+    previous = evidence.head
+    entered, release = threading.Event(), threading.Event()
+    original = Path.open
+    class SlowWriter:
+        def __init__(self, stream):
+            self.stream = stream
+        def __enter__(self):
+            self.stream.__enter__()
+            return self
+        def write(self, value):
+            entered.set()
+            assert release.wait(2)
+            return self.stream.write(value)
+        def __exit__(self, *args):
+            return self.stream.__exit__(*args)
+    def open_file(p, mode='r', *args, **kwargs):
+        stream = original(p, mode, *args, **kwargs)
+        return SlowWriter(stream) if p == path and mode == 'a' else stream
+    monkeypatch.setattr(Path, 'open', open_file)
+    writer = threading.Thread(target=lambda: evidence.append('blocked'))
+    writer.start()
+    try:
+        assert entered.wait(1)
+        start = time.monotonic()
+        assert evidence.head == previous
+        assert time.monotonic() - start < .05
+    finally:
+        release.set()
+        writer.join(2)
+    assert not writer.is_alive() and evidence.head != previous
+
+
+def test_failed_evidence_write_does_not_publish_an_unpersisted_head(tmp_path, monkeypatch):
+    path = tmp_path / 'evidence.jsonl'
+    evidence = EvidenceStore(path)
+    evidence.append('baseline')
+    previous = evidence.head
+    original = Path.open
+    def fail(p, mode='r', *args, **kwargs):
+        if p == path and mode == 'a':
+            raise OSError('injected write failure')
+        return original(p, mode, *args, **kwargs)
+    monkeypatch.setattr(Path, 'open', fail)
+    with pytest.raises(OSError):
+        evidence.append('unpersisted')
+    assert evidence.head == previous
+    assert [r['event'] for r in evidence.records()] == ['baseline']
