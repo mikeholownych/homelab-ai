@@ -2,6 +2,6 @@
 - name: Reload inference policy
   ansible.builtin.systemd_service:
     name: aihost-inference-policy.service
-    daemon_reload: true
+    daemon_reload: "{{ inference_policy_unit.changed | default(false) | bool }}"
     state: restarted
   when: not ansible_check_mode

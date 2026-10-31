@@ -76,6 +76,7 @@
     path: "/etc/systemd/system/{{ item }}"
     state: absent
   loop: "{{ inference_origin_retired_units }}"
+  register: inference_origin_removed_units
   when: inference_origin_retire_onhost_tools | bool
 
 - name: Remove archived direct-worker evaluation checkout from the host
@@ -90,3 +91,4 @@
   when:
     - inference_origin_retire_onhost_tools | bool
     - not ansible_check_mode
+    - inference_origin_removed_units.changed | default(false) | bool
