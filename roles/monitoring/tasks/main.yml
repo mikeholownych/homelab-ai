@@ -118,6 +118,7 @@
   loop:
     - { src: "aihost-metrics.service.j2", dest: "{{ monitoring_metrics_service_path }}" }
     - { src: "aihost-metrics.timer.j2", dest: "{{ monitoring_metrics_timer_path }}" }
+  register: monitoring_metrics_units
   when: monitoring_metrics_textfile_enabled | bool
   notify: Reload monitoring daemon
   tags: [monitoring, telemetry]
@@ -125,7 +126,7 @@
 - name: Establish textfile metrics timer state
   ansible.builtin.systemd_service:
     name: aihost-metrics.timer
-    daemon_reload: true
+    daemon_reload: "{{ monitoring_metrics_units.changed | default(false) | bool }}"
     enabled: "{{ monitoring_metrics_textfile_enabled | bool }}"
     state: "{{ 'started' if (monitoring_metrics_textfile_enabled | bool) else 'stopped' }}"
   when:

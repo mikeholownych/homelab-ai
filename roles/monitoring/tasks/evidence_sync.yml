@@ -20,6 +20,7 @@
     mode: "0644"
   notify: Reload monitoring daemon
   tags: [monitoring, evidence_sync]
+  register: monitoring_evidence_sync_service_unit
 
 - name: Install evidence sync timer unit
   ansible.builtin.template:
@@ -30,13 +31,16 @@
     mode: "0644"
   notify: Reload monitoring daemon
   tags: [monitoring, evidence_sync]
+  register: monitoring_evidence_sync_timer_unit
 
 - name: Manage evidence sync timer state
   ansible.builtin.systemd_service:
     name: aihost-evidence-sync.timer
     state: "{{ 'started' if (monitoring_evidence_sync_enabled | bool) else 'stopped' }}"
     enabled: "{{ monitoring_evidence_sync_enabled | bool }}"
-    daemon_reload: true
+    daemon_reload: >-
+      {{ (monitoring_evidence_sync_service_unit.changed | default(false) | bool)
+         or (monitoring_evidence_sync_timer_unit.changed | default(false) | bool) }}
   when:
     - not ansible_check_mode
   tags: [monitoring, evidence_sync]

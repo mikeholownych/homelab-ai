@@ -153,13 +153,14 @@
     owner: root
     group: root
     mode: "0644"
+  register: inference_policy_unit
   when: inference_policy_enabled | bool
   notify: Reload inference policy
 
 - name: Establish inference policy before any worker starts
   ansible.builtin.systemd_service:
     name: aihost-inference-policy.service
-    daemon_reload: true
+    daemon_reload: "{{ inference_policy_unit.changed | default(false) | bool }}"
     enabled: true
     state: started
   when:

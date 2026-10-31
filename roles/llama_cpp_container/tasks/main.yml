@@ -136,7 +136,6 @@
     name: "{{ item }}"
     state: stopped
     enabled: false
-    daemon_reload: true
   loop: "{{ llama_cpp_container_retired_services }}"
   when:
     - llama_cpp_container_enabled | bool
@@ -147,14 +146,18 @@
     path: "{{ item }}"
     state: absent
   loop: "{{ llama_cpp_container_retired_unit_files }}"
+  register: llama_cpp_container_removed_units
   when: llama_cpp_container_enabled | bool
 
-- name: Reload systemd after retiring unit files
+- name: Reload systemd after installing or retiring unit files
   ansible.builtin.systemd_service:
     daemon_reload: true
   when:
     - llama_cpp_container_enabled | bool
     - not ansible_check_mode
+    - >-
+      llama_cpp_container_units.changed | default(false) | bool
+      or llama_cpp_container_removed_units.changed | default(false) | bool
 
 - name: Remove credential-bearing configuration of superseded services
   ansible.builtin.file:

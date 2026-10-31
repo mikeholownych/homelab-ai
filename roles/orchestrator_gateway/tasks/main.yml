@@ -496,13 +496,14 @@
     owner: root
     group: root
     mode: "0644"
+  register: orchestrator_gateway_unit
   when: orchestrator_gateway_enabled | bool
   notify: Restart gateway service
 
 - name: Establish persistent gateway state
   ansible.builtin.systemd_service:
     name: aihost-orchestrator-gateway.service
-    daemon_reload: true
+    daemon_reload: "{{ orchestrator_gateway_unit.changed | default(false) | bool }}"
     enabled: true
     state: started
   when:
