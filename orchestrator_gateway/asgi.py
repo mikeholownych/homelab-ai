@@ -375,7 +375,15 @@ def create_asgi_gateway(
                 }
                 try:
                     pending = asyncio.run_coroutine_threadsafe(stream_queue.put(chunk), loop)
-                    pending.result(timeout=stream_queue_timeout)
+                    expires = time.monotonic() + stream_queue_timeout
+                    while not sync_cancel.is_set():
+                        try:
+                            pending.result(timeout=min(0.05, max(0.001, expires - time.monotonic())))
+                            return
+                        except concurrent.futures.TimeoutError:
+                            if time.monotonic() >= expires:
+                                raise
+                    pending.cancel()
                 except concurrent.futures.TimeoutError:
                     pending.cancel()
                     runtime.metrics.streaming_slow_consumer_disconnects_total.inc(worker_id=worker_id or "unknown")
@@ -740,6 +748,11 @@ def create_asgi_gateway(
             body = await parse_body(request)
         except IngressError as error:
             return ingress_response(error)
+        if (not isinstance(body.get("request_id"), str) or len(body["request_id"]) > 128
+                or body.get("outcome") not in ("pass", "fail", "partial")
+                or (body.get("detail") is not None and
+                    (not isinstance(body["detail"], str) or len(body["detail"]) > 4096))):
+            return ingress_response(IngressError(400, "invalid outcome report fields"))
         result = runtime.report_outcome(client, str(body.get("request_id", "")),
                                         str(body.get("outcome", "")), body.get("detail"))
         return JSONResponse(result, status_code={"recorded": 200, "not_found": 404}.get(result["status"], 400))

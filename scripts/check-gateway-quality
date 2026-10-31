@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+# This environment is separate from controller tooling and must install requirements-gateway-test.lock.
+GATEWAY_TEST_PYTHON=${GATEWAY_TEST_PYTHON:-.venv-gateway-test/bin/python}
+export PYTHONPATH=.
+export PYTHONWARNINGS=error
+"$GATEWAY_TEST_PYTHON" -c 'import httpx2; from starlette.testclient import TestClient'
+exec "$GATEWAY_TEST_PYTHON" -m pytest -W error -q \
+  tests/test_gateway_quality.py tests/test_gateway_activation.py tests/test_asgi_worker_drain.py \
+  tests/test_smart_gateway_enterprise.py tests/test_smart_gateway_security_tracing.py \
+  tests/test_response_cache.py tests/test_otlp_tracing.py tests/test_syslog_evidence_streamer.py \
+  tests/test_gateway_platform.py tests/test_orchestrator_gateway.py tests/test_orchestrator_runtime.py \
+  tests/test_client_telemetry_api.py tests/test_worker_drain_contract.py tests/test_gateway_release_identity.py

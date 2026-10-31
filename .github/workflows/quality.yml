@@ -74,3 +74,24 @@ jobs:
 
       - name: Show active Ansible config overrides
         run: ANSIBLE_CONFIG=ansible.cfg .venv/bin/ansible-config dump --only-changed
+
+  gateway-quality:
+    name: gateway protocol and failure qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.12"
+      - name: Install the locked gateway validation environment
+        run: |
+          python -m venv .venv-gateway-test
+          .venv-gateway-test/bin/python -m pip install --require-hashes --only-binary=:all: -r requirements-gateway-test.lock
+      - name: Run gateway checks with every warning treated as an error
+        run: sh scripts/check-gateway-quality

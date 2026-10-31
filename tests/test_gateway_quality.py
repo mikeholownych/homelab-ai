@@ -8,8 +8,10 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-import httpx
 import pytest
+
+pytest.importorskip("httpx2")
+import httpx
 
 from orchestrator_gateway import AsgiServerWrapper, create_asgi_gateway
 from orchestrator_gateway.asgi_limits import BoundedExecutor, ExecutionBusy, IngressError, read_object
@@ -63,6 +65,8 @@ def test_http_shape_size_and_outcome_contract(tmp_path):
             assert response.status_code == 413
             response = await c.post('/v1/outcomes', json={"request_id": "unknown", "outcome": "fail"})
             assert response.status_code == 404
+            response = await c.post('/v1/outcomes', json={'request_id': 'unknown', 'outcome': 'fail', 'detail': {}})
+            assert response.status_code == 400
             response = await c.get('/v1/outcomes/summary')
             assert response.status_code == 200
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c:
@@ -121,12 +125,18 @@ def test_execution_capacity_not_released_when_http_await_is_cancelled():
         executor.shutdown()
 
 
-@pytest.mark.parametrize("stream", [False, True])
-def test_socket_disconnect_before_headers_cancels_provider(tmp_path, stream):
+@pytest.mark.parametrize("stream,phase", [(False, "before"), (True, "before"), (True, "stream")])
+def test_socket_disconnect_cancels_provider(tmp_path, stream, phase):
     runtime = make_runtime(tmp_path)
     started, stopped = threading.Event(), threading.Event()
     def completion(body, *, cancel, **kwargs):
         started.set()
+        if phase == "stream":
+            kwargs["on_stream_start"]({"id": "socket-fixture", "model": "fixture"})
+            for _ in range(10000):
+                if cancel.is_set():
+                    break
+                kwargs["on_stream_chunk"]({"choices": [{"delta": {"content": "x" * 1024}}]})
         if cancel.wait(2):
             stopped.set()
         return {"status": "cancelled"}
@@ -151,6 +161,8 @@ def test_socket_disconnect_before_headers_cancels_provider(tmp_path, stream):
                            b'Authorization: Bearer tok\r\nContent-Type: application/json\r\nContent-Length: '
                            + str(len(body)).encode() + b'\r\n\r\n' + body)
         assert started.wait(1)
+        if phase == "stream":
+            assert b"200 OK" in connection.recv(4096)
         connection.close()
         assert stopped.wait(1), "provider did not observe client disconnect"
     finally:

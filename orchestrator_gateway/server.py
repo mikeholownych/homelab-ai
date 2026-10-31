@@ -233,6 +233,7 @@ def create_gateway(
                         if runtime.shutting_down.is_set():
                             payload["status"], payload["ready"] = "draining", False
                             status_code = HTTPStatus.SERVICE_UNAVAILABLE
+                        payload["release_id"] = os.environ.get("ORCHESTRATOR_RELEASE_ID", "unknown")
                         payload["evidence"] = {"chain_valid": getattr(runtime.evidence, "chain_valid", True),
                                                "head": getattr(runtime.evidence, "head", None)}
                         self._send(status_code, payload, request_id)

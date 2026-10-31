@@ -77,3 +77,15 @@ Run the targeted gateway/runtime/activation tests with PYTHONPATH=. in the check
 release-identity contract must pass after the inventory points at the code commit. Run all configured
 playbook syntax checks and role lint. Production promotion must use the reviewed final snapshot,
 retain the recovery preflight, and record post-deployment identity, worker health and rollback evidence.
+
+## Warning-free validation environment
+
+Use a dedicated Python 3.12 environment installed from requirements-gateway-test.lock.
+The lock includes httpx2, the supported Starlette TestClient backend; it does not rely
+on the deprecated httpx fallback. Run sh scripts/check-gateway-quality with
+GATEWAY_TEST_PYTHON pointing to that environment's Python. The dedicated CI job runs
+this same command and first checks that httpx2 and TestClient import successfully.
+Every warning is an error in the gateway gate. Repository pytest defaults also make
+DeprecationWarning and PendingDeprecationWarning errors. No warning suppression or
+accepted deprecation exception is added. The controller's existing tooling environment
+is left unchanged.
