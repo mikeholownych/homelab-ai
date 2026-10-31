@@ -35,3 +35,4 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 - [`enhancement-analysis.md`](enhancement-analysis.md) — Enhancement opportunities and roadmap analysis.
 - [`findings-summary.md`](findings-summary.md) — Repository review findings summary and recommended priority order.
 - [`vault.md`](vault.md) — HashiCorp Vault runtime integration.
+- [`GATEWAY-SINGLE-HOST-QUALIFICATION.md`](GATEWAY-SINGLE-HOST-QUALIFICATION.md) — Single-host gateway acceptance gates, live probes, failure drills and verified state backups.
