@@ -1,0 +1,18 @@
+[Unit]
+Description=Recover an interrupted gateway activation
+After=network.target
+ConditionPathExists={{ orchestrator_gateway_activation_state_dir }}/pending/armed
+OnFailure=aihost-alert@%n.service
+
+[Service]
+Type=oneshot
+Environment=PYTHONWARNINGS=error
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart={{ orchestrator_gateway_activation_helper_path }} recover --state {{ orchestrator_gateway_activation_state_dir }}
+TimeoutStartSec=45
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ orchestrator_gateway_activation_state_dir }} {{ orchestrator_gateway_service_path | dirname }} {{ orchestrator_gateway_env_file | dirname }} {{ orchestrator_gateway_readiness_path | dirname }}

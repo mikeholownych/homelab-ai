@@ -329,6 +329,22 @@ orchestrator_gateway_capability_evidence:
 # Every route carries a finite output policy (Design 02 L2/L3): requests without max_tokens are bounded by it.
 # R3: a client's retry (X-AIHost-Attempt >= 2) or a request after a reported failure escalates to deep.
 orchestrator_gateway_routes:
+  - id: interactive-model
+    match: {model: [engineering/interactive]}
+    pool: lead
+    fallback: [deep]
+    fallback_on_saturation: true
+    max_queue_wait_ms: 100
+    reasoning: {mode: "off", answer_allowance: 1024}
+  # Explicit opt-in: a caller permits either qualified model by choosing this task class.
+  # Pinned aliases still bypass the table; existing workload output allowances are unchanged.
+  - id: interactive-fast
+    match: {task_class: [interactive-fast]}
+    pool: lead
+    fallback: [deep]
+    fallback_on_saturation: true
+    max_queue_wait_ms: 100
+    reasoning: {mode: "off", answer_allowance: 1024}
   - id: escalate-retry
     match: {attempt_gte: 2}
     pool: deep

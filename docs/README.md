@@ -36,3 +36,5 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 - [`findings-summary.md`](findings-summary.md) — Repository review findings summary and recommended priority order.
 - [`vault.md`](vault.md) — HashiCorp Vault runtime integration.
 - [`GATEWAY-SINGLE-HOST-QUALIFICATION.md`](GATEWAY-SINGLE-HOST-QUALIFICATION.md) — Single-host gateway acceptance gates, live probes, failure drills and verified state backups.
+
+- [`GATEWAY-BOUNDED-ADMISSION-RECOVERY.md`](GATEWAY-BOUNDED-ADMISSION-RECOVERY.md) — Opt-in bounded admission and durable activation recovery.

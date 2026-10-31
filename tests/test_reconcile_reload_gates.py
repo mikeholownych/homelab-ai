@@ -28,6 +28,7 @@ def task(role, name, section="tasks", file="main.yml"):
 
 
 CASES = [
+    ("orchestrator_gateway", "Establish the activation recovery timer", "tasks", "main.yml", ["orchestrator_gateway_activation_units"]),
     ("inference_policy", "Establish inference policy before any worker starts", "tasks", "main.yml", ["inference_policy_unit"]),
     ("inference_policy", "Reload inference policy", "handlers", "main.yml", ["inference_policy_unit"]),
     ("orchestrator_gateway", "Establish persistent gateway state", "tasks", "main.yml", ["orchestrator_gateway_unit", "orchestrator_gateway_removed_dropins"]),

@@ -1449,6 +1449,10 @@ class OrchestratorRuntime:
             pools = [None]
             route = {"rule_id": "legacy", "pool": None, "fallback_used": False, "reason": "no route table configured"}
 
+        # Fallback and canary pools require the same authority as the preferred pool.
+        if client is not None:
+            pools = [pool for pool in pools if client.permits_pool(pool)]
+
         try:
             needs = capability_requirements(request, reasoning_requested=policy.mode == "on" and reasoning_profile != "off")
         except Exception:  # noqa: BLE001 - malformed parts are the provider's problem, not a routing requirement
@@ -1468,6 +1472,8 @@ class OrchestratorRuntime:
             ordered_all = self._eligible(pool, capabilities, public_model if (pool is None and worker_id is None) else None,
                                          needs, include_candidates or (pool is not None and route.get("canary") == pool), missing,
                                          pinned_worker_id=worker_id)
+            if client is not None:
+                ordered_all = [w for w in ordered_all if client.permits_pool(w.pool)]
             if worker_id:
                 ordered_all = [w for w in ordered_all if w.worker_id == worker_id]
             ordered_all = [w for w in ordered_all if w.worker_id not in excluded]
@@ -1487,7 +1493,9 @@ class OrchestratorRuntime:
             same_model = [w for w in ordered if w.worker_id == plan.worker.worker_id or (
                 planned_state is not None and (s := self.capacity.state(w.worker_id)) is not None
                 and s.model_alias == planned_state.model_alias and s.ctx_per_slot >= planned_state.ctx_per_slot)]
-            ticket = self.admission.new_ticket(pool or "default", priority=priority, client_id=client_id, deadline=deadline)
+            ticket = self.admission.new_ticket(pool or "default", priority=priority, client_id=client_id, deadline=deadline,
+                                               max_wait_seconds=(decision.max_queue_wait_ms / 1000.0
+                                                                 if decision and decision.max_queue_wait_ms is not None else None))
             ticket.cancelled = cancel
             entry = {"cancel": cancel, "client_id": client_id, "started": time.monotonic(), "cancel_reason": None}
             with self._inflight_lock:

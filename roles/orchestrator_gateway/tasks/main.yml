@@ -29,6 +29,29 @@
       release directory, isolated listener mode and systemd worker credentials.
   when: orchestrator_gateway_enabled | bool
 
+- name: Check for a previously installed activation recovery helper
+  ansible.builtin.stat:
+    path: "{{ orchestrator_gateway_activation_helper_path }}"
+  register: orchestrator_gateway_existing_activation_helper
+
+- name: Recover any earlier interrupted gateway activation before deploying
+  ansible.builtin.command:
+    argv:
+      - "{{ orchestrator_gateway_activation_helper_path }}"
+      - recover
+      - --state
+      - "{{ orchestrator_gateway_activation_state_dir }}"
+  register: orchestrator_gateway_existing_activation_recovery
+  changed_when: false
+  until: >-
+    (orchestrator_gateway_existing_activation_recovery.stdout | from_json).status
+    in ['idle', 'accepted', 'restored', 'stopped_first_install', 'manual_attention']
+  retries: 430
+  delay: 5
+  when:
+    - orchestrator_gateway_existing_activation_helper.stat.exists
+    - not ansible_check_mode
+
 - name: Validate the model route table with the gateway's own router (fail before deploying)
   ansible.builtin.command:
     argv:
@@ -302,7 +325,10 @@
 - name: Read prior gateway activation files for rollback
   ansible.builtin.slurp:
     src: "{{ item }}"
-  loop: ["{{ orchestrator_gateway_service_path }}", "{{ orchestrator_gateway_env_file }}"]
+  loop:
+    - "{{ orchestrator_gateway_service_path }}"
+    - "{{ orchestrator_gateway_env_file }}"
+    - "{{ orchestrator_gateway_readiness_path }}"
   register: orchestrator_gateway_previous_activation
   failed_when: false
   no_log: true
@@ -551,8 +577,88 @@
   changed_when: false
   when: not ansible_check_mode
 
+- name: Create the private activation journal directory
+  ansible.builtin.file:
+    path: "{{ orchestrator_gateway_activation_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install durable gateway activation recovery
+  ansible.builtin.copy:
+    src: gateway-activation.py
+    dest: "{{ orchestrator_gateway_activation_helper_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install activation recovery units
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/systemd/system/{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - {src: gateway-activation-recovery.service.j2, dest: aihost-gateway-activation-recovery.service}
+    - {src: gateway-activation-recovery.timer.j2, dest: aihost-gateway-activation-recovery.timer}
+  register: orchestrator_gateway_activation_units
+
+- name: Establish the activation recovery timer
+  ansible.builtin.systemd_service:
+    name: aihost-gateway-activation-recovery.timer
+    daemon_reload: "{{ orchestrator_gateway_activation_units.changed | default(false) | bool }}"
+    enabled: true
+    state: started
+
 - name: Activate and verify the staged gateway with rollback
   block:
+    - name: Determine whether activation files need to change
+      ansible.builtin.set_fact:
+        orchestrator_gateway_activation_required: >-
+          {{ ((orchestrator_gateway_previous_activation.results[0].content | default('') | b64decode | trim)
+               != (lookup('ansible.builtin.template', 'orchestrator-gateway.service.j2') | trim))
+             or ((orchestrator_gateway_previous_activation.results[1].content | default('') | b64decode | trim)
+                 != (lookup('ansible.builtin.template', 'gateway.env.j2') | trim))
+             or ((orchestrator_gateway_previous_activation.results[2].content | default('') | b64decode | trim)
+                 != (lookup('ansible.builtin.file', role_path ~ '/files/gateway-readiness.py') | trim)) }}
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: Journal the previous gateway before changing activation files
+      ansible.builtin.command:
+        argv:
+          - "{{ orchestrator_gateway_activation_helper_path }}"
+          - begin
+          - --state
+          - "{{ orchestrator_gateway_activation_state_dir }}"
+          - --unit-file
+          - "{{ orchestrator_gateway_service_path }}"
+          - --env-file
+          - "{{ orchestrator_gateway_env_file }}"
+          - --readiness-file
+          - "{{ orchestrator_gateway_readiness_path }}"
+          - --target-release
+          - "{{ orchestrator_gateway_release_id }}"
+          - --health-url
+          - "http://{{ orchestrator_gateway_host }}:{{ orchestrator_gateway_port }}/health?strict=true"
+          - --prepared-timeout
+          - "{{ orchestrator_gateway_activation_prepared_timeout | string }}"
+          - --activation-timeout
+          - "{{ orchestrator_gateway_activation_timeout | string }}"
+      register: orchestrator_gateway_activation_begin
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - orchestrator_gateway_activation_required | default(false) | bool
+        - orchestrator_gateway_enabled | bool
+
+    - name: Record whether this deployment owns an activation journal
+      ansible.builtin.set_fact:
+        orchestrator_gateway_activation_journal_started: >-
+          {{ orchestrator_gateway_activation_begin.changed | default(false) | bool }}
+
     - name: Render gateway non-secret environment
       ansible.builtin.template:
         src: gateway.env.j2
@@ -583,6 +689,16 @@
       register: orchestrator_gateway_unit
       when: orchestrator_gateway_enabled | bool
       notify: Restart gateway service
+
+    - name: Arm recovery before requesting gateway activation
+      ansible.builtin.command:
+        argv:
+          - "{{ orchestrator_gateway_activation_helper_path }}"
+          - arm
+          - --state
+          - "{{ orchestrator_gateway_activation_state_dir }}"
+      changed_when: true
+      when: orchestrator_gateway_activation_journal_started | default(false) | bool
 
     - name: Establish persistent gateway state
       ansible.builtin.systemd_service:
@@ -619,16 +735,59 @@
         owner: root
         group: "{{ orchestrator_gateway_group }}"
         mode: "0640"
+
+    - name: Commit the strictly verified activation journal
+      ansible.builtin.command:
+        argv:
+          - "{{ orchestrator_gateway_activation_helper_path }}"
+          - commit
+          - --state
+          - "{{ orchestrator_gateway_activation_state_dir }}"
+          - --transaction-id
+          - "{{ (orchestrator_gateway_activation_begin.stdout | from_json).id }}"
+      changed_when: true
+      when: orchestrator_gateway_activation_journal_started | default(false) | bool
   rescue:
+    - name: Start durable recovery of the interrupted activation
+      ansible.builtin.command:
+        argv:
+          - "{{ orchestrator_gateway_activation_helper_path }}"
+          - recover
+          - --force
+          - --state
+          - "{{ orchestrator_gateway_activation_state_dir }}"
+      changed_when: true
+      when: orchestrator_gateway_activation_journal_started | default(false) | bool
+
+    - name: Wait for durable recovery to finish
+      ansible.builtin.command:
+        argv:
+          - "{{ orchestrator_gateway_activation_helper_path }}"
+          - recover
+          - --state
+          - "{{ orchestrator_gateway_activation_state_dir }}"
+      register: orchestrator_gateway_durable_recovery
+      changed_when: false
+      until: >-
+        (orchestrator_gateway_durable_recovery.stdout | from_json).status
+        in ['idle', 'restored', 'accepted', 'stopped_first_install', 'manual_attention']
+      retries: 430
+      delay: 5
+      when: orchestrator_gateway_activation_journal_started | default(false) | bool
+
     - name: Restore the previous gateway activation files
       ansible.builtin.copy:
         content: "{{ item.content | b64decode }}"
         dest: "{{ item.item }}"
         owner: root
         group: root
-        mode: "{{ '0644' if item.item == orchestrator_gateway_service_path else '0640' }}"
+        mode: >-
+          {{ '0755' if item.item == orchestrator_gateway_readiness_path
+             else '0644' if item.item == orchestrator_gateway_service_path else '0640' }}
       loop: "{{ orchestrator_gateway_previous_activation.results }}"
-      when: item.content is defined
+      when:
+        - item.content is defined
+        - not (orchestrator_gateway_activation_journal_started | default(false) | bool)
       no_log: true
 
     - name: Restart the previous gateway after restoring its activation
@@ -636,14 +795,18 @@
         name: aihost-orchestrator-gateway.service
         daemon_reload: true
         state: restarted
-      when: orchestrator_gateway_previous_activation.results[0].content is defined
+      when:
+        - orchestrator_gateway_previous_activation.results[0].content is defined
+        - not (orchestrator_gateway_activation_journal_started | default(false) | bool)
 
     - name: Stop a failed first gateway installation
       ansible.builtin.systemd_service:
         name: aihost-orchestrator-gateway.service
         state: stopped
         enabled: false
-      when: orchestrator_gateway_previous_activation.results[0].content is not defined
+      when:
+        - orchestrator_gateway_previous_activation.results[0].content is not defined
+        - not (orchestrator_gateway_activation_journal_started | default(false) | bool)
 
     - name: Verify the restored gateway is ready
       ansible.builtin.uri:
@@ -657,5 +820,5 @@
     - name: Report the failed gateway activation after rollback
       ansible.builtin.fail:
         msg: >-
-          Gateway activation failed; previous activation restored when available.
-          See failed task and rollback checks.
+          Gateway activation failed. Inspect the durable recovery receipt and rollback checks
+          for whether the previous activation was restored or a strictly healthy target adopted.

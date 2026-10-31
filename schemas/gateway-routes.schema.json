@@ -136,6 +136,11 @@
         "fallback_on_saturation": {
           "type": "boolean"
         },
+        "max_queue_wait_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120000
+        },
         "canary": {
           "type": "array",
           "minItems": 2,

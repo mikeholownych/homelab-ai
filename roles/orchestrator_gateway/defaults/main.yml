@@ -96,3 +96,10 @@ orchestrator_gateway_python_bin: >-
      if orchestrator_gateway_venv_enabled | bool
      else '/usr/bin/python3' }}
 orchestrator_gateway_releases_retention_count: 3
+
+# Root-owned recovery persists across controller disconnects and host restarts.
+orchestrator_gateway_activation_state_dir: /var/lib/aihost-gateway-activation
+orchestrator_gateway_activation_helper_path: /usr/local/libexec/aihost-gateway-activation
+orchestrator_gateway_activation_prepared_timeout: 60
+# Covers graceful gateway shutdown (600s), worker readiness (1300s) and acceptance margin.
+orchestrator_gateway_activation_timeout: 2100
