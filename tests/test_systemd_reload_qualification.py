@@ -13,6 +13,7 @@ def test_kernel_generator_warning_fails_even_with_clean_pid1():
 
 
 def test_no_reload_window_and_explicit_change_window():
+    assert not assess([])['passed']
     assert assess([{'MESSAGE': 'ordinary information'}])['passed']
     pair = [{'_PID': '1', 'MESSAGE': 'Reload requested from client PID 4'},
             {'_PID': '1', 'MESSAGE': 'Reloading finished in 1 ms.'}]

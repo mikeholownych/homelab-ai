@@ -27,14 +27,14 @@ def assess(records, expected_reloads=0):
             completions.append(brief)
     return {'expected_reloads': expected_reloads, 'reload_requests': requests, 'reload_completions': completions,
             'obsolete_diagnostics': warnings, 'records_examined': len(records),
-            'passed': not warnings and len(requests) == expected_reloads and len(completions) == expected_reloads}
+            'passed': bool(records) and not warnings and len(requests) == expected_reloads and len(completions) == expected_reloads}
 
 
 def window(since, until):
     start, end = (datetime.fromisoformat(value.replace('Z', '+00:00')) for value in (since, until))
     if start.tzinfo is None or end.tzinfo is None or not 0 < (end - start).total_seconds() <= 3600:
         raise ValueError('An explicit timezone and a positive window no longer than one hour are required')
-    return [value.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC') for value in (start, end)]
+    return [value.astimezone(timezone.utc).strftime('%Y-%m-%d %H:%M:%S.%f UTC') for value in (start, end)]
 
 
 def main():
@@ -47,7 +47,10 @@ def main():
     if os.geteuid() != 0:
         parser.error('Root is required so kernel/system records cannot be silently omitted')
     since, until = window(args.since, args.until)
-    raw = subprocess.check_output(['journalctl', '--utc', '--since', since, '--until', until, '--no-pager', '--output=json'], text=True)
+    journal = subprocess.run(['journalctl', '--utc', '--since', since, '--until', until, '--no-pager', '--output=json'], text=True, capture_output=True, check=True)
+    if journal.stderr:
+        raise RuntimeError('Journal read emitted diagnostics; complete evidence is not established')
+    raw = journal.stdout
     records = [json.loads(line) for line in raw.splitlines() if line]
     result = assess(records, args.expected_reloads)
     result.update(since=args.since, until=args.until, scope='complete journal, all transports; no PID filter')
