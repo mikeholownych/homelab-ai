@@ -23,8 +23,8 @@ def task(role, name, section="tasks", file="main.yml"):
 CASES = [
     ("inference_policy", "Establish inference policy before any worker starts", "tasks", "main.yml", ["inference_policy_unit"]),
     ("inference_policy", "Reload inference policy", "handlers", "main.yml", ["inference_policy_unit"]),
-    ("orchestrator_gateway", "Establish persistent gateway state", "tasks", "main.yml", ["orchestrator_gateway_unit"]),
-    ("orchestrator_gateway", "Restart gateway service", "handlers", "main.yml", ["orchestrator_gateway_unit"]),
+    ("orchestrator_gateway", "Establish persistent gateway state", "tasks", "main.yml", ["orchestrator_gateway_unit", "orchestrator_gateway_removed_dropins"]),
+    ("orchestrator_gateway", "Restart gateway service", "handlers", "main.yml", ["orchestrator_gateway_unit", "orchestrator_gateway_removed_dropins"]),
     ("vllm_top_console", "Enable the console service", "tasks", "main.yml", ["vllm_top_console_unit"]),
     ("vllm_top_console", "Restart vllm-top console", "handlers", "main.yml", ["vllm_top_console_unit"]),
     ("monitoring", "Establish textfile metrics timer state", "tasks", "main.yml", ["monitoring_metrics_units"]),
