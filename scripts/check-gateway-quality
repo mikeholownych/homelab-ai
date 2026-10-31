@@ -10,4 +10,5 @@ exec "$GATEWAY_TEST_PYTHON" -m pytest -W error -q \
   tests/test_smart_gateway_enterprise.py tests/test_smart_gateway_security_tracing.py \
   tests/test_response_cache.py tests/test_otlp_tracing.py tests/test_syslog_evidence_streamer.py \
   tests/test_gateway_platform.py tests/test_orchestrator_gateway.py tests/test_orchestrator_runtime.py \
-  tests/test_client_telemetry_api.py tests/test_worker_drain_contract.py tests/test_gateway_release_identity.py
+  tests/test_client_telemetry_api.py tests/test_worker_drain_contract.py tests/test_gateway_release_identity.py \
+  tests/test_reconcile_reload_gates.py

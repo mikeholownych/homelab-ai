@@ -16,8 +16,15 @@ def tasks(role, section="tasks", file="main.yml"):
     return yaml.safe_load((ROOT / "roles" / role / section / file).read_text())
 
 
+def walk_tasks(items):
+    for item in items:
+        yield item
+        for section in ("block", "rescue", "always"):
+            yield from walk_tasks(item.get(section, []))
+
+
 def task(role, name, section="tasks", file="main.yml"):
-    return next(t for t in tasks(role, section, file) if t["name"] == name)
+    return next(t for t in walk_tasks(tasks(role, section, file)) if t["name"] == name)
 
 
 CASES = [
