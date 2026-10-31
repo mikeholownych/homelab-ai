@@ -31,6 +31,8 @@ def test_package_and_application_deprecations_are_not_hidden():
 
 def test_audit_command_text_does_not_become_a_fake_diagnostic():
     assert assess([{'SYSLOG_IDENTIFIER': 'sudo', 'MESSAGE': 'COMMAND=journalctl --grep deprecated'}])['passed']
+    assert not assess([{'SYSLOG_IDENTIFIER': 'sudo', 'MESSAGE': 'Deprecated configuration option'}])['passed']
+    assert not assess([{'_TRANSPORT': 'audit', 'MESSAGE': 'Deprecated configuration option'}])['passed']
 
 
 @pytest.mark.parametrize('since,until', [('2026-10-31T00:00:00','2026-10-31T00:01:00'),

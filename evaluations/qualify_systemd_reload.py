@@ -15,7 +15,7 @@ def assess(records, expected_reloads=0):
     for row in records:
         message = str(row.get('MESSAGE', ''))
         identifier = row.get('SYSLOG_IDENTIFIER', '')
-        if identifier == 'sudo' or row.get('_TRANSPORT') == 'audit':
+        if identifier == 'sudo' and 'COMMAND=' in message:
             continue  # Audit command text is not an emitted runtime diagnostic.
         brief = {k: row[k] for k in ('__REALTIME_TIMESTAMP', '_TRANSPORT', 'SYSLOG_IDENTIFIER', '_COMM', '_PID') if k in row}
         brief['message'] = message
