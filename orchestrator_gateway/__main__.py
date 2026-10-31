@@ -207,7 +207,8 @@ def main() -> None:
         local_app = create_asgi_gateway(
             runtime, clients=runtime.clients, monitoring_token=monitoring_token,
             require_monitoring_auth=os.environ.get("ORCHESTRATOR_REQUIRE_MONITORING_AUTH") == "true",
-            allow_worker_pinning=allow_worker_pinning, listener=local_mode)
+            allow_worker_pinning=allow_worker_pinning, listener=local_mode,
+            max_body_bytes=int(os.environ.get("ORCHESTRATOR_MAX_BODY_BYTES", "1000000")))
         servers.append(AsgiServerWrapper(local_app, local_host, local_port))
 
         if remote_host:
@@ -221,7 +222,8 @@ def main() -> None:
             remote_app = create_asgi_gateway(
                 runtime, clients=runtime.clients, monitoring_token=monitoring_token,
                 require_monitoring_auth=True, allow_worker_pinning=allow_worker_pinning,
-                listener="remote")
+                listener="remote",
+                max_body_bytes=int(os.environ.get("ORCHESTRATOR_MAX_BODY_BYTES", "1000000")))
             servers.append(AsgiServerWrapper(
                 remote_app, remote_host, remote_port,
                 ssl_keyfile=key, ssl_certfile=cert,
@@ -231,7 +233,8 @@ def main() -> None:
         servers.append(GatewayServer((local_host, local_port), create_gateway(
             runtime, clients=runtime.clients, monitoring_token=monitoring_token,
             require_monitoring_auth=os.environ.get("ORCHESTRATOR_REQUIRE_MONITORING_AUTH") == "true",
-            allow_worker_pinning=allow_worker_pinning, listener=local_mode)))
+            allow_worker_pinning=allow_worker_pinning, listener=local_mode,
+            max_body_bytes=int(os.environ.get("ORCHESTRATOR_MAX_BODY_BYTES", "1000000")))))
 
         # Remote listener: the only workload entry point (TLS; requests from the host's own addresses are refused).
         if remote_host:
@@ -259,6 +262,10 @@ def main() -> None:
         for server in servers:
             server.shutdown()  # stop accepting; in-flight handler threads continue
         drained = runtime.wait_idle(grace)
+        for executor_name in ("http_dispatch", "http_tokenize"):
+            executor = getattr(runtime, executor_name, None)
+            if executor is not None:
+                executor.shutdown()
         runtime.save_state()
         if runtime.clients is not None:
             runtime.clients.save_state()

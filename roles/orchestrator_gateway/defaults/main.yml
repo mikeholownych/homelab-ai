@@ -80,12 +80,17 @@ orchestrator_gateway_routes: []
 orchestrator_gateway_model_aliases: {}
 orchestrator_gateway_engine: sync
 orchestrator_gateway_venv_enabled: false
-orchestrator_gateway_venv_dir: /var/lib/aihost-gateway/venv
-orchestrator_gateway_venv_packages:
-  - "starlette>=0.38.0"
-  - "uvicorn[standard]>=0.30.0"
-  - "httpx>=0.27.0"
-  - "pyjwt>=2.8.0"
+orchestrator_gateway_venv_dir: "{{ orchestrator_gateway_release_dir }}/venv"
+# Runtime closure is installed from files/gateway-requirements.lock with hash verification.
+orchestrator_gateway_requirements_path: "{{ orchestrator_gateway_release_dir }}/gateway-requirements.lock"
+orchestrator_gateway_http_dispatch_limit: 32
+orchestrator_gateway_http_client_dispatch_limit: 8
+orchestrator_gateway_tokenize_limit: 4
+orchestrator_gateway_http_connection_limit: 128
+orchestrator_gateway_body_timeout_seconds: 15
+orchestrator_gateway_max_body_bytes: 1000000
+orchestrator_gateway_memory_max: 1G
+orchestrator_gateway_tasks_max: 256
 orchestrator_gateway_python_bin: >-
   {{ (orchestrator_gateway_venv_dir ~ '/bin/python3')
      if orchestrator_gateway_venv_enabled | bool

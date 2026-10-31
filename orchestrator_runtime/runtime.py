@@ -1325,6 +1325,25 @@ class OrchestratorRuntime:
                     "trace_context": trace_context,
                 }
 
+        # R6 quotas, R2 priority (monotonic), R7 deadline
+        clamped_fields: list[str] = []
+        if client is not None:
+            try:
+                self.registry_clients_admit(client, model=public_model)
+            except QuotaExceeded as error:
+                if self.tracer is not None:
+                    self.tracer.record_span(Span("admission", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"status": "REJECTED", "code": "quota_exceeded"}, status_code=2, status_message=str(error)))
+                self.metrics.admission_rejections_total.inc(code="quota_exceeded", pool="-")
+                self.evidence.append("admission_rejected", request_id=request_id, client_id=client_id, failure_class="quota_exceeded",
+                                     trace_id=trace_context.trace_id, span_id=trace_context.span_id)
+                return {"status": "limited", "failure_class": "quota_exceeded", "request_id": request_id, "http_status": 429,
+                        "retry_after": error.retry_after, "message": str(error), "trace_context": trace_context}
+            priority, was_clamped = clamp_priority(priority, client, PRIORITIES)
+            if was_clamped:
+                clamped_fields.append("priority")
+        elif priority not in PRIORITIES:
+            priority = "interactive"
+
         # Deterministic Response Cache lookup
         cache_key = None
         if self.cache is not None and self.cache.is_cacheable(request, cache_headers):
@@ -1377,25 +1396,6 @@ class OrchestratorRuntime:
         else:
             if self.tracer is not None:
                 self.tracer.record_span(Span("cache", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"aihost.cache.status": "BYPASS", "model": public_model or "unknown"}))
-
-        # R6 quotas, R2 priority (monotonic), R7 deadline
-        clamped_fields: list[str] = []
-        if client is not None:
-            try:
-                self.registry_clients_admit(client, model=public_model)
-            except QuotaExceeded as error:
-                if self.tracer is not None:
-                    self.tracer.record_span(Span("admission", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"status": "REJECTED", "code": "quota_exceeded"}, status_code=2, status_message=str(error)))
-                self.metrics.admission_rejections_total.inc(code="quota_exceeded", pool="-")
-                self.evidence.append("admission_rejected", request_id=request_id, client_id=client_id, failure_class="quota_exceeded",
-                                     trace_id=trace_context.trace_id, span_id=trace_context.span_id)
-                return {"status": "limited", "failure_class": "quota_exceeded", "request_id": request_id, "http_status": 429,
-                        "retry_after": error.retry_after, "message": str(error), "trace_context": trace_context}
-            priority, was_clamped = clamp_priority(priority, client, PRIORITIES)
-            if was_clamped:
-                clamped_fields.append("priority")
-        elif priority not in PRIORITIES:
-            priority = "interactive"
 
         if self.tracer is not None:
             self.tracer.record_span(Span("admission", trace_context.trace_id, os.urandom(8).hex(), trace_context.span_id, attributes={"status": "ADMITTED", "priority": priority}))

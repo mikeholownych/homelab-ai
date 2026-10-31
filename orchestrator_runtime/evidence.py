@@ -11,6 +11,9 @@ Data policy (default ``hash``): evidence never stores prompt text unless explici
 """
 from __future__ import annotations
 
+from collections import deque
+from typing import Iterable
+
 import hashlib
 import json
 import os
@@ -18,6 +21,7 @@ import re
 import socket
 import sys
 import threading
+import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -39,10 +43,10 @@ def record_hash(record: dict[str, Any]) -> str:
     return hashlib.sha256(canonical(body).encode()).hexdigest()
 
 
-def verify_lines(lines: list[str]) -> tuple[bool, int, str | None, list[str]]:
+def verify_lines(lines: Iterable[str]) -> tuple[bool, int, str | None, list[str]]:
     """(intact, records, head_hash, problems). A link record (event=chain_break_detected) legitimately restarts linkage."""
     previous: str | None = None
-    problems: list[str] = []
+    problems = deque(maxlen=50)
     count = 0
     for number, line in enumerate(lines, 1):
         if not line.strip():
@@ -51,6 +55,10 @@ def verify_lines(lines: list[str]) -> tuple[bool, int, str | None, list[str]]:
             record = json.loads(line)
         except ValueError:
             problems.append(f"line {number}: not JSON")
+            previous = None
+            continue
+        if not isinstance(record, dict):
+            problems.append(f"line {number}: record must be an object")
             previous = None
             continue
         count += 1
@@ -63,7 +71,52 @@ def verify_lines(lines: list[str]) -> tuple[bool, int, str | None, list[str]]:
         if count > 1 and record.get("previous_hash") != previous:
             problems.append(f"line {number}: previous_hash does not link to line before")
         previous = record.get("record_hash")
-    return not problems, count, previous, problems
+    return not problems, count, previous, list(problems)
+
+
+def file_digest(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_file(path: Path) -> tuple[bool, int, str | None, list[str]]:
+    """Verify current and sealed predecessors with a bounded working set per segment."""
+    current = path
+    total, final_head = 0, None
+    problems = deque(maxlen=50)
+    visited = set()
+    while current not in visited:
+        visited.add(current)
+        with current.open(encoding="utf-8") as stream:
+            first_line = stream.readline()
+            try:
+                first = json.loads(first_line) if first_line.strip() else {}
+            except ValueError:
+                first = {}
+            stream.seek(0)
+            intact, count, head, faults = verify_lines(stream)
+        if final_head is None:
+            final_head = head
+        total += count
+        problems.extend(faults)
+        previous = first.get("sealed_predecessor") if isinstance(first, dict) else None
+        if not previous:
+            return not problems, total, final_head, list(problems)
+        name = previous.get("file", "")
+        if not name or Path(name).name != name:
+            problems.append("invalid sealed predecessor path")
+            break
+        predecessor = current.parent / name
+        if not predecessor.is_file() or file_digest(predecessor) != previous.get("sha256"):
+            problems.append("sealed predecessor missing or digest mismatch")
+            break
+        current = predecessor
+    else:
+        problems.append("sealed predecessor cycle")
+    return False, total, final_head, list(problems)
 
 
 def scrub(text: str, policy: str) -> str:
@@ -162,7 +215,7 @@ class SyslogEvidenceStreamer:
 class EvidenceStore:
     def __init__(self, path: str | Path | None = None, *, anchor_stream=None) -> None:
         self.path = Path(path) if path else None
-        self._records: list[dict[str, Any]] = []
+        self._records = deque(maxlen=max(1, int(os.environ.get("ORCHESTRATOR_EVIDENCE_RING_SIZE", "1024"))))
         self._streamers: list[Callable[[dict[str, Any]], None]] = []
         self._lock = threading.Lock()
         self._anchor_stream = anchor_stream if anchor_stream is not None else sys.stderr
@@ -191,12 +244,11 @@ class EvidenceStore:
 
     def _resume(self) -> None:
         try:
-            lines = self.path.read_text(encoding="utf-8").splitlines()
+            intact, count, head, problems = verify_file(self.path)
         except OSError as error:
             # Never append with a fresh head when an existing chain cannot be read. That would create a
             # disconnected suffix while making the gateway look healthy.
             raise OSError(f"cannot read existing evidence chain at {self.path}") from error
-        intact, count, head, problems = verify_lines(lines)
         self._head = head
         self.chain_valid = intact
         self.chain_problems = problems[:20]
@@ -215,8 +267,49 @@ class EvidenceStore:
         self._since_anchor = 0
         self._anchored_at = time.monotonic()
 
+    def _rotate_if_needed(self) -> None:
+        limit = max(1024, int(os.environ.get("ORCHESTRATOR_EVIDENCE_SEGMENT_BYTES", str(64 * 1024 * 1024))))
+        if not self.path or not self._head or not self.path.exists() or self.path.stat().st_size < limit:
+            return
+        sealed = self.path.with_name(self.path.name + ".sealed-" + self._head)
+        with self.path.open("rb") as previous:
+            os.fsync(previous.fileno())
+        digest = file_digest(self.path)
+        if sealed.exists():
+            if file_digest(sealed) != digest:
+                raise OSError("sealed evidence identity collision")
+        else:
+            # Link the existing inode before atomic replacement: interruption never loses the active chain.
+            os.link(self.path, sealed)
+        genesis = {"evidence_id": str(uuid.uuid4()), "event": "chain_genesis",
+                   "recorded_at": datetime.now(timezone.utc).isoformat(), "previous_hash": None,
+                   "sealed_predecessor": {"file": sealed.name, "sha256": digest, "head": self._head}}
+        genesis["record_hash"] = record_hash(genesis)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent,
+                                             prefix=".evidence-", delete=False) as stream:
+                temporary = Path(stream.name)
+                os.chmod(temporary, self.path.stat().st_mode & 0o777)
+                stream.write(canonical(genesis) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(temporary, self.path)
+            descriptor = os.open(self.path.parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        finally:
+            if temporary and temporary.exists():
+                temporary.unlink()
+        self._head = genesis["record_hash"]
+        self._records.append(genesis)
+        self._emit_anchor(1)
+
     def append(self, event: str, **fields: Any) -> str:
         with self._lock:
+            self._rotate_if_needed()
             record = {
                 "evidence_id": str(uuid.uuid4()),
                 "event": event,
@@ -255,7 +348,7 @@ def _main(argv: list[str]) -> int:
     if len(argv) != 2 or argv[0] != "verify":
         print("usage: python3 -m orchestrator_runtime.evidence verify <file>", file=sys.stderr)
         return 2
-    intact, count, head, problems = verify_lines(Path(argv[1]).read_text(encoding="utf-8").splitlines())
+    intact, count, head, problems = verify_file(Path(argv[1]))
     print(json.dumps({"intact": intact, "records": count, "head": head, "problems": problems[:50]}, indent=1))
     return 0 if intact else 1
 
