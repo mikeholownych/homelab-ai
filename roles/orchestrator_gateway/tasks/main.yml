@@ -288,6 +288,7 @@
     path: "{{ item }}"
     state: absent
   loop: "{{ orchestrator_gateway_obsolete_dropins }}"
+  register: orchestrator_gateway_removed_dropins
   when: orchestrator_gateway_enabled | bool
   notify: Restart gateway service
 
@@ -503,7 +504,9 @@
 - name: Establish persistent gateway state
   ansible.builtin.systemd_service:
     name: aihost-orchestrator-gateway.service
-    daemon_reload: "{{ orchestrator_gateway_unit.changed | default(false) | bool }}"
+    daemon_reload: >-
+      {{ (orchestrator_gateway_unit.changed | default(false) | bool)
+         or (orchestrator_gateway_removed_dropins.changed | default(false) | bool) }}
     enabled: true
     state: started
   when:

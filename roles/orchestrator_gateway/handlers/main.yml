@@ -2,12 +2,16 @@
 - name: Reload gateway systemd unit
   ansible.builtin.systemd_service:
     name: aihost-orchestrator-gateway.service
-    daemon_reload: "{{ orchestrator_gateway_unit.changed | default(false) | bool }}"
+    daemon_reload: >-
+      {{ (orchestrator_gateway_unit.changed | default(false) | bool)
+         or (orchestrator_gateway_removed_dropins.changed | default(false) | bool) }}
 
 - name: Restart gateway service
   ansible.builtin.systemd_service:
     name: aihost-orchestrator-gateway.service
-    daemon_reload: "{{ orchestrator_gateway_unit.changed | default(false) | bool }}"
+    daemon_reload: >-
+      {{ (orchestrator_gateway_unit.changed | default(false) | bool)
+         or (orchestrator_gateway_removed_dropins.changed | default(false) | bool) }}
     state: restarted
   when: not ansible_check_mode
 

@@ -13,7 +13,7 @@ sequence account for these requests. This is historical run evidence, not valida
 Unit template and removal results now gate manager reloads. Worker templates and retired units
 are loaded together before the existing drain/start sequence. Per-worker start/stop actions do
 not repeat that reload. Policy, gateway and console handlers still restart their services when
-notified, but only reload manager configuration when their unit template changed. Monitoring
+notified, but only reload manager configuration when their unit template changed (or an obsolete gateway drop-in was removed). Monitoring
 service/timer changes are loaded before managing the corresponding timer.
 
 Acceptance after an authorized deployment:
