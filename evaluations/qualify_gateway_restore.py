@@ -28,7 +28,7 @@ def digest(path: Path) -> str:
     return h.hexdigest()
 
 
-def copy_prefix(source: Path, target: Path, budget: int) -> int:
+def copy_prefix(source: Path, target: Path, budget: int, *, trim_partial: bool = True) -> int:
     """Copy an opened inode's initial prefix; omit a partially written final JSONL record."""
     with source.open('rb') as src, target.open('xb') as dst:
         size = os.fstat(src.fileno()).st_size
@@ -42,6 +42,8 @@ def copy_prefix(source: Path, target: Path, budget: int) -> int:
             dst.write(data)
             remaining -= len(data)
         dst.flush()
+    if not trim_partial:
+        return size
     with target.open('r+b') as stream:
         end = stream.seek(0, 2)
         if end:
@@ -76,6 +78,30 @@ def snapshot(source: Path, target: Path) -> dict:
     valid, count, head, problems = verify_file(target / active)
     if not valid:
         raise ValueError('snapshot chain invalid: ' + str(problems[:3]))
+    # Older genesis records reference immutable archives using a separate legacy format.
+    # Preserve them too, without pretending an unreadable-at-genesis file was historically attested.
+    attachments = []
+    referenced = set()
+    for chain_name in list(names):
+        with (target / chain_name).open() as stream:
+            genesis = json.loads(stream.readline())
+        for anchor in genesis.get('sealed_predecessors', []):
+            legacy = Path(anchor.get('path', ''))
+            if (not legacy.is_absolute() or legacy.is_symlink() or legacy.suffix != '.jsonl'
+                    or legacy.resolve().parent not in (source.resolve(), Path('/var/lib/aihost/evidence').resolve())):
+                raise ValueError('legacy evidence path outside allowed evidence roots')
+            if str(legacy) in referenced:
+                continue
+            referenced.add(str(legacy))
+            name = 'legacy-evidence-' + hashlib.sha256(str(legacy).encode()).hexdigest() + '.jsonl'
+            used += copy_prefix(legacy, target / name, MAX_BYTES - used, trim_partial=False)
+            actual = digest(target / name)
+            if anchor.get('sha256') and actual != anchor['sha256']:
+                raise ValueError('legacy evidence differs from genesis anchor')
+            names.append(name)
+            attachments.append({'source_path': str(legacy), 'snapshot_file': name, 'sha256': actual,
+                                'genesis_sha256': anchor.get('sha256'),
+                                'genesis_attested': bool(anchor.get('sha256'))})
     # These are non-secret JSON runtime state files, not clients.json or credential files.
     for name in ['gateway-state.json', 'client-usage.json']:
         path = source / name
@@ -92,7 +118,8 @@ def snapshot(source: Path, target: Path) -> dict:
                     time.sleep(.1)
             (target / name).write_bytes(raw)
             names.append(name)
-    manifest = {'schema_version': 1, 'evidence_records': count, 'evidence_head': head,
+    manifest = {'schema_version': 2, 'evidence_records': count, 'evidence_head': head,
+                'legacy_attachments': attachments,
                 'files': {name: {'sha256': digest(target / name), 'bytes': (target / name).stat().st_size} for name in names}}
     (target / 'snapshot.json').write_text(json.dumps(manifest, indent=2) + '\n')
     for path in target.iterdir():
@@ -116,7 +143,10 @@ def restore(source: Path, target: Path) -> dict:
     valid, restored_count, _, problems = verify_file(target / 'evidence-chain.jsonl')
     assert valid and restored_count == count + 1, problems
     return {'passed': True, 'backup_records': count, 'restored_records': restored_count,
-            'continuity_preserved': True, 'state_json_valid': all(isinstance(json.loads((target / name).read_text()), dict)
+            'continuity_preserved': True,
+            'legacy_attachments': len(manifest.get('legacy_attachments', [])),
+            'genesis_attested_legacy_attachments': sum(a['genesis_attested'] for a in manifest.get('legacy_attachments', [])),
+            'state_json_valid': all(isinstance(json.loads((target / name).read_text()), dict)
                 for name in manifest['files'] if name.endswith('.json')),
             'scope': 'evidence chain and per-file non-secret runtime state; no auth/TLS/model/host restore'}
 

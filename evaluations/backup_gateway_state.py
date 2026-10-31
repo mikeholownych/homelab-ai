@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from orchestrator_runtime.evidence import verify_file  # noqa: E402
 
 NAME = re.compile(r'^\d{8}T\d{6}Z-[0-9a-f]{12}$')
-ALLOWED = re.compile(r'^(snapshot\.json|gateway-state\.json|client-usage\.json|evidence-chain\.jsonl(?:\.sealed-[0-9a-f]{64})?)$')
+ALLOWED = re.compile(r'^(snapshot\.json|gateway-state\.json|client-usage\.json|evidence-chain\.jsonl(?:\.sealed-[0-9a-f]{64})?|legacy-evidence-[0-9a-f]{64}\.jsonl)$')
 
 
 def verify_snapshot(root: Path) -> dict:
@@ -41,6 +41,20 @@ def verify_snapshot(root: Path) -> dict:
     valid, count, head, problems = verify_file(root / 'evidence-chain.jsonl')
     if not valid or count != manifest['evidence_records'] or head != manifest['evidence_head']:
         raise ValueError('snapshot evidence invalid: ' + str(problems[:3]))
+    if manifest.get('schema_version', 1) >= 2:
+        attached = {a['source_path']: a for a in manifest.get('legacy_attachments', [])}
+        for name in manifest['files']:
+            if not name.startswith('evidence-chain.jsonl'):
+                continue
+            with (root / name).open() as stream:
+                genesis = json.loads(stream.readline())
+            for anchor in genesis.get('sealed_predecessors', []):
+                entry = attached.get(anchor.get('path'))
+                if not entry or entry['snapshot_file'] not in manifest['files']:
+                    raise ValueError('legacy attachment missing')
+                actual = manifest['files'][entry['snapshot_file']]['sha256']
+                if actual != entry['sha256'] or (anchor.get('sha256') and actual != anchor['sha256']):
+                    raise ValueError('legacy attachment differs from genesis anchor')
     return manifest
 
 
@@ -107,9 +121,13 @@ def main() -> int:
                 raise ValueError('unexpected gateway release path')
             helper = Path(__file__).with_name('qualify_gateway_restore.py').read_text()
             remote_created = True
-            remote(['sudo', '-n', 'env', 'PYTHONDONTWRITEBYTECODE=1', 'PYTHONPATH=' + release,
-                    release + '/venv/bin/python3', '-W', 'error', '-', 'snapshot', '--source',
-                    '/var/lib/aihost-gateway', '--target', remote_path], input=helper, text=True, capture_output=True)
+            try:
+                remote(['sudo', '-n', 'env', 'PYTHONDONTWRITEBYTECODE=1', 'PYTHONPATH=' + release,
+                        release + '/venv/bin/python3', '-W', 'error', '-', 'snapshot', '--source',
+                        '/var/lib/aihost-gateway', '--target', remote_path], input=helper, text=True, capture_output=True)
+            except subprocess.CalledProcessError as error:
+                diagnostic = (error.stderr or 'no diagnostic').strip().splitlines()[-1]
+                raise RuntimeError('appliance snapshot failed: ' + diagnostic[:300]) from None
             with subprocess.Popen([*ssh, shlex.join(['sudo', '-n', 'tar', '-C', remote_path, '-cf', '-', '.'])],
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
                 assert process.stdout is not None

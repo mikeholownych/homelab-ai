@@ -75,6 +75,9 @@ reconcile_controller_gateway_backup_keep=7. Override the host for a different to
 The backup job discovers the active gateway release and runs the reviewed snapshot helper with that
 release's Python. It transfers a complete, verified evidence prefix plus gateway-state.json and
 client-usage.json over host-key-verified SSH. Controller directories are mode 0700 and files 0600.
+Legacy genesis attachments are copied from the two allowed evidence roots too. Their original
+genesis hash must match when present; an archive that was unreadable at genesis is explicitly
+labelled historically unattested. Backups preserve its current bytes without inventing provenance.
 Only a fully transferred and verified snapshot becomes visible as a completed backup. A private
 receipt records the release directory, chain head and record count. The job deletes only its own
 UUID-named appliance scratch snapshot; retained appliance evidence and releases are untouched.

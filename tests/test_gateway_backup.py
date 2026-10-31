@@ -55,3 +55,21 @@ def test_retention_only_removes_whole_verified_owned_snapshots(tmp_path):
     assert unrelated.exists()
     for name in names[1:]:
         verify_snapshot(tmp_path / name)
+
+
+def test_verification_rejects_missing_legacy_attachment(tmp_path):
+    import hashlib
+    import json
+    source = tmp_path / 'live'
+    source.mkdir()
+    old = source / 'legacy.jsonl'
+    old.write_text('old bytes\n')
+    EvidenceStore(source / 'evidence-chain.jsonl', anchor_stream=io.StringIO()).genesis(
+        sealed_predecessors=[{'path': str(old), 'sha256': hashlib.sha256(old.read_bytes()).hexdigest()}])
+    backup = tmp_path / 'backup'
+    manifest = snapshot(source, backup)
+    verify_snapshot(backup)
+    manifest['legacy_attachments'] = []
+    (backup / 'snapshot.json').write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='attachment missing'):
+        verify_snapshot(backup)
