@@ -59,3 +59,23 @@ def test_receipt_scrubs_generated_content_and_keeps_usage():
     assert 'PRIVATE' not in str(result)
     assert result['usage']['total_tokens'] == 4
     assert original == before
+
+
+def test_http_error_retains_health_payload_in_memory_but_scrubs_receipt(monkeypatch):
+    import io
+    import ssl
+    import urllib.error
+    import urllib.request
+    from evaluations.qualify_single_host import Probe
+
+    monkeypatch.setattr(ssl, 'create_default_context', lambda **kwargs: None)
+    body = io.BytesIO(b'{"status":"degraded","ready":true}')
+    def fail(*args, **kwargs):
+        raise urllib.error.HTTPError('https://fixture/health', 503, 'degraded', {}, body)
+    monkeypatch.setattr(urllib.request, 'urlopen', fail)
+    probe = Probe('https://fixture', 'fixture-ca', {'operator': 'fixture-token'}, 'fixture')
+    result = probe.request('/health')
+    assert result['status'] == 503
+    assert result['body'] == {'status': 'degraded', 'ready': True}
+    assert 'body' not in scrub(result)
+    assert body.closed

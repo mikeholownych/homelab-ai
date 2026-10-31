@@ -109,6 +109,10 @@ class Probe:
             with error:
                 raw = error.read(8192)
                 result.update({'status': error.code, 'error_body_sha256': hashlib.sha256(raw).hexdigest()})
+                try:
+                    result['body'] = json.loads(raw)
+                except ValueError:
+                    pass
         except (OSError, ValueError) as error:
             # Exception messages can contain URLs; retain the class only.
             result['error_type'] = type(error).__name__
