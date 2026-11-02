@@ -1,0 +1,10 @@
+[Unit]
+Description=Check pending gateway activations, including after boot
+
+[Timer]
+OnCalendar=*-*-* *:*:00/30
+Persistent=true
+Unit=aihost-gateway-activation-recovery.service
+
+[Install]
+WantedBy=timers.target

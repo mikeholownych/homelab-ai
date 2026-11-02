@@ -1,0 +1,18 @@
+# Managed by aihost systemd_compat native service; package actions are retained.
+[Unit]
+Description=Apply packaged CPU frequency settings
+After=remote-fs.target loadcpufreq.service
+Before=multi-user.target graphical.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=SYSTEMCTL_SKIP_REDIRECT=1
+TimeoutStartSec=5min
+TimeoutStopSec=5min
+ExecStart=/etc/init.d/cpufrequtils start
+ExecStop=/etc/init.d/cpufrequtils stop
+ExecReload=/etc/init.d/cpufrequtils reload
+
+[Install]
+WantedBy=multi-user.target

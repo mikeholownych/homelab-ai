@@ -1,0 +1,13 @@
+[Unit]
+Description=Verified gateway evidence and state backup from {{ reconcile_controller_gateway_backup_host }}
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ reconcile_controller_snapshot_dir }}
+Environment=PYTHONPATH={{ reconcile_controller_snapshot_dir }}
+Environment=PYTHONWARNINGS=error
+ExecStart={{ reconcile_controller_snapshot_dir }}/.venv/bin/python {{ reconcile_controller_snapshot_dir }}/evaluations/backup_gateway_state.py --host {{ reconcile_controller_gateway_backup_host }} --backup-root {{ reconcile_controller_gateway_backup_root }} --keep {{ reconcile_controller_gateway_backup_keep }}
+TimeoutStartSec=600
+UMask=0077
+Nice=15

@@ -19,7 +19,7 @@ MATCH_KEYS = {
 }
 RULE_KEYS = {
     "id", "match", "pool", "fallback", "reasoning", "fallback_on_saturation",
-    "canary", "shadow", "evidence", "strategy", "cost_weight",
+    "canary", "shadow", "evidence", "strategy", "cost_weight", "max_queue_wait_ms",
 }
 OUTCOMES = ("pass", "fail", "partial")
 COMPLEXITY_TIERS = ("simple", "medium", "complex")
@@ -49,6 +49,7 @@ class RouteRule:
     cost_weight: float = 1.0
     policy: RoutePolicy = field(default_factory=RoutePolicy)
     fallback_on_saturation: bool = False
+    max_queue_wait_ms: int | None = None
     canary: tuple[str, float] | None = None
     shadow: tuple[str, float] | None = None
     evidence: tuple[str, ...] = ()
@@ -128,6 +129,8 @@ class RouteRule:
             "fallback_on_saturation": self.fallback_on_saturation,
             "strategy": self.strategy,
         }
+        if self.max_queue_wait_ms is not None:
+            out["max_queue_wait_ms"] = self.max_queue_wait_ms
         if self.canary:
             out["canary"] = {"pool": self.canary[0], "percent": self.canary[1]}
         if self.shadow:
@@ -154,6 +157,7 @@ class RouteDecision:
     reason: str
     policy: RoutePolicy = field(default_factory=RoutePolicy)
     fallback_on_saturation: bool = False
+    max_queue_wait_ms: int | None = None
     canary: tuple[str, float] | None = None
     shadow: tuple[str, float] | None = None
     scope: str = "workload"
@@ -317,6 +321,9 @@ class Router:
             saturation = raw.get("fallback_on_saturation", False)
             if not isinstance(saturation, bool):
                 raise RouteConfigError(f"rule '{rule_id}': 'fallback_on_saturation' must be a boolean")
+            queue_wait = raw.get("max_queue_wait_ms")
+            if queue_wait is not None and (isinstance(queue_wait, bool) or not isinstance(queue_wait, int) or not 1 <= queue_wait <= 120000):
+                raise RouteConfigError(f"rule '{rule_id}': max_queue_wait_ms must be an integer from 1 to 120000")
             evidence = raw.get("evidence", [])
             if not isinstance(evidence, list) or not all(isinstance(e, str) and e for e in evidence):
                 raise RouteConfigError(f"rule '{rule_id}': 'evidence' must be a list of evidence ids")
@@ -331,7 +338,7 @@ class Router:
                 has_tools=has_tools, min_prompt_tokens=lo, max_prompt_tokens=hi,
                 attempt_gte=attempt_gte, previous_outcomes=previous,
                 min_complexity=min_complexity, max_complexity=max_complexity, complexity_tiers=complexity_tiers,
-                strategy=strategy, cost_weight=cost_weight,
+                strategy=strategy, cost_weight=cost_weight, max_queue_wait_ms=queue_wait,
                 policy=_policy(raw.get("reasoning"), f"rule '{rule_id}'"), fallback_on_saturation=saturation,
                 canary=_split(raw.get("canary"), "canary", rule_id), shadow=_split(raw.get("shadow"), "shadow", rule_id),
                 evidence=tuple(evidence),
@@ -439,6 +446,7 @@ class Router:
                     reason=reason,
                     policy=rule.policy,
                     fallback_on_saturation=rule.fallback_on_saturation,
+                    max_queue_wait_ms=rule.max_queue_wait_ms,
                     canary=rule.canary,
                     shadow=rule.shadow,
                     strategy=rule.strategy,

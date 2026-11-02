@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily verified gateway evidence and state backup
+
+[Timer]
+OnCalendar={{ reconcile_controller_gateway_backup_schedule }}
+RandomizedDelaySec=300s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

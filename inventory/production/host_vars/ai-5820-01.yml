@@ -257,8 +257,8 @@ inference_policy_remote_gateway_port: 8443
 inference_policy_gateway_client_cidrs: [10.0.8.95/32]
 inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
-orchestrator_gateway_release_id: t5820-gateway-b72a4f5
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-b72a4f5
+orchestrator_gateway_release_id: t5820-gateway-e1ef079868d9
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-e1ef079868d9
 orchestrator_gateway_otlp_endpoint: "http://10.0.8.2:4318/v1/traces"
 orchestrator_gateway_otlp_service_name: "aihost-gateway"
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
@@ -329,6 +329,22 @@ orchestrator_gateway_capability_evidence:
 # Every route carries a finite output policy (Design 02 L2/L3): requests without max_tokens are bounded by it.
 # R3: a client's retry (X-AIHost-Attempt >= 2) or a request after a reported failure escalates to deep.
 orchestrator_gateway_routes:
+  - id: interactive-model
+    match: {model: [engineering/interactive]}
+    pool: lead
+    fallback: [deep]
+    fallback_on_saturation: true
+    max_queue_wait_ms: 100
+    reasoning: {mode: "off", answer_allowance: 1024}
+  # Explicit opt-in: a caller permits either qualified model by choosing this task class.
+  # Pinned aliases still bypass the table; existing workload output allowances are unchanged.
+  - id: interactive-fast
+    match: {task_class: [interactive-fast]}
+    pool: lead
+    fallback: [deep]
+    fallback_on_saturation: true
+    max_queue_wait_ms: 100
+    reasoning: {mode: "off", answer_allowance: 1024}
   - id: escalate-retry
     match: {attempt_gte: 2}
     pool: deep
@@ -359,13 +375,23 @@ orchestrator_gateway_model_aliases:
 # Every client token below is a Vault record (roles/vault_platform_credentials); rotate through Vault.
 orchestrator_gateway_vault_managed_clients: [nexus, opencode, operator, qualification, ansible-admin]
 orchestrator_gateway_clients:
-  - {client_id: nexus, scopes: [workload, telemetry], legacy_token_file: /etc/local-ai/orchestrator/client-token}
+  - client_id: nexus
+    scopes: [workload]
+    quota: {requests_per_minute: 60}
+    legacy_token_file: /etc/local-ai/orchestrator/client-token
   - client_id: opencode
-    scopes: [workload, telemetry]
+    scopes: [workload]
+    quota: {requests_per_minute: 60}
     legacy_token_file: /etc/local-ai/orchestrator/opencode-client-token
-  - {client_id: operator, scopes: [workload, qualification, monitoring, telemetry]}
-  - {client_id: qualification, scopes: [qualification], default_priority: batch, max_priority: batch}
-  - {client_id: ansible-admin, scopes: [admin, monitoring, telemetry]}
+  - client_id: operator
+    scopes: [workload, qualification, monitoring]
+    quota: {requests_per_minute: 60}
+  - client_id: qualification
+    scopes: [qualification]
+    default_priority: batch
+    max_priority: batch
+    quota: {requests_per_minute: 6}
+  - {client_id: ansible-admin, scopes: [admin, monitoring]}
 orchestrator_gateway_workers:
   - worker_id: b0-live-llama-worker1
     credential_name: worker-lead-token
@@ -576,3 +602,10 @@ cluster:
     coordinator: null
     peer_hosts: []
     quorum_size: null
+
+# Regenerate vendor XFS units without systemd 258+ no-op CPUAccounting declarations.
+systemd_compat_enabled: true
+systemd_compat_native_services:
+  - {name: loadcpufreq, enabled: true}
+  - {name: cpufrequtils, enabled: true}
+  - {name: openipmi, enabled: false}

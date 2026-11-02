@@ -1,7 +1,7 @@
 """Enterprise-grade Asynchronous ASGI Gateway for the AIHost Orchestrator.
 
 Provides high-throughput async request handling, non-blocking SSE streaming,
-native client disconnect cancellation without thread polling, and full OpenAI compatibility.
+bounded ingress, cancellation and the supported OpenAI-compatible chat API.
 """
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import asyncio
 import json
 import os
 import queue
+import concurrent.futures
 import socket
 import threading
 import time
@@ -25,7 +26,10 @@ from starlette.routing import Route
 from orchestrator_runtime import OrchestratorRuntime
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 from orchestrator_runtime.tracing import TraceContext
+from .asgi_limits import BoundedExecutor, ExecutionBusy, IngressError, read_object, watch_disconnect, GatewayMetricsMiddleware
 from .server import MONITORING_ROUTES, _is_local, _route_headers, host_addresses
+
+_EXECUTOR_LOCK = threading.Lock()
 
 _STATUS = {
     "rejected": 400,
@@ -34,6 +38,7 @@ _STATUS = {
     "limited": 429,
     "deadline": 504,
     "unavailable": 503,
+    "cancelled": 499,
 }
 
 
@@ -59,6 +64,24 @@ def create_asgi_gateway(
         clients = ClientRegistry.from_tokens([(f"client-{i}" if i else "default", t) for i, t in enumerate(tokens)])
     if getattr(runtime, "clients", None) is None:
         runtime.clients = clients
+
+    with _EXECUTOR_LOCK:
+        if not hasattr(runtime, "http_dispatch"):
+            runtime.http_dispatch = BoundedExecutor(int(os.environ.get("ORCHESTRATOR_HTTP_DISPATCH_LIMIT", "32")), "gateway-dispatch",
+                int(os.environ.get("ORCHESTRATOR_HTTP_CLIENT_DISPATCH_LIMIT", "8")))
+            runtime.http_tokenize = BoundedExecutor(int(os.environ.get("ORCHESTRATOR_TOKENIZE_LIMIT", "4")), "gateway-tokenize")
+    body_timeout = float(os.environ.get("ORCHESTRATOR_BODY_TIMEOUT_SECONDS", "15"))
+
+    async def parse_body(request):
+        return await read_object(request, max_body_bytes, body_timeout)
+
+    def ingress_response(error):
+        return JSONResponse(status_code=error.status, content={"error": {
+            "message": error.message, "type": "invalid_request_error"}})
+
+    def busy_response():
+        return JSONResponse(status_code=503, headers={"Retry-After": "1"},
+                            content={"error": {"message": "gateway execution capacity exhausted", "code": "overloaded"}})
 
     env_mon = monitoring_token or os.environ.get("ORCHESTRATOR_MONITORING_TOKEN")
     monitoring_digest = token_digest(env_mon) if env_mon else None
@@ -161,12 +184,11 @@ def create_asgi_gateway(
         if runtime.shutting_down.is_set():
             payload["status"], payload["ready"] = "draining", False
             status_code = 503
+        payload["release_id"] = os.environ.get("ORCHESTRATOR_RELEASE_ID", "unknown")
         payload["evidence"] = {
             "chain_valid": getattr(runtime.evidence, "chain_valid", True),
             "head": getattr(runtime.evidence, "head", None),
         }
-        runtime.metrics.http_requests_total.inc(route="health", method="GET", status_class=f"{status_code//100}xx")
-        runtime.metrics.http_request_duration_seconds.observe(time.monotonic() - t0, route="health", method="GET")
         return JSONResponse(status_code=status_code, content=payload, headers={"X-Request-ID": req_id})
 
     async def handle_metrics(request: Request) -> Response:
@@ -179,8 +201,10 @@ def create_asgi_gateway(
             return unauthorized_response(req_id, "metrics", "monitoring authentication required")
 
         body = runtime.metrics.render_prometheus_text()
-        runtime.metrics.http_requests_total.inc(route="metrics", method="GET", status_class="2xx")
-        runtime.metrics.http_request_duration_seconds.observe(time.monotonic() - t0, route="metrics", method="GET")
+        tracer = getattr(runtime, "tracer", None)
+        if tracer is not None:
+            body += (f"aihost_trace_export_dropped_spans_total {getattr(tracer, 'dropped_spans', 0)}\n"
+                     f"aihost_trace_export_failures_total {getattr(tracer, 'export_failures', 0)}\n")
         return Response(
             content=body,
             media_type="text/plain; version=0.0.4; charset=utf-8",
@@ -200,8 +224,6 @@ def create_asgi_gateway(
             return forbidden_response(req_id, "workload, qualification, monitoring, telemetry or admin scope required")
 
         models_view = runtime.alias_view(client)
-        runtime.metrics.http_requests_total.inc(route="v1_models", method="GET", status_class="2xx")
-        runtime.metrics.http_request_duration_seconds.observe(time.monotonic() - t0, route="v1_models", method="GET")
         return JSONResponse(status_code=200, content={"object": "list", "data": models_view}, headers={"X-Request-ID": req_id})
 
     async def handle_routes(request: Request) -> Response:
@@ -226,8 +248,6 @@ def create_asgi_gateway(
                 "healthy": worker["healthy"],
             })
         table = runtime.router.describe() if runtime.router else None
-        runtime.metrics.http_requests_total.inc(route="v1_routes", method="GET", status_class="2xx")
-        runtime.metrics.http_request_duration_seconds.observe(time.monotonic() - t0, route="v1_routes", method="GET")
         return JSONResponse(
             status_code=200,
             content={"object": "route_table", "router": table, "pools": pools},
@@ -247,14 +267,15 @@ def create_asgi_gateway(
             return forbidden_response(req_id, "workload or qualification scope required")
 
         try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse(status_code=400, content={"error": {"message": "invalid request", "type": "invalid_request_error"}})
+            body = await parse_body(request)
+        except IngressError as error:
+            return ingress_response(error)
 
-        counted = runtime.count_tokens(body, client)
+        try:
+            counted = await runtime.http_tokenize.submit_for(client.client_id, runtime.count_tokens, body, client)
+        except ExecutionBusy:
+            return busy_response()
         status_code = 404 if counted.get("status") == "not_found" else 200
-        runtime.metrics.http_requests_total.inc(route="v1_tokenize", method="POST", status_class=f"{status_code//100}xx")
-        runtime.metrics.http_request_duration_seconds.observe(time.monotonic() - t0, route="v1_tokenize", method="POST")
         return JSONResponse(status_code=status_code, content=counted, headers={"X-Request-ID": req_id})
 
     async def handle_chat_completions(request: Request) -> Response:
@@ -272,10 +293,18 @@ def create_asgi_gateway(
         trace_context = TraceContext.from_headers(request.headers)
 
         try:
-            body = await request.json()
-        except Exception:
-            return JSONResponse(status_code=400, content={"error": {"message": "invalid request", "type": "invalid_request_error"}})
+            body = await parse_body(request)
+        except IngressError as error:
+            return ingress_response(error)
 
+        if (not isinstance(body.get("messages"), list) or not body["messages"]
+                or any(not isinstance(message, dict) for message in body["messages"])
+                or ("stream" in body and not isinstance(body["stream"], bool))
+                or any(type(body[key]) is not int or body[key] < 1
+                       for key in ("max_tokens", "max_completion_tokens") if key in body)):
+            return ingress_response(IngressError(400, "invalid chat request fields"))
+        if len(req_id) > 128:
+            return ingress_response(IngressError(400, "request id exceeds 128 characters"))
         body["request_id"] = req_id
         pinned_worker = request.headers.get("X-AIHost-Worker")
         pinning_enabled = allow_worker_pinning or os.environ.get("ORCHESTRATOR_ALLOW_WORKER_PINNING") == "true"
@@ -298,12 +327,12 @@ def create_asgi_gateway(
         reasoning_profile = request.headers.get("X-AIHost-Reasoning") or body_profile
         is_streaming = bool(body.get("stream"))
 
-        # Cancellation event triggered if client disconnects
-        cancel = asyncio.Event()
+        # Cancellation is propagated while queued, before response headers and during generation.
 
         if is_streaming:
             # High-performance async SSE streaming with thread-safe backpressure
-            stream_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=max_stream_queue_size)
+            stream_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue(maxsize=max_stream_queue_size)
+            loop = asyncio.get_running_loop()
             stream_state: dict[str, Any] = {}
             stream_timing: dict[str, Any] = {}
             stream_started = threading.Event()
@@ -345,8 +374,18 @@ def create_asgi_gateway(
                     "choices": choices,
                 }
                 try:
-                    stream_queue.put(chunk, timeout=stream_queue_timeout)
-                except queue.Full:
+                    pending = asyncio.run_coroutine_threadsafe(stream_queue.put(chunk), loop)
+                    expires = time.monotonic() + stream_queue_timeout
+                    while not sync_cancel.is_set():
+                        try:
+                            pending.result(timeout=min(0.05, max(0.001, expires - time.monotonic())))
+                            return
+                        except concurrent.futures.TimeoutError:
+                            if time.monotonic() >= expires:
+                                raise
+                    pending.cancel()
+                except concurrent.futures.TimeoutError:
+                    pending.cancel()
                     runtime.metrics.streaming_slow_consumer_disconnects_total.inc(worker_id=worker_id or "unknown")
                     sync_cancel.set()
 
@@ -370,19 +409,24 @@ def create_asgi_gateway(
                         on_stream_chunk=send_stream_delta,
                         stream_timing=stream_timing,
                         trace_context=trace_context,
+                        cache_headers=dict(request.headers),
                     )
                 except Exception as err:
                     return {"status": "error", "error": str(err)}
 
-            future = asyncio.create_task(asyncio.to_thread(run_sync))
+            try:
+                future = runtime.http_dispatch.submit_for(client.client_id, run_sync)
+            except ExecutionBusy:
+                return busy_response()
+            watcher = asyncio.create_task(watch_disconnect(request, sync_cancel))
 
             async def sse_generator() -> AsyncGenerator[bytes, None]:
                 try:
                     while not future.done() or not stream_queue.empty():
                         try:
-                            item = await asyncio.to_thread(stream_queue.get, timeout=0.05)
+                            item = await asyncio.wait_for(stream_queue.get(), timeout=0.05)
                             yield f"data: {json.dumps(item, separators=(',', ':'))}\n\n".encode("utf-8")
-                        except queue.Empty:
+                        except asyncio.TimeoutError:
                             continue
 
                     res = await future
@@ -406,10 +450,19 @@ def create_asgi_gateway(
                         yield f"event: error\ndata: {json.dumps(err_payload, separators=(',', ':'))}\n\n".encode("utf-8")
                 finally:
                     sync_cancel.set()
+                    watcher.cancel()
 
             # Wait for stream start headers or early exit
-            while not stream_started.is_set() and not future.done():
-                await asyncio.sleep(0.01)
+            try:
+                while not stream_started.is_set() and not future.done():
+                    if sync_cancel.is_set():
+                        watcher.cancel()
+                        return Response(status_code=499)
+                    await asyncio.sleep(0.01)
+            except BaseException:
+                sync_cancel.set()
+                watcher.cancel()
+                raise
 
             if future.done() and not stream_state.get("started"):
                 res = future.result()
@@ -423,7 +476,11 @@ def create_asgi_gateway(
                     for k in ("details", "missing_capabilities"):
                         if k in res:
                             err_dict[k] = res[k]
-                    return JSONResponse(status_code=status_code, content={"error": err_dict})
+                    watcher.cancel()
+                    error_headers = {"X-Request-ID": req_id, **trace_context.to_headers()}
+                    if res.get("retry_after") is not None:
+                        error_headers["Retry-After"] = str(int(res["retry_after"]))
+                    return JSONResponse(status_code=status_code, content={"error": err_dict}, headers=error_headers)
 
             meta = stream_state.get("meta", {})
             hdrs = {
@@ -438,8 +495,9 @@ def create_asgi_gateway(
 
         # Non-streaming execution
         sync_cancel = threading.Event()
-        result = await asyncio.to_thread(
-            runtime.complete,
+        try:
+            future = runtime.http_dispatch.submit_for(
+            client.client_id, runtime.complete,
             body,
             worker_id=pinned_worker,
             affinity=request.headers.get("X-Session-ID"),
@@ -451,8 +509,17 @@ def create_asgi_gateway(
             previous_request=request.headers.get("X-AIHost-Previous-Request"),
             reasoning_profile=reasoning_profile,
             cancel=sync_cancel,
+            cache_headers=dict(request.headers),
             trace_context=trace_context,
-        )
+            )
+        except ExecutionBusy:
+            return busy_response()
+        watcher = asyncio.create_task(watch_disconnect(request, sync_cancel))
+        try:
+            result = await asyncio.shield(future)
+        finally:
+            sync_cancel.set()
+            watcher.cancel()
 
         headers = {
             "X-Request-ID": req_id,
@@ -464,7 +531,7 @@ def create_asgi_gateway(
         if status_str == "cancelled":
             return Response(status_code=499, headers=headers)
         if status_str != "ok":
-            status_code = result.get("http_status", 503)
+            status_code = result.get("http_status") or _STATUS.get(status_str, 503)
             if result.get("retry_after") is not None:
                 headers["Retry-After"] = str(int(result["retry_after"]))
             err_dict = {
@@ -478,6 +545,35 @@ def create_asgi_gateway(
             return JSONResponse(status_code=status_code, content={"error": err_dict}, headers=headers)
 
         return JSONResponse(status_code=200, content=result["response"], headers=headers)
+
+    async def handle_admin_workers(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_workers"):
+            return refuse_origin_response(req_id, "admin_workers", request.client.host if request.client else "127.0.0.1")
+        client = get_client(request)
+        if client is None:
+            return unauthorized_response(req_id, "admin_workers")
+        if "admin" not in client.scopes:
+            return forbidden_response(req_id, "admin scope required")
+        return JSONResponse({"workers": {w["worker_id"]: runtime.worker_detail(w["worker_id"])
+                                         for w in runtime.registry.snapshot()}}, headers={"X-Request-ID": req_id})
+
+    async def handle_admin_worker_action(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_worker"):
+            return refuse_origin_response(req_id, "admin_worker", request.client.host if request.client else "127.0.0.1")
+        client = get_client(request)
+        if client is None:
+            return unauthorized_response(req_id, "admin_worker")
+        if "admin" not in client.scopes:
+            return forbidden_response(req_id, "admin scope required")
+        action = request.path_params["action"]
+        if action not in ("drain", "undrain"):
+            return JSONResponse({"status": "not_found"}, status_code=404, headers={"X-Request-ID": req_id})
+        handler = runtime.drain if action == "drain" else runtime.undrain
+        result = handler(request.path_params["worker_id"], actor=client.client_id)
+        return JSONResponse(result, status_code=404 if result["status"] == "not_found" else 200,
+                            headers={"X-Request-ID": req_id})
 
     async def handle_admin_reload(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
@@ -637,9 +733,35 @@ def create_asgi_gateway(
         html = _render_admin_html(health_payload, cache_stats)
         return HTMLResponse(content=html, headers={"X-Request-ID": req_id})
 
+    async def handle_outcomes(request):
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "v1_outcomes"):
+            return refuse_origin_response(req_id, "v1_outcomes", request.client.host if request.client else "")
+        client = get_client(request)
+        if client is None:
+            return unauthorized_response(req_id, "v1_outcomes")
+        if not client.scopes & {"workload", "qualification"}:
+            return forbidden_response(req_id, "workload or qualification scope required")
+        if request.method == "GET":
+            return JSONResponse({"object": "outcome_summary", "rows": runtime.outcome_summary()})
+        try:
+            body = await parse_body(request)
+        except IngressError as error:
+            return ingress_response(error)
+        if (not isinstance(body.get("request_id"), str) or len(body["request_id"]) > 128
+                or body.get("outcome") not in ("pass", "fail", "partial")
+                or (body.get("detail") is not None and
+                    (not isinstance(body["detail"], str) or len(body["detail"]) > 4096))):
+            return ingress_response(IngressError(400, "invalid outcome report fields"))
+        result = runtime.report_outcome(client, str(body.get("request_id", "")),
+                                        str(body.get("outcome", "")), body.get("detail"))
+        return JSONResponse(result, status_code={"recorded": 200, "not_found": 404}.get(result["status"], 400))
+
     routes = [
         Route("/health", handle_health, methods=["GET"]),
         Route("/metrics", handle_metrics, methods=["GET"]),
+        Route("/v1/outcomes", handle_outcomes, methods=["POST"]),
+        Route("/v1/outcomes/summary", handle_outcomes, methods=["GET"]),
         Route("/v1/models", handle_models, methods=["GET"]),
         Route("/v1/routes", handle_routes, methods=["GET"]),
         Route("/v1/tokenize", handle_tokenize, methods=["POST"]),
@@ -647,10 +769,14 @@ def create_asgi_gateway(
         Route("/v1/admin/reload", handle_admin_reload, methods=["POST"]),
         Route("/v1/admin/status", handle_admin_status, methods=["GET"]),
         Route("/v1/admin/workers/{worker_id}/recover", handle_admin_worker_recover, methods=["POST"]),
+        Route("/admin/workers", handle_admin_workers, methods=["GET"]),
+        Route("/admin/workers/{worker_id}/{action}", handle_admin_worker_action, methods=["POST"]),
         Route("/admin", handle_admin_ui, methods=["GET"]),
     ]
 
-    return Starlette(routes=routes)
+    app = Starlette(routes=routes)
+    app.add_middleware(GatewayMetricsMiddleware, runtime=runtime)
+    return app
 
 
 class AsgiServerWrapper:
@@ -678,6 +804,9 @@ class AsgiServerWrapper:
             "port": port,
             "log_level": log_level,
             "access_log": False,
+            "limit_concurrency": int(os.environ.get("ORCHESTRATOR_HTTP_CONNECTION_LIMIT", "128")),
+            "timeout_graceful_shutdown": float(os.environ.get("ORCHESTRATOR_SHUTDOWN_GRACE_SECONDS", "600")),
+            "proxy_headers": False,
         }
         if ssl_keyfile and ssl_certfile:
             config_kwargs["ssl_keyfile"] = ssl_keyfile

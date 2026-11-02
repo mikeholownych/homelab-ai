@@ -41,7 +41,8 @@ def host_addresses() -> set[str]:
     """
     addresses = {"127.0.0.1", "::1"}
     try:
-        lines = open("/proc/net/fib_trie", encoding="utf-8").read().splitlines()
+        with open("/proc/net/fib_trie", encoding="utf-8") as stream:
+            lines = stream.read().splitlines()
         for previous, line in zip(lines, lines[1:]):
             if line.strip() == "/32 host LOCAL" and "--" in previous:
                 addresses.add(previous.split("--")[-1].strip())
@@ -233,6 +234,7 @@ def create_gateway(
                         if runtime.shutting_down.is_set():
                             payload["status"], payload["ready"] = "draining", False
                             status_code = HTTPStatus.SERVICE_UNAVAILABLE
+                        payload["release_id"] = os.environ.get("ORCHESTRATOR_RELEASE_ID", "unknown")
                         payload["evidence"] = {"chain_valid": getattr(runtime.evidence, "chain_valid", True),
                                                "head": getattr(runtime.evidence, "head", None)}
                         self._send(status_code, payload, request_id)
@@ -494,6 +496,7 @@ def create_gateway(
                     priority=self.headers.get("X-AIHost-Priority"), deadline_ms=header_int("X-AIHost-Deadline-Ms"),
                     attempt=header_int("X-AIHost-Attempt") or 1, previous_request=self.headers.get("X-AIHost-Previous-Request"),
                     reasoning_profile=reasoning_profile, cancel=cancel,
+                    cache_headers=dict(self.headers),
                     on_stream_start=begin_stream if request.get("stream") else None,
                     on_stream_chunk=send_stream_delta if request.get("stream") else None,
                     stream_timing=stream_timing if request.get("stream") else None,

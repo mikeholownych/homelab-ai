@@ -137,6 +137,7 @@ def test_unauthenticated_capabilities_rejected(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -186,6 +187,7 @@ def test_authenticated_capabilities_discovery(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -241,6 +243,7 @@ def test_scope_authorization_enforcement(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -325,6 +328,7 @@ def test_request_correlation_and_isolation(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -386,6 +390,7 @@ def test_parameter_validation_and_error_handling(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -469,6 +474,7 @@ def test_non_streaming_telemetry_provenance_and_filtering(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 
 
@@ -513,5 +519,6 @@ def test_worker_and_appliance_telemetry(tmp_path):
         conn.close()
     finally:
         server.shutdown()
+        server.server_close()
         thread.join(timeout=2)
 

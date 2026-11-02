@@ -43,6 +43,7 @@ class Ticket:
     client_id: str = "default"
     deadline: float | None = None  # time.monotonic() value
     seq: int = 0
+    max_wait_seconds: float | None = None
     enqueued_at: float = field(default_factory=time.monotonic)
     granted_at: float | None = None
     wait_seconds: float = 0.0
@@ -128,9 +129,10 @@ class AdmissionController:
 
     # ------------------------------------------------------------------ admission
     def new_ticket(self, pool: str, *, priority: str = "interactive", client_id: str = "default",
-                   deadline: float | None = None) -> Ticket:
+                   deadline: float | None = None, max_wait_seconds: float | None = None) -> Ticket:
         return Ticket(pool=pool, priority=priority if priority in PRIORITIES else "interactive",
-                      client_id=client_id, deadline=deadline, seq=next(self._seq))
+                      client_id=client_id, deadline=deadline, seq=next(self._seq),
+                      max_wait_seconds=max_wait_seconds)
 
     def _order_key(self, ticket: Ticket) -> tuple[int, int, int]:
         return (PRIORITIES[ticket.priority], self._served.get((ticket.pool, ticket.client_id), 0), ticket.seq)
@@ -161,9 +163,10 @@ class AdmissionController:
                     now = time.monotonic()
                     if ticket.deadline is not None and now >= ticket.deadline:
                         raise AdmissionRejected("deadline_exceeded", 504, "deadline passed while queued")
-                    if now - ticket.enqueued_at >= self.max_wait_seconds:
+                    wait_limit = self.max_wait_seconds if ticket.max_wait_seconds is None else min(self.max_wait_seconds, ticket.max_wait_seconds)
+                    if now - ticket.enqueued_at >= wait_limit:
                         raise AdmissionRejected("capacity_exhausted", 429, f"no capacity in pool '{ticket.pool}' within "
-                                                f"{self.max_wait_seconds:.0f}s",
+                                                f"{wait_limit:.3f}s",
                                                 self._retry_after(ticket.pool, queue.index(ticket)))
                     eligible = [w for w in candidates() if w not in self._drained]
                     if not eligible:
@@ -180,7 +183,10 @@ class AdmissionController:
                                 if self.metrics is not None and hasattr(self.metrics, "scheduler_queue_wait_seconds"):
                                     self.metrics.scheduler_queue_wait_seconds.observe(wait_seconds, worker_id=worker_id)
                                 return worker_id
-                    self._cond.wait(0.25)
+                    remaining = max(0.001, wait_limit - (time.monotonic() - ticket.enqueued_at))
+                    if ticket.deadline is not None:
+                        remaining = min(remaining, max(0.001, ticket.deadline - time.monotonic()))
+                    self._cond.wait(min(0.25, remaining))
             finally:
                 if ticket in queue:
                     queue.remove(ticket)

@@ -11,11 +11,10 @@ devices:
           hostPath: "{{ node }}"
           permissions: "rwm"
 {% endfor %}
-{% for card in ['/dev/dri/card1', '/dev/dri/card2'] %}
-        - path: "{{ card }}"
-          hostPath: "{{ card }}"
-          permissions: "rwm"
-{% endfor %}
+{# Render nodes only. Compute (Level Zero / SYCL) needs no /dev/dri/cardN node, and card minors are not stable across
+   boots: a display driver that claims minor 0 on one boot and not the next shifts every GPU's card number, and podman
+   refuses the whole CDI device when any listed node is missing (2026-11-01 power-loss boot: "card2" absent, both
+   workers exit 127). #}
 {% for node in container_runtime_render_nodes %}
   - name: "gpu{{ loop.index0 }}"
     containerEdits:

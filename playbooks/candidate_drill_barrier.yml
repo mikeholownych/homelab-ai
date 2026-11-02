@@ -1,0 +1,15 @@
+---
+# Bounded operator-controlled barrier used only by interruption/service-death drills.
+- name: Hold the declared candidate transaction at an observable bounded boundary
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Wait for explicit drill release while retaining transaction ownership
+      ansible.builtin.wait_for:
+        path: "{{ candidate_evidence_root }}/continue"
+        timeout: 300
+    - name: Preserve the deliberately interrupted experiment as failed
+      ansible.builtin.fail:
+        msg: Deliberate candidate fault drill; restoration must be verified separately

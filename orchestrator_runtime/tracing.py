@@ -8,6 +8,8 @@ Implements the W3C Recommendation for Trace Context propagation:
 """
 from __future__ import annotations
 
+from collections import deque
+
 import json
 import os
 import queue
@@ -178,8 +180,10 @@ class OTLPTraceExporter:
         self.batch_size = max(1, batch_size)
         self.batch_timeout_seconds = max(0.05, batch_timeout_seconds)
         self.headers = dict(headers or {})
+        self.dropped_spans = 0
+        self.export_failures = 0
         self._queue: queue.Queue[Span] = queue.Queue(maxsize=10000)
-        self._exported_spans: list[Span] = []
+        self._exported_spans = deque(maxlen=max(1, int(os.environ.get("ORCHESTRATOR_TRACE_RING_SIZE", "1024"))))
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -198,7 +202,8 @@ class OTLPTraceExporter:
             try:
                 self._queue.put_nowait(span)
             except queue.Full:
-                pass
+                with self._lock:
+                    self.dropped_spans += 1
 
     def start_span(
         self,
@@ -286,8 +291,9 @@ class OTLPTraceExporter:
             with urllib.request.urlopen(req, timeout=5.0) as resp:
                 pass
         except Exception:
-            # Network or collector failure is non-fatal; fail closed with resilience
-            pass
+            # Delivery loss is observable; export never blocks inference.
+            with self._lock:
+                self.export_failures += 1
 
     def _worker(self) -> None:
         batch: list[Span] = []

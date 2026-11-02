@@ -32,6 +32,13 @@
           - _candidate_reasoning_budget | int <= 32768
         fail_msg: "Unknown candidate profile; declared: {{ llama_cpp_container_candidate_profiles.keys() | list }}"
 
+    - name: Drill a blocked restoration before changing production configuration
+      ansible.builtin.fail:
+        msg: candidate_drill_fail_restore is set; durable recovery must retain ownership
+      when:
+        - candidate_state == 'absent'
+        - candidate_drill_fail_restore | default(false) | bool
+
     - name: Remember the production configuration (restored if the swap fails part-way)
       ansible.builtin.set_fact:
         _candidate_production:
@@ -77,6 +84,10 @@
         - name: Converge the workers
           ansible.builtin.include_role:
             name: llama_cpp_container
+        - name: Drill a failure after the worker swap before gateway convergence
+          ansible.builtin.fail:
+            msg: candidate_drill_fail_after_workers is set
+          when: candidate_drill_fail_after_workers | default(false) | bool
         - name: Converge the gateway
           ansible.builtin.include_role:
             name: orchestrator_gateway

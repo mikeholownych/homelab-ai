@@ -1,0 +1,17 @@
+# Managed by aihost systemd_compat native service; package actions are retained.
+[Unit]
+Description=Load configured OpenIPMI drivers
+After=remote-fs.target
+Before=multi-user.target graphical.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=SYSTEMCTL_SKIP_REDIRECT=1
+TimeoutStartSec=5min
+TimeoutStopSec=5min
+ExecStart=/etc/init.d/openipmi start
+ExecStop=/etc/init.d/openipmi stop
+
+[Install]
+WantedBy=multi-user.target

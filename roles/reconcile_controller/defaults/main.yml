@@ -8,9 +8,17 @@ reconcile_controller_root: "{{ ansible_facts.env.HOME }}/.local/share/aihost/rec
 reconcile_controller_snapshot_dir: "{{ reconcile_controller_root }}/snapshot"
 reconcile_controller_evidence_dir: "{{ reconcile_controller_root }}/evidence"
 reconcile_controller_lock_dir: "{{ reconcile_controller_root }}/lock"
+reconcile_controller_candidate_state_dir: "{{ reconcile_controller_root }}/candidate"
 reconcile_controller_unit_dir: "{{ ansible_facts.env.HOME }}/.config/systemd/user"
 reconcile_controller_target: ai-5820-01
 reconcile_controller_schedule: hourly
 reconcile_controller_random_delay: 300s
 reconcile_controller_timer_enabled: true
 reconcile_controller_cargo: "{{ ansible_facts.env.HOME }}/.cargo/bin/cargo"
+
+# Gateway state is outside /var/lib/local-ai/evidence. Keep verified, private controller copies separately.
+reconcile_controller_gateway_backup_enabled: true
+reconcile_controller_gateway_backup_host: "{{ ansible_facts.user_id }}@10.0.8.5"
+reconcile_controller_gateway_backup_root: "{{ ansible_facts.env.HOME }}/.local/share/aihost/gateway-backups"
+reconcile_controller_gateway_backup_keep: 7
+reconcile_controller_gateway_backup_schedule: daily

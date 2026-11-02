@@ -102,6 +102,7 @@ def test_otlp_trace_exporter_hierarchy_and_collector():
         assert resource_spans["resource"]["attributes"][0]["value"]["stringValue"] == "aihost-orchestrator"
     finally:
         server.shutdown()
+        server.server_close()
         server_thread.join()
 
 

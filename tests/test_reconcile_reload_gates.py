@@ -16,11 +16,19 @@ def tasks(role, section="tasks", file="main.yml"):
     return yaml.safe_load((ROOT / "roles" / role / section / file).read_text())
 
 
+def walk_tasks(items):
+    for item in items:
+        yield item
+        for section in ("block", "rescue", "always"):
+            yield from walk_tasks(item.get(section, []))
+
+
 def task(role, name, section="tasks", file="main.yml"):
-    return next(t for t in tasks(role, section, file) if t["name"] == name)
+    return next(t for t in walk_tasks(tasks(role, section, file)) if t["name"] == name)
 
 
 CASES = [
+    ("orchestrator_gateway", "Establish the activation recovery timer", "tasks", "main.yml", ["orchestrator_gateway_activation_units"]),
     ("inference_policy", "Establish inference policy before any worker starts", "tasks", "main.yml", ["inference_policy_unit"]),
     ("inference_policy", "Reload inference policy", "handlers", "main.yml", ["inference_policy_unit"]),
     ("orchestrator_gateway", "Establish persistent gateway state", "tasks", "main.yml", ["orchestrator_gateway_unit", "orchestrator_gateway_removed_dropins"]),

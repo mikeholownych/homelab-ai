@@ -273,6 +273,50 @@ def find_descendant_pid_with_needle(root_pid: int, needle: str) -> int | None:
 
 
 class RunWrapperTests(unittest.TestCase):
+    def test_rejected_read_only_baseline_allows_normal_reconciliation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            repo = create_repo(root / "repo")
+            evidence = root / "evidence"
+            evidence.mkdir()
+            state = root / "candidate"
+            state.mkdir()
+            (state / "active.json").write_text('{"phase":"baseline_rejected"}')
+            tools = root / "bin"
+            tools.mkdir()
+            log = root / "tools.log"
+            build_fake_tools(tools, log)
+            result = run_wrapper(repo, evidence, root / "ansible.lock", playbook="reconcile.yml", env={
+                "PATH": f"{tools}:{os.environ['PATH']}", "AIHOST_CANDIDATE_STATE_ROOT": str(state),
+                "LOCAL_AI_DEPLOYED_ROOT": str(root),
+                "FAKE_ANSIBLE_STDOUT": "PLAY RECAP\nai-p620-01 : ok=1 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0\n"})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("ansible-playbook ", log.read_text())
+
+    def test_pending_or_malformed_candidate_journal_blocks_reconciliation(self) -> None:
+        for journal in ('{"phase":"deploying"}', '{broken'):
+            with self.subTest(journal=journal), tempfile.TemporaryDirectory() as tmpdir:
+                temp_root = Path(tmpdir)
+                repo = create_repo(temp_root / "repo")
+                evidence = temp_root / "evidence"
+                evidence.mkdir()
+                state = temp_root / "candidate"
+                state.mkdir()
+                (state / "active.json").write_text(journal)
+                bin_dir = temp_root / "bin"
+                bin_dir.mkdir()
+                tool_log = temp_root / "tools.log"
+                build_fake_tools(bin_dir, tool_log)
+                lock = temp_root / "ansible.lock"
+                result = run_wrapper(repo, evidence, lock, extra_args=["--simulate"], env={
+                    "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                    "AIHOST_CANDIDATE_STATE_ROOT": str(state),
+                    "LOCAL_AI_DEPLOYED_ROOT": str(temp_root)})
+                self.assertEqual(result.returncode, 75, result.stdout + result.stderr)
+                self.assertNotIn("ansible-playbook ", tool_log.read_text() if tool_log.exists() else "")
+                with lock.open("r+") as holder:
+                    fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
     def test_wrapper_creates_host_timestamp_run_and_records_successful_site_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_root = Path(tmpdir)

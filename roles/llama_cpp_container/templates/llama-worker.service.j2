@@ -22,7 +22,7 @@ ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
   -v /dev/dri/by-path:/dev/dri/by-path:ro \
   -v {{ llama_cpp_container_model_dir }}:/models:ro \
   -v {{ llama_worker.config_dir }}/worker-api-key:/cfg/api-key:ro \
-  {{ llama_cpp_container_image }}@{{ llama_cpp_container_digest }} \
+  {{ llama_worker.image_ref | default(llama_cpp_container_image ~ '@' ~ llama_cpp_container_digest) }} \
   -m /models/{{ llama_worker.model_file }} -c {{ llama_worker.context }} \
   --host {{ llama_cpp_container_host }} --port {{ llama_worker.port }} \
   --api-key-file /cfg/api-key --alias {{ llama_worker.served_name }} \
