@@ -501,14 +501,9 @@ impl App {
                     !discovered_instance_expired(rt, present, now)
                 });
                 let registered = orchestrator::gateway_registered_endpoints(orchestrator::DEFAULT_URL);
-                self.runtimes.retain(|rt| {
-                    let is_placeholder = rt.def.discovered_via.is_none()
-                        && rt.def.url.trim_end_matches('/') == "http://localhost:8000"
-                        && rt.last_ok.is_none();
-                    let now_gateway_managed = rt.def.kind == crate::config::SourceKind::Direct
-                        && registered.contains(rt.def.url.trim_end_matches('/'));
-                    (!is_placeholder || defs.is_empty()) && !now_gateway_managed
-                });
+                let gateway_workers = orchestrator::gateway_worker_instances(orchestrator::DEFAULT_URL);
+                let found_elsewhere = !defs.is_empty() || !gateway_workers.is_empty();
+                self.runtimes.retain(|rt| keep_after_rediscovery(rt, found_elsewhere, &registered));
                 for def in defs {
                     if self.runtimes.iter().any(|rt| rt.def.url.trim_end_matches('/') == def.url.trim_end_matches('/')) {
                         continue;
@@ -517,7 +512,7 @@ impl App {
                         self.runtimes.push(rt);
                     }
                 }
-                for (name, url) in orchestrator::gateway_worker_instances(orchestrator::DEFAULT_URL) {
+                for (name, url) in gateway_workers {
                     if self.runtimes.iter().any(|rt| rt.def.kind == crate::config::SourceKind::Gateway && rt.def.url == url) {
                         continue;
                     }
@@ -850,6 +845,16 @@ impl App {
 /// How long a locally discovered server stays visible (as down) after it stops being found.
 const DISCOVERED_DOWN_RETENTION: Duration = Duration::from_secs(300);
 
+/// Whether a runtime survives a rediscovery pass. The never-reached `localhost:8000` startup placeholder goes as soon
+/// as anything real is found, locally or through the gateway; startup applies the same rule (config.rs), this covers
+/// a gateway that comes up after the console. A direct entry the gateway now registers is monitored through it.
+fn keep_after_rediscovery(rt: &Runtime, found_elsewhere: bool, registered: &std::collections::BTreeSet<String>) -> bool {
+    let url = rt.def.url.trim_end_matches('/');
+    let is_placeholder = rt.def.discovered_via.is_none() && url == "http://localhost:8000" && rt.last_ok.is_none();
+    let now_gateway_managed = rt.def.kind == crate::config::SourceKind::Direct && registered.contains(url);
+    !(now_gateway_managed || (is_placeholder && found_elsewhere))
+}
+
 /// A socket-discovered server (named `!<port>`) that the latest scan no longer finds is kept, shown down,
 /// until it has been unseen for DISCOVERED_DOWN_RETENTION; then it is dropped so it stops counting as a
 /// live policy violation. Gateway workers and configured endpoints never expire this way.
@@ -1065,6 +1070,40 @@ mod gateway_lifecycle_tests {
         let names: Vec<_> = app.runtimes.iter().map(|rt| rt.def.name.as_str()).collect();
         assert_eq!(names, ["!18081"], "the long-unseen server expires; the recent one stays");
         assert_eq!(app.view, View::Instance(0), "the selected instance stays selected across removal");
+    }
+
+    #[test]
+    fn the_startup_placeholder_goes_once_the_gateway_reports_workers() {
+        // Console started while the gateway was down (power-loss boot, 2026-11-01): only the placeholder exists, and
+        // local discovery stays empty because policy denies direct worker access to this uid.
+        let settings = Settings { poll: Duration::from_secs(1), history: 16, auto_discover: false, rediscover: Duration::ZERO };
+        let placeholder = InstanceDef {
+            name: String::new(),
+            kind: SourceKind::Direct,
+            url: "http://localhost:8000".into(),
+            api_key: None,
+            discovered_via: None,
+            auth: None,
+            confidence: None,
+        };
+        let app = App::new(&settings, vec![placeholder]).expect("app builds");
+        let rt = &app.runtimes[0];
+        let none = std::collections::BTreeSet::new();
+        assert!(keep_after_rediscovery(rt, false, &none), "nothing found anywhere yet: keep the placeholder");
+        assert!(!keep_after_rediscovery(rt, true, &none), "gateway workers (or local servers) found: drop it");
+    }
+
+    #[test]
+    fn a_reached_or_configured_localhost_8000_is_not_a_placeholder() {
+        let settings = Settings { poll: Duration::from_secs(1), history: 16, auto_discover: false, rediscover: Duration::ZERO };
+        let mut configured = adhoc("configured", 8000);
+        configured.url = "http://localhost:8000".into();
+        let mut app = App::new(&settings, vec![configured]).expect("app builds");
+        let none = std::collections::BTreeSet::new();
+        assert!(keep_after_rediscovery(&app.runtimes[0], true, &none), "discovered/configured entries are kept");
+        app.runtimes[0].def.discovered_via = None;
+        app.runtimes[0].last_ok = Some(Instant::now());
+        assert!(keep_after_rediscovery(&app.runtimes[0], true, &none), "an endpoint that has answered is kept");
     }
 
     #[test]

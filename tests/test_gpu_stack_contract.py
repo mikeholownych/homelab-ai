@@ -217,6 +217,17 @@ def test_container_runtime_is_opt_in_and_maps_dri_only():
     assert defaults["container_runtime_render_nodes"] == ["/dev/dri/renderD128", "/dev/dri/renderD129"]
 
 
+def test_cdi_spec_lists_no_unstable_card_nodes():
+    # Card minors renumber across boots; one missing listed node makes podman reject the whole CDI device.
+    import jinja2
+
+    defaults = load_yaml("roles/container_runtime/defaults/main.yml")
+    template = (ROOT / "roles/container_runtime/templates/local-ai-dri.yaml.j2").read_text()
+    spec = yaml.safe_load(jinja2.Template(template).render(**defaults))
+    nodes = [n["hostPath"] for d in spec["devices"] for n in d["containerEdits"]["deviceNodes"]]
+    assert nodes and all(n.startswith("/dev/dri/renderD") for n in nodes), nodes
+
+
 def test_container_runtime_enables_unprivileged_userns_for_rootless_podman():
     defaults = load_yaml("roles/container_runtime/defaults/main.yml")
     assert defaults["container_runtime_apparmor_userns_restriction"] is True
