@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.4
+
+**Fixed** — The `localhost:8000` startup placeholder no longer lingers as a refused instance when the console starts
+before the orchestrator gateway (e.g. after a power-loss boot). Rediscovery now drops it once the gateway reports
+workers, matching the startup rule; previously only a non-empty *local* scan removed it, which never happens on a
+host whose policy denies direct worker access to the console's uid.
+
 ## 1.0.3
 
 **Added** — Ingestion of universal gateway telemetry for Time To First Token (TTFT), scheduler queue wait duration, and Inter-Token Latency (ITL). Maps `aihost_inference_ttft_seconds`, `aihost_scheduler_queue_wait_seconds`, and `aihost_inference_inter_token_latency_seconds` onto `vllm-top`'s internal latency model, enabling complete latency quantiles (p50, p99, avg) across all engine types (including llama.cpp workers).
