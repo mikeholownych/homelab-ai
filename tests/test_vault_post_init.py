@@ -210,6 +210,41 @@ class VaultPostInitTests(unittest.TestCase):
             self.assertFalse(result["sealed"])
             self.assertEqual(fake.calls, [("POST", "sys/unseal"), ("GET", "sys/health")])
 
+    def test_unseal_waits_through_raft_standby_until_active(self):
+        # 2026-11-03 power-loss recovery: the unsealed node answered 429 (standby) once before electing itself.
+        helper = load_helper()
+
+        class ElectingVault:
+            def __init__(self, standby_polls):
+                self.standby_polls = standby_polls
+                self.calls = []
+
+            def request(self, method, path, payload=None, allow_missing=False):
+                self.calls.append((method, path))
+                if path == "sys/unseal":
+                    return 200, {"sealed": False}
+                if self.standby_polls:
+                    self.standby_polls -= 1
+                    return 429, {"initialized": True, "sealed": False, "standby": True}
+                return 200, {"initialized": True, "sealed": False, "standby": False}
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_file = Path(directory) / "share"
+            key_file.write_text("fixture-unseal-share\n")
+            key_file.chmod(0o400)
+            fake = ElectingVault(standby_polls=2)
+            with patch.object(helper.time, "sleep") as sleep:
+                result = helper.unseal_if_needed(fake, {"initialized": True, "sealed": True}, key_file)
+            self.assertFalse(result["standby"])
+            self.assertEqual(fake.calls, [("POST", "sys/unseal")] + [("GET", "sys/health")] * 3)
+            self.assertEqual(sleep.call_count, 2)
+
+            stuck = ElectingVault(standby_polls=10**6)
+            clock = iter(range(0, 10**6, 10))
+            with patch.object(helper.time, "sleep"), patch.object(helper.time, "monotonic", lambda: next(clock)):
+                with self.assertRaisesRegex(helper.VaultError, "no node became active"):
+                    helper.unseal_if_needed(stuck, {"initialized": True, "sealed": True}, key_file)
+
     def test_converge_unseals_realistic_http_503_then_continues(self):
         helper = load_helper()
 
@@ -298,6 +333,35 @@ class VaultPostInitTests(unittest.TestCase):
                 status, health = api.request("GET", "sys/health")
             self.assertEqual(status, 503)
             self.assertEqual(health, {"initialized": True, "sealed": True})
+
+
+    def test_health_api_accepts_only_documented_unsealed_standby_429(self):
+        helper = load_helper()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ca = root / "ca.crt"
+            ca.write_text("test ca fixture")
+            token = root / "token"
+            token.write_text("fixture-token\n")
+            token.chmod(0o400)
+            with patch.object(helper.ssl, "create_default_context", return_value=object()):
+                api = helper.VaultAPI("https://vault.invalid:8200", ca, token)
+            for body, accepted in (
+                (b'{"initialized":true,"sealed":false,"standby":true}', True),
+                (b'{"initialized":true,"sealed":true,"standby":true}', False),
+                (b'{"initialized":true,"sealed":false,"standby":false}', False),
+                (b"not json", False),
+            ):
+                error = urllib.error.HTTPError(
+                    "https://vault.invalid:8200/v1/sys/health", 429, "standby", {}, None
+                )
+                error.read = lambda body=body: body
+                with patch.object(helper.urllib.request, "urlopen", side_effect=error):
+                    if accepted:
+                        self.assertEqual(api.request("GET", "sys/health")[0], 429)
+                    else:
+                        with self.assertRaisesRegex(helper.VaultError, "HTTP 429"):
+                            api.request("GET", "sys/health")
 
 
 class VaultRotationAndPolicyTests(unittest.TestCase):

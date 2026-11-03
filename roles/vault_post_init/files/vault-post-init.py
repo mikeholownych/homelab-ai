@@ -9,6 +9,7 @@ import re
 import ssl
 import stat
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -17,6 +18,7 @@ from pathlib import Path
 AUDIT_PATH = "file/"
 AUDIT_FILE = "/var/log/vault/audit.log"
 KV_PATH = "secret/"
+ACTIVE_WAIT_SECONDS = 30
 WORKLOAD_POLICY = """path \"secret/data/local-ai/services/orchestrator-gateway/client-token\" { capabilities = [\"read\"] }
 path \"secret/data/local-ai/hosts/ai-5820-01/opencode-client-token\" { capabilities = [\"read\"] }
 path \"secret/data/local-ai/services/vllm/api-key\" { capabilities = [\"read\"] }
@@ -97,14 +99,21 @@ class VaultAPI:
         except urllib.error.HTTPError as error:
             if allow_missing and error.code == 404:
                 return 404, {}
-            if method == "GET" and path == "sys/health" and error.code == 503:
+            # sys/health reports state through status codes: 503 sealed, 429 unsealed standby (no active node yet).
+            if method == "GET" and path == "sys/health" and error.code in (503, 429):
                 try:
                     health = json.loads(error.read())
                 except (json.JSONDecodeError, UnicodeDecodeError):
-                    raise VaultError("Vault health returned an invalid sealed-state response") from None
-                if not isinstance(health, dict) or health.get("initialized") is not True or health.get("sealed") is not True:
-                    raise VaultError("Vault health returned an unexpected HTTP 503 state") from None
-                return 503, health
+                    raise VaultError(f"Vault health returned an invalid HTTP {error.code} response") from None
+                sealed = error.code == 503
+                if (
+                    not isinstance(health, dict)
+                    or health.get("initialized") is not True
+                    or health.get("sealed") is not sealed
+                    or (not sealed and health.get("standby") is not True)
+                ):
+                    raise VaultError(f"Vault health returned an unexpected HTTP {error.code} state") from None
+                return error.code, health
             raise VaultError(f"Vault API operation failed with HTTP {error.code}") from None
         except (urllib.error.URLError, TimeoutError, ssl.SSLError) as error:
             raise VaultError(f"Vault API operation failed ({type(error).__name__})") from None
@@ -300,6 +309,13 @@ def unseal_if_needed(api: VaultAPI, health: dict, unseal_file: Path) -> dict:
         raise VaultError("Unseal source is empty")
     api.request("POST", "sys/unseal", {"key": share})
     status, health = api.request("GET", "sys/health")
+    # A raft node answers 429 (unsealed standby) until it elects itself leader, usually within a second or two.
+    deadline = time.monotonic() + ACTIVE_WAIT_SECONDS
+    while status == 429 and time.monotonic() < deadline:
+        time.sleep(1)
+        status, health = api.request("GET", "sys/health")
+    if status == 429:
+        raise VaultError(f"Vault unsealed but no node became active within {ACTIVE_WAIT_SECONDS}s")
     if status != 200:
         raise VaultError("Vault health did not return HTTP 200 after unseal")
     if health.get("initialized") is not True:

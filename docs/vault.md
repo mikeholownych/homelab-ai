@@ -416,40 +416,39 @@ changing any consumer role.
 
 ## Disaster recovery: Vault VM reboot and emergency unsealing
 
-In the event of a Vault VM reboot, power interruption, or service restart, Vault starts in a sealed state and refuses all read/write requests until unsealed:
+After a Vault VM reboot, power interruption, or service restart, Vault starts
+sealed and refuses all requests until it is unsealed. The Vault VM is `vault`
+at `10.0.8.254`. The commands below verify TLS with the operator CA and never
+put the unseal share or root token in argv or shell history.
 
-1. **Verify Vault Health & Sealed Posture**:
+1. **Confirm the sealed state**:
    ```bash
-   curl -ks https://10.0.8.109:8200/v1/sys/health | jq .
+   curl -s --cacert /home/mike/.local/share/vault-issue4/vault-root-ca.crt \
+     -o /dev/null -w '%{http_code}\n' https://10.0.8.254:8200/v1/sys/health
    ```
-   Expected state when sealed: HTTP 503 with `"sealed": true, "initialized": true`.
+   `503` means sealed (the body shows `"sealed": true, "initialized": true`).
+   `429` means unsealed but standby, which is normal for a second or two while
+   the single raft node elects itself. `200` means unsealed and active.
 
-2. **Retrieve Out-of-Band Shamir Unseal Keys**:
-   Retrieve the operator unseal key(s) from secure offline storage (hardware token, encrypted password manager, or physical safe). Do not store unseal keys on either the controller or the inference appliance.
-
-3. **Execute Unseal Operation**:
-   Using the Vault CLI against the control-plane endpoint:
+2. **Unseal** with the protected `vault-unseal.key` from the operator handoff
+   (one Shamir share, threshold one). Either re-run the post-init playbook from
+   [Reproducible post-initialization configuration](#reproducible-post-initialization-configuration) unchanged. It unseals
+   from the file, waits for the node to become active, and re-checks the
+   converged state without rotating credentials. Or use the Vault CLI, which
+   prompts for the share without echoing it. The CLI is installed only on the
+   Vault VM (`ssh 10.0.8.254`), so point `VAULT_CACERT` at a copy of the
+   operator CA there:
    ```bash
-   export VAULT_ADDR="https://10.0.8.109:8200"
-   export VAULT_CACERT="/etc/ssl/certs/ca-certificates.crt"
-   vault operator unseal
-   ```
-   Or perform via direct authenticated HTTPS API call:
-   ```bash
-   curl -ks --request POST \
-     --data "{\"key\": \"$(cat /path/to/operator-unseal.key)\"}" \
-     https://10.0.8.109:8200/v1/sys/unseal | jq .
-   ```
-
-4. **Verify Restored Posture & Service Continuity**:
-   ```bash
-   curl -ks https://10.0.8.109:8200/v1/sys/health | jq .
-   ```
-   Expected state: HTTP 200 with `"sealed": false, "initialized": true`.
-
-5. **Test Controller Secret Retrieval**:
-   Verify that controller AppRole authentication recovers immediately:
-   ```bash
-   ansible-playbook playbooks/site.yml --tags vault_preflight
+   export VAULT_ADDR=https://10.0.8.254:8200
+   export VAULT_CACERT=/path/to/vault-root-ca.crt
+   vault operator unseal   # paste the share at the hidden prompt
    ```
 
+3. **Confirm it is active**: repeat step 1 and expect `200`.
+
+4. **Prove workload access recovered**: the validator's `vault_access` check
+   logs in with the appliance AppRole:
+   ```bash
+   ansible-playbook -i inventory/production playbooks/validate.yml --limit ai-5820-01
+   ```
+   Expect `[PASS] vault_access` in the summary.
