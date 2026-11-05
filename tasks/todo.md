@@ -551,6 +551,9 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] Deploy (approved 2026-11-05) **failed and rolled back**: CAIS SIGHUP handler killed the just-restarted gateway;
       journaled activation restored e1ef079868d9; snapshot re-pinned to fb4089d; 15:01 reconcile green.
       Fixed in a54c17e (reload after strict readiness, enforce only) + role test. Retry needs a new go-ahead.
+- [x] Deploy retry (approved 2026-11-05): snapshot 664a7e24849b, reconcile 0 failed / 0 rescued; gateway
+      t5820-gateway-ce1937c27e88 strictly ready, chain valid, `/v1/cais` mode off, capability request → 503
+      cais_disabled; validator PASS (healthy) after one legacy completion on engineering/deep.
 - [ ] Enable `enforce`: not useful until some profile is granted (would only return no_qualified_model)
 
 ### Review dispositions
