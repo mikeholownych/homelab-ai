@@ -235,6 +235,9 @@ orchestrator_gateway_port: 8010
 orchestrator_gateway_host: 127.0.0.1
 orchestrator_gateway_local_listener_mode: local
 orchestrator_gateway_engine: asgi
+# CAIS (docs/design/07, docs/operations/cais.md §4): capability requests route only to evidence-qualified
+# profiles. Enabled 2026-11-05 with operator approval; first enablement needs POST /v1/admin/cais/rebaseline.
+orchestrator_gateway_cais_mode: enforce
 orchestrator_gateway_venv_enabled: true
 orchestrator_gateway_remote_host: 10.0.8.5
 orchestrator_gateway_remote_port: 8443
