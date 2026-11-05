@@ -22,11 +22,3 @@
   changed_when: true
   delegate_to: localhost
   become: true
-
-- name: Reload gateway CAIS state
-  # SIGHUP re-reads the authoritative CAIS directory in place (no restart, in-flight work continues). A failed load
-  # leaves capability requests failing closed and legacy routing untouched.
-  ansible.builtin.command:
-    argv: [systemctl, kill, --signal=HUP, aihost-orchestrator-gateway.service]
-  changed_when: true
-  when: not ansible_check_mode
