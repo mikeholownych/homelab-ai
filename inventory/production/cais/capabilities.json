@@ -1,0 +1,37 @@
+{
+ "schema": "cais-capabilities/v1",
+ "policy_version": "2026-11-05.1",
+ "comment": "Thresholds fixed before any CAIS evidence was collected (docs/design/07 section 5.3). The statistical unit is the distinct task; confidence 0.9 one-sided Wilson lower bound. Only capabilities with an executable, versioned suite are defined; see docs/design/07 section 4.2 for the classes deliberately not defined yet.",
+ "capabilities": {
+  "coding.routine": {
+   "version": 1,
+   "description": "Small, well-scoped repository changes (defect repair, refactor, spec implementation, security fix, migration, test generation) accepted only when hidden tests pass; engx base corpus, up to 3 attempts with test feedback.",
+   "criteria": {
+    "suite_id": "engx-base",
+    "suite_version": "c7e0a4a73e55612b-a3-t8192",
+    "min_tasks": 12,
+    "min_pass_lower_bound": 0.6,
+    "confidence": 0.9,
+    "max_infra_error_rate": 0.1,
+    "max_validity_days": 60,
+    "min_context_envelope": 2048,
+    "min_independence": "internal"
+   }
+  },
+  "coding.complex": {
+   "version": 1,
+   "description": "Harder specification implementations, root-cause investigation, data migration and performance work accepted only when hidden tests pass; engx hard corpus, up to 3 attempts with test feedback.",
+   "criteria": {
+    "suite_id": "engx-hard",
+    "suite_version": "a2e49329628243ed-a3-t8192",
+    "min_tasks": 10,
+    "min_pass_lower_bound": 0.45,
+    "confidence": 0.9,
+    "max_infra_error_rate": 0.1,
+    "max_validity_days": 60,
+    "min_context_envelope": 2048,
+    "min_independence": "internal"
+   }
+  }
+ }
+}

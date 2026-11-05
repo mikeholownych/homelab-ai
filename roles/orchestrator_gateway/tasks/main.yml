@@ -115,6 +115,70 @@
     - /etc/local-ai/orchestrator
   when: orchestrator_gateway_enabled | bool
 
+- name: Check for a CAIS authoritative directory in the inventory
+  ansible.builtin.stat:
+    path: "{{ orchestrator_gateway_cais_source_dir }}/capabilities.json"
+  register: orchestrator_gateway_cais_source
+  delegate_to: localhost
+  become: false
+  check_mode: false
+  when: orchestrator_gateway_enabled | bool
+
+- name: Require a CAIS authoritative directory before enforcement can be enabled
+  ansible.builtin.assert:
+    that:
+      - orchestrator_gateway_cais_mode in ['off', 'enforce']
+      - orchestrator_gateway_cais_mode == 'off' or orchestrator_gateway_cais_source.stat.exists
+    fail_msg: >-
+      orchestrator_gateway_cais_mode must be off|enforce, and enforce needs
+      {{ orchestrator_gateway_cais_source_dir }}/capabilities.json
+  when: orchestrator_gateway_enabled | bool
+
+- name: Verify the CAIS ledger, catalog and evidence with the gateway's own loader (fail before deploying)
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - orchestrator_runtime.cais_cli
+      - verify
+      - "{{ orchestrator_gateway_cais_source_dir }}"
+  environment:
+    PYTHONPATH: "{{ playbook_dir }}/.."
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  check_mode: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_cais_source.stat.exists
+
+- name: Create the read-only CAIS directory
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0750"
+  loop:
+    - "{{ orchestrator_gateway_cais_dir }}"
+    - "{{ orchestrator_gateway_cais_dir }}/bundles"
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_cais_source.stat.exists
+
+- name: Deliver the CAIS authoritative ledger, catalog and evidence bundles
+  ansible.builtin.copy:
+    src: "{{ orchestrator_gateway_cais_source_dir }}/"
+    dest: "{{ orchestrator_gateway_cais_dir }}/"
+    owner: root
+    group: "{{ orchestrator_gateway_group }}"
+    mode: "0640"
+    directory_mode: "0750"
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_cais_source.stat.exists
+  notify: Reload gateway CAIS state
+
 - name: Create remote gateway certificate directory
   ansible.builtin.file:
     path: "{{ orchestrator_gateway_tls_cert | dirname }}"

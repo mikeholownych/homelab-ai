@@ -407,6 +407,7 @@ orchestrator_gateway_workers:
     artifact_digest: sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
     runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
     topology: llama-cpp-sycl
+    hardware_class: intel-arc-pro-b65-32g
     gpu_assignment: ["0"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal]
     context_limit: 65536
@@ -431,6 +432,7 @@ orchestrator_gateway_workers:
     artifact_digest: sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
     runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
     topology: llama-cpp-sycl
+    hardware_class: intel-arc-pro-b65-32g
     gpu_assignment: ["1"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
     context_limit: 65536
