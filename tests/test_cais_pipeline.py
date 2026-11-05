@@ -6,6 +6,7 @@ reference solutions (or garbage), so this proves the pipeline and its integrity 
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import shutil
 import sys
@@ -17,7 +18,12 @@ import pytest
 from orchestrator_gateway import GatewayServer, create_gateway
 from orchestrator_runtime import CapabilityRegistry, EvidenceStore, OrchestratorRuntime, cais, cais_cli
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
-from tests.test_orchestrator_runtime import worker
+from tests.test_orchestrator_runtime import worker as _base_worker
+
+
+def worker(worker_id, **kw):
+    """The shared fixture with a labelled hardware class: grants for the "unspecified" default are refused."""
+    return dataclasses.replace(_base_worker(worker_id, **kw), hardware_class="test-accelerator")
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "evaluations" / "cais"))
@@ -106,6 +112,8 @@ def test_pipeline_qualifies_rescore_detects_tampering_and_enforcement_follows_re
     state = tmp_path / "state"
     state.mkdir()
     svc = cais.CaisService("enforce", directory, state)
+    assert not svc.snapshot.valid  # anti-rollback: ledgers this gateway has never accepted are not trusted
+    svc.rebaseline(authority="pipeline-test")  # the runbook's explicit first-enablement step
     qid = next(iter(svc.snapshot.qualifications))
     assert svc.snapshot.qualifications[qid].state == cais.QUALIFIED
 

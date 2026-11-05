@@ -303,7 +303,9 @@ def main() -> None:
                 print(f"Failed to hot-reload routes: {e}", file=sys.stderr, flush=True)
 
         if runtime.cais is not None and runtime.cais.enabled:
-            runtime.cais.reload()  # never raises: a failed load leaves CAIS failing closed, legacy routing untouched
+            # never raises: a failed load leaves CAIS failing closed, legacy routing untouched. Going through the
+            # runtime also cancels in-flight work whose qualification the delivered ledger withdrew.
+            runtime.cais_reload()
         evidence.append("configuration_reloaded", clients_count=reloaded_clients, rules_count=reloaded_rules)
 
     serve_until_stopped(servers, stop_sequence, reload_sequence=reload_sequence)

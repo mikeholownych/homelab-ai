@@ -28,7 +28,7 @@ from orchestrator_runtime.cais import CaisRequirement
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 from orchestrator_runtime.tracing import TraceContext
 from .asgi_limits import BoundedExecutor, ExecutionBusy, IngressError, read_object, watch_disconnect, GatewayMetricsMiddleware
-from .server import MONITORING_ROUTES, _is_local, _route_headers, host_addresses
+from .server import MONITORING_ROUTES, _is_local, _route_headers, cais_admin_call, host_addresses
 
 _EXECUTOR_LOCK = threading.Lock()
 
@@ -630,17 +630,28 @@ def create_asgi_gateway(
 
     async def handle_cais_status(request: Request) -> Response:
         """Capability matrix and qualification state (no secrets; digests and evidence references only)."""
-        req_id, _client, refused = _cais_client(request, "v1_cais", {"workload", "qualification", "monitoring", "admin"})
+        req_id, client, refused = _cais_client(request, "v1_cais",
+                                               {"workload", "qualification", "monitoring", "telemetry", "admin"})
         if refused is not None:
             return refused
-        status = runtime.cais.status() if runtime.cais is not None else {"mode": "off"}
+        full = bool(client.scopes & {"admin", "monitoring"})
+        status = runtime.cais.status(full=full) if runtime.cais is not None else {"mode": "off"}
         return JSONResponse(status, headers={"X-Request-ID": req_id})
 
     async def handle_cais_reload(request: Request) -> Response:
         req_id, _client, refused = _cais_client(request, "admin_cais", {"admin"})
         if refused is not None:
             return refused
-        return JSONResponse(runtime.cais_reload(), headers={"X-Request-ID": req_id})
+        # Reload hashes every bundle and fsyncs: keep it off the event loop.
+        return JSONResponse(await asyncio.to_thread(runtime.cais_reload), headers={"X-Request-ID": req_id})
+
+    async def handle_cais_rebaseline(request: Request) -> Response:
+        req_id, client, refused = _cais_client(request, "admin_cais", {"admin"})
+        if refused is not None:
+            return refused
+        status, result = await asyncio.to_thread(
+            cais_admin_call, lambda: runtime.cais_rebaseline(authority=f"gateway-admin:{client.client_id}"))
+        return JSONResponse(result, status_code=int(status), headers={"X-Request-ID": req_id})
 
     async def handle_cais_suspend(request: Request) -> Response:
         req_id, client, refused = _cais_client(request, "admin_cais", {"admin"})
@@ -653,17 +664,11 @@ def create_asgi_gateway(
             body = await parse_body(request)
         except IngressError as error:
             return ingress_response(error)
-        try:
-            result = runtime.cais_suspend(request.path_params["qualification_id"], reason_code=str(body.get("reason_code", "")),
-                                          authority=f"gateway-admin:{client.client_id}", revoke=action == "revoke",
-                                          detail=body.get("detail") if isinstance(body.get("detail"), str) else None)
-        except KeyError:
-            return JSONResponse({"status": "not_found"}, status_code=404, headers={"X-Request-ID": req_id})
-        except ValueError as error:
-            return JSONResponse({"status": "rejected", "message": str(error)}, status_code=400, headers={"X-Request-ID": req_id})
-        except OSError as error:
-            return JSONResponse({"status": "unavailable", "message": str(error)}, status_code=503, headers={"X-Request-ID": req_id})
-        return JSONResponse(result, headers={"X-Request-ID": req_id})
+        status, result = await asyncio.to_thread(cais_admin_call, lambda: runtime.cais_suspend(
+            request.path_params["qualification_id"], reason_code=str(body.get("reason_code", "")),
+            authority=f"gateway-admin:{client.client_id}", revoke=action == "revoke",
+            detail=body.get("detail") if isinstance(body.get("detail"), str) else None))
+        return JSONResponse(result, status_code=int(status), headers={"X-Request-ID": req_id})
 
     async def handle_admin_worker_recover(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
@@ -821,6 +826,7 @@ def create_asgi_gateway(
         Route("/v1/models", handle_models, methods=["GET"]),
         Route("/v1/cais", handle_cais_status, methods=["GET"]),
         Route("/v1/admin/cais/reload", handle_cais_reload, methods=["POST"]),
+        Route("/v1/admin/cais/rebaseline", handle_cais_rebaseline, methods=["POST"]),
         Route("/v1/admin/cais/qualifications/{qualification_id}/{action}", handle_cais_suspend, methods=["POST"]),
         Route("/v1/routes", handle_routes, methods=["GET"]),
         Route("/v1/tokenize", handle_tokenize, methods=["POST"]),

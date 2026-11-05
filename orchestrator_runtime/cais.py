@@ -45,6 +45,9 @@ from .reasoning import RoutePolicy
 
 CAPABILITIES_SCHEMA = "cais-capabilities/v1"
 BUNDLE_SCHEMA = "cais-evidence-bundle/v1"
+# Model names that let CAIS choose among every qualified profile (with the model field omitted). Any other name must
+# resolve to a pin, an alias or a served model, or the request is denied.
+ANY_MODEL = frozenset({"engineering/auto"})
 MODES = ("off", "enforce")
 PRIORITIES = ("quality", "latency")
 FALLBACKS = ("qualified_only", "none")
@@ -85,6 +88,10 @@ FAILURES = {
 
 class CaisConfigError(ValueError):
     pass
+
+
+class CaisConflict(ValueError):
+    """The requested state change is redundant or impossible (e.g. suspending a revoked qualification)."""
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -224,14 +231,17 @@ def profile_identity(worker: Any) -> dict[str, Any]:
 
 def profile_digest(identity: Mapping[str, Any]) -> str:
     values = tuple(identity.get(k) for k in PROFILE_FIELDS)
+    # Key the cache on (type, value): 1, 1.0 and True hash equal but canonicalise differently.
+    key = tuple((type(v).__name__, v) for v in values)
     try:
-        return _profile_digest(values)
+        return _profile_digest(key)
     except TypeError:  # an unhashable field value (malformed ledger input): compute without the cache
-        return _profile_digest.__wrapped__(values)
+        return _profile_digest.__wrapped__(key)
 
 
 @functools.lru_cache(maxsize=1024)
-def _profile_digest(values: tuple[Any, ...]) -> str:
+def _profile_digest(key: tuple[tuple[str, Any], ...]) -> str:
+    values = [v for _t, v in key]
     return "sha256:" + hashlib.sha256(canonical(dict(zip(PROFILE_FIELDS, values))).encode()).hexdigest()
 
 
@@ -286,7 +296,7 @@ def assess_bundle(bundle: Mapping[str, Any], definition: CapabilityDefinition) -
         reasons.append("bundle_schema")
     if bundle.get("capability") != definition.name:
         reasons.append("bundle_capability_mismatch")
-    if bundle.get("capability_version") != definition.version:
+    if isinstance(bundle.get("capability_version"), bool) or bundle.get("capability_version") != definition.version:
         reasons.append("bundle_capability_version_mismatch")
     suite = bundle.get("suite") if isinstance(bundle.get("suite"), dict) else {}
     if suite.get("id") != criteria.suite_id or suite.get("version") != criteria.suite_version:
@@ -309,8 +319,18 @@ def assess_bundle(bundle: Mapping[str, Any], definition: CapabilityDefinition) -
     infra = sum(1 for t in trials if isinstance(t, dict) and t.get("outcome") == "infra_error")
     graded: dict[tuple[bool, str], list[str]] = {}
     for t in trials:
-        if isinstance(t, dict) and t.get("outcome") in ("pass", "fail") and isinstance(t.get("task_id"), str):
-            graded.setdefault((t.get("gate") is True, t["task_id"]), []).append(t["outcome"])
+        if isinstance(t, dict) and t.get("outcome") in TRIAL_OUTCOMES and isinstance(t.get("task_id"), str):
+            graded.setdefault((t.get("gate") is True, t["task_id"]), [])
+            if t["outcome"] != "infra_error":
+                graded[(t.get("gate") is True, t["task_id"])].append(t["outcome"])
+    # A task (gate or not) whose every trial was an infrastructure error produced no answer to grade. It counts as a
+    # failure: relabelling failures as infra errors must never shrink the denominator or hide a gate.
+    graded = {key: (outcomes or ["fail"]) for key, outcomes in graded.items()}
+    listed = suite.get("tasks")
+    if not isinstance(listed, list) or not listed or not all(isinstance(t, str) for t in listed):
+        reasons.append("suite_task_list_missing")
+    elif set(listed) != {task for _gate, task in graded}:
+        reasons.append("suite_task_coverage_mismatch")
     gate_tasks = {task: outcomes for (gate, task), outcomes in graded.items() if gate}
     stat_tasks = {task: outcomes for (gate, task), outcomes in graded.items() if not gate}
     gate_failures = sorted(task for task, outcomes in gate_tasks.items() if any(o != "pass" for o in outcomes))
@@ -442,14 +462,15 @@ class CaisSnapshot:
     gateway_head: str | None
     anti_rollback: str
     loaded_at: str
-    _effective_cache: list = field(default_factory=list, compare=False, repr=False)
+    # One (now, next_boundary, result) tuple replaced atomically, so concurrent readers never mix two computations.
+    _effective_cache: list = field(default_factory=lambda: [None], compare=False, repr=False)
 
     def effective(self, now: datetime) -> dict[str, Qualification]:
         """Qualifications with time-dependent state (expiry, not-yet-valid) applied at ``now``. Only the validity
         window varies with time, so results are reused until the next boundary any qualification crosses."""
-        cache = self._effective_cache
-        if cache and cache[0] <= now < cache[1]:
-            return cache[2]
+        cached = self._effective_cache[0]
+        if cached is not None and cached[0] <= now < cached[1]:
+            return cached[2]
         out: dict[str, Qualification] = {}
         next_boundary = datetime.max.replace(tzinfo=timezone.utc)
         for qid, q in self.qualifications.items():
@@ -465,7 +486,7 @@ class CaisSnapshot:
                 else:
                     next_boundary = min(next_boundary, expires)
             out[qid] = q if state == q.state else Qualification(**{**q.__dict__, "state": state})
-        self._effective_cache[:] = [now, next_boundary, out]
+        self._effective_cache[0] = (now, next_boundary, out)
         return out
 
 
@@ -492,7 +513,8 @@ def build_snapshot(authority_dir: Path, gateway_ledger: Path | None, head_file: 
     if not gateway.intact:
         return _invalid_snapshot([f"gateway_ledger: {p}" for p in gateway.problems] or ["gateway_ledger_broken"], catalog)
 
-    anti_rollback, rollback_problem = _check_head(head_file, authoritative)
+    ledgers = {"authoritative": authoritative, "gateway": gateway}
+    anti_rollback, rollback_problem = _check_head(head_file, ledgers)
     if rollback_problem:
         return _invalid_snapshot([rollback_problem], catalog, anti_rollback)
 
@@ -531,32 +553,62 @@ def build_snapshot(authority_dir: Path, gateway_ledger: Path | None, head_file: 
     for qid, grant in grants.items():
         qualifications[qid] = _derive(qid, grant, catalog, authority_dir, removals.get(qid, []),
                                       reinstatements.get(qid, []))
+    if head_file is not None:
+        write_problem = write_head(head_file, ledgers)
+        if write_problem:
+            return _invalid_snapshot([write_problem], catalog, "unwritable")
+        anti_rollback = "enforced"
     return CaisSnapshot(True, tuple(problems), catalog, qualifications, authoritative.head, gateway.head,
                         anti_rollback, _now().isoformat())
 
 
-def _check_head(head_file: Path | None, ledger: LedgerRead) -> tuple[str, str | None]:
-    """Anti-rollback: the authoritative ledger must extend the longest one this gateway has accepted, so deleting a
-    revocation from Git (or restoring an old copy) cannot silently restore eligibility."""
+def _check_head(head_file: Path | None, ledgers: Mapping[str, LedgerRead]) -> tuple[str, str | None]:
+    """Anti-rollback for both ledgers: each must extend the longest one this gateway has accepted, so restoring an old
+    copy of either (a Git revert, an old backup, a deleted or truncated suspension file) cannot silently restore
+    eligibility. A missing baseline with non-empty ledgers fails closed until an operator re-baselines explicitly.
+
+    Limit: the baseline lives in the gateway's own state directory. It defends against accidental or administrative
+    loss, not against a compromised gateway process (which could serve anything regardless); the journal-anchored
+    evidence chain records every ledger head the gateway loaded, so such tampering remains detectable afterwards."""
     if head_file is None:
         return "disabled", None
-    count = len(ledger.records)
     try:
-        if head_file.exists():
-            seen = json.loads(head_file.read_text(encoding="utf-8"))
-            seen_count, seen_head = int(seen["count"]), seen["head"]
-            if count < seen_count or (seen_count and ledger.records[seen_count - 1].get("record_hash") != seen_head):
-                return "violated", (f"authoritative_ledger_rollback: accepted {seen_count} records ending "
-                                    f"{str(seen_head)[:16]}, now {count}")
+        if not head_file.exists():
+            if any(ledger.records for ledger in ledgers.values()):
+                return "baseline_missing", ("anti_rollback_baseline_missing: ledgers have records but no accepted "
+                                            "baseline exists; an operator must re-baseline explicitly")
+            return "baseline_new", None
+        seen = json.loads(head_file.read_text(encoding="utf-8"))
+        for name, ledger in ledgers.items():
+            count, head = int(seen[name]["count"]), seen[name]["head"]
+            if len(ledger.records) < count or (count and ledger.records[count - 1].get("record_hash") != head):
+                return "violated", (f"{name}_ledger_rollback: accepted {count} records ending {str(head)[:16]}, "
+                                    f"now {len(ledger.records)}")
     except (OSError, ValueError, KeyError, TypeError) as error:
         return "unreadable", f"anti_rollback_state_unreadable: {error.__class__.__name__}"
-    try:
-        tmp = head_file.with_suffix(".tmp")
-        tmp.write_text(json.dumps({"count": count, "head": ledger.head}), encoding="utf-8")
-        tmp.replace(head_file)
-    except OSError:
-        return "degraded", None  # current state is still correct; future rollback detection is not guaranteed
     return "enforced", None
+
+
+def write_head(head_file: Path, ledgers: Mapping[str, LedgerRead]) -> str | None:
+    """Durably record the accepted ledger lengths and heads. A failure is returned (callers fail closed)."""
+    body = json.dumps({name: {"count": len(ledger.records), "head": ledger.head} for name, ledger in ledgers.items()})
+    tmp = head_file.with_suffix(".tmp")
+    try:
+        descriptor = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
+        try:
+            os.write(descriptor, body.encode())
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        os.replace(tmp, head_file)
+        directory = os.open(head_file.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    except OSError as error:
+        return f"anti_rollback_state_unwritable: {error.__class__.__name__}"
+    return None
 
 
 def _derive(qid: str, grant: dict[str, Any], catalog: CapabilityCatalog, authority_dir: Path,
@@ -567,11 +619,12 @@ def _derive(qid: str, grant: dict[str, Any], catalog: CapabilityCatalog, authori
     bundle_name = grant.get("bundle") if isinstance(grant.get("bundle"), str) else ""
     lower = 0.0
     reasoning = grant.get("reasoning") if isinstance(grant.get("reasoning"), dict) else {}
-    envelope = grant.get("context_envelope") if isinstance(grant.get("context_envelope"), int) else 0
+    raw_envelope = grant.get("context_envelope")
+    envelope = raw_envelope if isinstance(raw_envelope, int) and not isinstance(raw_envelope, bool) else 0
     state = QUALIFIED
     if definition is None:
         state, reasons = INVALID, ["capability_undefined"]
-    elif grant.get("capability_version") != definition.version:
+    elif isinstance(grant.get("capability_version"), bool) or grant.get("capability_version") != definition.version:
         state, reasons = SUPERSEDED, ["capability_version_changed"]
     else:
         reasons = _verify_grant(grant, definition, authority_dir, bundle_name)
@@ -620,6 +673,9 @@ def _verify_grant(grant: dict[str, Any], definition: CapabilityDefinition, autho
             return [f"grant_missing_{key}"]
     if not isinstance(grant.get("profile"), dict) or profile_digest(grant["profile"]) != grant["profile_digest"]:
         return ["grant_profile_digest_mismatch"]
+    if any(grant["profile"].get(k) in (None, "", "unspecified") for k in PROFILE_FIELDS if k != "reasoning_budget"):
+        # "unspecified" is the inventory default; a grant for it would match every worker nobody labelled.
+        return ["grant_profile_incomplete"]
     issued, expires = _parse_time(grant["issued_at"]), _parse_time(grant["expires_at"])
     if issued is None or expires is None or expires <= issued:
         return ["grant_validity_window_invalid"]
@@ -663,8 +719,9 @@ class CaisRequirement:
         if capability is None:
             return None
         capability = capability.strip()
-        if not capability:
-            raise ValueError("X-AIHost-Capability must not be empty")
+        if not capability or len(capability) > 64 or not _CAPABILITY_NAME.match(capability):
+            # Rejected before any evidence is written, so arbitrary strings never reach the chain or the metrics.
+            raise ValueError("X-AIHost-Capability must be a dotted lowercase capability name of at most 64 characters")
         qualification = (get("X-AIHost-Qualification") or "required").strip().lower()
         if qualification != "required":
             # Only one contract exists: a capability request always requires an effective qualification. A client
@@ -708,7 +765,12 @@ class CaisEvaluation:
     required_context: int
     inputs: dict[str, Any] = field(default_factory=dict)
 
-    def describe(self) -> dict[str, Any]:
+    def describe(self, *, internal: bool = True) -> dict[str, Any]:
+        """``internal`` (evidence) includes ledger heads and ranking inputs; the client-facing view omits them."""
+        if not internal:
+            return {"decision_id": self.decision_id, "requirement": self.requirement.describe(),
+                    "policy_version": self.policy_version, "required_context": self.required_context,
+                    "rejected": dict(sorted(self.rejected.items())), "failure_class": self.failure_class}
         return {
             "decision_id": self.decision_id, "requirement": self.requirement.describe(),
             "policy_version": self.policy_version, "required_context": self.required_context,
@@ -740,11 +802,12 @@ class CaisService:
         self.authority_dir = Path(authority_dir) if authority_dir else None
         state = Path(state_dir) if state_dir else None
         self.gateway_ledger = state / "cais-suspensions.jsonl" if state else None
-        self.head_file = state / "cais-authoritative-head.json" if state else None
+        self.head_file = state / "cais-ledger-heads.json" if state else None
         self.evidence = evidence
         self.metrics = metrics
         self.clock = clock
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()  # guards the snapshot swap only; requests never wait for a rebuild
+        self._write_lock = threading.RLock()  # serialises reload / suspend / rebaseline
         self._snapshot = _invalid_snapshot(["not_loaded"])
         if self.mode == "enforce":
             self.reload()
@@ -759,7 +822,7 @@ class CaisService:
             return self._snapshot
 
     def reload(self) -> CaisSnapshot:
-        with self._lock:
+        with self._write_lock:
             if self._mode_problem:
                 snapshot = _invalid_snapshot([self._mode_problem])
             elif self.authority_dir is None:
@@ -769,7 +832,8 @@ class CaisService:
                     snapshot = build_snapshot(self.authority_dir, self.gateway_ledger, self.head_file)
                 except Exception as error:  # noqa: BLE001 - any failure to derive state fails CAIS closed
                     snapshot = _invalid_snapshot([f"load_failed: {error.__class__.__name__}: {error}"])
-            self._snapshot = snapshot
+            with self._lock:
+                self._snapshot = snapshot
         self._observe(snapshot)
         if self.evidence is not None:
             try:
@@ -806,10 +870,14 @@ class CaisService:
             raise OSError("CAIS state directory is not configured; cannot persist a suspension")
         if not re.match(r"^[a-z][a-z0-9_]{0,63}$", reason_code or ""):
             raise ValueError("reason_code must be a short snake_case identifier")
-        with self._lock:
-            known = self._snapshot.qualifications.get(qualification_id)
+        with self._write_lock:
+            known = self.snapshot.qualifications.get(qualification_id)
             if known is None:
                 raise KeyError(qualification_id)
+            if known.state == REVOKED or (known.state == SUSPENDED and not revoke):
+                raise CaisConflict(f"qualification is already {known.state}")
+            if not self.snapshot.valid:
+                raise CaisConflict("qualification state is not valid; repair it before recording changes")
             event = "qualification_revoked" if revoke else "qualification_suspended"
             record = append_ledger(self.gateway_ledger, event, qualification_id=qualification_id,
                                    reason_code=reason_code, authority=authority,
@@ -821,6 +889,30 @@ class CaisService:
                 "qualification_id": qualification_id,
                 "state": snapshot.qualifications.get(qualification_id).state
                 if snapshot.qualifications.get(qualification_id) else None}
+
+    def rebaseline(self, *, authority: str) -> dict[str, Any]:
+        """Explicitly accept the current ledgers as the anti-rollback baseline (first enablement, or an intended
+        restore). Attributable and evidenced; refused when either ledger's chain is broken."""
+        if self.authority_dir is None or self.head_file is None:
+            raise OSError("CAIS directories are not configured")
+        with self._write_lock:
+            ledgers = {"authoritative": read_ledger(self.authority_dir / "ledger.jsonl"),
+                       "gateway": read_ledger(self.gateway_ledger) if self.gateway_ledger else LedgerRead((), True, None, ())}
+            broken = [name for name, ledger in ledgers.items() if not ledger.intact]
+            if broken:
+                raise CaisConflict(f"cannot re-baseline over a broken ledger: {broken}")
+            try:
+                previous = json.loads(self.head_file.read_text(encoding="utf-8")) if self.head_file.exists() else None
+            except (OSError, ValueError):
+                previous = "unreadable"
+            problem = write_head(self.head_file, ledgers)
+            if problem:
+                raise OSError(problem)
+            if self.evidence is not None:
+                self.evidence.append("cais_rebaselined", authority=authority, previous=previous,
+                                     current={n: {"count": len(l.records), "head": l.head} for n, l in ledgers.items()})
+            snapshot = self.reload()
+        return {"status": "rebaselined", "valid": snapshot.valid, "problems": list(snapshot.problems)}
 
     # ------------------------------------------------------------------ evaluation
     def evaluate(self, requirement: CaisRequirement, workers: Iterable[Any], *, required_context: int,
@@ -850,10 +942,8 @@ class CaisService:
         effective = snapshot.effective(self.clock())
         by_profile: dict[str, list[Qualification]] = {}
         for q in effective.values():
-            if q.capability == definition.name and q.capability_version == definition.version:
+            if q.capability == definition.name:  # superseded/invalid ones are kept so the rejection names them
                 by_profile.setdefault(q.profile_digest, []).append(q)
-            elif q.capability == definition.name:
-                by_profile.setdefault(q.profile_digest, []).append(q)  # superseded/invalid: kept for the reason
         rejected: dict[str, str] = {}
         candidates: list[Candidate] = []
         for worker in sorted(workers, key=lambda w: w.worker_id):
@@ -903,6 +993,21 @@ class CaisService:
         return CaisEvaluation(decision_id, requirement, tuple(candidates), rejected, None, None, policy_version,
                               heads, needed, inputs)
 
+    def admits(self, candidate: Candidate, worker: Any, required_context: int) -> str | None:
+        """Dispatch-time re-check of a candidate chosen before queueing: the qualification must still be effective
+        AND the worker actually granted must still be the qualified profile (a re-registration while queued could have
+        changed its artifact, runtime, role or context). None when admitted, else the reason."""
+        lapsed = self.still_effective(candidate.qualification.qualification_id)
+        if lapsed is not None:
+            return lapsed
+        if worker is None or getattr(worker, "role", "production") != "production":
+            return "candidate_role"
+        if profile_digest(profile_identity(worker)) != candidate.qualification.profile_digest:
+            return "profile_changed"
+        if required_context > min(candidate.qualification.context_envelope, int(worker.context_limit)):
+            return "context_unsupported"
+        return None
+
     def still_effective(self, qualification_id: str) -> str | None:
         """Re-check at dispatch time (after queueing). None when still qualified, else the state that now applies."""
         q = self.snapshot.effective(self.clock()).get(qualification_id)
@@ -910,8 +1015,21 @@ class CaisService:
             return INVALID
         return None if q.state == QUALIFIED else q.state
 
-    def status(self) -> dict[str, Any]:
+    def status(self, *, full: bool = True) -> dict[str, Any]:
+        """Full view for admin/monitoring; the reduced view (no authorities, bundles, ledger heads or problem text)
+        is what workload clients need to choose a capability."""
         snapshot = self.snapshot
+        if not full:
+            return {
+                "mode": self.mode, "valid": snapshot.valid,
+                "policy_version": snapshot.catalog.policy_version if snapshot.catalog else None,
+                "capabilities": {n: {"version": d.version, "description": d.description}
+                                 for n, d in (snapshot.catalog.capabilities.items() if snapshot.catalog else [])},
+                "qualifications": {q: {"capability": v.capability, "state": v.state, "profile_digest": v.profile_digest,
+                                       "context_envelope": v.context_envelope, "expires_at": v.expires_at,
+                                       "independence": v.independence}
+                                   for q, v in sorted(snapshot.effective(self.clock()).items())},
+            }
         return {
             "mode": self.mode, "valid": snapshot.valid, "problems": list(snapshot.problems),
             "policy_version": snapshot.catalog.policy_version if snapshot.catalog else None,

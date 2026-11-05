@@ -152,6 +152,29 @@
     - orchestrator_gateway_enabled | bool
     - orchestrator_gateway_cais_source.stat.exists
 
+- name: Inspect the parent of the CAIS directory
+  ansible.builtin.stat:
+    path: "{{ orchestrator_gateway_cais_dir | dirname }}"
+  register: orchestrator_gateway_cais_parent
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_cais_source.stat.exists
+
+- name: Require a root-owned, non-group/other-writable parent for the CAIS directory
+  # A writable parent would let a non-root user swap the read-only authority directory for one of their own.
+  ansible.builtin.assert:
+    that:
+      - orchestrator_gateway_cais_parent.stat.exists
+      - orchestrator_gateway_cais_parent.stat.isdir
+      - orchestrator_gateway_cais_parent.stat.uid == 0
+      - not orchestrator_gateway_cais_parent.stat.wgrp
+      - not orchestrator_gateway_cais_parent.stat.woth
+    fail_msg: >-
+      {{ orchestrator_gateway_cais_dir | dirname }} must exist, be owned by root and not be group/other writable
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_cais_source.stat.exists
+
 - name: Create the read-only CAIS directory
   ansible.builtin.file:
     path: "{{ item }}"
