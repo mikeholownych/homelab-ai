@@ -41,6 +41,10 @@ sys.path.insert(0, str(REPO))
 from orchestrator_runtime import cais  # noqa: E402
 
 TRANSPORT_FAILURES = ("timeout", "error")  # engx.classify_error classes that are not the model's answer
+# A task that ends on a transport failure (quota 429, restart, timeout) is re-run from scratch after a pause, so an
+# infrastructure refusal after a graded attempt is never scored as the model's failure. Bounded; recorded per trial.
+INFRA_RETRIES = 2
+INFRA_PAUSE_SECONDS = 65  # longer than a one-minute request quota window
 
 
 def _engx(corpus: str, max_tokens: int):
@@ -86,7 +90,9 @@ def run(args: argparse.Namespace) -> int:
     profile = {k: spec.get(k) for k in cais.PROFILE_FIELDS}
     reasoning = spec.get("reasoning") or {}
     token = sys.stdin.read().strip() if args.token_file == "-" else Path(args.token_file).read_text().strip()
-    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+    # Every generation must be fresh: a cached answer is not a repeat (and its admission is not exercised).
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {token}",
+               "X-AIHost-Cache": "bypass", "Cache-Control": "no-store"}
     before = serving_entry(args.base, headers, args.model)
     _check_identity(before, profile)
     if (before.get("reasoning") or {}).get("mode") != reasoning.get("mode", "default"):
@@ -104,12 +110,26 @@ def run(args: argparse.Namespace) -> int:
     trials, started = [], datetime.now(timezone.utc)
     for repeat in range(args.reps):
         for task in engx.TASKS:
-            graded.clear()
-            t0 = time.monotonic()
-            rec = engx.run_task(task, args.base, headers, args.model, args.max_attempts)
-            history = rec.get("history") or []
+            infra_retries = 0
+            while True:
+                graded.clear()
+                t0 = time.monotonic()
+                rec = engx.run_task(task, args.base, headers, args.model, args.max_attempts)
+                history = rec.get("history") or []
+                ended_on_transport = bool(history) and history[-1].get("termination") in TRANSPORT_FAILURES \
+                    and "error" in history[-1]
+                if not ended_on_transport or infra_retries >= INFRA_RETRIES:
+                    break
+                infra_retries += 1
+                print(f"rep{repeat} {task['id']:24s} transport failure; re-running after {INFRA_PAUSE_SECONDS}s",
+                      flush=True)
+                time.sleep(INFRA_PAUSE_SECONDS)
             transport = [h for h in history if h.get("termination") in TRANSPORT_FAILURES and "error" in h]
-            outcome = "pass" if rec["success"] else ("infra_error" if transport and not graded else "fail")
+            # Still ending on a transport failure after the retries: the evidence is missing, not negative.
+            ended_on_transport = bool(history) and history[-1].get("termination") in TRANSPORT_FAILURES \
+                and "error" in history[-1]
+            outcome = "pass" if rec["success"] else ("infra_error" if ended_on_transport or (transport and not graded)
+                                                     else "fail")
             contexts = [(h.get("prompt_tokens") or 0) + (h.get("completion_tokens") or 0) for h in history]
             final_files = graded[-1][0] if graded else {}
             trials.append({
@@ -117,7 +137,7 @@ def run(args: argparse.Namespace) -> int:
                 "latency_ms": round((time.monotonic() - t0) * 1000, 1),
                 "ttft_ms": next((h.get("ttft_ms_est") for h in history if h.get("ttft_ms_est") is not None), None),
                 "max_context_tokens": max(contexts) if contexts else 0, "tokens": rec.get("tokens"),
-                "terminations": [h.get("termination") for h in history],
+                "terminations": [h.get("termination") for h in history], "infra_retries": infra_retries,
                 "final_files": final_files,
                 "final_files_sha256": hashlib.sha256(json.dumps(final_files, sort_keys=True).encode()).hexdigest(),
             })
@@ -144,7 +164,9 @@ def run(args: argparse.Namespace) -> int:
                      "git_commit": commit, "host": os.uname().nodename},
         "observed_serving": {"before": before["serving"][0], "after": after["serving"][0],
                              "alias_reasoning": before.get("reasoning"), "alias": args.model, "gateway": args.base},
-        "sampling": {"temperature": 0, "seed": None, "note": "temperature 0; repeats are correlated, the task is the unit"},
+        "sampling": {"temperature": 0, "seed": None, "response_cache": "bypass",
+                     "infra_retry_policy": {"retries": INFRA_RETRIES, "pause_seconds": INFRA_PAUSE_SECONDS},
+                     "note": "temperature 0; repeats are correlated, the task is the unit"},
         "started_at": started.isoformat(), "finished_at": datetime.now(timezone.utc).isoformat(),
         "trials": trials,
     }
