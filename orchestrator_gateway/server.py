@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Iterable
 
 from orchestrator_runtime import OrchestratorRuntime
+from orchestrator_runtime.cais import CaisRequirement
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 
 # Endpoints that only read gateway state (allowed on the loopback monitoring listener).
@@ -213,7 +214,7 @@ def create_gateway(
             route = {"/health": "health", "/metrics": "metrics", "/v1/models": "v1_models", "/v1/routes": "v1_routes",
                      "/v1/outcomes/summary": "v1_outcomes_summary", "/admin/workers": "admin_workers",
                      "/v1/telemetry/capabilities": "v1_telemetry_capabilities",
-                     "/v1/telemetry/inference": "v1_telemetry_inference"}.get(path, "unsupported")
+                     "/v1/telemetry/inference": "v1_telemetry_inference", "/v1/cais": "v1_cais"}.get(path, "unsupported")
             runtime.metrics.http_requests_in_flight.inc(route=route)
             status_code = HTTPStatus.OK
             try:
@@ -324,6 +325,10 @@ def create_gateway(
                 if route == "v1_outcomes_summary":
                     self._send(HTTPStatus.OK, {"object": "outcome_summary", "rows": runtime.outcome_summary()}, request_id)
                     return
+                if route == "v1_cais":
+                    self._send(HTTPStatus.OK, runtime.cais.status() if runtime.cais is not None else {"mode": "off"},
+                               request_id)
+                    return
                 status_code = HTTPStatus.NOT_FOUND
                 self._send(status_code, {"error": {"message": "unsupported endpoint", "type": "not_found"}}, request_id)
             finally:
@@ -336,7 +341,9 @@ def create_gateway(
             request_id = self.headers.get("X-Request-ID") or str(uuid.uuid4())
             path = urllib.parse.urlsplit(self.path).path
             route = {"/v1/chat/completions": "v1_chat_completions", "/v1/tokenize": "v1_tokenize",
-                     "/v1/outcomes": "v1_outcomes"}.get(path, "admin_worker" if path.startswith("/admin/workers/") else "unsupported")
+                     "/v1/outcomes": "v1_outcomes"}.get(path, "admin_worker" if path.startswith("/admin/workers/")
+                                                        else "admin_cais" if path.startswith("/v1/admin/cais/")
+                                                        else "unsupported")
             runtime.metrics.http_requests_in_flight.inc(route=route)
             status_code = HTTPStatus.OK
             try:
@@ -353,6 +360,9 @@ def create_gateway(
                     return
                 if route == "admin_worker":
                     status_code = self._admin(client, path, request_id)
+                    return
+                if route == "admin_cais":
+                    status_code = self._cais_admin(client, path, request_id)
                     return
                 body = self._read_json()
                 if body is None:
@@ -391,6 +401,34 @@ def create_gateway(
             self._send(status, result, request_id)
             return status
 
+        def _cais_admin(self, client: Client, path: str, request_id: str) -> int:
+            """POST /v1/admin/cais/reload | /v1/admin/cais/qualifications/<id>/(suspend|revoke). Removal only."""
+            if "admin" not in client.scopes:
+                return self._forbidden(request_id, "admin scope required")
+            parts = path.strip("/").split("/")  # v1/admin/cais/...
+            if parts[3:] == ["reload"]:
+                self._send(HTTPStatus.OK, runtime.cais_reload(), request_id)
+                return HTTPStatus.OK
+            if len(parts) != 6 or parts[3] != "qualifications" or parts[5] not in ("suspend", "revoke"):
+                self._send(HTTPStatus.NOT_FOUND, {"error": {"message": "unsupported endpoint", "type": "not_found"}}, request_id)
+                return HTTPStatus.NOT_FOUND
+            body = self._read_json() or {}
+            try:
+                result = runtime.cais_suspend(parts[4], reason_code=str(body.get("reason_code", "")),
+                                              authority=f"gateway-admin:{client.client_id}", revoke=parts[5] == "revoke",
+                                              detail=body.get("detail") if isinstance(body.get("detail"), str) else None)
+            except KeyError:
+                self._send(HTTPStatus.NOT_FOUND, {"status": "not_found"}, request_id)
+                return HTTPStatus.NOT_FOUND
+            except ValueError as error:
+                self._send(HTTPStatus.BAD_REQUEST, {"status": "rejected", "message": str(error)}, request_id)
+                return HTTPStatus.BAD_REQUEST
+            except OSError as error:
+                self._send(HTTPStatus.SERVICE_UNAVAILABLE, {"status": "unavailable", "message": str(error)}, request_id)
+                return HTTPStatus.SERVICE_UNAVAILABLE
+            self._send(HTTPStatus.OK, result, request_id)
+            return HTTPStatus.OK
+
         def _completion(self, request: dict[str, Any], client: Client, request_id: str, t0: float) -> int:
             request["request_id"] = request_id
             pinned_worker = self.headers.get("X-AIHost-Worker")
@@ -398,6 +436,12 @@ def create_gateway(
             if pinned_worker and not pinning_enabled:
                 self._send(HTTPStatus.FORBIDDEN, {"error": {"message": "worker pinning is disabled", "type": "forbidden"}}, request_id)
                 return HTTPStatus.FORBIDDEN
+            try:
+                cais_requirement = CaisRequirement.from_headers(self.headers.get)
+            except ValueError as error:
+                self._send(HTTPStatus.BAD_REQUEST, {"error": {"message": str(error), "type": "invalid_request_error",
+                                                              "code": "cais_request_invalid"}}, request_id)
+                return HTTPStatus.BAD_REQUEST
 
             def header_int(name: str) -> int | None:
                 value = self.headers.get(name)
@@ -496,7 +540,7 @@ def create_gateway(
                     priority=self.headers.get("X-AIHost-Priority"), deadline_ms=header_int("X-AIHost-Deadline-Ms"),
                     attempt=header_int("X-AIHost-Attempt") or 1, previous_request=self.headers.get("X-AIHost-Previous-Request"),
                     reasoning_profile=reasoning_profile, cancel=cancel,
-                    cache_headers=dict(self.headers),
+                    cache_headers=dict(self.headers), cais_requirement=cais_requirement,
                     on_stream_start=begin_stream if request.get("stream") else None,
                     on_stream_chunk=send_stream_delta if request.get("stream") else None,
                     stream_timing=stream_timing if request.get("stream") else None,

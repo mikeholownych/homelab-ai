@@ -23,6 +23,7 @@ from orchestrator_contract import Authority, Task
 from . import reasoning as reasoning_policy
 from .admission import AdmissionCancelled, AdmissionController, AdmissionRejected, PoolUnavailable, PRIORITIES
 from .cache import ResponseCache
+from . import cais as cais_policy
 from .capabilities import intersect, requirements as capability_requirements
 from .capacity import CapacityTracker
 from .circuit_breaker import CircuitBreakerRegistry
@@ -42,6 +43,9 @@ SAFETY_MARGIN_TOKENS = 16
 MIN_COMPLETION_TOKENS = 64
 # Remembered requests for outcome reporting (R10) and escalation lookups (R3).
 _OUTCOME_INDEX_SIZE = 10_000
+# Qualification state found at dispatch time -> the CAIS failure the client receives.
+_CAIS_LAPSED = {"revoked": "qualification_revoked", "suspended": "qualification_suspended",
+                "expired": "qualification_expired"}
 
 
 def _canonical(value: Any) -> str:
@@ -116,6 +120,8 @@ class WorkerRecord:
     reasoning_budget: int | None = None
     # production | candidate (R4): candidates are reachable only through explicit candidate aliases / canary / shadow.
     role: str = "production"
+    # Hardware class the profile was qualified on (CAIS execution-profile identity, docs/design/07); never inferred.
+    hardware_class: str = "unspecified"
 
     def __post_init__(self) -> None:
         if self.revision in {"", "main", "latest"}:
@@ -676,7 +682,11 @@ class OrchestratorRuntime:
         guardrails: GuardrailScanner | None = None,
         cache: ResponseCache | None = None,
         tracer: OTLPTraceExporter | None = None,
+        cais: "cais_policy.CaisService | None" = None,
     ) -> None:
+        # Capability-aware scheduling (docs/design/07). None or mode "off": capability requests fail closed with
+        # cais_disabled; requests without a capability header never touch it.
+        self.cais = cais
         if tracer is None:
             otlp_ep = (
                 os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
@@ -1215,6 +1225,7 @@ class OrchestratorRuntime:
         stream_timing: dict[str, Any] | None = None,
         trace_context: TraceContext | None = None,
         cache_headers: dict[str, str] | None = None,
+        cais_requirement: "cais_policy.CaisRequirement | None" = None,
     ) -> dict[str, Any]:
         trace_context = trace_context or TraceContext.new_root()
         t0_ns = time.time_ns()
@@ -1346,7 +1357,8 @@ class OrchestratorRuntime:
 
         # Deterministic Response Cache lookup
         cache_key = None
-        if self.cache is not None and self.cache.is_cacheable(request, cache_headers):
+        # Never serve a qualified request from cache: the entry may predate a suspension or revocation.
+        if cais_requirement is None and self.cache is not None and self.cache.is_cacheable(request, cache_headers):
             identities = [{k: w.get(k) for k in (
                 "worker_id", "revision", "artifact_digest", "runtime_image_digest",
                 "model_id", "context_limit", "reasoning_budget", "pool",
@@ -1408,7 +1420,23 @@ class OrchestratorRuntime:
         include_candidates = False
         policy = reasoning_policy.RoutePolicy()
         decision: RouteDecision | None = None
-        if worker_id:
+        cais_eval: cais_policy.CaisEvaluation | None = None
+        cais_by_worker: dict[str, cais_policy.Candidate] = {}
+        if cais_requirement is not None:
+            # Qualification is a hard eligibility gate evaluated before (and instead of) the rule table: rules, canary,
+            # shadow and alias fallbacks cannot add a worker the evaluation did not admit.
+            reasoning_profile = None  # the qualification fixes the reasoning policy it was evidenced under
+            cais_started = time.perf_counter()
+            cais_eval = self._cais_evaluate(cais_requirement, public_model, worker_id, estimate, client)
+            if self.metrics is not None and hasattr(self.metrics, "cais_decision_seconds"):
+                self.metrics.cais_decision_seconds.observe(time.perf_counter() - cais_started)
+            if cais_eval.failure_class:
+                return self._cais_deny(request_id, client_id, cais_eval, trace_context)
+            cais_by_worker = {c.worker_id: c for c in cais_eval.candidates}
+            pools = [None]
+            route = {"rule_id": "cais", "pool": None, "fallback_used": False,
+                     "reason": f"capability {cais_requirement.capability!r} (decision {cais_eval.decision_id})"}
+        elif worker_id:
             pinned = self.registry.record(worker_id)
             if pinned is None or not pinned.eligible(capabilities, 0, 1):
                 return self._capability_reject(request_id, client_id)
@@ -1454,7 +1482,8 @@ class OrchestratorRuntime:
             pools = [pool for pool in pools if client.permits_pool(pool)]
 
         try:
-            needs = capability_requirements(request, reasoning_requested=policy.mode == "on" and reasoning_profile != "off")
+            needs = capability_requirements(request, reasoning_requested=cais_eval is None and policy.mode == "on"
+                                            and reasoning_profile != "off")
         except Exception:  # noqa: BLE001 - malformed parts are the provider's problem, not a routing requirement
             needs = frozenset()
         if reasoning_profile is not None and reasoning_profile not in reasoning_policy.PROFILES:
@@ -1469,9 +1498,12 @@ class OrchestratorRuntime:
         index = 0
         while index < len(pools):
             pool = pools[index]
-            ordered_all = self._eligible(pool, capabilities, public_model if (pool is None and worker_id is None) else None,
+            ordered_all = self._eligible(pool, capabilities,
+                                         public_model if (pool is None and worker_id is None and cais_eval is None) else None,
                                          needs, include_candidates or (pool is not None and route.get("canary") == pool), missing,
                                          pinned_worker_id=worker_id)
+            if cais_eval is not None:
+                ordered_all = [w for w in ordered_all if w.worker_id in cais_by_worker]
             if client is not None:
                 ordered_all = [w for w in ordered_all if client.permits_pool(w.pool)]
             if worker_id:
@@ -1481,8 +1513,12 @@ class OrchestratorRuntime:
                 index += 1
                 continue
             any_candidate = True
-            ordered = self.registry.prefer(ordered_all, affinity_key, public_model if pool is None else pool)
-            plan = self._plan(request, ordered[0], policy, reasoning_profile)
+            if cais_eval is not None:
+                ordered = sorted(ordered_all, key=lambda w: cais_by_worker[w.worker_id].rank_key)
+            else:
+                ordered = self.registry.prefer(ordered_all, affinity_key, public_model if pool is None else pool)
+            plan = self._plan(request, ordered[0], self._cais_route_policy(cais_by_worker, ordered[0], policy),
+                              reasoning_profile)
             if isinstance(plan, _ContextReject):
                 context_reject = plan  # fit-checked fallback: a later pool may have a larger window
                 index += 1
@@ -1526,8 +1562,21 @@ class OrchestratorRuntime:
                         "request_id": request_id, "http_status": rejection.status, "retry_after": rejection.retry_after,
                         "message": rejection.message, "route": route}
             worker = self.registry.record(granted_id) or plan.worker
+            if cais_eval is not None:
+                # Re-check after queueing: a suspension/revocation/expiry while queued must not be executed.
+                lapsed = (self.cais.still_effective(cais_by_worker[worker.worker_id].qualification.qualification_id)
+                          if worker.worker_id in cais_by_worker else cais_policy.INVALID)
+                if lapsed is not None:
+                    self.admission.release(worker.worker_id, ok=True)
+                    self._forget(request_id)
+                    return self._cais_deny(request_id, client_id, cais_eval, trace_context,
+                                           failure_class=_CAIS_LAPSED.get(lapsed, "no_qualified_model"),
+                                           message=f"qualification became {lapsed} while the request was queued",
+                                           worker_id=worker.worker_id)
+                entry["cais_qualification_id"] = cais_by_worker[worker.worker_id].qualification.qualification_id
             if worker.worker_id != plan.worker.worker_id:
-                replanned = self._plan(request, worker, policy, reasoning_profile)
+                replanned = self._plan(request, worker, self._cais_route_policy(cais_by_worker, worker, policy),
+                                       reasoning_profile)
                 if isinstance(replanned, _ContextReject):
                     self.admission.release(worker.worker_id, ok=True)
                     self._forget(request_id)
@@ -1546,8 +1595,15 @@ class OrchestratorRuntime:
                     return {"status": "limited", "failure_class": "pool_quota_exceeded", "request_id": request_id, "http_status": 429,
                             "retry_after": error.retry_after, "message": str(error), "trace_context": trace_context}
             route_now = {**route, "pool": target_pool, "fallback_used": index > 0 and not route.get("canary")}
+            stream_start = on_stream_start
+            if cais_eval is not None and on_stream_start is not None:
+                # Streamed headers leave before generation ends, so the qualification identity travels with them.
+                cais_headers = self._cais_headers(cais_eval, cais_by_worker.get(worker.worker_id), worker)
+
+                def stream_start(meta: dict[str, Any], _inner=on_stream_start, _extra=cais_headers) -> None:
+                    _inner({**meta, "headers": {**(meta.get("headers") or {}), **_extra}})
             outcome = self._dispatch(request_id, plan, route_now, client, client_id, priority, timeout, cancel, entry,
-                                     clamped_fields, deadline, decision, request, on_stream_start, on_stream_chunk,
+                                     clamped_fields, deadline, decision, request, stream_start, on_stream_chunk,
                                      ticket=ticket, stream_timing=stream_timing, trace_context=trace_context,
                                      t0_ns=t0_ns)
             if outcome.get("status") == "retry" and not retried:
@@ -1557,6 +1613,9 @@ class OrchestratorRuntime:
                 continue  # same pool first (other workers), then fallbacks
             if outcome.get("status") == "retry":
                 outcome = {"status": "blocked", "failure_class": "provider", "request_id": request_id}
+            if cais_eval is not None:
+                self._cais_annotate(outcome, cais_eval, cais_by_worker.get(worker.worker_id), worker, request_id,
+                                    client_id)
             if outcome.get("status") == "ok":
                 if affinity_key and worker:
                     self._worker_prefix_affinity[affinity_key] = worker.worker_id
@@ -1580,6 +1639,14 @@ class OrchestratorRuntime:
 
         if context_reject is not None:
             return self._reject_context(request_id, context_reject, client_id)
+        if cais_eval is not None:
+            failure = "worker_unavailable"
+            if not any_candidate and missing:
+                failure = "policy_denied"  # qualified profiles exist but lack an API feature this request needs
+            return self._cais_deny(request_id, client_id, cais_eval, trace_context, failure_class=failure,
+                                   message=("qualified execution profiles exist but none is currently healthy and "
+                                            "admissible" if failure == "worker_unavailable" else
+                                            f"qualified workers lack required features: {sorted(missing)}"))
         if not any_candidate and missing:
             self.metrics.scheduler_dispatch_decisions_total.inc(worker_id="none", decision="rejected_capability")
             self.metrics.inference_completions_total.inc(worker_id="none", outcome="rejected", failure_class="capability")
@@ -1597,6 +1664,128 @@ class OrchestratorRuntime:
                     "message": f"No healthy worker is available in pool(s) {list(decision.pools)} (rule '{decision.rule_id}').",
                     "route": {"rule_id": decision.rule_id, "pool": decision.pool, "fallback_used": False, "reason": decision.reason}}
         return self._capability_reject(request_id, client_id)
+
+    # ================================================================== capability-aware scheduling (docs/design/07)
+    def _cais_evaluate(self, requirement: "cais_policy.CaisRequirement", public_model: str | None,
+                       worker_id: str | None, estimate: int, client: Client | None) -> "cais_policy.CaisEvaluation":
+        workers = [w for w in (self.registry.record(r["worker_id"]) for r in self.registry.snapshot()) if w is not None]
+        # An explicit pin, alias or served model name narrows the choice; it never widens it. Any other name
+        # (e.g. engineering/auto) lets CAIS choose among every qualified profile.
+        restrict: set[str] | None = None
+        if worker_id:
+            restrict = {worker_id}
+        elif public_model and self.router is not None and public_model in self.router.alias_specs:
+            pool = self.router.alias_specs[public_model].pool
+            restrict = {w.worker_id for w in workers if w.pool == pool}
+        elif public_model and any(w.public_model_id == public_model for w in workers):
+            restrict = {w.worker_id for w in workers if w.public_model_id == public_model}
+        if client is not None:
+            permitted = {w.worker_id for w in workers if client.permits_pool(w.pool)}
+            restrict = permitted if restrict is None else restrict & permitted
+        latency = {}
+        tracker = getattr(self.router, "latency_tracker", None) if self.router is not None else None
+        if tracker is not None:
+            latency = {wid: m["ewma_duration_ms"] for wid, m in tracker.snapshot()["workers"].items()}
+        if self.cais is None:
+            service = cais_policy.CaisService("off", None, None)
+            return service.evaluate(requirement, [], required_context=estimate)
+        return self.cais.evaluate(requirement, workers, required_context=estimate, restrict_to=restrict,
+                                  latency_ms=latency)
+
+    @staticmethod
+    def _cais_route_policy(by_worker: dict[str, "cais_policy.Candidate"], worker: WorkerRecord,
+                           default: reasoning_policy.RoutePolicy) -> reasoning_policy.RoutePolicy:
+        candidate = by_worker.get(worker.worker_id)
+        if candidate is None:
+            return default
+        return reasoning_policy.RoutePolicy.from_config(candidate.qualification.reasoning or None)
+
+    def _cais_metric(self, capability: str, result: str) -> None:
+        if self.metrics is None or not hasattr(self.metrics, "cais_requests_total"):
+            return
+        snapshot = self.cais.snapshot if self.cais is not None else None
+        known = snapshot is not None and snapshot.catalog is not None and capability in snapshot.catalog.capabilities
+        self.metrics.cais_requests_total.inc(capability=capability if known else "unknown", result=result)
+
+    def _cais_deny(self, request_id: str, client_id: str, evaluation: "cais_policy.CaisEvaluation",
+                   trace_context: TraceContext | None, *, failure_class: str | None = None, message: str | None = None,
+                   worker_id: str | None = None) -> dict[str, Any]:
+        failure = failure_class or evaluation.failure_class or "no_qualified_model"
+        detail = evaluation.describe()
+        detail.pop("inputs", None)
+        self.evidence.append("cais_routing_decision", request_id=request_id, client_id=client_id, outcome="denied",
+                             failure_class=failure, worker_id=worker_id, decision=evaluation.describe(),
+                             trace_id=trace_context.trace_id if trace_context else None)
+        self._cais_metric(evaluation.requirement.capability, failure)
+        return {"status": "rejected" if cais_policy.FAILURES.get(failure, 422) < 500 else "unavailable",
+                "failure_class": failure, "request_id": request_id, "http_status": cais_policy.FAILURES.get(failure, 422),
+                "message": message or evaluation.message or failure,
+                "details": {"cais": detail},
+                "headers": {"X-AIHost-Routing-Decision": evaluation.decision_id},
+                "trace_context": trace_context}
+
+    def _cais_annotate(self, outcome: dict[str, Any], evaluation: "cais_policy.CaisEvaluation",
+                       candidate: "cais_policy.Candidate | None", worker: WorkerRecord, request_id: str,
+                       client_id: str) -> None:
+        qualification = candidate.qualification if candidate else None
+        profile = cais_policy.profile_digest(cais_policy.profile_identity(worker))
+        outcome.setdefault("headers", {}).update(self._cais_headers(evaluation, candidate, worker))
+        if isinstance(outcome.get("route"), dict):
+            outcome["route"]["cais_decision"] = evaluation.decision_id
+        self.evidence.append(
+            "cais_routing_decision", request_id=request_id, client_id=client_id,
+            outcome=outcome.get("status"), failure_class=outcome.get("failure_class"), worker_id=worker.worker_id,
+            execution_profile=profile, qualification_id=qualification.qualification_id if qualification else None,
+            qualification_bundle_sha256=qualification.bundle_sha256 if qualification else None,
+            model_id=worker.model_id, artifact_digest=worker.artifact_digest, decision=evaluation.describe())
+        self._cais_metric(evaluation.requirement.capability,
+                          "served" if outcome.get("status") == "ok" else str(outcome.get("failure_class") or "failed"))
+
+    @staticmethod
+    def _cais_headers(evaluation: "cais_policy.CaisEvaluation", candidate: "cais_policy.Candidate | None",
+                      worker: WorkerRecord) -> dict[str, str]:
+        headers = {
+            "X-AIHost-Routing-Decision": evaluation.decision_id,
+            "X-AIHost-Capability": evaluation.requirement.capability,
+            "X-AIHost-Execution-Profile": cais_policy.profile_digest(cais_policy.profile_identity(worker)),
+        }
+        if candidate is not None:
+            headers["X-AIHost-Qualification-Id"] = candidate.qualification.qualification_id
+            headers["X-AIHost-Qualification-Evidence"] = candidate.qualification.independence
+        return headers
+
+    def cais_suspend(self, qualification_id: str, *, reason_code: str, authority: str, revoke: bool = False,
+                     detail: str | None = None) -> dict[str, Any]:
+        """Admin suspension/revocation, then cancel in-flight work that relied on the qualification."""
+        if self.cais is None or not self.cais.enabled:
+            raise OSError("capability-aware routing is not enabled")
+        result = self.cais.suspend(qualification_id, reason_code=reason_code, authority=authority, revoke=revoke,
+                                   detail=detail)
+        result["cancelled_in_flight"] = self.cais_enforce_in_flight()
+        return result
+
+    def cais_reload(self) -> dict[str, Any]:
+        if self.cais is None:
+            return {"mode": "off"}
+        self.cais.reload()
+        status = self.cais.status()
+        status["cancelled_in_flight"] = self.cais_enforce_in_flight()
+        return status
+
+    def cais_enforce_in_flight(self) -> int:
+        """Cancel in-flight requests whose qualification no longer holds (revocation during execution policy)."""
+        if self.cais is None:
+            return 0
+        cancelled = 0
+        with self._inflight_lock:
+            entries = list(self._inflight.values())
+        for entry in entries:
+            qid = entry.get("cais_qualification_id")
+            if qid and self.cais.still_effective(qid) is not None and not entry["cancel"].is_set():
+                entry["cancel_reason"] = "qualification_revoked"
+                entry["cancel"].set()
+                cancelled += 1
+        return cancelled
 
     def registry_clients_admit(self, client: Client, *, model: str | None = None, pool: str | None = None) -> None:
         clients = getattr(self, "clients", None)
@@ -1652,6 +1841,10 @@ class OrchestratorRuntime:
         if reason == "deadline":
             return {"status": "deadline", "failure_class": "deadline_exceeded", "request_id": request_id, "http_status": 504,
                     "message": "deadline passed before the worker finished"}
+        if reason == "qualification_revoked":
+            return {"status": "rejected", "failure_class": "qualification_revoked", "request_id": request_id,
+                    "http_status": 409, "message": ("the serving qualification was suspended or revoked during "
+                                                    "execution; any output already received must not be trusted")}
         return {"status": "cancelled", "failure_class": "client_disconnect", "request_id": request_id, "http_status": 499}
 
     def _dispatch(self, request_id: str, plan: _Plan, route: dict[str, Any], client: Client | None, client_id: str,
