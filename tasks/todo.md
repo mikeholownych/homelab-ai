@@ -530,3 +530,49 @@ Ansible installs the public root at `/usr/local/share/ca-certificates/aihost-t58
       expected text and `[DONE]`); host-origin 403; and remote worker ports 8000/8001/8003 blocked.
 - [x] Rotate/redeploy the server leaf and prove trust remains with the unchanged CA; official OpenCode 1.18.34 release binary checksum verified
       (`0f22479647226d1d2dd99595d20082ee7bda3870b62dc6a90b41efc1a71d7e9a`) and completed a real request after rotation. Reapplying Ansible was idempotent.
+
+---
+
+## CAIS — capability-aware inference scheduling (branch `feat/cais`, 2026-11-05)
+
+Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/cais.md.
+
+- [x] Phase 0 baseline (VERIFIED/INFERRED/UNKNOWN table in design §1)
+- [x] Registry, catalog, profile identity, hash-chained ledgers, bundle re-verification at every load
+- [x] Capability routing in `OrchestratorRuntime.complete()`; fail closed; legacy untouched (mode `off` default)
+- [x] Evaluation runner through the gateway + independent rescore; pipeline test with stubbed inference
+- [x] Suspend/revoke (gateway, removal-only) + authoritative revoke/reinstate; in-flight cancellation
+- [x] Metrics (bounded labels), evidence records, `/v1/cais`, Ansible delivery
+- [x] Independent review (security audit + code review, same model family: internal, not external)
+- [x] Fixes for every accepted finding, each with a regression test that fails when its fix is reverted
+- [x] Release id bumped to t5820-gateway-ce1937c27e88
+- [ ] BLOCKED on approval: live qualification run via the gateway (occupies a production worker)
+- [ ] BLOCKED on approval: deploy (reconcile re-pin), then enable `enforce` + first-enable rebaseline
+
+### Review dispositions
+| Finding | Disposition |
+|---|---|
+| H1 gateway ledger truncation/deletion restores eligibility | Fixed: baseline covers both ledgers; missing baseline fails closed; explicit evidenced rebaseline |
+| M1 TOFU baseline, degraded accepted, no fsync | Fixed (fail closed on unwritable; fsync file + dir). Residual: compromised gateway process — documented |
+| M2 unvalidated capability string into evidence | Fixed (syntax + length check → 400) |
+| M3 redundant suspends; rebuild under request lock | Fixed (409; write lock separate from swap lock) |
+| M4 parent dir ownership | Fixed (Ansible assert); prod verified root:root 755 |
+| L1 copy without purge | Accepted, documented (stale bundles are inert) |
+| L2 /v1/cais over-exposure, scope mismatch | Fixed (reduced view; same scopes both front ends; no heads in client errors) |
+| L3 paths in 503 bodies | Fixed (generic message; detail to journal) |
+| L4 free-text detail | Accepted, documented (ticket reference only) |
+| R1 infra-only gate/task vanishes | Fixed (counts as failure; suite task coverage) |
+| R2 re-registration while queued | Fixed (`CaisService.admits`: role, profile digest, context) |
+| R3 cancel race window | Fixed (qid registered before re-check) |
+| R4 non-cancellable adapters | Fixed (non-stream answer withheld, 409). Residual: already-streamed tokens — documented |
+| R5 SIGHUP does not cancel | Fixed (`runtime.cais_reload()`) |
+| R6 blocking I/O on ASGI loop | Fixed (`asyncio.to_thread`) |
+| R8 unknown model substituted | Fixed (`policy_denied`; only omitted / `engineering/auto` choose freely) |
+| R9/R10/R13 type confusion, `unspecified` | Fixed |
+| R11 torn cache read, R12 redundant branch | Fixed |
+| Expiry mid-flight | Decision: no cancel (qualification held at dispatch) — documented |
+| Timing-based overhead test may flake | Kept (5 ms budget vs 0.43 ms measured); revisit if it flakes |
+
+### Results
+- `scripts/check-gateway-quality`: 245 passed. Broader suites (inventory, contracts, routing, runtime, gateway,
+  pipeline): 382 passed, 1 skipped (pre-existing). yamllint + ansible-lint (production profile) clean.
