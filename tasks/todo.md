@@ -554,7 +554,23 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] Deploy retry (approved 2026-11-05): snapshot 664a7e24849b, reconcile 0 failed / 0 rescued; gateway
       t5820-gateway-ce1937c27e88 strictly ready, chain valid, `/v1/cais` mode off, capability request → 503
       cais_disabled; validator PASS (healthy) after one legacy completion on engineering/deep.
-- [ ] Enable `enforce`: not useful until some profile is granted (would only return no_qualified_model)
+- [x] Further live runs (approved 2026-11-05): engineering/deep coding.routine **qualified** (10/12, LB 0.658;
+      `q-coding.routine-f6cc01c8efc4-028dcdee`, expires 2027-01-04); engineering/lead coding.complex not qualified
+      (6/10, LB 0.401 < 0.45). Clean evidence, rescore 0 mismatches. Grant reviewed and merged in #16.
+- [x] Grant delivered (approved): main 6fbc61a reconciled, enforcement still off, gateway untouched.
+- [x] Enforcement enabled (approved): #17 merged (eee729b), reconciled. First re-pin failed because the snapshot role
+      fetches only local branches and local `main` lagged `origin/main`; fast-forwarded and retried. Delivered ledger and
+      bundle verified byte-identical to Git, then `POST /v1/admin/cais/rebaseline` (evidenced, gateway-admin:ansible-admin).
+- [x] Live acceptance from the controller: `/v1/cais` valid/enforced; `aihost_cais_state_valid 1`; coding.routine →
+      200 via rule=cais on the deep worker with qualification headers; coding.complex → 422 no_qualified_model with no
+      inference; prompt-free decision evidence; validator PASS (healthy).
+
+### Follow-ups
+- Requalify engineering/deep for coding.routine before 2027-01-04 (runbook §6).
+- coding.complex has no qualified profile; capability requests for it are refused until one passes.
+- deep is slow on coding.routine (trial p50 229 s, p95 1,177 s): callers must budget for it.
+- Gateway cannot hash GGUF artifacts at runtime (digests verified by hand; design §9).
+- Review was internal (same model family); external validation not performed.
 
 ### Review dispositions
 | Finding | Disposition |

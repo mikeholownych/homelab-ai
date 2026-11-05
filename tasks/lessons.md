@@ -49,3 +49,6 @@
   production is `asgi`).
 - Rule: evaluation runs through the gateway must bypass the response cache and survive client quotas, or "repeats"
   are cache hits and quota refusals get scored as model failures.
+
+- Rule: before re-pinning the reconcile snapshot to a merge commit, fast-forward local `main`: the snapshot role's git
+  checkout fetches only local branches/tags, so an `origin/main`-only commit fails with "reference is not a tree".
