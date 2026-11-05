@@ -546,8 +546,12 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] Independent review (security audit + code review, same model family: internal, not external)
 - [x] Fixes for every accepted finding, each with a regression test that fails when its fix is reverted
 - [x] Release id bumped to t5820-gateway-ce1937c27e88
-- [ ] BLOCKED on approval: live qualification run via the gateway (occupies a production worker)
-- [ ] BLOCKED on approval: deploy (reconcile re-pin), then enable `enforce` + first-enable rebaseline
+- [x] Live qualification (approved 2026-11-05): `engineering/lead` / `coding.routine` → **not qualified**
+      (9/12 tasks, LB 0.567 < 0.6; clean rerun after runner fix b752c41). No grant; criteria unchanged.
+- [ ] Deploy (approved 2026-11-05) **failed and rolled back**: CAIS SIGHUP handler killed the just-restarted gateway;
+      journaled activation restored e1ef079868d9; snapshot re-pinned to fb4089d; 15:01 reconcile green.
+      Fixed in a54c17e (reload after strict readiness, enforce only) + role test. Retry needs a new go-ahead.
+- [ ] Enable `enforce`: not useful until some profile is granted (would only return no_qualified_model)
 
 ### Review dispositions
 | Finding | Disposition |

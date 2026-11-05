@@ -38,3 +38,14 @@
   host, so a local unit says nothing about Vault access (operator correction, 2026-10-09).
 - Rule: for any external dependency, first establish where it runs and how this host reaches it (inventory address,
   client config, credentials), then test that path. A missing local service is evidence only for local services.
+
+
+## 2026-11-05 — never signal a service from a handler that can flush with its restart (CAIS deploy rollback)
+- Pattern: a `notify:` handler sent SIGHUP; `meta: flush_handlers` ran it ~1 s after the release restart, before the
+  new Python process installed its SIGHUP handler, and SIGHUP's default action killed it. Unit tests could not see it.
+- Rule: signals to a long-running service go in an explicit task placed **after** strict readiness verification, never
+  in a handler. Pin the ordering with a role-structure test.
+- Rule: verify which engine/config production actually runs from host_vars, not role defaults (Phase 0 said `sync`;
+  production is `asgi`).
+- Rule: evaluation runs through the gateway must bypass the response cache and survive client quotas, or "repeats"
+  are cache hits and quota refusals get scored as model failures.
