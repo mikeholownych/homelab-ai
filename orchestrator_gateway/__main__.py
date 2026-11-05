@@ -24,6 +24,7 @@ from orchestrator_runtime import (
     Router,
     WorkerRecord,
 )
+from orchestrator_runtime.cais import CaisService
 
 
 def read_secret(name: str, file_name: str | None = None) -> str:
@@ -73,6 +74,7 @@ def worker_records() -> list[WorkerRecord]:
                     engine=spec.get("engine", "unknown"),
                     reasoning_budget=spec.get("reasoning_budget"),
                     role=spec.get("role", "production"),
+                    hardware_class=spec.get("hardware_class", "unspecified"),
                 )
             )
         return records
@@ -188,6 +190,8 @@ def main() -> None:
         router=router,
         capability_evidence=capability_evidence,
         state_path=Path(state_dir) / "gateway-state.json" if state_dir else None,
+        cais=CaisService(os.environ.get("ORCHESTRATOR_CAIS_MODE", "off").strip().lower(),
+                         os.environ.get("ORCHESTRATOR_CAIS_DIR"), state_dir, evidence=evidence, metrics=metrics),
     )
     runtime.clients = load_clients()
     health.start()
@@ -298,6 +302,10 @@ def main() -> None:
             except Exception as e:
                 print(f"Failed to hot-reload routes: {e}", file=sys.stderr, flush=True)
 
+        if runtime.cais is not None and runtime.cais.enabled:
+            # never raises: a failed load leaves CAIS failing closed, legacy routing untouched. Going through the
+            # runtime also cancels in-flight work whose qualification the delivered ledger withdrew.
+            runtime.cais_reload()
         evidence.append("configuration_reloaded", clients_count=reloaded_clients, rules_count=reloaded_rules)
 
     serve_until_stopped(servers, stop_sequence, reload_sequence=reload_sequence)

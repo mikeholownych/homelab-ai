@@ -257,8 +257,8 @@ inference_policy_remote_gateway_port: 8443
 inference_policy_gateway_client_cidrs: [10.0.8.95/32]
 inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
-orchestrator_gateway_release_id: t5820-gateway-e1ef079868d9
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-e1ef079868d9
+orchestrator_gateway_release_id: t5820-gateway-ce1937c27e88
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-ce1937c27e88
 orchestrator_gateway_otlp_endpoint: "http://10.0.8.2:4318/v1/traces"
 orchestrator_gateway_otlp_service_name: "aihost-gateway"
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
@@ -407,6 +407,7 @@ orchestrator_gateway_workers:
     artifact_digest: sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
     runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
     topology: llama-cpp-sycl
+    hardware_class: intel-arc-pro-b65-32g
     gpu_assignment: ["0"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal]
     context_limit: 65536
@@ -431,6 +432,7 @@ orchestrator_gateway_workers:
     artifact_digest: sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
     runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
     topology: llama-cpp-sycl
+    hardware_class: intel-arc-pro-b65-32g
     gpu_assignment: ["1"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
     context_limit: 65536

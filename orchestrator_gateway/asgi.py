@@ -24,10 +24,11 @@ from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, R
 from starlette.routing import Route
 
 from orchestrator_runtime import OrchestratorRuntime
+from orchestrator_runtime.cais import CaisRequirement
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 from orchestrator_runtime.tracing import TraceContext
 from .asgi_limits import BoundedExecutor, ExecutionBusy, IngressError, read_object, watch_disconnect, GatewayMetricsMiddleware
-from .server import MONITORING_ROUTES, _is_local, _route_headers, host_addresses
+from .server import MONITORING_ROUTES, _is_local, _route_headers, cais_admin_call, host_addresses
 
 _EXECUTOR_LOCK = threading.Lock()
 
@@ -310,6 +311,11 @@ def create_asgi_gateway(
         pinning_enabled = allow_worker_pinning or os.environ.get("ORCHESTRATOR_ALLOW_WORKER_PINNING") == "true"
         if pinned_worker and not pinning_enabled:
             return JSONResponse(status_code=403, content={"error": {"message": "worker pinning is disabled", "type": "forbidden"}})
+        try:
+            cais_requirement = CaisRequirement.from_headers(request.headers.get)
+        except ValueError as error:
+            return JSONResponse(status_code=400, headers={"X-Request-ID": req_id}, content={"error": {
+                "message": str(error), "type": "invalid_request_error", "code": "cais_request_invalid"}})
 
         def header_int(name: str) -> int | None:
             val = request.headers.get(name)
@@ -410,6 +416,7 @@ def create_asgi_gateway(
                         stream_timing=stream_timing,
                         trace_context=trace_context,
                         cache_headers=dict(request.headers),
+                        cais_requirement=cais_requirement,
                     )
                 except Exception as err:
                     return {"status": "error", "error": str(err)}
@@ -511,6 +518,7 @@ def create_asgi_gateway(
             cancel=sync_cancel,
             cache_headers=dict(request.headers),
             trace_context=trace_context,
+            cais_requirement=cais_requirement,
             )
         except ExecutionBusy:
             return busy_response()
@@ -608,6 +616,59 @@ def create_asgi_gateway(
             "reloads_count": reloads_count,
         }
         return JSONResponse(status_code=200, content=status_payload, headers={"X-Request-ID": req_id})
+
+    def _cais_client(request: Request, route: str, scopes: set[str]) -> tuple[str, Client | None, Response | None]:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, route):
+            return req_id, None, refuse_origin_response(req_id, route, request.client.host if request.client else "127.0.0.1")
+        client = get_client(request)
+        if client is None:
+            return req_id, None, unauthorized_response(req_id, route)
+        if not client.scopes & scopes:
+            return req_id, None, forbidden_response(req_id, f"one of scopes {sorted(scopes)} required")
+        return req_id, client, None
+
+    async def handle_cais_status(request: Request) -> Response:
+        """Capability matrix and qualification state (no secrets; digests and evidence references only)."""
+        req_id, client, refused = _cais_client(request, "v1_cais",
+                                               {"workload", "qualification", "monitoring", "telemetry", "admin"})
+        if refused is not None:
+            return refused
+        full = bool(client.scopes & {"admin", "monitoring"})
+        status = runtime.cais.status(full=full) if runtime.cais is not None else {"mode": "off"}
+        return JSONResponse(status, headers={"X-Request-ID": req_id})
+
+    async def handle_cais_reload(request: Request) -> Response:
+        req_id, _client, refused = _cais_client(request, "admin_cais", {"admin"})
+        if refused is not None:
+            return refused
+        # Reload hashes every bundle and fsyncs: keep it off the event loop.
+        return JSONResponse(await asyncio.to_thread(runtime.cais_reload), headers={"X-Request-ID": req_id})
+
+    async def handle_cais_rebaseline(request: Request) -> Response:
+        req_id, client, refused = _cais_client(request, "admin_cais", {"admin"})
+        if refused is not None:
+            return refused
+        status, result = await asyncio.to_thread(
+            cais_admin_call, lambda: runtime.cais_rebaseline(authority=f"gateway-admin:{client.client_id}"))
+        return JSONResponse(result, status_code=int(status), headers={"X-Request-ID": req_id})
+
+    async def handle_cais_suspend(request: Request) -> Response:
+        req_id, client, refused = _cais_client(request, "admin_cais", {"admin"})
+        if refused is not None:
+            return refused
+        action = request.path_params["action"]
+        if action not in ("suspend", "revoke"):
+            return JSONResponse({"status": "not_found"}, status_code=404, headers={"X-Request-ID": req_id})
+        try:
+            body = await parse_body(request)
+        except IngressError as error:
+            return ingress_response(error)
+        status, result = await asyncio.to_thread(cais_admin_call, lambda: runtime.cais_suspend(
+            request.path_params["qualification_id"], reason_code=str(body.get("reason_code", "")),
+            authority=f"gateway-admin:{client.client_id}", revoke=action == "revoke",
+            detail=body.get("detail") if isinstance(body.get("detail"), str) else None))
+        return JSONResponse(result, status_code=int(status), headers={"X-Request-ID": req_id})
 
     async def handle_admin_worker_recover(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
@@ -763,6 +824,10 @@ def create_asgi_gateway(
         Route("/v1/outcomes", handle_outcomes, methods=["POST"]),
         Route("/v1/outcomes/summary", handle_outcomes, methods=["GET"]),
         Route("/v1/models", handle_models, methods=["GET"]),
+        Route("/v1/cais", handle_cais_status, methods=["GET"]),
+        Route("/v1/admin/cais/reload", handle_cais_reload, methods=["POST"]),
+        Route("/v1/admin/cais/rebaseline", handle_cais_rebaseline, methods=["POST"]),
+        Route("/v1/admin/cais/qualifications/{qualification_id}/{action}", handle_cais_suspend, methods=["POST"]),
         Route("/v1/routes", handle_routes, methods=["GET"]),
         Route("/v1/tokenize", handle_tokenize, methods=["POST"]),
         Route("/v1/chat/completions", handle_chat_completions, methods=["POST"]),

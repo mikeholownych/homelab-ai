@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import sys
 import os
 import select
 import socket
@@ -14,9 +15,27 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Iterable
 
 from orchestrator_runtime import OrchestratorRuntime
+from orchestrator_runtime.cais import CaisConflict, CaisRequirement
 from orchestrator_runtime.clients import Client, ClientRegistry, token_digest
 
 # Endpoints that only read gateway state (allowed on the loopback monitoring listener).
+def cais_admin_call(action: Callable[[], dict[str, Any]]) -> tuple[int, dict[str, Any]]:
+    """Run a CAIS admin action and map its errors to a status. Messages never carry filesystem paths."""
+    try:
+        return HTTPStatus.OK, action()
+    except KeyError:
+        return HTTPStatus.NOT_FOUND, {"status": "not_found"}
+    except CaisConflict as error:
+        return HTTPStatus.CONFLICT, {"status": "conflict", "message": str(error)}
+    except ValueError as error:
+        return HTTPStatus.BAD_REQUEST, {"status": "rejected", "message": str(error)}
+    except OSError as error:
+        print(f"CAIS admin action failed: {error!r}", file=sys.stderr, flush=True)  # the journal keeps the detail
+        return HTTPStatus.SERVICE_UNAVAILABLE, {"status": "unavailable",
+                                                "message": "CAIS is disabled or its state could not be written; "
+                                                           "see the gateway journal"}
+
+
 MONITORING_ROUTES = {"health", "metrics", "v1_telemetry_capabilities", "v1_telemetry_inference"}
 # HTTP status for each runtime result status when the runtime did not pick one.
 _STATUS = {"rejected": HTTPStatus.BAD_REQUEST, "unsupported": HTTPStatus.UNPROCESSABLE_ENTITY,
@@ -213,7 +232,7 @@ def create_gateway(
             route = {"/health": "health", "/metrics": "metrics", "/v1/models": "v1_models", "/v1/routes": "v1_routes",
                      "/v1/outcomes/summary": "v1_outcomes_summary", "/admin/workers": "admin_workers",
                      "/v1/telemetry/capabilities": "v1_telemetry_capabilities",
-                     "/v1/telemetry/inference": "v1_telemetry_inference"}.get(path, "unsupported")
+                     "/v1/telemetry/inference": "v1_telemetry_inference", "/v1/cais": "v1_cais"}.get(path, "unsupported")
             runtime.metrics.http_requests_in_flight.inc(route=route)
             status_code = HTTPStatus.OK
             try:
@@ -324,6 +343,11 @@ def create_gateway(
                 if route == "v1_outcomes_summary":
                     self._send(HTTPStatus.OK, {"object": "outcome_summary", "rows": runtime.outcome_summary()}, request_id)
                     return
+                if route == "v1_cais":
+                    full = bool(client.scopes & {"admin", "monitoring"})
+                    self._send(HTTPStatus.OK, runtime.cais.status(full=full) if runtime.cais is not None
+                               else {"mode": "off"}, request_id)
+                    return
                 status_code = HTTPStatus.NOT_FOUND
                 self._send(status_code, {"error": {"message": "unsupported endpoint", "type": "not_found"}}, request_id)
             finally:
@@ -336,7 +360,9 @@ def create_gateway(
             request_id = self.headers.get("X-Request-ID") or str(uuid.uuid4())
             path = urllib.parse.urlsplit(self.path).path
             route = {"/v1/chat/completions": "v1_chat_completions", "/v1/tokenize": "v1_tokenize",
-                     "/v1/outcomes": "v1_outcomes"}.get(path, "admin_worker" if path.startswith("/admin/workers/") else "unsupported")
+                     "/v1/outcomes": "v1_outcomes"}.get(path, "admin_worker" if path.startswith("/admin/workers/")
+                                                        else "admin_cais" if path.startswith("/v1/admin/cais/")
+                                                        else "unsupported")
             runtime.metrics.http_requests_in_flight.inc(route=route)
             status_code = HTTPStatus.OK
             try:
@@ -353,6 +379,9 @@ def create_gateway(
                     return
                 if route == "admin_worker":
                     status_code = self._admin(client, path, request_id)
+                    return
+                if route == "admin_cais":
+                    status_code = self._cais_admin(client, path, request_id)
                     return
                 body = self._read_json()
                 if body is None:
@@ -391,6 +420,28 @@ def create_gateway(
             self._send(status, result, request_id)
             return status
 
+        def _cais_admin(self, client: Client, path: str, request_id: str) -> int:
+            """POST /v1/admin/cais/reload | /v1/admin/cais/rebaseline |
+            /v1/admin/cais/qualifications/<id>/(suspend|revoke). Removal and re-baselining only; never grants."""
+            if "admin" not in client.scopes:
+                return self._forbidden(request_id, "admin scope required")
+            parts = path.strip("/").split("/")  # v1/admin/cais/...
+            if parts[3:] == ["reload"]:
+                self._send(HTTPStatus.OK, runtime.cais_reload(), request_id)
+                return HTTPStatus.OK
+            authority = f"gateway-admin:{client.client_id}"
+            if parts[3:] == ["rebaseline"]:
+                status, result = cais_admin_call(lambda: runtime.cais_rebaseline(authority=authority))
+            elif len(parts) == 6 and parts[3] == "qualifications" and parts[5] in ("suspend", "revoke"):
+                body = self._read_json() or {}
+                status, result = cais_admin_call(lambda: runtime.cais_suspend(
+                    parts[4], reason_code=str(body.get("reason_code", "")), authority=authority,
+                    revoke=parts[5] == "revoke", detail=body.get("detail") if isinstance(body.get("detail"), str) else None))
+            else:
+                status, result = HTTPStatus.NOT_FOUND, {"error": {"message": "unsupported endpoint", "type": "not_found"}}
+            self._send(status, result, request_id)
+            return status
+
         def _completion(self, request: dict[str, Any], client: Client, request_id: str, t0: float) -> int:
             request["request_id"] = request_id
             pinned_worker = self.headers.get("X-AIHost-Worker")
@@ -398,6 +449,12 @@ def create_gateway(
             if pinned_worker and not pinning_enabled:
                 self._send(HTTPStatus.FORBIDDEN, {"error": {"message": "worker pinning is disabled", "type": "forbidden"}}, request_id)
                 return HTTPStatus.FORBIDDEN
+            try:
+                cais_requirement = CaisRequirement.from_headers(self.headers.get)
+            except ValueError as error:
+                self._send(HTTPStatus.BAD_REQUEST, {"error": {"message": str(error), "type": "invalid_request_error",
+                                                              "code": "cais_request_invalid"}}, request_id)
+                return HTTPStatus.BAD_REQUEST
 
             def header_int(name: str) -> int | None:
                 value = self.headers.get(name)
@@ -496,7 +553,7 @@ def create_gateway(
                     priority=self.headers.get("X-AIHost-Priority"), deadline_ms=header_int("X-AIHost-Deadline-Ms"),
                     attempt=header_int("X-AIHost-Attempt") or 1, previous_request=self.headers.get("X-AIHost-Previous-Request"),
                     reasoning_profile=reasoning_profile, cancel=cancel,
-                    cache_headers=dict(self.headers),
+                    cache_headers=dict(self.headers), cais_requirement=cais_requirement,
                     on_stream_start=begin_stream if request.get("stream") else None,
                     on_stream_chunk=send_stream_delta if request.get("stream") else None,
                     stream_timing=stream_timing if request.get("stream") else None,

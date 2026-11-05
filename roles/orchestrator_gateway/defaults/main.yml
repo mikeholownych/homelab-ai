@@ -49,6 +49,14 @@ orchestrator_gateway_vault_managed_clients: []
 orchestrator_gateway_clients_file: /var/lib/aihost-gateway/clients.json
 # Verified capabilities by artifact digest (Design 01 section 4), written from qualification evidence.
 orchestrator_gateway_capability_evidence: {}
+# Capability-aware scheduling (docs/design/07). "off": requests carrying X-AIHost-Capability are refused with
+# cais_disabled and nothing else changes. "enforce": they are served only by execution profiles holding an effective,
+# evidence-verified qualification. Production activation is an explicit, approved change (docs/operations/cais.md).
+orchestrator_gateway_cais_mode: "off"
+# Authoritative ledger, capability catalog and evidence bundles (Git: <inventory>/cais). Delivered read-only: under
+# ProtectSystem=strict the gateway can read but never write this path; its own suspensions live in its state dir.
+orchestrator_gateway_cais_source_dir: "{{ inventory_dir }}/cais"
+orchestrator_gateway_cais_dir: /var/lib/aihost/cais
 orchestrator_gateway_prompt_policy: hash
 # R12: graceful stop waits this long for in-flight work (sized to the longest bounded generation).
 orchestrator_gateway_shutdown_grace_seconds: 600

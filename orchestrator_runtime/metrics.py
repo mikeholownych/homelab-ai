@@ -654,6 +654,37 @@ class MetricsRegistry:
             "1 when the persisted evidence chain verified intact at start (0 = a break was detected and evidenced).",
         )
 
+        # ---------------------------------------------------------------------
+        # 9. Capability-aware scheduling (docs/design/07). Labels are bounded: capability names come from the
+        #    versioned catalog (anything else is "unknown"), states/results/actions are fixed enumerations. Digests,
+        #    qualification ids and request ids stay in the evidence chain, never in labels.
+        # ---------------------------------------------------------------------
+        self.cais_state_valid = self._register_gauge(
+            "aihost_cais_state_valid",
+            "1 when authoritative qualification state was established at the last load (0 = CAIS requests fail closed).",
+        )
+        self.cais_qualifications = self._register_gauge(
+            "aihost_cais_qualifications",
+            "Qualifications by capability and effective state (qualified, suspended, revoked, expired, ...).",
+            ("capability", "state"),
+        )
+        self.cais_requests_total = self._register_counter(
+            "aihost_cais_requests_total",
+            "Capability-class requests by capability and result (served, or the failure class that denied them).",
+            ("capability", "result"),
+        )
+        self.cais_suspensions_total = self._register_counter(
+            "aihost_cais_suspensions_total",
+            "Gateway-recorded qualification suspensions and revocations.",
+            ("action", "source"),
+        )
+        self.cais_decision_seconds = self._register_histogram(
+            "aihost_cais_decision_seconds",
+            "Time spent evaluating qualification eligibility for one request (routing overhead, excludes inference).",
+            (),
+            (0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.05),
+        )
+
     def _register_counter(self, name: str, help_text: str, label_names: tuple[str, ...] = ()) -> Counter:
         counter = Counter(name, help_text, label_names)
         self._metrics.append(counter)

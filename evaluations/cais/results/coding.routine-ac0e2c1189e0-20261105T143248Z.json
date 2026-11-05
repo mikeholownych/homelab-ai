@@ -1,0 +1,551 @@
+{
+ "capability": "coding.routine",
+ "capability_version": 1,
+ "context_envelope": 25251,
+ "executor": {
+  "git_commit": "b752c41c5769c11567af65de5f3a4cbaf9b8d241",
+  "host": "mike-dev",
+  "id": "evaluations/cais/run_qualification.py",
+  "sha256": "071049684afd524786bfc04680c066896829f7e78be632986be705649ad02e67"
+ },
+ "finished_at": "2026-11-05T14:49:53.718018+00:00",
+ "independence": "internal",
+ "independence_basis": "in-repo engx corpus with hidden pytest oracles; graded under bubblewrap; re-scorable",
+ "observed_serving": {
+  "after": {
+   "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+   "capacity_source": "observed",
+   "engine": "llama.cpp",
+   "engine_version": "b11347-5fc4f3c8c",
+   "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+   "pool": "lead",
+   "quantization": "Q4_K - Medium",
+   "role": "production",
+   "worker_id": "b0-live-llama-worker1"
+  },
+  "alias": "engineering/lead",
+  "alias_reasoning": {
+   "budget": 8192,
+   "mode": "off"
+  },
+  "before": {
+   "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+   "capacity_source": "observed",
+   "engine": "llama.cpp",
+   "engine_version": "b11347-5fc4f3c8c",
+   "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+   "pool": "lead",
+   "quantization": "Q4_K - Medium",
+   "role": "production",
+   "worker_id": "b0-live-llama-worker1"
+  },
+  "gateway": "https://10.0.8.5:8443"
+ },
+ "profile": {
+  "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+  "engine": "llama.cpp",
+  "hardware_class": "intel-arc-pro-b65-32g",
+  "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+  "reasoning_budget": 8192,
+  "runtime_image_digest": "sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451",
+  "topology": "llama-cpp-sycl"
+ },
+ "profile_digest": "sha256:bd3bbd1e58ee1d9cb6da6d45e88ece6f898c72a0f3894bfd0361aefed351c4ed",
+ "reasoning": {
+  "answer_allowance": 8192,
+  "mode": "off"
+ },
+ "run_id": "coding.routine-ac0e2c1189e0-20261105T143248Z",
+ "sampling": {
+  "infra_retry_policy": {
+   "pause_seconds": 65,
+   "retries": 2
+  },
+  "note": "temperature 0; repeats are correlated, the task is the unit",
+  "response_cache": "bypass",
+  "seed": null,
+  "temperature": 0
+ },
+ "schema": "cais-evidence-bundle/v1",
+ "started_at": "2026-11-05T14:32:48.046058+00:00",
+ "suite": {
+  "corpus_digest": "c7e0a4a73e55612b",
+  "id": "engx-base",
+  "max_attempts": 3,
+  "max_tokens": 8192,
+  "tasks": [
+   "T01-pagination",
+   "T02-money",
+   "T03-cache-collision",
+   "T04-dry-run",
+   "T05-iterative-tree",
+   "T06-api-rename",
+   "T07-parse-duration",
+   "T08-safe-join",
+   "T09-token-bucket",
+   "T10-sqlite-migration",
+   "T11-test-generation",
+   "T12-nested-config"
+  ],
+  "temperature": 0,
+  "version": "c7e0a4a73e55612b-a3-t8192"
+ },
+ "trials": [
+  {
+   "attempts": 1,
+   "final_files": {
+    "api.py": "from paginator import paginate, page_count\n\n\ndef list_users(users, page=1, per_page=10):\n    return {\"items\": paginate(users, page, per_page), \"pages\": page_count(len(users), per_page), \"page\": page}\n",
+    "paginator.py": "def paginate(items, page, per_page):\n    \"\"\"Return the items on 1-based `page`. Pages past the end return [].\"\"\"\n    if page < 1:\n        raise ValueError(\"page must be >= 1\")\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    start = (page - 1) * per_page\n    return items[start:start + per_page]\n\n\ndef page_count(total, per_page):\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    return (total + per_page - 1) // per_page\n"
+   },
+   "final_files_sha256": "bf07133970329008319b187e318d2913bd65e88610dc69c9b09dab06efa687b5",
+   "infra_retries": 0,
+   "latency_ms": 7223.8,
+   "max_context_tokens": 736,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T01-pagination",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 736,
+   "ttft_ms": 865.5
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "invoice.py": "from money import Money\nfrom decimal import Decimal, ROUND_HALF_UP\n\n\ndef invoice_total(lines):\n    \"\"\"lines: list of (unit_price_str, quantity).\"\"\"\n    total = Money(\"0\")\n    for price, qty in lines:\n        total = total + Money(price) * qty\n    return total\n\n\ndef apply_tax(total, rate):\n    \"\"\"rate is a string like \"0.0825\"; the tax is rounded half up to the cent.\"\"\"\n    tax_amount = total.amount * Decimal(str(rate))\n    tax_amount = tax_amount.quantize(Decimal(\"0.01\"), rounding=ROUND_HALF_UP)\n    return Money(total.amount + tax_amount)\n",
+    "money.py": "from decimal import Decimal, ROUND_HALF_UP\n\n\nclass Money:\n    def __init__(self, amount):\n        self.amount = Decimal(str(amount))\n\n    def __add__(self, other):\n        return Money(self.amount + other.amount)\n\n    def __mul__(self, qty):\n        return Money(self.amount * qty)\n\n    def __eq__(self, other):\n        return self.amount == other.amount\n\n    def __repr__(self):\n        return f\"Money({self.amount:.2f})\"\n\n    def cents(self):\n        return int((self.amount * 100).to_integral_value(rounding=ROUND_HALF_UP))\n"
+   },
+   "final_files_sha256": "7d5573d0379076c052f5e299074b140546b52b1e98add4c61aeebb6faf6c9096",
+   "infra_retries": 0,
+   "latency_ms": 8752.2,
+   "max_context_tokens": 893,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T02-money",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 893,
+   "ttft_ms": 95.5
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "cache.py": "class Cache:\n    def __init__(self):\n        self._d = {}\n\n    def key(self, *parts):\n        return \":\".join(str(p) for p in parts)\n\n    def get_or_compute(self, parts, fn):\n        k = self.key(*parts)\n        if k not in self._d:\n            self._d[k] = fn()\n        return self._d[k]\n"
+   },
+   "final_files_sha256": "38c1234e10fc5a0aa549589dd81593bd949d381007f98379d8edebc25d4fc09f",
+   "infra_retries": 0,
+   "latency_ms": 9476.5,
+   "max_context_tokens": 1069,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T03-cache-collision",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1069,
+   "ttft_ms": 1072.5
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "deploy.py": "def plan(services, current, prune=True):\n    \"\"\"Return the actions that bring `current` (name -> version) to `services` (name -> version).\"\"\"\n    actions = []\n    for name, version in sorted(services.items()):\n        if name not in current:\n            actions.append((\"create\", name, version))\n        elif current[name] != version:\n            actions.append((\"update\", name, version))\n    if prune:\n        for name in sorted(current):\n            if name not in services:\n                actions.append((\"delete\", name, current[name]))\n    return actions\n\n\ndef apply(actions, state, log, dry_run=False):\n    for kind, name, version in actions:\n        if kind == \"delete\":\n            if not dry_run:\n                state.pop(name, None)\n        else:\n            if not dry_run:\n                state[name] = version\n        log.append(f\"[dry-run] {kind} {name} {version}\" if dry_run else f\"{kind} {name} {version}\")\n    return state\n"
+   },
+   "final_files_sha256": "9a4cf3f49d75ffa7b329ce380262d8183de592fb34448871b387d69c2fc5eece",
+   "infra_retries": 0,
+   "latency_ms": 6295.1,
+   "max_context_tokens": 890,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T04-dry-run",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 890,
+   "ttft_ms": 100.4
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tree.py": "class Node:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\n\ndef flatten(node):\n    result = []\n    stack = [node]\n    while stack:\n        current = stack.pop()\n        result.append(current.value)\n        # Push children in reverse order so they are visited left to right\n        for child in reversed(current.children):\n            stack.append(child)\n    return result\n\n\ndef depth(node):\n    if not node.children:\n        return 1\n    max_child_depth = 0\n    stack = [(node, 1)]\n    while stack:\n        current, current_depth = stack.pop()\n        if current.children:\n            for child in current.children:\n                stack.append((child, current_depth + 1))\n            if current_depth > max_child_depth:\n                max_child_depth = current_depth\n        else:\n            if current_depth > max_child_depth:\n                max_child_depth = current_depth\n    return max_child_depth\n"
+   },
+   "final_files_sha256": "4c727d16725168e3728e3ad561517d7ce867dc4e16acd81766d246f88cb5da30",
+   "infra_retries": 0,
+   "latency_ms": 8426.6,
+   "max_context_tokens": 1009,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T05-iterative-tree",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1009,
+   "ttft_ms": 1068.7
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "health.py": "from http_client import fetch\n\n\ndef ping():\n    return fetch(\"/health\")\n",
+    "http_client.py": "def fetch(url, *, timeout_s=5):\n    return {\"url\": url, \"timeout\": timeout_s, \"status\": 200}\n",
+    "orders.py": "from http_client import fetch\n\n\ndef load_order(oid):\n    return fetch(f\"/orders/{oid}\", timeout_s=10)\n",
+    "users.py": "from http_client import fetch\n\n\ndef load_user(uid):\n    return fetch(f\"/users/{uid}\", timeout_s=3)\n"
+   },
+   "final_files_sha256": "af334e4547aadc7b76fdeca0e2250a93cd0d8a01ea09b5e541975f725796344d",
+   "infra_retries": 0,
+   "latency_ms": 4755.4,
+   "max_context_tokens": 567,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T06-api-rename",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 567,
+   "ttft_ms": 93.3
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "durations.py": "def parse_duration(text):\n    \"\"\"Parse a human-readable duration into whole seconds (int).\n\n    Grammar: one or more `<integer><unit>` groups, units d, h, m, s (case-insensitive), groups optionally\n    separated by exactly one space. Examples: \"1h30m\" -> 5400, \"2d\" -> 172800, \"45s\" -> 45, \"1H 30M\" -> 5400.\n    Leading and trailing whitespace is ignored. Leading zeros are fine (\"01h\" -> 3600) and \"0s\" -> 0.\n    Units must appear at most once and in descending order (d, h, m, s).\n    A bare integer with no unit, an empty or whitespace-only string, an unknown unit, a negative or decimal\n    number, two or more spaces between groups, or a space between a number and its unit all raise ValueError.\n    \"\"\"\n    if not isinstance(text, str):\n        raise ValueError(\"Input must be a string\")\n    \n    stripped = text.strip()\n    if not stripped:\n        raise ValueError(\"Empty or whitespace-only string\")\n    \n    # Define unit multipliers in descending order\n    units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1}\n    unit_order = ['d', 'h', 'm', 's']\n    \n    import re\n    \n    # Pattern: groups of (digits + unit) with optional single space between groups\n    # Each group: \\d+[dhmsDHMS]\n    # Between groups: optional single space\n    \n    # The entire string must match this pattern\n    pattern = r'^(\\d+[dhmsDHMS])(\\s?\\d+[dhmsDHMS])*$'\n    \n    if not re.match(pattern, stripped):\n        raise ValueError(\"Invalid format\")\n    \n    # Now extract the groups\n    # Split by whitespace to get individual groups\n    parts = stripped.split()\n    \n    if len(parts) == 0:\n        raise ValueError(\"No groups found\")\n    \n    seen_units = set()\n    last_unit_index = -1\n    total_seconds = 0\n    \n    for part in parts:\n        # Each part should be digits followed by a single unit letter\n        match = re.match(r'^(\\d+)([dhmsDHMS])$', part)\n        if not match:\n            raise ValueError(f\"Invalid group: {part}\")\n        \n        number_str = match.group(1)\n        unit_char = match.group(2).lower()\n        \n        # Check if unit has been seen before\n        if unit_char in seen_units:\n            raise ValueError(f\"Unit {unit_char} appears more than once\")\n        \n        # Check order: units must be in descending order (d, h, m, s)\n        current_unit_index = unit_order.index(unit_char)\n        if current_unit_index <= last_unit_index:\n            raise ValueError(f\"Units not in descending order\")\n        \n        last_unit_index = current_unit_index\n        seen_units.add(unit_char)\n        \n        number = int(number_str)\n        total_seconds += number * units[unit_char]\n    \n    return total_seconds\n"
+   },
+   "final_files_sha256": "9ff51fdd8e0faf48c4d88d47e339693f4530421cfdabfdf037a9128b5b314008",
+   "infra_retries": 0,
+   "latency_ms": 48864.1,
+   "max_context_tokens": 3270,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T07-parse-duration",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 7044,
+   "ttft_ms": 890.6
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "storage.py": "import os\nimport urllib.parse\n\n\ndef safe_join(base, user_path):\n    \"\"\"\n    Join base and user_path, ensuring the result is strictly inside base.\n    \n    - Percent-decodes user_path once.\n    - Treats both / and \\ as separators.\n    - Rejects absolute paths, NUL bytes, and paths that resolve outside base.\n    - Raises ValueError on any violation.\n    \"\"\"\n    # Reject NUL bytes early\n    if '\\x00' in user_path:\n        raise ValueError(\"NUL bytes not allowed\")\n    \n    # Percent-decode the user_path\n    decoded_path = urllib.parse.unquote(user_path)\n    \n    # Reject NUL bytes after decoding\n    if '\\x00' in decoded_path:\n        raise ValueError(\"NUL bytes not allowed\")\n    \n    # Normalize separators: replace backslashes with forward slashes\n    normalized_path = decoded_path.replace('\\\\', '/')\n    \n    # Reject absolute paths\n    if normalized_path.startswith('/'):\n        raise ValueError(\"Absolute paths not allowed\")\n    \n    # Join and resolve\n    joined = os.path.join(base, normalized_path)\n    resolved = os.path.realpath(joined)\n    base_resolved = os.path.realpath(base)\n    \n    # Ensure the resolved path is inside the base directory\n    # We add a trailing separator to base_resolved to ensure we match full directory names\n    if not resolved.startswith(base_resolved + os.sep) and resolved != base_resolved:\n        raise ValueError(\"Path escapes base directory\")\n    \n    return resolved\n"
+   },
+   "final_files_sha256": "936dfd8ca02e8d2f3b8ca1afe4f4d077ca49e7b1d3c312003b30ee7395e898cf",
+   "infra_retries": 0,
+   "latency_ms": 9683.0,
+   "max_context_tokens": 817,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T08-safe-join",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 817,
+   "ttft_ms": 858.8
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "ratelimit.py": "class TokenBucket:\n    def __init__(self, rate, capacity, clock):\n        self.rate = rate\n        self.capacity = capacity\n        self.clock = clock\n        self.tokens = capacity\n        self.last = clock()\n\n    def allow(self, cost=1):\n        if cost > self.capacity:\n            return False\n        now = self.clock()\n        self.tokens += (now - self.last) * self.rate\n        self.last = now\n        if self.tokens > self.capacity:\n            self.tokens = self.capacity\n        if self.tokens >= cost:\n            self.tokens -= cost\n            return True\n        return False\n"
+   },
+   "final_files_sha256": "46eb73dad94ab0250f4ce8bd4aac6b2751a60d0421fd4bc89ad39739ae30e24e",
+   "infra_retries": 0,
+   "latency_ms": 4782.7,
+   "max_context_tokens": 690,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T09-token-bucket",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 690,
+   "ttft_ms": 91.8
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "db.py": "import sqlite3\n\n\ndef init_v1(conn):\n    conn.execute(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\n    conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n    conn.execute(\"INSERT INTO schema_version VALUES (1)\")\n    conn.commit()\n\n\ndef version(conn):\n    return conn.execute(\"SELECT version FROM schema_version\").fetchone()[0]\n\n\ndef migrate(conn):\n    current_version = version(conn)\n    if current_version == 2:\n        return\n\n    # Add the new column if it doesn't exist\n    conn.execute(\"ALTER TABLE users ADD COLUMN email_domain TEXT\")\n\n    # Backfill email_domain from email\n    # Extract the part after the last '@', lowercased. NULL if email is NULL or no '@'.\n    conn.execute(\"\"\"\n        UPDATE users\n        SET email_domain = LOWER(SUBSTR(email, LENGTH(email) - INSTR(REVERSE(email), '@') + 2, INSTR(REVERSE(email), '@') - 1))\n        WHERE email IS NOT NULL AND INSTR(email, '@') > 0\n    \"\"\")\n\n    # Update schema version to 2\n    conn.execute(\"UPDATE schema_version SET version = 2\")\n    conn.commit()\n"
+   },
+   "final_files_sha256": "5afc3623360acc93b99bad5d5ea185db90e19ed93789f9db2c517b437beb17fe",
+   "infra_retries": 0,
+   "latency_ms": 92421.8,
+   "max_context_tokens": 5845,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T10-sqlite-migration",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 12127,
+   "ttft_ms": 847.6
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "tests/test_lru.py": "```python\nfrom lru import LRUCache\n\n\ndef test_basic_get_put():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert cache.get(1) == 1\n    assert cache.get(2) == 2\n\n\ndef test_get_miss_returns_none():\n    cache = LRUCache(2)\n    assert cache.get(1) is None\n\n\ndef test_put_updates_existing_key():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(1, 2)\n    assert cache.get(1) == 2\n\n\ndef test_put_marks_key_as_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    # Access key 1 to make it most recently used\n    cache.get(1)\n    # Now put key 3, which should evict key 2 (least recently used)\n    cache.put(3, 3)\n    assert cache.get(2) is None\n    assert cache.get(1) == 1\n    assert cache.get(3) == 3\n\n\ndef test_eviction_of_least_recently_used():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Key 1 should be evicted\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n\n\ndef test_len_returns_number_of_stored_keys():\n    cache = LRUCache(2)\n    assert len(cache) == 0\n    cache.put(1, 1)\n    assert len(cache) == 1\n    cache.put(2, 2)\n    assert len(cache) == 2\n    cache.put(3, 3)\n    assert len(cache) == 2\n\n\ndef test_capacity_must_be_at_least_one():\n    try:\n        LRUCache(0)\n        assert False, \"Expected ValueError\"\n    except ValueError:\n        pass\n\n    try:\n        LRUCache(-1)\n        assert False, \"Expected ValueError\"\n    except ValueError:\n        pass\n\n\ndef test_capacity_one():\n    cache = LRUCache(1)\n    cache.put(1, 1)\n    assert cache.get(1) == 1\n    cache.put(2, 2)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n\n\ndef test_put_with_same_key_updates_value_and_mru():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(1, 2)\n    assert cache.get(1) == 2\n    assert cache.get(2) == 2\n    # Key 1 is now most recently used, so key 2 should be evicted next\n    cache.put(3, 3)\n    assert cache.get(2) is None\n    assert cache.get(1) == 2\n    assert cache.get(3) == 3\n\n\ndef test_get_does_not_change_length():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert len(cache) == 2\n    cache.get(1)\n    assert len(cache) == 2\n    cache.get(3)\n    assert len(cache) == 2\n\n\ndef test_put_does_not_change_length_if_within_capacity():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert len(cache) == 2\n    cache.put(1, 10)\n    assert len(cache) == 2\n\n\ndef test_put_evicts_correct_key_when_over_capacity():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2, 3\n    cache.get(1)\n    # Order: 2, 3, 1\n    cache.put(4, 4)\n    # Should evict 2 (least recently used)\n    assert cache.get(2) is None\n    assert cache.get(1) == 1\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n\n\ndef test_multiple_gets_update_order():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2, 3\n    cache.get(2)\n    # Order: 1, 3, 2\n    cache.get(1)\n    # Order: 3, 2, 1\n    cache.put(4, 4)\n    # Should evict 3 (least recently used)\n    assert cache.get(3) is None\n    assert cache.get(1) == 1\n    assert cache.get(2) == 2\n    assert cache.get(4) == 4\n\n\ndef test_put_with_new_key_updates_order():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2\n    cache.put(3, 3)\n    # Order: 2, 3 (1 evicted)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n\n\ndef test_get_on_nonexistent_key_returns_none():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    assert cache.get(2) is None\n    assert len(cache) == 1\n\n\ndef test_put_with_zero_value():\n    cache = LRUCache(2)\n    cache.put(1, 0)\n    assert cache.get(1) == 0\n\n\ndef test_put_with_none_value():\n    cache = LRUCache(2)\n    cache.put(1, None)\n    assert cache.get(1) is None\n\n\ndef test_put_with_empty_string_key():\n    cache = LRUCache(2)\n    cache.put(\"\", \"empty\")\n    assert cache.get(\"\") == \"empty\"\n\n\ndef test_put_with_integer_key():\n    cache = LRUCache(2)\n    cache.put(0, \"zero\")\n    cache.put(1, \"one\")\n    assert cache.get(0) == \"zero\"\n    assert cache.get(1) == \"one\"\n\n\ndef test_put_with_negative_key():\n    cache = LRUCache(2)\n    cache.put(-1, \"negative\")\n    cache.put(1, \"positive\")\n    assert cache.get(-1) == \"negative\"\n    assert cache.get(1) == \"positive\"\n\n\ndef test_put_with_large_capacity():\n    cache = LRUCache(100)\n    for i in range(100):\n        cache.put(i, i)\n    assert len(cache) == 100\n    for i in range(100):\n        assert cache.get(i) == i\n\n\ndef test_put_exceeds_capacity():\n    cache = LRUCache(2)\n    for i in range(5):\n        cache.put(i, i)\n    assert len(cache) == 2\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n    assert cache.get(0) is None\n    assert cache.get(1) is None\n    assert cache.get(2) is None\n\n\ndef test_get_updates_order_for_eviction():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2, 3\n    cache.get(2)\n    # Order: 1, 3, 2\n    cache.put(4, 4)\n    # Evicts 1\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n\n\ndef test_put_updates_order_for_eviction():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2, 3\n    cache.put(2, 20)\n    # Order: 1, 3, 2\n    cache.put(4, 4)\n    # Evicts 1\n    assert cache.get(1) is None\n    assert cache.get(2) == 20\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n\n\ndef test_len_after_eviction():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert len(cache) == 2\n    cache.put(3, 3)\n    assert len(cache) == 2\n\n\ndef test_get_after_eviction():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n\n\ndef test_put_same_key_multiple_times():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(1, 2)\n    cache.put(1, 3)\n    assert cache.get(1) == 3\n    assert len(cache) == 1\n\n\ndef test_get_nonexistent_key_does_not_affect_order():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.get(3)\n    cache.put(3, 3)\n    # Should evict 1 (least recently used)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n\n\ndef test_put_with_different_value_same_key():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(1, 2)\n    assert cache.get(1) == 2\n    assert len(cache) == 1\n\n\ndef test_eviction_with_mixed_get_and_put():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    cache.get(1)\n    cache.put(4, 4)\n    cache.get(2)\n    cache.put(5, 5)\n    # After get(1): order 2, 3, 1\n    # After put(4): order 2, 3, 1, 4 -> evict 2 -> order 3, 1, 4\n    # After get(2): 2 is not in cache, no change\n    # After put(5): order 3, 1, 4, 5 -> evict 3 -> order 1, 4, 5\n    assert cache.get(3) is None\n    assert cache.get(1) == 1\n    assert cache.get(4) == 4\n    assert cache.get(5) == 5\n    assert cache.get(2) is None\n\n\ndef test_capacity_one_eviction():\n    cache = LRUCache(1)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    cache.put(3, 3)\n    assert cache.get(2) is None\n    assert cache.get(3) == 3\n\n\ndef test_put_updates_mru_for_existing_key():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2, 3\n    cache.put(2, 20)\n    # Order: 1, 3, 2\n    cache.put(4, 4)\n    # Evicts 1\n    assert cache.get(1) is None\n    assert cache.get(2) == 20\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n\n\ndef test_get_updates_mru_for_existing_key():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Order: 1, 2, 3\n    cache.get(2)\n    # Order: 1, 3, 2\n    cache.put(4, 4)\n    # Evicts 1\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n\n\ndef test_len_with_empty_cache():\n    cache = LRUCache(2)\n    assert len(cache) == 0\n\n\ndef test_len_with_full_cache():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert len(cache) == 2\n\n\ndef test_len_with_evicted_cache():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    assert len(cache) == 2\n\n\ndef test_put_with_none_key():\n    cache = LRUCache(2)\n    cache.put(None, \"none\")\n    assert cache.get(None) == \"none\"\n\n\ndef test_put_with_tuple_key():\n    cache = LRUCache(2)\n    cache.put((1, 2), \"tuple\")\n    assert cache.get((1, 2)) == \"tuple\"\n\n\ndef test_put_with_list_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.put([1, 2], \"list\")\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_get_with_list_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.get([1, 2])\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_put_with_dict_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.put({\"a\": 1}, \"dict\")\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_get_with_dict_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.get({\"a\": 1})\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_put_with_set_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.put({1, 2}, \"set\")\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_get_with_set_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.get({1, 2})\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_put_with_float_key():\n    cache = LRUCache(2)\n    cache.put(1.5, \"float\")\n    assert cache.get(1.5) == \"float\"\n\n\ndef test_put_with_bool_key():\n    cache = LRUCache(2)\n    cache.put(True, \"true\")\n    cache.put(False, \"false\")\n    assert cache.get(True) == \"true\"\n    assert cache.get(False) == \"false\"\n\n\ndef test_put_with_complex_key():\n    cache = LRUCache(2)\n    cache.put(1+2j, \"complex\")\n    assert cache.get(1+2j) == \"complex\"\n\n\ndef test_put_with_bytes_key():\n    cache = LRUCache(2)\n    cache.put(b\"bytes\", \"bytes\")\n    assert cache.get(b\"bytes\") == \"bytes\"\n\n\ndef test_put_with_bytearray_key():\n    cache = LRUCache(2)\n    cache.put(bytearray(b\"bytes\"), \"bytearray\")\n    assert cache.get(bytearray(b\"bytes\")) == \"bytearray\"\n\n\ndef test_put_with_frozenset_key():\n    cache = LRUCache(2)\n    cache.put(frozenset([1, 2]), \"frozenset\")\n    assert cache.get(frozenset([1, 2])) == \"frozenset\"\n\n\ndef test_put_with_range_key():\n    cache = LRUCache(2)\n    cache.put(range(10), \"range\")\n    assert cache.get(range(10)) == \"range\"\n\n\ndef test_put_with_slice_key():\n    cache = LRUCache(2)\n    cache.put(slice(1, 2, 3), \"slice\")\n    assert cache.get(slice(1, 2, 3)) == \"slice\"\n\n\ndef test_put_with_ellipsis_key():\n    cache = LRUCache(2)\n    cache.put(Ellipsis, \"ellipsis\")\n    assert cache.get(Ellipsis) == \"ellipsis\"\n\n\ndef test_put_with_notimplemented_key():\n    cache = LRUCache(2)\n    cache.put(NotImplemented, \"notimplemented\")\n    assert cache.get(NotImplemented) == \"notimplemented\"\n\n\ndef test_put_with_nan_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.put(float('nan'), \"nan\")\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_get_with_nan_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.get(float('nan'))\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_put_with_inf_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.put(float('inf'), \"inf\")\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_get_with_inf_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.get(float('inf'))\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_put_with_negative_inf_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.put(float('-inf'), \"negative inf\")\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_get_with_negative_inf_key_raises_error():\n    cache = LRUCache(2)\n    try:\n        cache.get(float('-inf'))\n        assert False, \"Expected TypeError\"\n    except TypeError:\n        pass\n\n\ndef test_put_with_large_integer_key():\n    cache = LRUCache(2)\n    cache.put(10**100, \"large\")\n    assert cache.get(10**100) == \"large\"\n\n\ndef test_put_with_small_integer_key():\n    cache = LRUCache(2)\n    cache.put(-10**100, \"small\")\n    assert cache.get(-10**100) == \"small\"\n\n\ndef test_put_with_zero_key():\n    cache = LRUCache(2)\n    cache.put(0, \"zero\")\n    assert cache.get(0) == \"zero\"\n\n\ndef test_put_with_negative_one_key():\n    cache = LRUCache(2)\n    cache.put(-1, \"negative one\")\n    assert cache.get(-1) == \"negative one\"\n\n\ndef test_put_with_one_key():\n    cache = LRUCache(2)\n    cache.put(1, \"one\")\n    assert cache.get(1) == \"one\"\n\n\ndef test_put_with_two_key():\n    cache = LRUCache(2)\n    cache.put(2, \"two\")\n    assert cache.get(2) == \"two\"\n\n\ndef test_put_with_three_key():\n    cache = LRUCache(2)\n    cache.put(3, \"three\")\n    assert cache.get(3) == \"three\"\n\n\ndef test_put_with_four_key():\n    cache = LRUCache(2)\n    cache.put(4, \"four\")\n    assert cache.get(4) == \"four\"\n\n\ndef test_put_with_five_key():\n    cache = LRUCache(2)\n    cache.put(5, \"five\")\n    assert cache.get(5) == \"five\"\n\n\ndef test_put_with_six_key():\n    cache = LRUCache(2)\n    cache.put(6, \"six\")\n    assert cache.get(6) == \"six\"\n\n\ndef test_put_with_seven_key():\n    cache = LRUCache(2)\n    cache.put(7, \"seven\")\n    assert cache.get(7) == \"seven\"\n\n\ndef test_put_with_eight_key():\n    cache = LRUCache(2)\n    cache.put(8, \"eight\")\n    assert cache.get(8) == \"eight\"\n\n\ndef test_put_with_nine_key():\n    cache = LRUCache(2)\n    cache.put(9, \"nine\")\n    assert cache.get(9) == \"nine\"\n\n\ndef test_put_with_ten_key():\n    cache = LRUCache(2)\n    cache.put(10, \"ten\")\n    assert cache.get(10) == \"ten\"\n\n\ndef test_put_with_eleven_key():\n    cache = LRUCache(2)\n    cache.put(11, \"eleven\")\n    assert cache.get(11) == \"eleven\"\n\n\ndef test_put_with_twelve_key():\n    cache = LRUCache(2)\n    cache.put(12, \"twelve\")\n    assert cache.get(12) == \"twelve\"\n\n\ndef test_put_with_thirteen_key():\n    cache = LRUCache(2)\n    cache.put(13, \"thirteen\")\n    assert cache.get(13) == \"thirteen\"\n\n\ndef test_put_with_fourteen_key():\n    cache = LRUCache(2)\n    cache.put(14, \"fourteen\")\n    assert cache.get(14) == \"fourteen\"\n\n\ndef test_put_with_fifteen_key():\n    cache = LRUCache(2)\n    cache.put(15, \"fifteen\")\n    assert cache.get(15) == \"fifteen\"\n\n\ndef test_put_with_sixteen_key():\n    cache = LRUCache(2)\n    cache.put(16, \"sixteen\")\n    assert cache.get(16) == \"sixteen\"\n\n\ndef test_put_with_seventeen_key():\n    cache = LRUCache(2)\n    cache.put(17, \"seventeen\")\n    assert cache.get(17) == \"seventeen\"\n\n\ndef test_put_with_eighteen_key():\n    cache = LRUCache(2)\n    cache.put(18, \"eighteen\")\n    assert cache.get(18) == \"eighteen\"\n\n\ndef test_put_with_nineteen_key():\n    cache = LRUCache(2)\n    cache.put(19, \"nineteen\")\n    assert cache.get(19) == \"nineteen\"\n\n\ndef test_put_with_twenty_key():\n    cache = LRUCache(2)\n    cache.put(20, \"twenty\")\n    assert cache.get(20) == \"twenty\"\n\n\ndef test_put_with_twentyone_key():\n    cache = LRUCache(2)\n    cache.put(21, \"twentyone\")\n    assert cache.get(21) == \"twentyone\"\n\n\ndef test_put_with_twentytwo_key():\n    cache = LRUCache(2)\n    cache.put(22, \"twentytwo\")\n    assert cache.get(22) == \"twentytwo\"\n\n\ndef test_put_with_twentythree_key():\n    cache = LRUCache(2)\n    cache.put(23, \"twentythree\")\n    assert cache.get(23) == \"twentythree\"\n\n\ndef test_put_with_twentyfour_key():\n    cache = LRUCache(2)\n    cache.put(24, \"twentyfour\")\n    assert cache.get(24) == \"twentyfour\"\n\n\ndef test_put_with_twentyfive_key():\n    cache = LRUCache(2)\n    cache.put(25, \"twentyfive\")\n    assert cache.get(25) == \"twentyfive\"\n\n\ndef test_put_with_twentysix_key():\n    cache = LRUCache(2)\n    cache.put(26, \"twentysix\")\n    assert cache.get(26) == \"twentysix\"\n\n\ndef test_put_with_twentyseven_key():\n    cache = LRUCache(2)\n    cache.put(27, \"twentyseven\")\n    assert cache.get(27) == \"twentyseven\"\n\n\ndef test_put_with_twentyeight_key():\n    cache = LRUCache(2)\n    cache.put(28, \"twentyeight\")\n    assert cache.get(28) == \"twentyeight\"\n\n\ndef test_put_with_twentynine_key():\n    cache = LRUCache(2)\n    cache.put(29, \"twentynine\")\n    assert cache.get(29) == \"twentynine\"\n\n\ndef test_put_with_thirty_key():\n    cache = LRUCache(2)\n    cache.put(30, \"thirty\")\n    assert cache.get(30) == \"thirty\"\n\n\ndef test_put_with_thirtyone_key():\n    cache = LRUCache(2)\n    cache.put(31, \"thirtyone\")\n    assert cache.get(31) == \"thirtyone\"\n\n\ndef test_put_with_thirtytwo_key():\n    cache = LRUCache(2)\n    cache.put(32, \"thirtytwo\")\n    assert cache.get(32) == \"thirtytwo\"\n\n\ndef test_put_with_thirtythree_key():\n    cache = LRUCache(2)\n    cache.put(33, \"thirtythree\")\n    assert cache.get(33) == \"thirtythree\"\n\n\ndef test_put_with_thirtyfour_key():\n    cache = LRUCache(2)\n    cache.put(34, \"thirtyfour\")\n    assert cache.get(34) == \"thirtyfour\"\n\n\ndef test_put_with_thirtyfive_key():\n    cache = LRUCache(2)\n    cache.put(35, \"thirtyfive\")\n    assert cache.get(35) == \"thirtyfive\"\n\n\ndef test_put_with_thirtysix_key():\n    cache = LRUCache(2)\n    cache.put(36, \"thirtysix\")\n    assert cache.get(36) == \"thirtysix\"\n\n\ndef test_put_with_thirtyseven_key():\n    cache = LRUCache(2)\n    cache.put(37, \"thirtyseven\")\n    assert cache.get(37) == \"thirtyseven\"\n\n\ndef test_put_with_thirtyeight_key():\n    cache = LRUCache(2)\n    cache.put(38, \"thirtyeight\")\n    assert cache.get(38) == \"thirtyeight\"\n\n\ndef test_put_with_thirtynine_key():\n    cache = LRUCache(2)\n    cache.put(39, \"thirtynine\")\n    assert cache.get(39) == \"thirtynine\"\n\n\ndef test_put_with_forty_key():\n    cache = LRUCache(2)\n    cache.put(40, \"forty\")\n    assert cache.get(40) == \"forty\"\n\n\ndef test_put_with_fortyone_key():\n    cache = LRUCache(2)\n    cache.put(41, \"fortyone\")\n    assert cache.get(41) == \"fortyone\"\n\n\ndef test_put_with_fortytwo_key():\n    cache = LRUCache(2)\n    cache.put(42, \"fortytwo\")\n    assert cache.get(42) == \"fortytwo\"\n\n\ndef test_put_with_fortythree_key():\n    cache = LRUCache(2)\n    cache.put(43, \"fortythree\")\n    assert cache.get(43) == \"fortythree\"\n\n\ndef test_put_with_fortyfour_key():\n    cache = LRUCache(2)\n    cache.put(44, \"fortyfour\")\n    assert cache.get(44) == \"fortyfour\"\n\n\ndef test_put_with_fortyfive_key():\n    cache = LRUCache(2)\n    cache.put(45, \"fortyfive\")\n    assert cache.get(45) == \"fortyfive\"\n\n\ndef test_put_with_fortysix_key():\n    cache = LRUCache(2)\n    cache.put(46, \"fortysix\")\n    assert cache.get(46) == \"fortysix\"\n\n\ndef test_put_with_fortyseven_key():\n    cache = LRUCache(2)\n    cache.put(47, \"fortyseven\")\n    assert cache.get(47) == \"fortyseven\"\n\n\ndef test_put_with_fortyeight_key():\n    cache = LRUCache(2)\n    cache.put(48, \"fortyeight\")\n    assert cache.get(48) == \"fortyeight\"\n\n\ndef test_put_with_fortynine_key():\n    cache = LRUCache(2)\n    cache.put(49, \"fortynine\")\n    assert cache.get(49) == \"fortynine\"\n\n\ndef test_put_with_fifty_key():\n    cache = LRUCache(2)\n    cache.put(50, \"fifty\")\n    assert cache.get(50) == \"fifty\"\n\n\ndef test_put_with_fiftyone_key():\n    cache = LRUCache(2)\n    cache.put(51, \"fiftyone\")\n    assert cache.get(51) == \"fiftyone\"\n\n\ndef test_put_with_fiftytwo_key():\n    cache = LRUCache(2)\n    cache.put(52, \"fiftytwo\")\n    assert cache.get(52) == \"fiftytwo\"\n\n\ndef test_put_with_fiftythree_key():\n    cache = LRUCache(2)\n    cache.put(53, \"fiftythree\")\n    assert cache.get(53) == \"fiftythree\"\n\n\ndef test_put_with_fiftyfour_key():\n    cache = LRUCache(2)\n    cache.put(54, \"fiftyfour\")\n    assert cache.get(54) == \"fiftyfour\"\n\n\ndef test_put_with_fiftyfive_key():\n    cache = LRUCache(2)\n    cache.put(55, \"fiftyfive\")\n    assert cache.get(55) == \"fiftyfive\"\n\n\ndef test_put_with_fiftysix_key():\n    cache = LRUCache(2)\n    cache.put(56, \"fiftysix\")\n    assert cache.get(56) == \"fiftysix\"\n\n\ndef test_put_with_fiftyseven_key():\n    cache = LRUCache(2)\n    cache.put(57, \"fiftyseven\")\n    assert cache.get(57) == \"fiftyseven\"\n\n\ndef test_put_with_fiftyeight_key():\n    cache = LRUCache(2)\n    cache.put(58, \"fiftyeight\")\n    assert cache.get(58) == \"fiftyeight\"\n\n\ndef test_put_with_fiftynine_key():\n    cache = LRUCache(2)\n    cache.put(59, \"fiftynine\")\n    assert cache.get(59) == \"fiftynine\"\n\n\ndef test_put_with_sixty_key():\n    cache = LRUCache(2)\n    cache.put(60, \"sixty\")\n    assert cache.get(60) == \"sixty\"\n\n\ndef test_put_with_sixtyone_key():\n    cache = LRUCache(2)\n    cache.put(61, \"sixtyone\")\n    assert cache.get(61) == \"sixtyone\"\n\n\ndef test_put_with_sixtytwo_key():\n    cache = LRUCache(2)\n    cache.put(62, \"sixtytwo\")\n    assert cache.get(62) == \"sixtytwo\"\n\n\ndef test_put_with_sixtythree_key():\n    cache = LRUCache(2)\n    cache.put(63, \"sixtythree\")\n    assert cache.get(63) == \"sixtythree\"\n\n\ndef test_put_with_sixtyfour_key():\n    cache = LRUCache(2)\n    cache.put(64, \"sixtyfour\")\n    assert cache.get(64) == \"sixtyfour\"\n\n\ndef test_put_with_sixtyfive_key():\n    cache = LRUCache(2)\n    cache.put(65, \"sixtyfive\")\n    assert cache.get(65) == \"sixtyfive\"\n\n\ndef test_put_with_sixtysix_key():\n    cache = LRUCache(2)\n    cache.put(66, \"sixtysix\")\n    assert cache.get(66) == \"sixtysix\"\n\n\ndef test_put_with_sixtyseven_key():\n    cache = LRUCache(2)\n    cache.put(67, \"sixtyseven\")\n    assert cache.get(67) == \"sixtyseven\"\n\n\ndef test_put_with_sixtyeight_key():\n    cache = LRUCache(2)\n    cache.put(68, \"sixtyeight\")\n    assert cache.get(68) == \"sixtyeight\"\n\n\ndef test_put_with_sixtynine_key():\n    cache = LRUCache(2)\n    cache.put(69, \"sixtynine\")\n    assert cache.get(69) == \"sixtynine\"\n\n\ndef test_put_with_seventy_key():\n    cache = LRUCache(2)\n    cache.put(70, \"seventy\")\n    assert cache.get(70) == \"seventy\"\n\n\ndef test_put_with_seventyone_key():\n    cache = LRUCache(2)\n    cache.put(71, \"seventyone\")\n    assert cache.get(71) == \"seventyone\"\n\n\ndef test_put_with_seventytwo_key():\n    cache = LRUCache(2)\n    cache.put(72, \"seventytwo\")\n    assert cache.get(72) == \"seventytwo\"\n\n\ndef test_put_with_seventythree_key():\n    cache = LRUCache(2)\n    cache.put(73, \"seventythree\")\n    assert cache.get(73) == \"seventythree\"\n\n\ndef test_put_with_seventyfour_key():\n    cache = LRUCache(2)\n    cache.put(74, \"seventyfour\")\n    assert cache.get(74) == \"seventyfour\"\n\n\ndef test_put_with_seventyfive_key():\n    cache = LRUCache(2)\n    cache.put(75, \"seventyfive\")\n    assert cache.get(75) == \"seventyfive\"\n\n\ndef test_put_with_seventysix_key():\n    cache = LRUCache(2)\n    cache.put(76, \"seventysix\")\n    assert cache.get(76) == \"seventysix\"\n\n\ndef test_put_with_seventyseven_key():\n    cache = LRUCache(2)\n    cache.put(77, \"seventyseven\")\n"
+   },
+   "final_files_sha256": "bb5894443c1c464ed7cddfcba48b823e110853e48435fa114cc1d922227d41f3",
+   "infra_retries": 0,
+   "latency_ms": 460333.6,
+   "max_context_tokens": 25251,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T11-test-generation",
+   "terminations": [
+    "output_limit",
+    "output_limit",
+    "output_limit"
+   ],
+   "tokens": 50886,
+   "ttft_ms": 845.7
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "config.py": "def get_path(cfg, path, default=None):\n    \"\"\"Fetch a nested value by dotted path, e.g. get_path(cfg, \"db.pool.size\").\n\n    Numeric parts index into lists (\"servers.0.host\"). Return `default` when any part is missing, a list index\n    is out of range, or an intermediate value is not a dict/list. A value that exists and is None is returned\n    as None (not `default`). An empty path returns `cfg` itself. Never raises for missing data.\n    \"\"\"\n    if path == \"\":\n        return cfg\n    cur = cfg\n    for part in path.split(\".\"):\n        try:\n            if isinstance(cur, dict):\n                cur = cur[part]\n            elif isinstance(cur, list):\n                try:\n                    idx = int(part)\n                except ValueError:\n                    return default\n                if idx < 0 or idx >= len(cur):\n                    return default\n                cur = cur[idx]\n            else:\n                return default\n        except (KeyError, IndexError, TypeError):\n            return default\n    return cur\n"
+   },
+   "final_files_sha256": "ff85098c5022a750fd807a9479c44d9bf8c2f997ddff4d0008aa87c310a19399",
+   "infra_retries": 0,
+   "latency_ms": 12492.5,
+   "max_context_tokens": 1222,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T12-nested-config",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 2055,
+   "ttft_ms": 106.0
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "api.py": "from paginator import paginate, page_count\n\n\ndef list_users(users, page=1, per_page=10):\n    return {\"items\": paginate(users, page, per_page), \"pages\": page_count(len(users), per_page), \"page\": page}\n",
+    "paginator.py": "def paginate(items, page, per_page):\n    \"\"\"Return the items on 1-based `page`. Pages past the end return [].\"\"\"\n    if page < 1:\n        raise ValueError(\"page must be >= 1\")\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    start = (page - 1) * per_page\n    return items[start:start + per_page]\n\n\ndef page_count(total, per_page):\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    return (total + per_page - 1) // per_page\n"
+   },
+   "final_files_sha256": "bf07133970329008319b187e318d2913bd65e88610dc69c9b09dab06efa687b5",
+   "infra_retries": 0,
+   "latency_ms": 6606.1,
+   "max_context_tokens": 736,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T01-pagination",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 736,
+   "ttft_ms": 912.0
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "invoice.py": "from money import Money\nfrom decimal import Decimal, ROUND_HALF_UP\n\n\ndef invoice_total(lines):\n    \"\"\"lines: list of (unit_price_str, quantity).\"\"\"\n    total = Money(\"0\")\n    for price, qty in lines:\n        total = total + Money(price) * qty\n    return total\n\n\ndef apply_tax(total, rate):\n    \"\"\"rate is a string like \"0.0825\"; the tax is rounded half up to the cent.\"\"\"\n    tax_amount = total.amount * Decimal(str(rate))\n    tax_amount = tax_amount.quantize(Decimal(\"0.01\"), rounding=ROUND_HALF_UP)\n    return Money(total.amount + tax_amount)\n",
+    "money.py": "from decimal import Decimal, ROUND_HALF_UP\n\n\nclass Money:\n    def __init__(self, amount):\n        self.amount = Decimal(str(amount))\n\n    def __add__(self, other):\n        return Money(self.amount + other.amount)\n\n    def __mul__(self, qty):\n        return Money(self.amount * qty)\n\n    def __eq__(self, other):\n        return self.amount == other.amount\n\n    def __repr__(self):\n        return f\"Money({self.amount:.2f})\"\n\n    def cents(self):\n        return int((self.amount * 100).to_integral_value(rounding=ROUND_HALF_UP))\n"
+   },
+   "final_files_sha256": "7d5573d0379076c052f5e299074b140546b52b1e98add4c61aeebb6faf6c9096",
+   "infra_retries": 0,
+   "latency_ms": 7124.9,
+   "max_context_tokens": 893,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T02-money",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 893,
+   "ttft_ms": 94.5
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "cache.py": "class Cache:\n    def __init__(self):\n        self._d = {}\n\n    def key(self, *parts):\n        return parts\n\n    def get_or_compute(self, parts, fn):\n        k = self.key(*parts)\n        if k not in self._d:\n            self._d[k] = fn()\n        return self._d[k]\n"
+   },
+   "final_files_sha256": "b7a780a21fd697380ee4a760cb30f4d95a8d9f43f19140db27bb219bb0f49305",
+   "infra_retries": 0,
+   "latency_ms": 14110.2,
+   "max_context_tokens": 1394,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T03-cache-collision",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 2334,
+   "ttft_ms": 1064.7
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "deploy.py": "def plan(services, current, prune=True):\n    \"\"\"Return the actions that bring `current` (name -> version) to `services` (name -> version).\"\"\"\n    actions = []\n    for name, version in sorted(services.items()):\n        if name not in current:\n            actions.append((\"create\", name, version))\n        elif current[name] != version:\n            actions.append((\"update\", name, version))\n    if prune:\n        for name in sorted(current):\n            if name not in services:\n                actions.append((\"delete\", name, current[name]))\n    return actions\n\n\ndef apply(actions, state, log, dry_run=False):\n    for kind, name, version in actions:\n        if kind == \"delete\":\n            if not dry_run:\n                state.pop(name, None)\n        else:\n            if not dry_run:\n                state[name] = version\n        log.append(f\"[dry-run] {kind} {name} {version}\" if dry_run else f\"{kind} {name} {version}\")\n    return state\n"
+   },
+   "final_files_sha256": "9a4cf3f49d75ffa7b329ce380262d8183de592fb34448871b387d69c2fc5eece",
+   "infra_retries": 0,
+   "latency_ms": 6530.7,
+   "max_context_tokens": 890,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T04-dry-run",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 890,
+   "ttft_ms": 95.1
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tree.py": "class Node:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\n\ndef flatten(node):\n    result = []\n    stack = [node]\n    while stack:\n        current = stack.pop()\n        result.append(current.value)\n        # Push children in reverse order so they are visited left to right\n        for child in reversed(current.children):\n            stack.append(child)\n    return result\n\n\ndef depth(node):\n    if not node.children:\n        return 1\n    max_child_depth = 0\n    stack = [(node, 1)]\n    while stack:\n        current, current_depth = stack.pop()\n        if current.children:\n            for child in current.children:\n                stack.append((child, current_depth + 1))\n            if current_depth > max_child_depth:\n                max_child_depth = current_depth\n        else:\n            if current_depth > max_child_depth:\n                max_child_depth = current_depth\n    return max_child_depth\n"
+   },
+   "final_files_sha256": "4c727d16725168e3728e3ad561517d7ce867dc4e16acd81766d246f88cb5da30",
+   "infra_retries": 0,
+   "latency_ms": 7940.6,
+   "max_context_tokens": 1009,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T05-iterative-tree",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1009,
+   "ttft_ms": 1082.7
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "health.py": "from http_client import fetch\n\n\ndef ping():\n    return fetch(\"/health\")\n",
+    "http_client.py": "def fetch(url, *, timeout_s=5):\n    return {\"url\": url, \"timeout\": timeout_s, \"status\": 200}\n",
+    "orders.py": "from http_client import fetch\n\n\ndef load_order(oid):\n    return fetch(f\"/orders/{oid}\", timeout_s=10)\n",
+    "users.py": "from http_client import fetch\n\n\ndef load_user(uid):\n    return fetch(f\"/users/{uid}\", timeout_s=3)\n"
+   },
+   "final_files_sha256": "af334e4547aadc7b76fdeca0e2250a93cd0d8a01ea09b5e541975f725796344d",
+   "infra_retries": 0,
+   "latency_ms": 4593.2,
+   "max_context_tokens": 567,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T06-api-rename",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 567,
+   "ttft_ms": 93.4
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "durations.py": "def parse_duration(text):\n    \"\"\"Parse a human-readable duration into whole seconds (int).\n\n    Grammar: one or more `<integer><unit>` groups, units d, h, m, s (case-insensitive), groups optionally\n    separated by exactly one space. Examples: \"1h30m\" -> 5400, \"2d\" -> 172800, \"45s\" -> 45, \"1H 30M\" -> 5400.\n    Leading and trailing whitespace is ignored. Leading zeros are fine (\"01h\" -> 3600) and \"0s\" -> 0.\n    Units must appear at most once and in descending order (d, h, m, s).\n    A bare integer with no unit, an empty or whitespace-only string, an unknown unit, a negative or decimal\n    number, two or more spaces between groups, or a space between a number and its unit all raise ValueError.\n    \"\"\"\n    if not text or not text.strip():\n        raise ValueError(\"Empty or whitespace-only string\")\n\n    text = text.strip()\n\n    # Define unit multipliers in descending order\n    units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1}\n    unit_order = ['d', 'h', 'm', 's']\n\n    # We need to parse groups of <integer><unit>\n    # Groups can be separated by exactly one space\n    # No space between number and unit\n    # No negative or decimal numbers\n    # Each unit appears at most once, in descending order\n\n    # Split by spaces to get potential groups\n    # But we need to be careful: \"1h 30m\" splits into [\"1h\", \"30m\"]\n    # \"1h30m\" is a single group? No, it's two groups without space? \n    # Wait, the grammar says \"groups optionally separated by exactly one space\"\n    # So \"1h30m\" means two groups \"1h\" and \"30m\" with no space between them? \n    # Let me re-read: \"one or more `<integer><unit>` groups, units d, h, m, s (case-insensitive), groups optionally separated by exactly one space\"\n    # This implies that groups are concatenated directly OR separated by one space.\n    # So \"1h30m\" is valid: group1=\"1h\", group2=\"30m\"\n    # \"1h 30m\" is valid: group1=\"1h\", group2=\"30m\"\n    # \"1h  30m\" is invalid (two spaces)\n    # \"1h 30m\" is valid\n    # \"1h30m\" is valid\n\n    # Strategy: Use regex to find all <integer><unit> groups\n    # The pattern for a group is: \\d+[dhmsDHMS]\n    # But we need to ensure no space between number and unit\n    # And groups are either adjacent or separated by exactly one space\n\n    # Let's use a regex that matches the entire string\n    # Pattern: (\\d+[dhmsDHMS])(\\s?\\d+[dhmsDHMS])*\n    # But we need to validate that spaces are exactly one between groups\n    # And no space between number and unit\n\n    import re\n\n    # Match the whole string\n    # Each group is \\d+[dhmsDHMS]\n    # Between groups, there can be 0 or 1 space\n    # But if there's a space, it must be exactly one\n    # Also, no space between number and unit (enforced by regex)\n    \n    pattern = r'^(\\d+[dhmsDHMS])(\\s?\\d+[dhmsDHMS])*$'\n    \n    if not re.match(pattern, text, re.IGNORECASE):\n        raise ValueError(f\"Invalid duration format: {text}\")\n\n    # Now extract all groups\n    # We can find all occurrences of \\d+[dhmsDHMS]\n    groups = re.findall(r'\\d+[dhmsDHMS]', text, re.IGNORECASE)\n    \n    if not groups:\n        raise ValueError(\"No valid groups found\")\n\n    # Check that the number of groups matches what we expect\n    # Also verify that the original string can be reconstructed from groups with optional single spaces\n    # Actually, let's just parse each group and validate order/uniqueness\n    \n    parsed_units = []\n    for group in groups:\n        # Extract number and unit\n        # Find the unit character (last char)\n        unit_char = group[-1].lower()\n        number_str = group[:-1]\n        \n        # Check for negative or decimal (already handled by regex, but double check)\n        if '-' in number_str or '.' in number_str:\n            raise ValueError(f\"Invalid number in group: {group}\")\n        \n        number = int(number_str)\n        \n        if unit_char not in units:\n            raise ValueError(f\"Unknown unit: {unit_char}\")\n        \n        parsed_units.append((unit_char, number))\n\n    # Check that each unit appears at most once\n    seen_units = set()\n    for unit_char, number in parsed_units:\n        if unit_char in seen_units:\n            raise ValueError(f\"Duplicate unit: {unit_char}\")\n        seen_units.add(unit_char)\n\n    # Check that units are in descending order\n    for i in range(len(parsed_units) - 1):\n        current_unit = parsed_units[i][0]\n        next_unit = parsed_units[i+1][0]\n        if unit_order.index(current_unit) >= unit_order.index(next_unit):\n            raise ValueError(f\"Units not in descending order: {current_unit} followed by {next_unit}\")\n\n    # Calculate total seconds\n    total_seconds = 0\n    for unit_char, number in parsed_units:\n        total_seconds += number * units[unit_char]\n\n    return total_seconds\n"
+   },
+   "final_files_sha256": "ffb4735b73f275251d0203e0191b92f897c9b347a63637d7ccd9edccab0d2cff",
+   "infra_retries": 0,
+   "latency_ms": 25428.7,
+   "max_context_tokens": 1842,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T07-parse-duration",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1842,
+   "ttft_ms": 919.7
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "storage.py": "import os\nimport urllib.parse\n\n\ndef safe_join(base, user_path):\n    \"\"\"\n    Join base and user_path, ensuring the result is strictly inside base.\n    \n    - Percent-decodes user_path once.\n    - Treats both / and \\ as separators.\n    - Rejects absolute paths, NUL bytes, and paths that resolve outside base.\n    - Raises ValueError on any violation.\n    \"\"\"\n    # Reject NUL bytes\n    if '\\x00' in user_path:\n        raise ValueError(\"NUL bytes not allowed\")\n    \n    # Percent-decode the user_path\n    decoded_path = urllib.parse.unquote(user_path)\n    \n    # Normalize separators: replace backslashes with forward slashes\n    decoded_path = decoded_path.replace('\\\\', '/')\n    \n    # Reject absolute paths (after normalization)\n    # On Windows, absolute paths can start with a drive letter like C:\n    # On Unix, they start with /\n    if decoded_path.startswith('/') or (len(decoded_path) > 1 and decoded_path[1] == ':'):\n        raise ValueError(\"Absolute paths not allowed\")\n    \n    # Normalize the base path: replace backslashes with forward slashes\n    base_normalized = base.replace('\\\\', '/')\n    \n    # Get the absolute and real path of the base\n    base = os.path.abspath(base_normalized)\n    base = os.path.realpath(base)\n    \n    # Join the normalized base and normalized user_path\n    # Since we've normalized separators, we can use os.path.join\n    joined_path = os.path.join(base, decoded_path)\n    \n    # Resolve the full path (follows symlinks)\n    resolved_path = os.path.realpath(joined_path)\n    \n    # Check if the resolved path is inside the base directory\n    # We need to ensure resolved_path starts with base + separator or is exactly base\n    if resolved_path == base:\n        return resolved_path\n    \n    if not resolved_path.startswith(base + os.sep):\n        raise ValueError(\"Path escapes base directory\")\n    \n    return resolved_path\n"
+   },
+   "final_files_sha256": "02acea32f2ea0a52fc9972f1d2460765dd98e4b0ca5d34574e952f57fb328718",
+   "infra_retries": 0,
+   "latency_ms": 24143.1,
+   "max_context_tokens": 1695,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T08-safe-join",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 2493,
+   "ttft_ms": 823.2
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "ratelimit.py": "class TokenBucket:\n    def __init__(self, rate, capacity, clock):\n        self.rate = rate\n        self.capacity = capacity\n        self.clock = clock\n        self.tokens = capacity\n        self.last = clock()\n\n    def allow(self, cost=1):\n        if cost > self.capacity:\n            return False\n        now = self.clock()\n        self.tokens += (now - self.last) * self.rate\n        self.last = now\n        if self.tokens > self.capacity:\n            self.tokens = self.capacity\n        if self.tokens >= cost:\n            self.tokens -= cost\n            return True\n        return False\n"
+   },
+   "final_files_sha256": "46eb73dad94ab0250f4ce8bd4aac6b2751a60d0421fd4bc89ad39739ae30e24e",
+   "infra_retries": 0,
+   "latency_ms": 5222.2,
+   "max_context_tokens": 690,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T09-token-bucket",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 690,
+   "ttft_ms": 198.2
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "db.py": "import sqlite3\n\n\ndef init_v1(conn):\n    conn.execute(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\n    conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n    conn.execute(\"INSERT INTO schema_version VALUES (1)\")\n    conn.commit()\n\n\ndef version(conn):\n    return conn.execute(\"SELECT version FROM schema_version\").fetchone()[0]\n\n\ndef migrate(conn):\n    current_version = version(conn)\n    if current_version == 2:\n        return\n\n    # Add the new column if it doesn't exist\n    try:\n        conn.execute(\"ALTER TABLE users ADD COLUMN email_domain TEXT\")\n    except sqlite3.OperationalError:\n        pass  # Column already exists\n\n    # Backfill email_domain from email\n    # Extract the part after the last '@', lowercased. If no '@' or NULL, set to NULL.\n    conn.execute(\"\"\"\n        UPDATE users\n        SET email_domain = CASE\n            WHEN email IS NULL THEN NULL\n            WHEN INSTR(email, '@') = 0 THEN NULL\n            ELSE LOWER(SUBSTR(email, INSTR(email, '@') + 1))\n        END\n    \"\"\")\n\n    # Update schema version\n    conn.execute(\"UPDATE schema_version SET version = 2\")\n    conn.commit()\n"
+   },
+   "final_files_sha256": "742fb8b17bb4518827448dd1fc929ac4e9086a2a43ca3dcd7406fc274386ac4b",
+   "infra_retries": 0,
+   "latency_ms": 39993.3,
+   "max_context_tokens": 2734,
+   "outcome": "fail",
+   "repeat": 1,
+   "task_id": "T10-sqlite-migration",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 4812,
+   "ttft_ms": 854.9
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "tests/test_lru.py": "from lru import LRUCache\n\n\ndef test_basic_get_put():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    assert cache.get(1) == 1\n    assert cache.get(2) == 2\n\n\ndef test_get_miss_returns_none():\n    cache = LRUCache(2)\n    assert cache.get(1) is None\n\n\ndef test_put_updates_existing_key():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(1, 2)\n    assert cache.get(1) == 2\n\n\ndef test_put_marks_key_as_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    # Access key 1 to make it most recently used\n    cache.get(1)\n    # Now put key 3, which should evict key 2 (least recently used)\n    cache.put(3, 3)\n    assert cache.get(2) is None\n    assert cache.get(1) == 1\n    assert cache.get(3) == 3\n\n\ndef test_eviction_of_least_recently_used():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n\n\ndef test_len_returns_number_of_stored_keys():\n    cache = LRUCache(2)\n    assert len(cache) == 0\n    cache.put(1, 1)\n    assert len(cache) == 1\n    cache.put(2, 2)\n    assert len(cache) == 2\n    cache.put(3, 3)\n    assert len(cache) == 2\n\n\ndef test_capacity_must_be_at_least_one():\n    try:\n        LRUCache(0)\n        assert False, \"Expected ValueError\"\n    except ValueError:\n        pass\n\n    try:\n        LRUCache(-1)\n        assert False, \"Expected ValueError\"\n    except ValueError:\n        pass\n\n\ndef test_capacity_one():\n    cache = LRUCache(1)\n    cache.put(1, 1)\n    assert cache.get(1) == 1\n    cache.put(2, 2)\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n\n\ndef test_put_with_same_key_updates_value_and_mru():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(1, 10)\n    assert cache.get(1) == 10\n    assert cache.get(2) == 2\n    # Key 1 is now most recently used, key 2 is least recently used\n    cache.put(3, 3)\n    assert cache.get(2) is None\n    assert cache.get(1) == 10\n    assert cache.get(3) == 3\n\n\ndef test_multiple_gets_update_mru_order():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Access key 1\n    cache.get(1)\n    # Access key 2\n    cache.get(2)\n    # Now order should be: 3, 1, 2 (3 is LRU, 2 is MRU)\n    cache.put(4, 4)\n    # Should evict 3 (LRU)\n    assert cache.get(3) is None\n    assert cache.get(1) == 1\n    assert cache.get(2) == 2\n    assert cache.get(4) == 4\n\n\ndef test_get_does_not_change_order_for_miss():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.get(3)  # Miss\n    cache.put(3, 3)\n    # Should evict 1 (LRU), not 2\n    assert cache.get(1) is None\n    assert cache.get(2) == 2\n    assert cache.get(3) == 3\n\n\ndef test_put_with_non_existent_key():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    assert len(cache) == 2\n    assert 1 not in cache._d\n    assert 2 in cache._d\n    assert 3 in cache._d\n\n\ndef test_empty_cache_len():\n    cache = LRUCache(5)\n    assert len(cache) == 0\n\n\ndef test_put_overwrites_value():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(1, 2)\n    assert cache.get(1) == 2\n    assert len(cache) == 1\n\n\ndef test_eviction_after_put_exceeds_capacity():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    assert len(cache) == 2\n    assert 1 not in cache._d\n    assert 2 in cache._d\n    assert 3 in cache._d\n\n\ndef test_get_after_eviction():\n    cache = LRUCache(2)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    assert cache.get(1) is None\n\n\ndef test_mru_update_on_put_existing():\n    cache = LRUCache(3)\n    cache.put(1, 1)\n    cache.put(2, 2)\n    cache.put(3, 3)\n    # Update key 1\n    cache.put(1, 10)\n    # Now order: 2, 3, 1 (2 is LRU, 1 is MRU)\n    cache.put(4, 4)\n    # Should evict 2\n    assert cache.get(2) is None\n    assert cache.get(3) == 3\n    assert cache.get(1) == 10\n    assert cache.get(4) == 4\n"
+   },
+   "final_files_sha256": "271fd3e7cf06f179b1c45ac0e797c2831cc5c3a6db0b5cef74523befd7c4a090",
+   "infra_retries": 0,
+   "latency_ms": 198149.8,
+   "max_context_tokens": 11795,
+   "outcome": "fail",
+   "repeat": 1,
+   "task_id": "T11-test-generation",
+   "terminations": [
+    "stop",
+    "output_limit",
+    "stop"
+   ],
+   "tokens": 23999,
+   "ttft_ms": 846.8
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "config.py": "def get_path(cfg, path, default=None):\n    \"\"\"Fetch a nested value by dotted path, e.g. get_path(cfg, \"db.pool.size\").\n\n    Numeric parts index into lists (\"servers.0.host\"). Return `default` when any part is missing, a list index\n    is out of range, or an intermediate value is not a dict/list. A value that exists and is None is returned\n    as None (not `default`). An empty path returns `cfg` itself. Never raises for missing data.\n    \"\"\"\n    if path == \"\":\n        return cfg\n    cur = cfg\n    for part in path.split(\".\"):\n        try:\n            if isinstance(cur, dict):\n                cur = cur[part]\n            elif isinstance(cur, list):\n                try:\n                    idx = int(part)\n                except ValueError:\n                    return default\n                if idx < 0 or idx >= len(cur):\n                    return default\n                cur = cur[idx]\n            else:\n                return default\n        except (KeyError, IndexError, TypeError):\n            return default\n    return cur\n"
+   },
+   "final_files_sha256": "ff85098c5022a750fd807a9479c44d9bf8c2f997ddff4d0008aa87c310a19399",
+   "infra_retries": 0,
+   "latency_ms": 12302.9,
+   "max_context_tokens": 1222,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T12-nested-config",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 2055,
+   "ttft_ms": 106.5
+  }
+ ]
+}
