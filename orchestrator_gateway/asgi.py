@@ -50,7 +50,7 @@ def create_asgi_gateway(
     max_body_bytes: int = 1_000_000,
     monitoring_token: str | None = None,
     require_monitoring_auth: bool = False,
-    allow_worker_pinning: bool = False,
+    allow_worker_pinning: bool | None = None,
     clients: ClientRegistry | None = None,
     listener: str = "any",
     local_addresses: Callable[[], set[str]] | None = None,
