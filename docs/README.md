@@ -33,6 +33,7 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 - [`model-catalog.md`](model-catalog.md) — Model catalog for the dual-B65 inference hosts.
 - [`security-controls.md`](security-controls.md) — Baseline host security controls.
 - [`enhancement-analysis.md`](enhancement-analysis.md) — Enhancement opportunities and roadmap analysis.
+- [`enhancement-priorities.md`](enhancement-priorities.md) — Ranked gateway enhancement priorities, architecture gaps and technical debt.
 - [`findings-summary.md`](findings-summary.md) — Repository review findings summary and recommended priority order.
 - [`vault.md`](vault.md) — HashiCorp Vault runtime integration.
 - [`GATEWAY-SINGLE-HOST-QUALIFICATION.md`](GATEWAY-SINGLE-HOST-QUALIFICATION.md) — Single-host gateway acceptance gates, live probes, failure drills and verified state backups.
