@@ -1,0 +1,25 @@
+head rep1 T01-pagination           PASS attempts=1 wall=50.1s tokens=3975
+head rep1 T02-money                PASS attempts=1 wall=67.4s tokens=5560
+head rep1 T03-cache-collision      PASS attempts=1 wall=39.9s tokens=3643
+head rep1 T04-dry-run              PASS attempts=1 wall=31.1s tokens=2928
+head rep1 T05-iterative-tree       PASS attempts=1 wall=35.3s tokens=3347
+head rep1 T06-api-rename           PASS attempts=1 wall=16.2s tokens=1592
+head rep1 T07-parse-duration       PASS attempts=2 wall=239.2s tokens=19036
+head rep1 T08-safe-join            PASS attempts=1 wall=87.6s tokens=6924
+head rep1 T09-token-bucket         PASS attempts=1 wall=23.5s tokens=2239
+head rep1 T10-sqlite-migration     FAIL attempts=3 wall=308.0s tokens=25186
+head rep1 T11-test-generation      PASS attempts=1 wall=69.7s tokens=5549
+head rep1 T12-nested-config        PASS attempts=1 wall=51.8s tokens=4429
+head rep2 T01-pagination           PASS attempts=1 wall=40.1s tokens=3481
+head rep2 T02-money                PASS attempts=1 wall=62.7s tokens=5223
+head rep2 T03-cache-collision      PASS attempts=1 wall=21.2s tokens=2242
+head rep2 T04-dry-run              PASS attempts=1 wall=32.2s tokens=3002
+head rep2 T05-iterative-tree       PASS attempts=1 wall=34.8s tokens=3320
+head rep2 T06-api-rename           PASS attempts=1 wall=15.9s tokens=1592
+head rep2 T07-parse-duration       PASS attempts=2 wall=227.5s tokens=18334
+head rep2 T08-safe-join            PASS attempts=1 wall=85.0s tokens=6748
+head rep2 T09-token-bucket         PASS attempts=1 wall=31.9s tokens=2888
+head rep2 T10-sqlite-migration     PASS attempts=2 wall=156.5s tokens=12929
+head rep2 T11-test-generation      PASS attempts=1 wall=102.1s tokens=7894
+head rep2 T12-nested-config        PASS attempts=1 wall=54.1s tokens=4592
+RESULT head {"reps": 2, "tasks": 12, "validated_rate": 95.8, "validated_per_rep": [11, 12], "first_attempt_rate": 83.3, "median_secs_to_validated": 50.1, "mean_secs_per_task": 78.5, "mean_tokens_per_task": 6527, "per_task_pass": {"T01-pagination": "2/2", "T02-money": "2/2", "T03-cache-collision": "2/2", "T04-dry-run": "2/2", "T05-iterative-tree": "2/2", "T06-api-rename": "2/2", "T07-parse-duration": "2/2", "T08-safe-join": "2/2", "T09-token-bucket": "2/2", "T10-sqlite-migration": "1/2", "T11-test-generation": "2/2", "T12-nested-config": "2/2"}, "always_fail": [], "flaky": ["T10-sqlite-migration"]}
