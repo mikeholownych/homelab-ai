@@ -488,6 +488,12 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
       convergence had been broken since the 2026-10-07 access changes (its checks were refused); repaired in `526bda1`.
 - [x] V11 live Vault rotation proof (2026-10-10 21:55): qualification_client rotated in Vault; the helper converged the token
       file and registry digest, restarted only the gateway; the old token is refused (401), the new one accepted (200).
+- [x] Vault unsealed (2026-11-14): Vault VM restarted and came back sealed; unsealed via protected Shamir share
+      (`vault-unseal.key`) through the verified TLS API (`PUT /v1/sys/unseal`, HTTP 200, share stripped of trailing newline);
+      health now `initialized: true, sealed: false, standby: false, active: true` (Vault v2.1.1). Workload access
+      recovered: `ansible-playbook -i inventory/production playbooks/validate.yml --limit ai-5820-01` →
+      `[PASS] vault_access` (AppRole login ok, policies ['default', 't5820-platform']). No active work was in flight
+      before unsealing.
 New findings from the code review (folded into the workstreams):
 - [x] N1 finish_reason overwritten (runtime.py hid `length`) → fixed, tested and deployed in gateway release `f31218c`
 - [x] N2 evidence hash chain resets on gateway restart → persisted continuity and strict link verification tested and deployed in R11
