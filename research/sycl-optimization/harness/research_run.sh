@@ -21,10 +21,10 @@ if [ "$MODE" = bench ]; then MODEL="$1"; shift; fi
 ENVS="-e ONEAPI_DEVICE_SELECTOR=level_zero:0,1 -e ZE_AFFINITY_MASK=$GPU -e SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1"
 for kv in ${EXTRA_ENV:-}; do ENVS="$ENVS -e $kv"; done
 MODEL_DIR="${MODEL_DIR:-/var/lib/local-ai/models/gguf}"
-COMMON="podman run --rm --name $UNIT --network host --ipc host --security-opt no-new-privileges --device local-ai.intel/gpu=all --group-add keep-groups $ENVS -v /dev/dri/by-path:/dev/dri/by-path:ro -v $MODEL_DIR:/models:ro"
+COMMON="podman run --rm --name $UNIT --network host --ipc host --security-opt no-new-privileges --device local-ai.intel/gpu=all --group-add keep-groups $ENVS -v /dev/dri/by-path:/dev/dri/by-path:ro -v $MODEL_DIR:/models:ro ${EXTRA_MOUNTS:-}"
 PROPS="-p User=aihost-runtime -p Group=aihost-runtime -p SupplementaryGroups=render\ video -p WorkingDirectory=/var/lib/aihost-runtime -p LimitMEMLOCK=infinity -p LimitNOFILE=65536 -p Delegate=yes -p ProtectControlGroups=no -p PrivateTmp=true"
 if [ "$MODE" = bench ]; then
-  CMD="$COMMON --entrypoint /app/llama $IMAGE bench -m /models/$MODEL $*"
+  CMD="$COMMON --entrypoint /app/llama $IMAGE ${SUBCMD:-bench} -m /models/$MODEL $*"
   ssh -o BatchMode=yes "$HOST" "cd /; sudo -n systemd-run --quiet --wait --pipe --collect --unit $UNIT $PROPS /usr/bin/$CMD"
 else
   CMD="$COMMON $IMAGE --host 127.0.0.1 --port $PORT $*"

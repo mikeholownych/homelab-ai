@@ -1,0 +1,11 @@
+0.09.022.830 I cmn          init: llama threadpool init, n_threads = 4
+1.33.599.308 I 
+1.33.599.416 I system_info: n_threads = 4 (n_threads_batch = 4) / 8 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | AVX512 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+1.33.599.527 I perplexity: saving all logits to /research/base-logits-head-q36.bin
+1.33.599.534 I perplexity: tokenizing the input ..
+1.33.902.802 I perplexity: tokenization took 303.26 ms
+1.33.902.941 I perplexity: calculating perplexity over 20 chunks, n_ctx=2048, batch_size=4096, n_seq=2
+0.93 minutes
+1.39.687.669 I perplexity: 5.69 seconds per pass - ETA [1]25.3715,[2]32.3408,[3]20.3576,[4]26.0371,[5]24.6023,[6]23.3527,[7]17.6732,[8]16.7507,[9]16.3987,[10]16.6575,[11]16.1286,[12]16.1724,[13]15.4458,[14]15.8030,[15]15.6113,[16]16.0328,[17]15.9096,[18]15.6557,[19]15.4069,[20]15.5081,
+2.30.249.067 I Final estimate: PPL = 15.5081 +/- 0.32881
+
