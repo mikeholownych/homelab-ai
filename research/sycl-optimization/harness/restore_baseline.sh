@@ -4,6 +4,8 @@
 # Steps: stop every research unit, start production workers, wait for gateway readiness with both workers healthy.
 set -euo pipefail
 HOST="${1:-10.0.8.5}"
+# The workstation-side hourly reconcile timer is paused during research windows; re-enable it first.
+systemctl --user start aihost-reconcile.timer 2>/dev/null || true
 PIN="sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451"
 ssh -o BatchMode=yes "$HOST" 'bash -s' -- "$PIN" <<'REMOTE'
 set -euo pipefail
