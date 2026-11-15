@@ -83,3 +83,14 @@ Deployed 1023. Bisect images with ESIMD=0: 493253fe 1022, 39febd2a 1019, 2c93f0b
 HEAD + ESIMD=0 plus one more toggle (none recover it): FA_DPAS=0 873; FA_ONEDNN=1 874; FA_ONEDNN=0 691 (worse); ENABLE_MKL_FA=0 876; MMID_SCHED=0 872;
 ENABLE_GRAPH=1 876; ENABLE_FUSION=0 864; ENABLE_OPT=0 878; baseline-with-no-op 865.
 Qwen3.6-35B on HEAD: XMX-ESIMD on/off identical (pp512/2048/8192/tg: 1400/1800/1777/80.8 vs 1403/1801/1776/81.0). The ESIMD switch matters for Coder-30B only.
+
+### Bisect round 4 (Coder-30B, GPU 0, ESIMD=0, 3 reps; t/s mean, stddev)
+| image (index) | pp2048 | pp32768 |
+|---|---|---|
+| 1b6935b2 (41) | 1549 (52) | 1029 (1.4) |
+| 8766c027 (48) | 1591 (104) | 1054 (3.2) |
+Deployed pp32768 = 1023; 18c5a95e (49) = 893; HEAD = 872.
+=> Indices 41-48 are all good at 32K. The residual 32K regression enters at 18c5a95e (#30156, device-side MoE scheduler) and nowhere earlier.
+Caveat: `GGML_SYCL_MMID_SCHED=0` on HEAD did not recover it, so either that switch does not bypass the new code path or part of the loss is in a commit after 18c5a95e (HEAD 872 vs 893). Next: read the #30156 diff for the switch's scope, and test HEAD with the #30156 change reverted.
+pp2048 stddev at 8766c027 is wide (104), so the pp2048 numbers are indicative only.
+Production restored after the outage: "OK: baseline restored, gateway ready, 2/2 workers available".
