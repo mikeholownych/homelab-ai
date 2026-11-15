@@ -16,3 +16,4 @@ docs/archive/transcripts/
 
 # Local Cloudflare API cache (account metadata); never commit
 .cloudflare/
+.venv-gateway-test/
