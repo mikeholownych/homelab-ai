@@ -13,3 +13,6 @@ kernel/build/*
 
 # Session transcript archives
 docs/archive/transcripts/
+
+# Local Cloudflare API cache (account metadata); never commit
+.cloudflare/
