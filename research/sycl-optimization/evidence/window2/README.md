@@ -76,3 +76,10 @@ Our confirmation on HEAD a956a852, Coder-30B, GPU 0 (t/s; pp512 / pp2048 / pp819
 | HEAD XMX_MAX_COLS=0 | 1306 | 1633 | 1407 | 870 | 95.9 |
 => The XMX-ESIMD path explains most of the 2K-8K loss (HEAD with it off beats deployed at 2K, -4% at 8K). A gap remains at 32K (-15% vs deployed): a second, context-scaling cause
    is still open (candidates: flash-attention changes such as #30684 fattn-mkl dependencies, or #31125 DPAS FA).
+
+### Residual 32K gap (Coder-30B, GPU 0, pp32768 t/s, XMX-ESIMD off unless noted)
+Deployed 1023. Bisect images with ESIMD=0: 493253fe 1022, 39febd2a 1019, 2c93f0b6 1024 (all match deployed); 18c5a95e 893; HEAD 872.
+=> the second cause enters in the last SYCL commits after 2c93f0b6 up to and including 18c5a95e (#30156 device MoE scheduler). 
+HEAD + ESIMD=0 plus one more toggle (none recover it): FA_DPAS=0 873; FA_ONEDNN=1 874; FA_ONEDNN=0 691 (worse); ENABLE_MKL_FA=0 876; MMID_SCHED=0 872;
+ENABLE_GRAPH=1 876; ENABLE_FUSION=0 864; ENABLE_OPT=0 878; baseline-with-no-op 865.
+Qwen3.6-35B on HEAD: XMX-ESIMD on/off identical (pp512/2048/8192/tg: 1400/1800/1777/80.8 vs 1403/1801/1776/81.0). The ESIMD switch matters for Coder-30B only.
