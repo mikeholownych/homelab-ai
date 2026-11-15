@@ -32,9 +32,8 @@ from autonomous_engineering.heterogeneous.containment import (
 )
 from autonomous_engineering.heterogeneous.specialist_contracts import TaskClass
 
-VLLM_API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
-GATEWAY_API_KEY = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
-
+VLLM_API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
+GATEWAY_API_KEY = os.environ.get("AIHOST_GATEWAY_API_KEY", "")
 WORKER1_URL = os.environ.get("WORKER1_URL", "http://127.0.0.1:18000")
 WORKER2_URL = os.environ.get("WORKER2_URL", "http://10.0.8.5:8001")
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:18010")
@@ -331,6 +330,10 @@ def run_physical_acceptance() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
+    if not VLLM_API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
+    if not GATEWAY_API_KEY:
+        raise SystemExit("AIHOST_GATEWAY_API_KEY is not set; export it before running this script")
     out = run_physical_acceptance()
     out_file = os.path.join(os.path.dirname(__file__), "../../../evidence/phase13_configuration_b_acceptance_results.json")
     with open(out_file, "w", encoding="utf-8") as f:

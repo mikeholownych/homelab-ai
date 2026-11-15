@@ -8,6 +8,8 @@ Extends CapabilityAwareScheduler to support the experimental Configuration B+ mo
 
 from dataclasses import dataclass, field
 from enum import Enum
+import hmac
+import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -47,7 +49,8 @@ class RebalancedScheduler(CapabilityAwareScheduler):
         super().__init__(worker1, worker2, scheduling_mode=SchedulingMode.CONFIGURATION_B)
         # Default to Configuration B (production default)
         self.extended_mode = scheduling_mode or ExtendedSchedulingMode.CONFIGURATION_B
-        self._auth_token = auth_token or "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+        # No built-in default: with no token configured, every mode switch is refused.
+        self._auth_token = auth_token or os.environ.get("AIHOST_GATEWAY_API_KEY", "")
         self.mode_change_log: List[Dict[str, Any]] = [
             {
                 "timestamp": time.time(),
@@ -63,7 +66,7 @@ class RebalancedScheduler(CapabilityAwareScheduler):
         reason: str = "Authorized experiment",
     ) -> None:
         """Authenticated toggle for experimental scheduling modes."""
-        if token != self._auth_token:
+        if not self._auth_token or not hmac.compare_digest(str(token).encode(), self._auth_token.encode()):
             raise PermissionError("Unauthorized attempt to modify scheduler operational mode")
         previous = self.extended_mode
         self.extended_mode = mode

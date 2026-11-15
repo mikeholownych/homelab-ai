@@ -36,6 +36,7 @@ from the relevant `README.md` sections, and coverage is contract-tested by
 - [`enhancement-priorities.md`](enhancement-priorities.md) — Ranked gateway enhancement priorities, architecture gaps and technical debt.
 - [`findings-summary.md`](findings-summary.md) — Repository review findings summary and recommended priority order.
 - [`vault.md`](vault.md) — HashiCorp Vault runtime integration.
+- [`gateway-auth-hardening.md`](gateway-auth-hardening.md) — Gateway admin/monitoring auth rules, JWT constraints, local-origin refusal and the mTLS follow-up.
 - [`GATEWAY-SINGLE-HOST-QUALIFICATION.md`](GATEWAY-SINGLE-HOST-QUALIFICATION.md) — Single-host gateway acceptance gates, live probes, failure drills and verified state backups.
 
 - [`GATEWAY-BOUNDED-ADMISSION-RECOVERY.md`](GATEWAY-BOUNDED-ADMISSION-RECOVERY.md) — Opt-in bounded admission and durable activation recovery.

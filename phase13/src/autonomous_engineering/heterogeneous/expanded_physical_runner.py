@@ -21,7 +21,7 @@ from autonomous_engineering.heterogeneous.containment import (
     ExternalAuthorityBoundary,
 )
 
-API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
+API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
 LEAD_BASE_URL = os.environ.get("LEAD_BASE_URL", "http://127.0.0.1:18000")
 SPECIALIST_BASE_URL = os.environ.get("SPECIALIST_BASE_URL", "http://10.0.8.5:8001")
 
@@ -466,6 +466,8 @@ def run_physical_containment_probes() -> dict:
 
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
     mode = sys.argv[1] if len(sys.argv) > 1 else "control"
     if mode == "containment":
         run_physical_containment_probes()

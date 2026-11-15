@@ -63,7 +63,7 @@ tensor-parallel-size: 1
 gpu-memory-utilization: 0.85
 max-model-len: 32768
 enforce-eager: false
-api-key: gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY
+api-key: <AIHOST_WORKER_API_KEY>
 enable-auto-tool-choice: true
 tool-call-parser: hermes
 served-model-name: Qwen/Qwen2.5-7B-Instruct-AWQ
@@ -77,7 +77,7 @@ ssh mike@10.0.8.5 "cd /tmp && sudo -u aihost-runtime XDG_RUNTIME_DIR=/run/user/9
 
 ### Step 5: Await Warm-Up and Verify
 ```bash
-ssh mike@10.0.8.5 "curl -s http://127.0.0.1:8001/v1/models -H \"Authorization: Bearer gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY\""
+ssh mike@10.0.8.5 "curl -s http://127.0.0.1:8001/v1/models -H \"Authorization: Bearer <AIHOST_WORKER_API_KEY>\""
 ```
 Expect HTTP 200 with `Qwen/Qwen2.5-7B-Instruct-AWQ`. Verify VRAM allocation drops from 27.8 GiB to ~7.2 GiB via `xpu-smi stats -d 1`.
 

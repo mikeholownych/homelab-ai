@@ -19,7 +19,7 @@ Upgrades of high-risk components (Intel compute runtime, Level Zero, PyTorch XPU
 2. **Stage and Validate Candidate**:
    Execute the upgrade playbook:
    ```bash
-   ansible-playbook playbooks/upgrade.yml --limit ai-p620-01 -e "upgrade_component=vllm upgrade_version=0.7.3"
+   ansible-playbook playbooks/upgrade.yml --limit ai-5820-01 -e "upgrade_component=llama_cpp upgrade_version=<committed-candidate-version>"
    ```
 
 3. **Run Validation and Benchmark Gates**:

@@ -12,12 +12,12 @@ Validates:
 """
 
 import json
+import os
 import time
 import urllib.request
 import threading
 
-API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
-
+API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
 def query_worker(port, model_name, prompt, worker_label, result_dict):
     url = f"http://127.0.0.1:{port}/v1/chat/completions"
     body = {
@@ -83,4 +83,6 @@ def main():
     print(f"Saved heterogeneous concurrency results to {output_path}")
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
     main()

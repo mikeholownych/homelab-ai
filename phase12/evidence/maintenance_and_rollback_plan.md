@@ -81,7 +81,7 @@ tensor-parallel-size: 1
 gpu-memory-utilization: 0.85
 max-model-len: 32768
 enforce-eager: false
-api-key: gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY
+api-key: <AIHOST_WORKER_API_KEY>
 enable-auto-tool-choice: true
 tool-call-parser: hermes
 served-model-name: Qwen/Qwen2.5-7B-Instruct-AWQ
@@ -95,7 +95,7 @@ sudo systemctl start local-ai-vllm-worker2.service
 ### Step 5: Post-Deployment Verification Probe
 Poll target endpoint until healthy (max 120s):
 ```bash
-curl -s http://127.0.0.1:8001/v1/models -H "Authorization: Bearer gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
+curl -s http://127.0.0.1:8001/v1/models -H "Authorization: Bearer <AIHOST_WORKER_API_KEY>"
 ```
 Expect HTTP 200 with model ID `Qwen/Qwen2.5-7B-Instruct-AWQ`.
 
@@ -126,7 +126,7 @@ sudo cp /etc/local-ai/vllm/worker2/vllm-config.yaml.baseline-backup /etc/local-a
 sudo systemctl start local-ai-vllm-worker2.service
 
 # 4. Confirm baseline restoration
-curl -s http://127.0.0.1:8001/v1/models -H "Authorization: Bearer gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
+curl -s http://127.0.0.1:8001/v1/models -H "Authorization: Bearer <AIHOST_WORKER_API_KEY>"
 ```
 Verify port 8001 returns `cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit`.
 Restore dual-worker routing in orchestrator gateway.

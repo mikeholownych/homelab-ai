@@ -15,7 +15,7 @@ import time
 import urllib.error
 import urllib.request
 
-API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
+API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
 BASE_URL = os.environ.get("WORKER2_BASE_URL", "http://10.0.8.5:8001")
 MODEL_NAME = "Qwen/Qwen2.5-7B-Instruct-AWQ"
 
@@ -339,6 +339,8 @@ def run_matched_candidate_campaign():
 
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
     results = run_matched_candidate_campaign()
     out_dir = "phase13/traces"
     os.makedirs(out_dir, exist_ok=True)

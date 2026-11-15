@@ -16,7 +16,7 @@ import time
 import urllib.error
 import urllib.request
 
-API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
+API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
 BASE_URL = os.environ.get("WORKER1_BASE_URL", "http://127.0.0.1:18000")
 MODEL_NAME = "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit"
 
@@ -297,6 +297,8 @@ def run_fair_control_campaign():
 
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
     results = run_fair_control_campaign()
     out_dir = "phase13/traces"
     os.makedirs(out_dir, exist_ok=True)

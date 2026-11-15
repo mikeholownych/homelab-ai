@@ -41,7 +41,7 @@ from autonomous_engineering.pipeline_rebalancing.handoff_contract import (
 )
 
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://127.0.0.1:18010")
-GATEWAY_TOKEN = os.environ.get("GATEWAY_TOKEN", "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM")
+GATEWAY_TOKEN = os.environ.get("AIHOST_GATEWAY_API_KEY") or os.environ.get("GATEWAY_TOKEN", "")
 PUBLIC_MODEL_ID = "engineering/b0"
 WORKER_1_ID = "b0-live-tp1-worker1"
 WORKER_2_ID = "b0-live-tp1-worker2"
@@ -315,6 +315,8 @@ def execute_acceptance_fixture() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
+    if not GATEWAY_TOKEN:
+        raise SystemExit("AIHOST_GATEWAY_API_KEY is not set; export it before running this script")
     res = execute_acceptance_fixture()
     print("==================================================================", flush=True)
     print("GATEWAY ACCEPTANCE FIXTURE RESULT: SUCCESS (100% 4-GATE ACCEPTED)")

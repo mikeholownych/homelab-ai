@@ -70,7 +70,7 @@ To qualify model and agent candidates against live serving endpoints:
 ### Step 1: Endpoint & Tunnel Preflight Check
 Verify that the forwarding tunnel and endpoint are responsive:
 ```bash
-curl -s http://127.0.0.1:18010/v1/models -H "Authorization: Bearer hermes-agent-local-auth-token-20260925-b65"
+curl -s http://127.0.0.1:18010/v1/models -H "Authorization: Bearer <HERMES_CLIENT_TOKEN>"
 ```
 Expect HTTP 200 with the active model ID.
 

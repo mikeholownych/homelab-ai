@@ -90,8 +90,8 @@ observability_grafana_enabled: true
 observability_loki_enabled: true
 observability_tempo_enabled: true
 
-# Grafana admin credentials
-observability_grafana_admin_password: "AiHost2026!Observability"
+# Grafana admin password, secret key and renderer token are NOT set here: the
+# observability role reads them from Vault (secret/local-ai/observability/grafana-admin).
 
 # Scrape target: remote inference appliance (ai-5820-01)
 observability_scrape_aihost_enabled: true

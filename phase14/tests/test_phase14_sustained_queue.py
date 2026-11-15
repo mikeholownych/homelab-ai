@@ -77,7 +77,7 @@ def test_lead_authority_preserved_under_queueing():
     w1 = WorkerState("worker_1", "30B", "AWQ", 18000, 0)
     w2 = WorkerState("worker_2", "30B", "AWQ", 8001, 1)
     scheduler = RebalancedScheduler(w1, w2)
-    scheduler.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B_PLUS, token="QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM")
+    scheduler.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B_PLUS, token="test-gateway-token-not-a-secret")
 
     # Implementation task (Item 03) must NEVER be assigned to Worker 2
     with pytest.raises(AuthorityEscalationError):

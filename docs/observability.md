@@ -82,12 +82,29 @@ Install is **fail-closed and commissioning-gated**, mirroring the Intel GPU
 role: `observability_stack_status` defaults to `pre_verification_fail_closed`
 and `observability_install_enabled` to `false`. Nothing downloads or starts
 until the commissioning run on physical hardware flips both to
-`commissioned` / `true`. The Grafana admin password and the Grafana encryption
-`secret_key` are read from Vault (`secret/local-ai/observability/grafana-admin`)
-into a mode-0600 env file (`GF_SECURITY_ADMIN_PASSWORD`, `GF_SECURITY_SECRET_KEY`);
-no credential is committed. When no explicit `observability_grafana_secret_key`
-is supplied, it is derived deterministically from the admin credential so the
-Grafana default key is never used. The vLLM dependence in the throughput recording rules
+`commissioned` / `true`. The Grafana admin password, the Grafana encryption
+`secret_key` and the image renderer token are three distinct values read from one
+Vault secret (`secret/local-ai/observability/grafana-admin`, keys `password`,
+`secret_key`, `renderer_token`) into mode-0600 env files
+(`GF_SECURITY_ADMIN_PASSWORD`, `GF_SECURITY_SECRET_KEY`, `GF_RENDERING_RENDERER_TOKEN`);
+no credential is committed and none is derived from another. The role fails closed
+(assert) if any of the three is missing, empty or equal to another. The AppRole used
+for the run needs `read` on `secret/data/local-ai/observability/*` (see `docs/vault.md`).
+
+**Rotating `secret_key` is destructive.** Grafana encrypts datasource credentials,
+stored secrets and sessions with it. After the value changes, everything Grafana
+encrypted under the old key can no longer be decrypted. Operator steps:
+
+1. Write the new `secret_key` to Vault (keep the old one until step 5).
+2. Export or note every datasource credential that is stored in Grafana (they will need re-entry).
+3. Converge the grafana host (`site.yml --limit grafana --tags observability`).
+4. Sign in again (all sessions are invalidated) and re-enter datasource secrets and any other
+   encrypted settings.
+5. Verify dashboards and datasources, then destroy the old key.
+
+Changing the admin password or renderer token has no such side effect: converge the host; the
+renderer token must change on both Grafana and the renderer in the same run (the role does this).
+The vLLM dependence in the throughput recording rules
 stays disabled (`observability_vllm_recording_rules_enabled: false`) until the
 live `/metrics` series names are validated against the running service and that
 check is recorded in `observability_verification_checklist`; host-level series

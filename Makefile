@@ -39,7 +39,7 @@ PLAYBOOKS := \
 	playbooks/vault-post-init.yml \
 	playbooks/vault-server.yml
 
-.PHONY: bootstrap-tools lint syntax test check tuning-smoke idempotency quality
+.PHONY: bootstrap-tools lint syntax test test-phases check tuning-smoke idempotency quality
 
 bootstrap-tools:
 	$(PYTHON_BIN) -m venv $(VENV_DIR)
@@ -55,6 +55,11 @@ syntax: bootstrap-tools
 
 test: bootstrap-tools
 	$(PYTEST) -q
+	$(MAKE) test-phases
+
+# One phase per process, each with its own phaseN/src ... phase0/src import path (see scripts/run-phase-tests.sh).
+test-phases: bootstrap-tools
+	PHASE_TEST_PYTHON=$(VENV_DIR)/bin/python scripts/run-phase-tests.sh
 
 check: bootstrap-tools
 	@echo "Running localhost-safe Ubuntu 24.04 contract check mode; this validates baseline and observability wiring and does not assert host convergence."

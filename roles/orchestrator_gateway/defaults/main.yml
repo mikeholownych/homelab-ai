@@ -11,6 +11,9 @@ orchestrator_gateway_remote_client_cidrs: []
 orchestrator_gateway_tls_cert: /etc/local-ai/orchestrator/tls/gateway.crt
 orchestrator_gateway_tls_key: /etc/local-ai/orchestrator/tls/gateway.key
 orchestrator_gateway_tls_sans: []
+# Require a client certificate on the remote (mTLS) listener. Off by default; production inventory does
+# NOT enable it yet (follow-up: issue client certs to every remote caller first, see docs/orchestrator-gateway*.md).
+orchestrator_gateway_tls_require_client_cert: false
 orchestrator_gateway_tls_pki_dir: "{{ lookup('env', 'HOME') }}/.local/share/aihost/pki/orchestrator-gateway"
 orchestrator_gateway_tls_ca_key: "{{ orchestrator_gateway_tls_pki_dir }}/gateway-ca.key"
 orchestrator_gateway_tls_ca_cert: "{{ orchestrator_gateway_tls_pki_dir }}/gateway-ca.crt"
