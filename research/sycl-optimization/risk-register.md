@@ -18,3 +18,7 @@
 | Long agent prompt may be re-read after an interleaved short request on a `-np 1` worker | unknown | medium (agent latency) | NOT MEASURED; slot/prompt-cache test through the gateway (plan 4h) |
 | MTP speculative decoding unusable without an MTP-bearing GGUF | likely | low (missed speedup, no risk) | Candidate only; check model sources first (plan 4i). Colibri's reported +15-30% is unverified and not on our hardware |
 | Third-party performance claims (colibri) taken at face value | low | medium | Treat as hypotheses; adopt only after our own end-to-end A/B |
+| Conversation bounces between workers, losing warm prefix state | unknown | medium (agent latency) | NOT MEASURED; check gateway routing stickiness (plan 4j) |
+| Benchmarks omit truncation/token accounting, so a stop-at-limit could pass as a quality result | low | medium | Record truncated flag and token counts (plan 4k); engx window-1 data checked: 0 of 62 attempts truncated |
+| Tool-definition tokens inflate prefill on long-prompt regime (where HEAD regresses on Coder-30B) | unknown | medium | Measure Nexus Code tool-token share first (plan 4l); AnythingLLM 80% claim is unverified |
+| Third-party chat/RAG front ends add telemetry and outbound connections (AnythingLLM default-on telemetry, CDN/GitHub fetches) | low | medium | If ever fronting the gateway: disable telemetry, enforce egress rules, keep gateway-only policy |

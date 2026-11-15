@@ -86,6 +86,13 @@ from an unmodified upstream commit, so patch boundary is empty.
    - 4i. Performance (candidate, not a result): MTP speculative decoding. llama.cpp supports MTP drafting in both builds but our worker flags do not use it, and the header region of both
      production GGUFs shows no `nextn`/`mtp` tensor names, so a separate MTP-capable model file would be needed. Check upstream and model sources for an MTP-bearing GGUF of each model
      before any test; accept only if output matches (greedy-equal) and decode speedup repeats beyond variance.
+   Additions from the AnythingLLM review (README + router/monitor source read 2026-11-15; not run):
+   - 4j. Performance/agents: check route stickiness. Confirm whether the gateway sends follow-up turns of one conversation to the same worker. Each worker holds its own prompt/KV state,
+     so bouncing a conversation between workers discards a warm prefix. If it does bounce, measure TTFT with and without a short sticky window (AnythingLLM uses 5 min) before changing anything.
+   - 4k. Evidence: record per-request prompt tokens, completion tokens, output tokens/s, duration and a truncated flag (stopped at the output limit) in gateway-level benchmarks.
+     Already verified for engx window 1: all 62 recorded attempts across both arms finished with `stop`, so truncation did not cause the T07/T10 failures.
+   - 4l. Performance (hypothesis only): reducing tool-definition tokens per request (expose only relevant tools). AnythingLLM claims up to 80% fewer tokens; the claim is unverified and
+     not from our workloads. Measure how many prompt tokens Nexus Code's tool definitions use per turn first; if material, A/B a reduced set for task accuracy and prefill time.
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).
