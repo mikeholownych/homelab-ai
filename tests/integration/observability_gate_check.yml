@@ -17,6 +17,9 @@
     observability_grafana_admin_password: >-
       {{ lookup('env', 'OBSERVABILITY_GRAFANA_ADMIN_GATE_TEST')
          | default('localhost-safe-gate-only', true) }}
+    # Distinct gate-only values: the role no longer derives these from the admin password.
+    observability_grafana_secret_key: localhost-safe-gate-only-secret-key
+    observability_grafana_image_renderer_token: localhost-safe-gate-only-renderer-token
     observability_install_root: "{{ observability_gate_root }}/opt/local-ai/observability"
     observability_config_dir: "{{ observability_gate_root }}/etc/local-ai/observability"
     observability_log_dir: "{{ observability_gate_root }}/log/local-ai/observability"

@@ -1,4 +1,36 @@
 ---
+- name: Read Grafana secrets from Vault at runtime
+  ansible.builtin.include_role:
+    name: vault_integration
+    tasks_from: main.yml
+  vars:
+    vault_integration_operation: read
+    vault_integration_secret_ref: "{{ observability_grafana_vault_secret_path }}"
+    vault_integration_required_secret_keys:
+      - "{{ observability_grafana_vault_key_admin_password }}"
+      - "{{ observability_grafana_vault_key_secret_key }}"
+      - "{{ observability_grafana_vault_key_renderer_token }}"
+  when:
+    - observability_install_enabled | bool
+    - observability_grafana_admin_password is none
+  no_log: true
+  tags: [observability, telemetry, vault]
+
+- name: Publish Grafana secrets retrieved from Vault for environment rendering
+  ansible.builtin.set_fact:
+    observability_grafana_admin_password: >-
+      {{ vault_integration_secret[observability_grafana_vault_key_admin_password] }}
+    observability_grafana_secret_key: >-
+      {{ vault_integration_secret[observability_grafana_vault_key_secret_key] }}
+    observability_grafana_image_renderer_token: >-
+      {{ vault_integration_secret[observability_grafana_vault_key_renderer_token] }}
+  when:
+    - observability_install_enabled | bool
+    - vault_integration_secret is defined
+    - vault_integration_secret is not none
+  no_log: true
+  tags: [observability, telemetry, vault]
+
 - name: Validate observability inputs
   ansible.builtin.assert:
     that:
@@ -34,10 +66,19 @@
         not (observability_install_enabled | bool) or
         (observability_grafana_secret_key is string and
         observability_grafana_secret_key | length > 0)
+      - >-
+        not (observability_install_enabled | bool) or
+        (observability_grafana_image_renderer_token is string and
+        observability_grafana_image_renderer_token | length > 0)
+      - >-
+        not (observability_install_enabled | bool) or
+        (observability_grafana_secret_key != observability_grafana_admin_password and
+        observability_grafana_image_renderer_token != observability_grafana_admin_password and
+        observability_grafana_image_renderer_token != observability_grafana_secret_key)
     fail_msg: >-
       observability role requires pinned, hash-verified artifacts and a non-empty
-      Grafana admin password and security secret key (from Vault) before any
-      install is allowed.
+      Grafana admin password, security secret key and image renderer token, each
+      its own distinct non-empty value from Vault, before any install is allowed.
   tags: [observability, telemetry]
 
 - name: Refuse unverified observability stack installation

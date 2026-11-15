@@ -185,6 +185,11 @@ class ObservabilityRoleContractTests(unittest.TestCase):
         )
         self.assertIn("GF_SECURITY_ADMIN_PASSWORD", admin_env)
         self.assertIsNone(self.defaults["observability_grafana_admin_password"])
+        # The other two Grafana secrets are Vault-sourced too, never derived from the admin password.
+        self.assertIsNone(self.defaults["observability_grafana_secret_key"])
+        self.assertIsNone(self.defaults["observability_grafana_image_renderer_token"])
+        host_vars = (REPO_ROOT / "inventory" / "production" / "host_vars" / "grafana.yml").read_text(encoding="utf-8")
+        self.assertNotIn("observability_grafana_admin_password:", host_vars)
 
     def test_gate_check_integration_playbook_wired_into_make_check(self) -> None:
         gate = REPO_ROOT / "tests" / "integration" / "observability_gate_check.yml"

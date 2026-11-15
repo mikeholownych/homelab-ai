@@ -273,7 +273,7 @@ class VaultContractTests(unittest.TestCase):
             "vault_integration_secret_ref_normalized.count('//') == 0",
             "vault_integration_secret_path_segments | reject('in', ['', '.', '..'])",
             "vault_integration_kv2_mount ~ '/local-ai/'",
-            "vault_integration_secret_path_segments[2] in ['shared', 'hosts', 'clusters', 'services']",
+            "vault_integration_secret_path_segments[2] in ['shared', 'hosts', 'clusters', 'services', 'observability']",
             "vault_integration_secret_path_segments[3] == inventory_hostname",
             "cluster.enabled | default(false) | bool",
             "delegate_to: localhost",

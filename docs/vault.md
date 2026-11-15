@@ -127,6 +127,11 @@ path "secret/data/local-ai/clusters/*" {
 path "secret/data/local-ai/services/*" {
   capabilities = ["read"]
 }
+
+# Only needed on the AppRole that converges the observability host (Grafana secrets).
+path "secret/data/local-ai/observability/*" {
+  capabilities = ["read"]
+}
 ```
 
 If you need metadata enumeration, add the minimum metadata path `list`
@@ -169,6 +174,7 @@ Git stores only logical references. Runtime reads must stay under the validated
 - `secret/local-ai/hosts/{{inventory_hostname}}/...`
 - `secret/local-ai/clusters/...`
 - `secret/local-ai/services/...`
+- `secret/local-ai/observability/...` (Grafana admin password, secret key and renderer token only)
 
 Host secrets must match the current `inventory_hostname`. Cluster secrets are
 allowed only when cluster membership is configured for the current host.

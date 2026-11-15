@@ -86,11 +86,19 @@ observability_grafana_http_port: 3000
 observability_grafana_admin_password: null
 # Grafana's encryption secret (sessions, datasource secrets, signed URLs).
 # Grafana ships a well-known default, so an explicit stable value is required.
-# Derived deterministically from the admin credential, mirroring the image
-# renderer token below, unless a dedicated value is supplied from Vault at
-# commissioning via observability_grafana_secret_key.
-observability_grafana_secret_key: >-
-  {{ (observability_grafana_admin_password | default('') ~ '-grafana-secret-key') | hash('sha256') }}
+# It is its own Vault-sourced value (never derived from the admin password).
+# Changing it invalidates every secret Grafana already encrypted; see
+# docs/observability.md before rotating.
+observability_grafana_secret_key: null
+
+# The three Grafana secrets (admin password, secret key, image renderer token)
+# are read from one Vault secret when observability_install_enabled is true and
+# observability_grafana_admin_password is not already supplied (the offline
+# gate check supplies fake values instead). Keys inside that secret:
+observability_grafana_vault_secret_path: secret/local-ai/observability/grafana-admin
+observability_grafana_vault_key_admin_password: password
+observability_grafana_vault_key_secret_key: secret_key
+observability_grafana_vault_key_renderer_token: renderer_token
 
 # ---------------------------------------------------------------------------
 # Grafana Image Renderer - remote HTTP rendering service for panel screenshots.
@@ -109,8 +117,7 @@ observability_grafana_image_renderer_bin: >-
 observability_grafana_image_renderer_archive: >-
   {{ observability_install_root }}/bin/grafana-image-renderer-{{
   observability_grafana_image_renderer_version }}.linux-amd64.zip
-observability_grafana_image_renderer_token: >-
-  {{ (observability_grafana_admin_password | default('') ~ '-renderer-token') | hash('sha256') }}
+observability_grafana_image_renderer_token: null
 observability_grafana_image_renderer_packages:
   - fonts-liberation
   - libasound2t64
