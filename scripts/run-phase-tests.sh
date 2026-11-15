@@ -26,8 +26,11 @@ for n in $phases; do
     i=$((i - 1))
   done
   echo "== phase$n (import path: phase$n/src first) =="
-  PYTHONPATH="${path#:}:$ROOT" PYTHONHASHSEED=0 PY_COLORS=0 \
-    "$PY" -m pytest -q -o pythonpath=. -p no:cacheprovider "phase$n" || failed="$failed phase$n"
+  # The path goes through pytest's own pythonpath option, NOT the PYTHONPATH environment variable: several phase
+  # tests copy the repo into a sandbox and run a child interpreter, which must not inherit this process's path.
+  pythonpath=$(printf '%s' "${path#:}" | tr ':' ' ')
+  PYTHONHASHSEED=0 PY_COLORS=0 \
+    "$PY" -m pytest -q -o "pythonpath=$pythonpath $ROOT" -p no:cacheprovider "phase$n" || failed="$failed phase$n"
 done
 if [ -n "$failed" ]; then
   echo "FAILED:$failed" >&2

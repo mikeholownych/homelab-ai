@@ -49,4 +49,6 @@ def test_runner_script_covers_every_phase_and_is_executable():
     assert runner.stat().st_mode & 0o111
     text = runner.read_text(encoding="utf-8")
     assert "phaseN/src first" in text or "phase$n/src first" in text
-    assert "-o pythonpath=." in text
+    assert '-o "pythonpath=' in text
+    # Child interpreters spawned by phase tests (repo sandboxes) must not inherit the phase path.
+    assert not [line for line in text.splitlines() if line.strip().startswith(("PYTHONPATH=", "export PYTHONPATH"))]
