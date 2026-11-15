@@ -38,3 +38,8 @@
 | `--cache-ram` default (8192 MiB) too small for several 64K conversations; idle may evict active | unknown | medium | NOT MEASURED; capacity test and host RAM headroom check (plan 4x) |
 | Recorded sessions used for replay contain private data | medium | medium | Sanitise, keep local, never upload (plan 4w) |
 | SGLang XPU comparison confounded by weights and stack | high if attempted | low | Engx accuracy plus latency only, after vLLM feasibility (plan 4y) |
+| Re-diagnosing a regression upstream has already reported and documented (wasted bisect time, missed workaround) | present | low | Search upstream issues/PRs first in every bump (plan 4z) |
+| A single global env setting helps one model and is neutral or harmful for another (ESIMD=0 for Coder-30B, no effect on Qwen3.6) | medium | medium | Per-worker env via Ansible, tested on each model (plan 4aa) |
+| Per-op backend bugs invisible to end-to-end KL (we build with tests off) | unknown | medium | NOT TESTED; `test-backend-ops` on a research build (plan 4ab) |
+| F16 NaN on dense models (upstream #30892) escapes a MoE-only gate; Dockerfile defaults `GGML_SYCL_F16=ON` | unknown | medium | Add dense-model check or F16 note to bump gate (plan 4ac) |
+| HEAD router/sleep-idle server flags assumed present or safe in the deployed build | unknown | low | Verify against `--help` per build before any use (plan 4ad) |

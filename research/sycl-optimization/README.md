@@ -127,6 +127,11 @@ from an unmodified upstream commit, so patch boundary is empty.
      that is actively in use. If it can, test raising `--cache-ram` against host RAM headroom (host has 61 GiB shared with both workers).
    - 4y. Engine comparison candidate, extending 4t: SGLang XPU (Arc / Arc Pro B-Series, `intel_xpu` attention backend, native MXFP4 MoE). Same caveats as vLLM: different weights, Python/PyTorch/Triton stack,
      no KL gate; compare on engx accuracy plus latency only, and only after 4t's feasibility check.
+   - 4z. Process: add "search upstream issues and PRs first" to the image-bump checklist (4m). Our Coder-30B prefill regression was already reported upstream as #31068 with a documented workaround; search by symptom and backend before spending bisect time.
+   - 4aa. Performance: per-op env switches. Upstream gives each SYCL optimisation its own env toggle (e.g. `GGML_SYCL_ENABLE_XMX_ESIMD=0`, `GGML_SYCL_XMX_MAX_COLS=0`). Test a per-worker environment: ESIMD=0 for the Coder worker only, since Qwen3.6 is unaffected. Cover Qwen3.6 and Flash-Next too, applied through Ansible with a rollback.
+   - 4ab. Correctness: run `tests/test-backend-ops` (per-op backend-vs-CPU comparison, with a perf mode) on a build with tests enabled. Our images build with tests off, so use a separate research build. Include MUL_MAT_ID and flash attention, and use it to localise the 32K residual.
+   - 4ac. Correctness gate: F16 NaN on dense Qwen3.8-27B since #29107 (open #30892); the official Dockerfile defaults `GGML_SYCL_F16=ON`. Any bump gate must include a dense-model sanity check or an explicit F16 note, since our deployed MoEs would not catch it.
+   - 4ad. Operations: HEAD adds server router mode and sleep-idle flags. Unverified in b11347; read the HEAD `--help` and test only after the image-pin and rollback work. Not a reason to bump by itself.
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).

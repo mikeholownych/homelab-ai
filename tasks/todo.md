@@ -631,3 +631,8 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time
 - [ ] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom
 - [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
+- [ ] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist
+- [ ] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback
+- [ ] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention)
+- [ ] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892)
+- [ ] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use
