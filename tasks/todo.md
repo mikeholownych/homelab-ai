@@ -618,3 +618,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (AnythingLLM review) Check gateway route stickiness; measure TTFT with/without a sticky window if conversations bounce between workers
 - [ ] (AnythingLLM review) Gateway benchmarks record token counts, output tps, duration, truncated flag
 - [ ] (AnythingLLM review) Measure Nexus Code tool-definition tokens per turn; A/B a reduced tool set only if material
+- [ ] (Ollama review) Write image-bump checklist (diff review, inspect built source, full gate) and add to deployment gate
+- [ ] (Ollama review) Patch policy: additive only, upstream PR linked, removal condition recorded
+- [ ] (Ollama review) Failure injection: worker saturation (queue bound, 503, queue-depth metric) and crash last-error in evidence
+- [ ] (Ollama review) Build Vulkan-enabled llama.cpp image; A/B vs SYCL on B65 for the three models

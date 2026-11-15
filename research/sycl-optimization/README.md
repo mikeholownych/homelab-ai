@@ -93,6 +93,16 @@ from an unmodified upstream commit, so patch boundary is empty.
      Already verified for engx window 1: all 62 recorded attempts across both arms finished with `stop`, so truncation did not cause the T07/T10 failures.
    - 4l. Performance (hypothesis only): reducing tool-definition tokens per request (expose only relevant tools). AnythingLLM claims up to 80% fewer tokens; the claim is unverified and
      not from our workloads. Measure how many prompt tokens Nexus Code's tool definitions use per turn first; if material, A/B a reduced set for task accuracy and prefill time.
+   Additions from the Ollama review (docs and source read 2026-11-15; not run):
+   - 4m. Operations: image-bump checklist, extending 4b. Before any bump, review the upstream diff for the paths we use (SYCL backend, MoE, flash attention, model loader, server), build and
+     inspect the exact source that goes into the image, then run the full gate (KL vs CPU, per-model prefill/decode A/B at 2K/8K/32K, reliability set). Ollama's guide notes a bump can change loading,
+     GPU discovery, scheduling inputs, logs and streaming; our Coder-30B regression is the same class of surprise.
+   - 4n. Maintainability: any carried patch must be additive, tied to an upstream PR, and have a written removal condition. Ollama's compat patch broke on an upstream file rename (clip.cpp -> mtmd-model.cpp, b12257).
+     Our patch queue is empty today; keep it empty unless the Coder-30B fix requires otherwise.
+   - 4o. Reliability: confirm gateway behaviour under saturation (bounded queue, explicit 503/overload response, queue-depth metric; Ollama defaults to 512 queued then 503) and that a killed or crashed worker
+     leaves a usable last-error in gateway evidence (Ollama captures the runner's last stderr, capped at 8 KB). Add both to the failure-injection set.
+   - 4p. Performance (hypothesis): A/B upstream llama.cpp's Vulkan backend against SYCL on the B65 for Coder-30B, Qwen3.6 and Flash-Next (prefill 2K/8K/32K, decode), using the same KL gate.
+     Ollama ships Vulkan for Intel by default and has no SYCL build, so its results say nothing about SYCL, but Vulkan may not share the Coder-30B prefill regression. Needs a Vulkan-enabled image build.
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).

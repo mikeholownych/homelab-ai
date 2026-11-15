@@ -22,3 +22,8 @@
 | Benchmarks omit truncation/token accounting, so a stop-at-limit could pass as a quality result | low | medium | Record truncated flag and token counts (plan 4k); engx window-1 data checked: 0 of 62 attempts truncated |
 | Tool-definition tokens inflate prefill on long-prompt regime (where HEAD regresses on Coder-30B) | unknown | medium | Measure Nexus Code tool-token share first (plan 4l); AnythingLLM 80% claim is unverified |
 | Third-party chat/RAG front ends add telemetry and outbound connections (AnythingLLM default-on telemetry, CDN/GitHub fetches) | low | medium | If ever fronting the gateway: disable telemetry, enforce egress rules, keep gateway-only policy |
+| An image bump changes behaviour in paths we did not check (loader, scheduler, streaming, per-model kernels) | present (Coder-30B regression) | high | Bump checklist and full gate before any deploy (plan 4m) |
+| Carried patch breaks on upstream refactor or lingers after upstream fixes the issue | low today (queue empty) | medium | Additive patches only, upstream PR linked, removal condition recorded (plan 4n) |
+| Gateway behaviour under worker saturation unknown (unbounded wait vs bounded queue and 503) | unknown | medium | NOT TESTED; add to failure injection with queue-depth metric (plan 4o) |
+| Worker crash leaves no usable error in gateway evidence | unknown | medium | NOT TESTED; capture last worker stderr in evidence on failure (plan 4o) |
+| Vulkan backend might avoid the Coder-30B SYCL prefill regression, or be worse elsewhere; untested | unknown | medium | Hypothesis only; A/B on the B65 before drawing any conclusion (plan 4p) |
