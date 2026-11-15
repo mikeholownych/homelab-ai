@@ -40,6 +40,35 @@ PRODUCTION_FILES = (
     "requirements.yml",
 )
 
+# Extra roots scanned ONLY for hardcoded credentials (the other banned-content rules
+# stay scoped to PRODUCTION_SCAN_ROOTS). phase*/ directories are added dynamically.
+CREDENTIAL_SCAN_ROOTS = (
+    "orchestrator_gateway",
+    "orchestrator_runtime",
+    "tools",
+    "observability",
+)
+CREDENTIAL_SCAN_SUFFIXES = {".py", ".yaml", ".yml", ".j2"}
+# "token" must not match LLM vocabulary (tokens, tokenize, tokenizer).
+CREDENTIAL_NAME_PATTERN = re.compile(r"(password|passwd|secret|token(?!s|ize|izer)|api_?key)", re.IGNORECASE)
+# Names ending like this hold a reference to a secret (file, Vault path or field), not the secret.
+CREDENTIAL_REFERENCE_NAME_SUFFIX = re.compile(
+    r"(_path|_paths|_file|_files|_filename|_file_key|_dir|_id|_ids|_type|_ref|_ttl|_sha256|_seconds|_limit|_keys|_field|_name)$",
+    re.IGNORECASE,
+)
+YAML_CREDENTIAL_LINE_PATTERN = re.compile(
+    r"^\s*(?:-\s*)?(?P<key>[A-Za-z0-9_.\-]+)\s*:\s*(?P<value>\S.*?)\s*$"
+)
+# Known fake fixtures that are safe to appear as literals (AWS docs example key, fake GitHub/OpenAI
+# style strings used by the gateway egress tests). Keep this list tiny and exact.
+CREDENTIAL_FIXTURE_ALLOWLIST = (
+    "AKIAIOSFODNN7EXAMPLE",
+    "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    # Obviously fake values used by the phase14 scheduler tests.
+    "test-gateway-token-not-a-secret",
+    "BAD_TOKEN",
+)
 EXCLUDED_RELATIVE_PATHS = (
     Path("docs"),
     Path("evidence"),
@@ -701,6 +730,109 @@ def contains_approle_secret_id_literal(content: str) -> bool:
     return False
 
 
+def is_allowed_credential_value(raw_value: str, name: str = "") -> bool:
+    """True when a value assigned to a credential-named key is not a literal secret."""
+    value = raw_value.split(" #", 1)[0].strip().strip("'\"").strip()
+    if value.startswith(("/", "~", "secret/")) or value in {"[]", "{}"} or any(ch.isspace() for ch in value):
+        return True  # path/Vault reference, empty collection, or prose message
+    if name and value.lower() == name.lower():
+        return True  # enum-style label, e.g. STALE_FENCING_TOKEN = "STALE_FENCING_TOKEN"
+    if value in {"", "null", "Null", "NULL", "~", "None", "true", "false", "True", "False"}:
+        return True
+    if value.startswith(("{{", "{%", "!vault", "|", ">", "&", "*")):
+        return True
+    if "lookup(" in value or "REPLACE_ME" in value or value.startswith(("${", "$(")):
+        return True
+    return value in CREDENTIAL_FIXTURE_ALLOWLIST
+
+
+def _python_literal_credential_violations(content: str) -> list[str]:
+    try:
+        module = ast.parse(content)
+    except SyntaxError:
+        return []
+    hits: list[str] = []
+
+    def check(name: str | None, value: ast.AST | None, lineno: int) -> None:
+        if name is None or not CREDENTIAL_NAME_PATTERN.search(name):
+            return
+        if CREDENTIAL_REFERENCE_NAME_SUFFIX.search(name):
+            return
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            if not is_allowed_credential_value(value.value, name):
+                hits.append(f"line {lineno}: {name}")
+
+    def target_name(node: ast.AST) -> str | None:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            return node.attr
+        return None
+
+    for node in ast.walk(module):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                check(target_name(target), node.value, node.lineno)
+        elif isinstance(node, ast.AnnAssign):
+            check(target_name(node.target), node.value, node.lineno)
+        elif isinstance(node, ast.keyword):
+            check(node.arg, node.value, getattr(node.value, "lineno", 0))
+        elif isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values):
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    check(key.value, value, key.lineno)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            positional = args.posonlyargs + args.args
+            for arg, default in zip(positional[len(positional) - len(args.defaults):], args.defaults):
+                check(arg.arg, default, default.lineno)
+            for arg, default in zip(args.kwonlyargs, args.kw_defaults):
+                check(arg.arg, default, getattr(default, "lineno", 0))
+    return hits
+
+
+def _yaml_literal_credential_violations(content: str) -> list[str]:
+    hits: list[str] = []
+    for lineno, line in enumerate(content.splitlines(), start=1):
+        if line.lstrip().startswith("#"):
+            continue
+        match = YAML_CREDENTIAL_LINE_PATTERN.match(line)
+        key = match.group("key") if match else ""
+        if not match or not CREDENTIAL_NAME_PATTERN.search(key) or CREDENTIAL_REFERENCE_NAME_SUFFIX.search(key):
+            continue
+        if not is_allowed_credential_value(match.group("value"), key):
+            hits.append(f"line {lineno}: {match.group('key')}")
+    return hits
+
+
+def find_literal_credentials(content: str, source_name: str) -> list[str]:
+    """Literal values assigned to password/secret/token/api_key-style names (YAML and Python)."""
+    if source_name.endswith(".py"):
+        return _python_literal_credential_violations(content)
+    if source_name.endswith((".yml", ".yaml", ".j2")):
+        return _yaml_literal_credential_violations(content)
+    return []
+
+
+def iter_credential_scan_files() -> list[Path]:
+    roots = set(PRODUCTION_SCAN_ROOTS) | set(CREDENTIAL_SCAN_ROOTS)
+    roots |= {p.name for p in REPO_ROOT.glob("phase[0-9]*") if p.is_dir()}
+    files: list[Path] = []
+    for root_name in sorted(roots):
+        root_path = REPO_ROOT / root_name
+        if not root_path.exists():
+            continue
+        for path in root_path.rglob("*"):
+            if (
+                path.is_file()
+                and path.suffix in CREDENTIAL_SCAN_SUFFIXES
+                and not is_path_excluded(path, REPO_ROOT)
+                and is_scannable_text_file(path)
+            ):
+                files.append(path)
+    return sorted(set(files))
+
+
 def find_banned_content(content: str, source_name: str = "inline.yml") -> list[str]:
     violations: list[str] = []
     if contains_mutable_latest_violation(content):
@@ -1061,6 +1193,56 @@ class NoSecretsRepositoryTests(unittest.TestCase):
                 violations.append(f"{relative_path}: {violation}")
 
         self.assertEqual([], violations, f"Found banned content: {violations}")
+
+
+class LiteralCredentialTests(unittest.TestCase):
+    def test_python_literal_credentials_are_flagged(self) -> None:
+        source = (
+            'API_KEY = "abc123notarealsecret"\n'
+            'def f(auth_token="abc123notarealsecret"): pass\n'
+            'cfg = {"admin_password": "hunter2hunter2"}\n'
+            'client(api_key="abc123notarealsecret")\n'
+        )
+        self.assertEqual(4, len(find_literal_credentials(source, "x.py")))
+
+    def test_python_non_literal_credentials_are_allowed(self) -> None:
+        source = (
+            'API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")\n'
+            'token = None\nsecret = ""\n'
+            'password = "REPLACE_ME"\n'
+            'aws = "AKIAIOSFODNN7EXAMPLE"\n'
+            'api_key_name = compute()\n'
+        )
+        self.assertEqual([], find_literal_credentials(source, "x.py"))
+
+    def test_yaml_literal_credentials_are_flagged_and_expressions_allowed(self) -> None:
+        bad = "observability_grafana_admin_password: s3cr3t-value\n  - api_key: abc123abc123\n"
+        self.assertEqual(2, len(find_literal_credentials(bad, "x.yml")))
+        good = (
+            "password: null\n"
+            "secret_key: \"\"\n"
+            "token: \"{{ lookup('env', 'T') }}\"\n"
+            "api_key: REPLACE_ME\n"
+            "secret_id: !vault |\n"
+            "# password: commented-out\n"
+        )
+        self.assertEqual([], find_literal_credentials(good, "x.yml"))
+
+    def test_repository_has_no_literal_credentials(self) -> None:
+        violations: list[str] = []
+        for path in iter_credential_scan_files():
+            content = read_scannable_text(path)
+            if content is None:
+                continue
+            relative_path = path.relative_to(REPO_ROOT).as_posix()
+            violations.extend(f"{relative_path}: {hit}" for hit in find_literal_credentials(content, relative_path))
+        self.assertEqual([], violations, "Literal credentials found (use env vars, Vault, or REPLACE_ME): " + "; ".join(violations))
+
+    def test_credential_scan_covers_phase_gateway_runtime_tools_and_observability(self) -> None:
+        scanned = {path.relative_to(REPO_ROOT).parts[0] for path in iter_credential_scan_files()}
+        self.assertTrue({"orchestrator_gateway", "orchestrator_runtime"} <= scanned)
+        self.assertTrue(any(name.startswith("phase") for name in scanned))
+        self.assertTrue({"tools", "observability"} & scanned)
 
 
 if __name__ == "__main__":

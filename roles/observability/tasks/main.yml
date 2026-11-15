@@ -7,9 +7,9 @@
     vault_integration_operation: read
     vault_integration_secret_ref: "{{ observability_grafana_vault_secret_path }}"
     vault_integration_required_secret_keys:
-      - "{{ observability_grafana_vault_key_admin_password }}"
-      - "{{ observability_grafana_vault_key_secret_key }}"
-      - "{{ observability_grafana_vault_key_renderer_token }}"
+      - "{{ observability_grafana_vault_admin_password_field }}"
+      - "{{ observability_grafana_vault_secret_key_field }}"
+      - "{{ observability_grafana_vault_renderer_token_field }}"
   when:
     - observability_install_enabled | bool
     - observability_grafana_admin_password is none
@@ -19,11 +19,11 @@
 - name: Publish Grafana secrets retrieved from Vault for environment rendering
   ansible.builtin.set_fact:
     observability_grafana_admin_password: >-
-      {{ vault_integration_secret[observability_grafana_vault_key_admin_password] }}
+      {{ vault_integration_secret[observability_grafana_vault_admin_password_field] }}
     observability_grafana_secret_key: >-
-      {{ vault_integration_secret[observability_grafana_vault_key_secret_key] }}
+      {{ vault_integration_secret[observability_grafana_vault_secret_key_field] }}
     observability_grafana_image_renderer_token: >-
-      {{ vault_integration_secret[observability_grafana_vault_key_renderer_token] }}
+      {{ vault_integration_secret[observability_grafana_vault_renderer_token_field] }}
   when:
     - observability_install_enabled | bool
     - vault_integration_secret is defined

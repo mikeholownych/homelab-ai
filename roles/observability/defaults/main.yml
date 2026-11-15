@@ -96,9 +96,9 @@ observability_grafana_secret_key: null
 # observability_grafana_admin_password is not already supplied (the offline
 # gate check supplies fake values instead). Keys inside that secret:
 observability_grafana_vault_secret_path: secret/local-ai/observability/grafana-admin
-observability_grafana_vault_key_admin_password: password
-observability_grafana_vault_key_secret_key: secret_key
-observability_grafana_vault_key_renderer_token: renderer_token
+observability_grafana_vault_admin_password_field: password
+observability_grafana_vault_secret_key_field: secret_key
+observability_grafana_vault_renderer_token_field: renderer_token
 
 # ---------------------------------------------------------------------------
 # Grafana Image Renderer - remote HTTP rendering service for panel screenshots.
