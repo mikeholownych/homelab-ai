@@ -626,3 +626,8 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (vLLM review) Map llama.cpp metrics to evidence/vllm-top vocabulary; derive TTFT/queue time client-side
 - [ ] (vLLM review) Split slot-reuse test: Coder-30B (full attention) vs Qwen3.6/Flash-Next (hybrid, ctx checkpoints)
 - [ ] (vLLM review) Feasibility: vllm-openai-xpu v0.29.0 serving Coder-30B on one B65; engine comparison on engx + latency only
+- [ ] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter
+- [ ] (SGLang review) Hybrid-model checkpoint test: request-end checkpoint on `-np 1`, continuation vs mid-prompt fork TTFT
+- [ ] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time
+- [ ] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom
+- [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility

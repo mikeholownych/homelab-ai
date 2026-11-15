@@ -32,3 +32,9 @@
 | Prefix-reuse results from one model family wrongly applied to the other (full-attention vs hybrid checkpointing) | medium | medium | Test Coder-30B and the hybrids separately (plan 4s) |
 | Engine comparison with vLLM confounded by different weights/quantisation | high if attempted | medium | Compare on engx accuracy plus latency only; label as engine comparison (plan 4t) |
 | vLLM XPU may not fit or run Coder-30B on one 32 GB B65 | unknown | low | Feasibility check before any comparison (plan 4t) |
+| Gateway behaviour on a hung worker, queue overflow and queue timeout is undefined or undocumented | unknown | high | NOT TESTED; define expected semantics and test (plan 4u) |
+| Hybrid-model (Qwen3.6, Flash-Next) prefix reuse limited to saved checkpoints; agent continuation may re-prefill more than expected | unknown | medium | NOT MEASURED; checkpoint behaviour test (plan 4v) |
+| Synthetic prompts mispredict agent behaviour (cache reuse, tool loops) | medium | medium | Trace replay of sanitised Nexus Code sessions (plan 4w) |
+| `--cache-ram` default (8192 MiB) too small for several 64K conversations; idle may evict active | unknown | medium | NOT MEASURED; capacity test and host RAM headroom check (plan 4x) |
+| Recorded sessions used for replay contain private data | medium | medium | Sanitise, keep local, never upload (plan 4w) |
+| SGLang XPU comparison confounded by weights and stack | high if attempted | low | Engx accuracy plus latency only, after vLLM feasibility (plan 4y) |

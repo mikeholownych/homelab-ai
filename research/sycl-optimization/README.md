@@ -114,6 +114,19 @@ from an unmodified upstream commit, so patch boundary is empty.
    - 4t. Performance (engine comparison, hypothesis): vLLM XPU lists Arc Pro B-Series as validated hardware and Qwen3-Coder-30B-A3B as supported (BF16/online FP8; GPTQ-Int4 checkpoint exists); the host already has
      `vllm/vllm-openai-xpu:v0.29.0`. Check whether it loads and serves Coder-30B on one B65 within 32 GB, then compare latency and engx task accuracy. Weights differ from our GGUF, so the KL gate does not apply;
      label it an engine comparison, not a kernel comparison, and run it through the same bench as 4q.
+   Additions from the SGLang review (docs read 2026-11-15; not run):
+   - 4u. Reliability: gateway failure semantics, extending 4o. Define and test expected behaviour for a hung or crashed worker and for saturation, using SGLang's router as a reference point:
+     per-worker circuit breaker (open after ~5 failures, close after ~2 successes, ~30 s timeout, ~60 s window), bounded FIFO queue with 429 when full and 408 on queue timeout, health checks
+     (~30 s interval, 3 failures to mark unhealthy), retries with jitter. Record what our gateway actually does against each, and fix or document gaps. Thresholds are starting points, not targets.
+   - 4v. Performance/agents: extend 4s with checkpoint behaviour. For Qwen3.6 and Flash-Next, record whether a request-end checkpoint is kept on a `-np 1` worker (`--ctx-checkpoints`, `--checkpoint-min-step`)
+     and measure continuation TTFT when the next turn extends the previous full context versus when it forks mid-prompt. SGLang reports 0.96-0.99 continuation hit rates on agent traces for comparable hybrids
+     with checkpoints at divergence and request end; unverified for llama.cpp.
+   - 4w. Evidence: realistic load. Extend 4q with trace replay. Replay recorded, sanitised Nexus Code sessions (kept local, no external upload) through the gateway instead of only synthetic prompt sizes,
+     and report cache-hit ratio (cached over total prompt tokens), TTFT and total time for the session.
+   - 4x. Performance: prompt-cache capacity under context pressure. Measure how many 64K-context conversations the `--cache-ram` default (8192 MiB) retains, and whether an idle conversation can evict one
+     that is actively in use. If it can, test raising `--cache-ram` against host RAM headroom (host has 61 GiB shared with both workers).
+   - 4y. Engine comparison candidate, extending 4t: SGLang XPU (Arc / Arc Pro B-Series, `intel_xpu` attention backend, native MXFP4 MoE). Same caveats as vLLM: different weights, Python/PyTorch/Triton stack,
+     no KL gate; compare on engx accuracy plus latency only, and only after 4t's feasibility check.
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).
