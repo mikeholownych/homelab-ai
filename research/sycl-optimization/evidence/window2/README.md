@@ -120,3 +120,14 @@ Each bisect image takes its runtime stack from ITS OWN commit's Dockerfile, so m
 Hypothesis: the 32K loss comes from the newer oneDNN / IGC JIT / compute runtime inside the image (the 32K path uses oneDNN SDPA), not from llama.cpp source. Test running: HEAD source built with the 8766c0273 Dockerfile (`head-oldstack`).
 Implication if true: pin the runtime stack separately from the llama.cpp commit in the bump checklist (plan 4b/4m); the stack is a second variable to test and to roll back. Production's pinned image keeps its own old stack.
 Production restored after the outage: "OK: baseline restored, gateway ready, 2/2 workers available".
+
+### Bisect round 7: the 32K residual is the image's runtime stack, not llama.cpp code (Coder-30B, GPU 0, ESIMD=0, 3 reps, t/s (sd))
+| image | pp2048 | pp32768 |
+|---|---|---|
+| head-oldstack (HEAD source, `.devops/intel.Dockerfile` from 8766c027, i.e. oneDNN 2026.0.2, IGC 2.34.4, NEO 26.18, Level Zero 1.28.2) | 1587 (54) | **1043.5 (2.2)** |
+| head-a956a852 (HEAD source, current Dockerfile: oneDNN 2026.1.0, IGC 2.42.6, NEO 26.40, Level Zero 1.34.0) | 1651 (25) | 895.4 (3.4) |
+Deployed b11347 = 1023 at 32K. Earlier: HEAD with #30156 reverted = 874 (no change); every code bisect point up to 8766c027 (old stack) = 1019-1054.
+=> HEAD source with the OLD stack matches the deployed 32K speed. The ~-15% 32K loss comes from the libraries the upstream Dockerfile bundles since d5bbcd1f3 (#31540), not from any llama.cpp source commit.
+   This also explains the "bisect" results: each image takes its stack from its own commit's Dockerfile, so the SYCL code commits 41-49 were never the cause.
+Implications: (1) a build bump is two variables, llama.cpp source and runtime stack; pin and test them separately (plan 4b/4m). (2) The pp2048 difference between the two is within noise. (3) Open: which component (oneDNN / IGC / NEO compute runtime / Level Zero) carries the loss; component builds follow.
+Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
