@@ -6,6 +6,7 @@ bounded ingress, cancellation and the supported OpenAI-compatible chat API.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 import os
 import queue
@@ -104,21 +105,17 @@ def create_asgi_gateway(
         return active_clients.authenticate(auth_header)
 
     def is_admin_authorized(request: Request) -> bool:
-        presented = request.headers.get("Authorization", "")
-        if not presented and "token" in request.query_params:
-            presented = f"Bearer {request.query_params['token']}"
-        if monitoring_digest and presented.startswith("Bearer ") and \
-                token_digest(presented[7:].strip()) == monitoring_digest:
-            return True
+        # Admin routes accept only a client that holds the "admin" scope, presented in the Authorization
+        # header. The monitoring token grants monitoring routes only, and a query-string token is never read.
         client = get_client(request)
-        return client is not None and bool(client.scopes & {"admin"})
+        return client is not None and "admin" in client.scopes
 
     def is_monitoring_authorized(request: Request) -> bool:
         if not require_monitoring_auth:
             return True
         presented = request.headers.get("Authorization", "")
         if monitoring_digest and presented.startswith("Bearer ") and \
-                token_digest(presented[7:].strip()) == monitoring_digest:
+                hmac.compare_digest(token_digest(presented[7:].strip()), monitoring_digest):
             return True
         client = get_client(request)
         return client is not None and bool(client.scopes & {"monitoring", "workload", "admin"})
@@ -585,6 +582,8 @@ def create_asgi_gateway(
 
     async def handle_admin_reload(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_reload"):
+            return refuse_origin_response(req_id, "admin_reload", request.client.host if request.client else "127.0.0.1")
         if not is_admin_authorized(request):
             return unauthorized_response(req_id, "admin_reload")
         try:
@@ -595,6 +594,8 @@ def create_asgi_gateway(
 
     async def handle_admin_status(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_status"):
+            return refuse_origin_response(req_id, "admin_status", request.client.host if request.client else "127.0.0.1")
         if not is_admin_authorized(request):
             return unauthorized_response(req_id, "admin_status")
         _, health_payload = runtime.health.check()
@@ -672,6 +673,8 @@ def create_asgi_gateway(
 
     async def handle_admin_worker_recover(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_worker_recover"):
+            return refuse_origin_response(req_id, "admin_worker_recover", request.client.host if request.client else "127.0.0.1")
         if not is_admin_authorized(request):
             return unauthorized_response(req_id, "admin_worker_recover")
         worker_id = request.path_params.get("worker_id", "")
@@ -787,6 +790,8 @@ def create_asgi_gateway(
 
     async def handle_admin_ui(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_ui"):
+            return refuse_origin_response(req_id, "admin_ui", request.client.host if request.client else "127.0.0.1")
         if not is_admin_authorized(request):
             return unauthorized_response(req_id, "admin_ui")
         _, health_payload = runtime.health.check()

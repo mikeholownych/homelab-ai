@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ipaddress
+import hmac
 import json
 import sys
 import os
@@ -161,7 +162,7 @@ def create_gateway(
                 return True
             presented = self.headers.get("Authorization", "")
             if monitoring_digest and presented.startswith("Bearer ") and \
-                    token_digest(presented[7:].strip()) == monitoring_digest:
+                    hmac.compare_digest(token_digest(presented[7:].strip()), monitoring_digest):
                 return True
             client = self._client()
             return client is not None and bool(client.scopes & {"monitoring", "workload", "admin"})

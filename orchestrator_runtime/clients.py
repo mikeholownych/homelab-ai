@@ -72,6 +72,32 @@ class _Usage:
     model_tokens_today: dict[str, int] = field(default_factory=dict)
 
 
+_JWT_HMAC_ALGORITHMS = frozenset({"HS256", "HS384", "HS512"})
+
+
+def _resolve_jwt_algorithms(
+    secret: str | None, public_key: str | None, requested: tuple[str, ...] | None
+) -> tuple[str, ...]:
+    """Pick the verification algorithms from whichever key is configured (one family only).
+
+    A shared secret verifies HMAC tokens only and a public key verifies asymmetric tokens only. Allowing both
+    families lets an attacker sign an HS256 token with the (public) RSA key as the HMAC secret, so the two keys
+    are never accepted together and an explicit algorithm list may not cross families.
+    """
+    if secret and public_key:
+        raise ValueError("configure either jwt_secret or jwt_public_key, not both")
+    if not secret and not public_key:
+        return ()
+    allowed_family = _JWT_HMAC_ALGORITHMS if secret else None
+    default = ("HS256",) if secret else ("RS256",)
+    algorithms = tuple(requested) if requested else default
+    for algorithm in algorithms:
+        is_hmac = algorithm in _JWT_HMAC_ALGORITHMS
+        if algorithm.lower() == "none" or is_hmac != (allowed_family is not None):
+            raise ValueError(f"jwt algorithm {algorithm!r} is not valid for the configured key type")
+    return algorithms
+
+
 class ClientRegistry:
     def __init__(
         self,
@@ -82,7 +108,7 @@ class ClientRegistry:
         jwt_public_key: str | None = None,
         jwt_issuer: str | None = None,
         jwt_audience: str | None = None,
-        jwt_algorithms: tuple[str, ...] = ("HS256", "RS256"),
+        jwt_algorithms: tuple[str, ...] | None = None,
         flush_interval_seconds: float = 5.0,
     ) -> None:
         self._clients = {c.client_id: c for c in clients}
@@ -93,7 +119,7 @@ class ClientRegistry:
         self.jwt_public_key = jwt_public_key
         self.jwt_issuer = jwt_issuer
         self.jwt_audience = jwt_audience
-        self.jwt_algorithms = jwt_algorithms
+        self.jwt_algorithms = _resolve_jwt_algorithms(jwt_secret, jwt_public_key, jwt_algorithms)
         self.flush_interval_seconds = max(0.1, float(flush_interval_seconds))
         self._dirty = False
         self._last_saved = time.monotonic()
@@ -162,7 +188,13 @@ class ClientRegistry:
         if verification_key and token_str.count(".") == 2:
             try:
                 import jwt
-                kwargs: dict[str, Any] = {"algorithms": list(self.jwt_algorithms)}
+            except ImportError:
+                return None
+            try:
+                kwargs: dict[str, Any] = {
+                    "algorithms": list(self.jwt_algorithms),
+                    "options": {"require": ["exp"]},  # a token that never expires is refused
+                }
                 if self.jwt_issuer:
                     kwargs["issuer"] = self.jwt_issuer
                 if self.jwt_audience:
@@ -190,7 +222,7 @@ class ClientRegistry:
                     model_quotas=model_quotas,
                     pool_quotas=pool_quotas,
                 )
-            except Exception:
+            except jwt.PyJWTError:
                 return None
         return None
 

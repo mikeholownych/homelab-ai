@@ -17,6 +17,7 @@ pytest.importorskip("httpx")
 from starlette.testclient import TestClient
 
 from orchestrator_gateway import create_asgi_gateway
+from orchestrator_runtime.clients import ClientRegistry
 from orchestrator_runtime import (
     CapabilityRegistry,
     Client,
@@ -278,7 +279,9 @@ def test_admin_api_endpoints_and_web_console(tmp_path):
         evidence,
     )
     admin_token = "enterprise-admin-secret-token"
-    app = create_asgi_gateway(runtime, "client-token", monitoring_token=admin_token)
+    # Admin routes need a client holding the "admin" scope; the monitoring token no longer grants admin.
+    registry = ClientRegistry.from_tokens([("admin-client", admin_token)], scopes=("admin",))
+    app = create_asgi_gateway(runtime, clients=registry, monitoring_token="monitoring-only-token")
     client = TestClient(app)
 
     # 1. Unauthorized access to /v1/admin/status
@@ -322,7 +325,6 @@ def test_admin_api_endpoints_and_web_console(tmp_path):
     import socket
     assert socket.gethostname() in html
 
-    # Authorized via query param token
+    # A token in the query string is never accepted for admin auth
     res_query = client.get(f"/admin?token={admin_token}")
-    assert res_query.status_code == 200
-    assert "Enterprise Appliance Console" in res_query.text
+    assert res_query.status_code == 401
