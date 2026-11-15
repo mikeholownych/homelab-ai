@@ -60,3 +60,19 @@ Regression introduced in (493253fe, 39febd2a]: 16 SYCL commits. Next: 7377bada8 
 7377bada8 (graph replay, index 23) and 0a9ef006 (24) do not compile: ggml-sycl.cpp:6897 calls can_use_mul_mat_vec_q without the `device` argument
 (fixed by f64a49819, index 25, #31014). Untestable alone. Building d81d0d8fb (22, XMX multi-column refactor) and f64a49819 (25):
 22 good => culprit in {23,24,25} (graph replay / fattn-mkl dependency change); 22 bad => culprit in 17-22.
+
+## Upstream already knows: ggml-org/llama.cpp #31068 (found 2026-11-15 14:2x UTC)
+Open issue "SYCL: XMX-ESIMD path is ~35% slower for MoE prompt processing on Arc Pro B70 (regression in d81d0d8fb)". The reporter isolates it to #29864
+(Multi-column on Intel XMX, = our bisect index 22) and shows that `GGML_SYCL_ENABLE_XMX_ESIMD=0` or `GGML_SYCL_XMX_MAX_COLS=0` on the same binary restores the old speed.
+A maintainer confirms the env switch is the intended workaround. Related open: #31262 (PP ~35% slower, b11804 vs b11046, CPU-offloaded MoE); #30892 (F16 NaN on dense Qwen3.8-27B since #29107).
+Note: my earlier test set GGML_SYCL_ENABLE_XMX_ESIMD=1, which is the default, so it showed no effect; the correct test is =0.
+
+Our confirmation on HEAD a956a852, Coder-30B, GPU 0 (t/s; pp512 / pp2048 / pp8192 / pp32768 / tg128):
+| config | pp512 | pp2048 | pp8192 | pp32768 | tg128 |
+|---|---|---|---|---|---|
+| deployed b11347 | 1027 | 1597 | 1478 | 1023 | 92.9 |
+| HEAD default | 1306 | 1472 | 1283 | 830 | 99.7 |
+| HEAD ENABLE_XMX_ESIMD=0 | 1308 | 1653 | 1413 | 872 | 100.3 |
+| HEAD XMX_MAX_COLS=0 | 1306 | 1633 | 1407 | 870 | 95.9 |
+=> The XMX-ESIMD path explains most of the 2K-8K loss (HEAD with it off beats deployed at 2K, -4% at 8K). A gap remains at 32K (-15% vs deployed): a second, context-scaling cause
+   is still open (candidates: flash-attention changes such as #30684 fattn-mkl dependencies, or #31125 DPAS FA).
