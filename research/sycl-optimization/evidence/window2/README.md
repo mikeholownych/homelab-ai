@@ -45,3 +45,13 @@ for that test; other tests differ run to run.)
 Toggles on HEAD at pp8192 (t/s, none restore ~1450): MMID_SCHED=0 1295; MMID_SCHED=3 1352; FA_DPAS=0 1299; FA_ONEDNN=0 1128 (worse);
 FA_ONEDNN=1 1291; ENABLE_ESIMD=0 1303; ENABLE_FUSION=0 1269; ENABLE_DNN=0 1330; MMVQ_WIDE=0 1289; ENABLE_FLASH_ATTN=0 50.
 Regression scales with context (-8% @2K, -11% @8K, -18% @32K) -> suspect attention/KV path or a generic kernel change, not MoE routing.
+
+### Bisect round 2 (Coder-30B pp2048/8192/32768 t/s, oneAPI 2026.1.1)
+| commit (SYCL-touching index) | pp2048 | pp8192 | pp32768 | |
+|---|---|---|---|---|
+| e707790c (8) | 1589 | 1451 | 1020 | good |
+| 493253fe (16) | 1570 | 1459 | 1026 | good |
+| 0a9ef006 (24) | — | — | — | does not compile alone (can_use_mul_mat_vec_q signature) |
+| 39febd2a (32) | 1408 | 1315 | 960 | **bad** |
+| 2c93f0b6 (40) | 1428 | 1335 | 971 | bad |
+Regression introduced in (493253fe, 39febd2a]: 16 SYCL commits. Next: 7377bada8 (graph record/replay, index 23).
