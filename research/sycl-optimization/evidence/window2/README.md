@@ -94,3 +94,15 @@ Deployed pp32768 = 1023; 18c5a95e (49) = 893; HEAD = 872.
 Caveat: `GGML_SYCL_MMID_SCHED=0` on HEAD did not recover it, so either that switch does not bypass the new code path or part of the loss is in a commit after 18c5a95e (HEAD 872 vs 893). Next: read the #30156 diff for the switch's scope, and test HEAD with the #30156 change reverted.
 pp2048 stddev at 8766c027 is wide (104), so the pp2048 numbers are indicative only.
 Production restored after the outage: "OK: baseline restored, gateway ready, 2/2 workers available".
+
+### Bisect round 5: do any #30156 switches recover 32K? (pp32768 t/s, ESIMD=0, 3 reps)
+| image | extra env | t/s (sd) |
+|---|---|---|
+| 18c5a95e | MMID_SCHED=0 | 871.3 (2.6) |
+| 18c5a95e | MMVQ_WIDE=0 | 873.0 (4.0) |
+| 18c5a95e | MMID_SCHED=0 + MMVQ_WIDE=0 | 873.8 (1.6) |
+| HEAD | MMVQ_WIDE=0 | 878.1 (1.1) |
+| HEAD | MMID_SCHED=0 + MMVQ_WIDE=0 | 875.8 (3.0) |
+=> No documented switch recovers it (all ~872-878 vs 1054 at 8766c027). `GGML_SYCL_MMID_SCHED` is a real env var (bitmask, bit 0 = device scheduler, ggml-sycl.cpp:455), so the loss is in code of #30156 that the switches do not bypass
+   (it also rewrites fused-gemm.cpp and mmvq.cpp and removes ~76 lines of ggml-sycl.cpp). Not a Coder-only knob fix: the 32K gap stays (~-15% vs deployed) until the commit is understood or reverted.
+Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
