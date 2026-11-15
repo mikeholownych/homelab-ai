@@ -55,3 +55,8 @@ Regression scales with context (-8% @2K, -11% @8K, -18% @32K) -> suspect attenti
 | 39febd2a (32) | 1408 | 1315 | 960 | **bad** |
 | 2c93f0b6 (40) | 1428 | 1335 | 971 | bad |
 Regression introduced in (493253fe, 39febd2a]: 16 SYCL commits. Next: 7377bada8 (graph record/replay, index 23).
+
+### Bisect round 3 (build breakage in the middle of the range)
+7377bada8 (graph replay, index 23) and 0a9ef006 (24) do not compile: ggml-sycl.cpp:6897 calls can_use_mul_mat_vec_q without the `device` argument
+(fixed by f64a49819, index 25, #31014). Untestable alone. Building d81d0d8fb (22, XMX multi-column refactor) and f64a49819 (25):
+22 good => culprit in {23,24,25} (graph replay / fattn-mkl dependency change); 22 bad => culprit in 17-22.
