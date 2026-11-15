@@ -106,3 +106,17 @@ Production restored after the outage: "OK: baseline restored, gateway ready, 2/2
 => No documented switch recovers it (all ~872-878 vs 1054 at 8766c027). `GGML_SYCL_MMID_SCHED` is a real env var (bitmask, bit 0 = device scheduler, ggml-sycl.cpp:455), so the loss is in code of #30156 that the switches do not bypass
    (it also rewrites fused-gemm.cpp and mmvq.cpp and removes ~76 lines of ggml-sycl.cpp). Not a Coder-only knob fix: the 32K gap stays (~-15% vs deployed) until the commit is understood or reverted.
 Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
+
+### Bisect round 6: reverting #30156 on HEAD does NOT recover 32K (CORRECTION to the previous section)
+HEAD with 18c5a95e (#30156) reverted (`head-revert30156`, clean revert) vs plain HEAD, ESIMD=0, 3 reps, t/s (sd):
+| image | pp2048 | pp32768 |
+|---|---|---|
+| head-revert30156 | 1644 (40) | 874.4 (3.7) |
+| head-a956a852 | 1639 (18) | 872.2 (2.8) |
+=> #30156 is NOT the cause. The previous section's conclusion ("the regression enters at 18c5a95e") was wrong: 18c5a95e is merely the first bisect point built AFTER another commit.
+The git range 8766c0273..18c5a95e also holds non-SYCL commits that my SYCL-only commit list skipped. One of them, d5bbcd1f3 (#31540 "ci: update oneAPI 2026.2, oneDNN 2026.1 and Level Zero SDK 1.34.0"),
+rewrites `.devops/intel.Dockerfile`: oneDNN 2026.0.2 -> 2026.1.0, Level Zero 1.28.2 -> 1.34.0, IGC 2.34.4 -> 2.42.6, compute runtime 26.18 -> 26.40, IGDGMM 22.10.0 -> 22.10.2 (default ONEAPI 2026.2.0; I override to 2026.1.1).
+Each bisect image takes its runtime stack from ITS OWN commit's Dockerfile, so my "code" bisect also bisected the bundled libraries. All images at or before 8766c027 carry the old stack; 18c5a95e, HEAD and head-revert30156 carry the new one.
+Hypothesis: the 32K loss comes from the newer oneDNN / IGC JIT / compute runtime inside the image (the 32K path uses oneDNN SDPA), not from llama.cpp source. Test running: HEAD source built with the 8766c0273 Dockerfile (`head-oldstack`).
+Implication if true: pin the runtime stack separately from the llama.cpp commit in the bump checklist (plan 4b/4m); the stack is a second variable to test and to roll back. Production's pinned image keeps its own old stack.
+Production restored after the outage: "OK: baseline restored, gateway ready, 2/2 workers available".
