@@ -42,7 +42,7 @@ def test_default_mode_is_configuration_b(dual_30b_workers):
 def test_authenticated_mode_switch(dual_30b_workers):
     w1, w2 = dual_30b_workers
     sched = RebalancedScheduler(w1, w2)
-    valid_token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    valid_token = "test-gateway-token-not-a-secret"
 
     # Reject unauthorized switch
     with pytest.raises(PermissionError):
@@ -56,7 +56,7 @@ def test_authenticated_mode_switch(dual_30b_workers):
 def test_item_01_placement_under_config_b_vs_b_plus(dual_30b_workers):
     w1, w2 = dual_30b_workers
     sched = RebalancedScheduler(w1, w2)
-    valid_token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    valid_token = "test-gateway-token-not-a-secret"
 
     # Under Config B: Item 01 routes to Worker 1
     res_b = sched.route_task("PROJ-01-01", TaskClass.ARCHITECTURAL_PLANNING, 512, [])
@@ -78,7 +78,7 @@ def test_item_01_placement_under_config_b_vs_b_plus(dual_30b_workers):
 def test_stage2_placement_under_config_b_plus(dual_30b_workers):
     w1, w2 = dual_30b_workers
     sched = RebalancedScheduler(w1, w2)
-    valid_token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    valid_token = "test-gateway-token-not-a-secret"
     sched.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B_PLUS, token=valid_token)
 
     # Stage 2 Items 04, 05 route to Worker 2
@@ -95,7 +95,7 @@ def test_stage2_placement_under_config_b_plus(dual_30b_workers):
 def test_authority_escalation_blocked(dual_30b_workers):
     w1, w2 = dual_30b_workers
     sched = RebalancedScheduler(w1, w2)
-    valid_token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    valid_token = "test-gateway-token-not-a-secret"
     sched.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B_PLUS, token=valid_token)
 
     # Worker 2 attempting MULTI_FILE_IMPLEMENTATION or PROJECT_INTEGRATION raises AuthorityEscalationError
@@ -109,7 +109,7 @@ def test_authority_escalation_blocked(dual_30b_workers):
 def test_fail_closed_rollback_to_config_b(dual_30b_workers):
     w1, w2 = dual_30b_workers
     sched = RebalancedScheduler(w1, w2)
-    valid_token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    valid_token = "test-gateway-token-not-a-secret"
     sched.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B_PLUS, token=valid_token)
     assert sched.extended_mode == ExtendedSchedulingMode.CONFIGURATION_B_PLUS
 

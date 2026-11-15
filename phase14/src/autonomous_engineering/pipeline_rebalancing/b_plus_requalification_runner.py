@@ -39,7 +39,7 @@ from autonomous_engineering.pipeline_rebalancing.handoff_contract import (
     Item01HandoffValidator,
 )
 
-API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
+API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
 LEAD_BASE_URL = os.environ.get("LEAD_BASE_URL", "http://127.0.0.1:18000")
 SPECIALIST_BASE_URL = os.environ.get("SPECIALIST_BASE_URL", "http://10.0.8.5:8001")
 REMOTE_HOST = os.environ.get("REMOTE_HOST", "10.0.8.5")
@@ -686,4 +686,6 @@ def run_b_plus_requalification_campaign() -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
     run_b_plus_requalification_campaign()

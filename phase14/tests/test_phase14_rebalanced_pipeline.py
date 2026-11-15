@@ -131,7 +131,7 @@ def test_pipeline_execution_under_config_b(rebalanced_env, sample_project):
 
 def test_pipeline_execution_under_config_b_plus(rebalanced_env, sample_project):
     sched, pipeline = rebalanced_env
-    token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    token = "test-gateway-token-not-a-secret"
     sched.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B_PLUS, token=token)
 
     res = pipeline.execute_project(sample_project)
@@ -151,7 +151,7 @@ def test_pipeline_execution_under_config_b_plus(rebalanced_env, sample_project):
 
 def test_pipeline_critical_path_demand_reduction(rebalanced_env, sample_project):
     sched, pipeline = rebalanced_env
-    token = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
+    token = "test-gateway-token-not-a-secret"
 
     # Run Config B
     sched.set_experimental_mode(ExtendedSchedulingMode.CONFIGURATION_B, token=token)

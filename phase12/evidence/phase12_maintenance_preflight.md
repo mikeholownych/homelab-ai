@@ -83,7 +83,7 @@ Authoritative verification of candidate snapshot on `10.0.8.5`:
 ### 2.8 Worker 1 Independent Serving Verification
 Worker 1 on GPU 0 was independently probed via direct authenticated HTTP request:
 - **Direct Endpoint**: `http://127.0.0.1:8000/v1/chat/completions`
-- **Bearer Token**: Verified (`gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY`)
+- **Bearer Token**: Verified (`<AIHOST_WORKER_API_KEY>`)
 - **Probe Request**: `{"model": "cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit", "messages": [{"role": "user", "content": "Respond with: PING_OK"}]}`
 - **Observed Response**: `PING_OK`, latency 463ms, finish_reason `stop`.
 - **Status**: PASSED. Worker 1 independently satisfies 100% of production demand without reliance on Worker 2.

@@ -38,13 +38,13 @@ Physical inference endpoints on the Dell Precision T5820 were polled directly vi
 
 ### Empirical Verification Output:
 ```bash
-$ curl -s -m 5 -H "Authorization: Bearer gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY" http://127.0.0.1:18000/v1/models | jq -r '.data[0].id'
+$ curl -s -m 5 -H "Authorization: Bearer <AIHOST_WORKER_API_KEY>" http://127.0.0.1:18000/v1/models | jq -r '.data[0].id'
 cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
 
-$ curl -s -m 5 -H "Authorization: Bearer gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY" http://10.0.8.5:8001/v1/models | jq -r '.data[0].id'
+$ curl -s -m 5 -H "Authorization: Bearer <AIHOST_WORKER_API_KEY>" http://10.0.8.5:8001/v1/models | jq -r '.data[0].id'
 cyankiwi/Qwen3-Coder-30B-A3B-Instruct-AWQ-4bit
 
-$ curl -s -m 5 -H "Authorization: Bearer QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM" http://127.0.0.1:18010/v1/models | jq -r '.data[0].id'
+$ curl -s -m 5 -H "Authorization: Bearer <AIHOST_GATEWAY_API_KEY>" http://127.0.0.1:18010/v1/models | jq -r '.data[0].id'
 engineering/b0
 ```
 

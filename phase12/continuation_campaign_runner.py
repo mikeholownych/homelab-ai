@@ -14,8 +14,7 @@ import time
 import urllib.error
 import urllib.request
 
-API_KEY = "gzA6fTtFePl9kNlrkEMYA9RCki5U6DjZcm7KcEMnsDY"
-
+API_KEY = os.environ.get("AIHOST_WORKER_API_KEY", "")
 TASKS = [
     {
         "id": "TASK-01",
@@ -272,4 +271,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if not API_KEY:
+        raise SystemExit("AIHOST_WORKER_API_KEY is not set; export it before running this script")
     main()

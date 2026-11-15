@@ -89,7 +89,7 @@ To prove that safety, authority, and containment controls are actively enforced 
 ## 5. Gateway Health & Route Verification
 
 - **Direct Probe**: `http://127.0.0.1:18010/v1/chat/completions`
-- **Auth**: Client Bearer token `QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM`
+- **Auth**: Client Bearer token `<AIHOST_GATEWAY_API_KEY>`
 - **Response**: HTTP 200 OK (`{"id":"chatcmpl-...","model":"engineering/b0","choices":[{"message":{"content":"pong\n\nI'm here"}}]}`)
 - **Latency**: $431$ ms.
 - **Round-Robin State**: Balanced between Worker 1 and Worker 2.

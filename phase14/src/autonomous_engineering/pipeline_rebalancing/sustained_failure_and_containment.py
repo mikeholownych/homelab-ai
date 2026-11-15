@@ -33,9 +33,7 @@ from autonomous_engineering.heterogeneous.capability_scheduler import WorkerStat
 from autonomous_engineering.heterogeneous.specialist_contracts import TaskClass
 
 CURRENT_REPO_SHA = "a8c3b6a1a4c27f391f28ebdf5a74c1bfd1d148ce"
-AUTH_TOKEN = "QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM"
-
-
+AUTH_TOKEN = os.environ.get("AIHOST_GATEWAY_API_KEY", "")
 def run_containment_workload() -> Dict[str, Any]:
     print("\n=======================================================", flush=True)
     print("STARTING SEPARATE SUSTAINED CONTAINMENT PROBE SUITE", flush=True)
@@ -272,4 +270,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if not AUTH_TOKEN:
+        raise SystemExit("AIHOST_GATEWAY_API_KEY is not set; export it before running this script")
     main()

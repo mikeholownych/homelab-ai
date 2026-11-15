@@ -56,7 +56,7 @@ $ ssh 10.0.8.5 "sudo sha256sum /etc/local-ai/vllm/worker2/vllm-config.yaml /etc/
 
 ```bash
 # Live Gateway Route Verification on Port 18010 (Tunnel to :8010)
-$ curl -s -X POST -H "Authorization: Bearer QVF-MUMrVzpjD7eyzZVveAEN06U4r3_jg2AFIeEoPkM" \
+$ curl -s -X POST -H "Authorization: Bearer <AIHOST_GATEWAY_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"model": "engineering/b0", "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5}' \
   http://127.0.0.1:18010/v1/chat/completions
