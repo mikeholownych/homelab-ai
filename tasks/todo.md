@@ -612,3 +612,6 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build
 - [ ] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report)
 - [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence
+- [ ] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check
+- [ ] (colibri review) Gateway test: long agent turn -> short interleaved request -> long turn; TTFT on deployed vs HEAD, `--cache-ram` default vs raised
+- [ ] (colibri review) Candidate: MTP speculative decoding; first find an MTP-bearing GGUF (ours show no nextn/mtp tensor names), then A/B with greedy-equality check

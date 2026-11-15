@@ -77,6 +77,15 @@ from an unmodified upstream commit, so patch boundary is empty.
    - 4d. Only if a worker ever serves more than one model: adopt per-model anti-affinity (concurrency groups) and pinned models. Not needed for one model per GPU.
    - 4e. Only if a MoE model larger than VRAM is introduced: evaluate upstream `--moe-cache-size` (field `moe_cache_size`, present in HEAD). Not needed now (both models fit).
    - 4f. If prompt/slot state is ever persisted: treat as private data (random IDs, per-model manifest, size/entry caps, no client-supplied paths).
+   Additions from the colibri review (README read 2026-11-15; engine not run, claims unverified):
+   - 4g. Operations: automate the correctness gate so any image bump fails a check. A tiny fixed prompt set scored by KL against a CPU reference, run in CI or as an Ansible pre-deploy step,
+     with the same pass thresholds we used (KLD within noise of the deployed build, same-top-token not lower). Today the gate is a manual harness run.
+   - 4h. Performance/agents: test slot reuse across an interleaved short request. On a `-np 1` worker, send a long (~15K token) agent turn, then a short unrelated request
+     (e.g. a title generation), then the next long turn, and measure time-to-first-token for the third request on the deployed build and on HEAD, with `--cache-ram` default and
+     with `--cache-ram` raised. Both flags exist in both builds; the behaviour on our workload is unmeasured. Run through the gateway.
+   - 4i. Performance (candidate, not a result): MTP speculative decoding. llama.cpp supports MTP drafting in both builds but our worker flags do not use it, and the header region of both
+     production GGUFs shows no `nextn`/`mtp` tensor names, so a separate MTP-capable model file would be needed. Check upstream and model sources for an MTP-bearing GGUF of each model
+     before any test; accept only if output matches (greedy-equal) and decode speedup repeats beyond variance.
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).

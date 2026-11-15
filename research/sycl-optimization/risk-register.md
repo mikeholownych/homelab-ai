@@ -14,3 +14,7 @@
 | SYCL hang with `mmap: true` (LocalAI docs) | unknown | medium | Our default-mmap workers have not hung; verify under load/reload and with `--no-mmap` (plan 4c) |
 | Image provenance drift: llama.cpp commit, base images, APP_REVISION not recorded together | medium | medium | One pinned commit variable, digest-pinned bases, embed APP_REVISION, record pin + rollback target in Ansible vars (plan 4b) |
 | LocalAI's llama.cpp pin (8ca5a800) already contains the regressed range | likely | low | Informational: other Intel users likely affected; include in the upstream report once bisected |
+| Correctness gate is manual; an image bump could ship without running it | medium | high | Automate KL-vs-CPU on a fixed prompt set as a pre-deploy check (plan 4g) |
+| Long agent prompt may be re-read after an interleaved short request on a `-np 1` worker | unknown | medium (agent latency) | NOT MEASURED; slot/prompt-cache test through the gateway (plan 4h) |
+| MTP speculative decoding unusable without an MTP-bearing GGUF | likely | low (missed speedup, no risk) | Candidate only; check model sources first (plan 4i). Colibri's reported +15-30% is unverified and not on our hardware |
+| Third-party performance claims (colibri) taken at face value | low | medium | Treat as hypotheses; adopt only after our own end-to-end A/B |
