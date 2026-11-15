@@ -12,8 +12,11 @@ import time
 from http.client import HTTPConnection
 from unittest import mock
 
-import jwt
 import pytest
+
+# PyJWT is a gateway-runtime dependency (requirements-gateway-test.lock), not a controller one: the controller venv
+# skips this module and scripts/check-gateway-quality (the gateway-quality CI job) runs it.
+jwt = pytest.importorskip("jwt")
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from starlette.testclient import TestClient
