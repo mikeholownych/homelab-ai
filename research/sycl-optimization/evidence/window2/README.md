@@ -27,3 +27,9 @@ CPU-truth KL (3 chunks): base KLD 0.00563 (95.18% same top), HEAD 0.00614 (95.18
 **Finding:** HEAD is NOT uniformly faster. On the brief's primary target (qwen3moe arch) it regresses prefill for prompts >=2K
 tokens by 8-19%, the regime agentic coding lives in. Qwen3.6-35B (qwen35moe) and Flash-Next gain. Cause unidentified
 (candidates: grouped-MoE prefill path for qwen3moe, or oneAPI 2026.2 vs 2026.1); a bisect is needed before any deployment.
+
+## Compiler control (2026-11-15)
+HEAD rebuilt with oneAPI 2026.1.1 (same compiler as deployed; APP_REVISION embedded, image head-a956a852-oneapi2611): Coder-30B
+pp2048 1498, pp8192 1308, pp32768 840, tg 98.7 — same regression as the 2026.2.0 build. **Not a compiler effect; it is in the code.**
+(Caveat: pp512 samples match the 2026.2.0 run to 0.01%, 1266.69/1322.91/1327.70 vs 1266.78/1323.02/1327.74 — looks deterministic
+for that test; other tests differ run to run.)
