@@ -67,6 +67,16 @@ from an unmodified upstream commit, so patch boundary is empty.
 2. Long context 16K/32K/64K retrieval + KV quant (q8_0) on HEAD, both models.
 3. Concurrency (`-np 2`) now that HEAD is correct at n_seq=2; also confirm and report the b11347 multi-sequence bug upstream.
 4. Reliability set (crash/restart, cancel, VRAM exhaustion bounded), then Ansible image-pin change + rollback test, then deploy.
+   Additions from the LocalAI review (docs/source read 2026-11-15; not run):
+   - 4a. Reliability: model a **busy-watchdog** on the worker/gateway path. A hang is detected by the age of the *oldest in-flight request* (not total traffic),
+     so overlapping load cannot mask a stuck backend. Test cancel + graceful stop (bounded ~30 s wait, forced kill only as a second step) against the HEAD image.
+   - 4b. Operations: mirror LocalAI's pin pattern. One variable for the llama.cpp commit, base images pinned by digest, a minimal patch queue (empty today),
+     APP_REVISION embedded in every image. Record the pin in the Ansible vars alongside the rollback target.
+   - 4c. Reliability: with SYCL, LocalAI's docs report a **hang with `mmap: true`**. Our workers use llama.cpp's default mmap setting and have not hung;
+     check model load/reload under failure injection on HEAD with default mmap and with `--no-mmap`.
+   - 4d. Only if a worker ever serves more than one model: adopt per-model anti-affinity (concurrency groups) and pinned models. Not needed for one model per GPU.
+   - 4e. Only if a MoE model larger than VRAM is introduced: evaluate upstream `--moe-cache-size` (field `moe_cache_size`, present in HEAD). Not needed now (both models fit).
+   - 4f. If prompt/slot state is ever persisted: treat as private data (random IDs, per-model manifest, size/entry caps, no client-supplied paths).
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).

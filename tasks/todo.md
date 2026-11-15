@@ -605,3 +605,10 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 ### Results
 - `scripts/check-gateway-quality`: 245 passed. Broader suites (inventory, contracts, routing, runtime, gateway,
   pipeline): 382 passed, 1 skipped (pre-existing). yamllint + ansible-lint (production profile) clean.
+
+## SYCL research window 2 - plan additions (2026-11-15, from LocalAI review)
+- [ ] Locate Coder-30B prefill regression: bisect (493253fe good, 39febd2a bad); 7377bada8 build in progress; then upstream report with b11347 multi-seq bug
+- [ ] Reliability: busy-watchdog design keyed on oldest in-flight request; graceful stop then forced kill; cancel test on HEAD image
+- [ ] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build
+- [ ] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report)
+- [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence

@@ -8,3 +8,9 @@
 | Reconcile timer restarts stopped workers during experiments | observed | medium | pause/restore scripts |
 | Evidence only single-GPU; Gen3 x16 multi-GPU behaviour unknown | unknown | medium | NOT TESTED |
 | Candidate image unpinned base images (node:24, intel/deep-learning-essentials tag) | medium | medium | Pin by digest before production use |
+| Coder-30B (qwen3moe) long-prompt prefill regresses on HEAD: -8% @2K, -13% @8K, -19% @32K | confirmed | high for agentic coding | Bisect in progress: good 493253fe, bad 39febd2a (16 SYCL commits); not the compiler, not #29245, not MMID_SCHED; no env toggle recovers it. No deploy for the Coder route until located and fixed or reported upstream |
+| HEAD helps Qwen3.6 and Flash-Next but hurts Coder-30B, so a single image pin may be wrong | medium | medium | Evaluate per-worker image pins in the Ansible change; keep Coder route on deployed build until resolved |
+| Hung or stuck backend not detected (watchdog design from LocalAI review) | unknown | high | NOT TESTED; add busy-watchdog keyed on oldest in-flight request plus graceful-then-forced stop to reliability set (plan 4a) |
+| SYCL hang with `mmap: true` (LocalAI docs) | unknown | medium | Our default-mmap workers have not hung; verify under load/reload and with `--no-mmap` (plan 4c) |
+| Image provenance drift: llama.cpp commit, base images, APP_REVISION not recorded together | medium | medium | One pinned commit variable, digest-pinned bases, embed APP_REVISION, record pin + rollback target in Ansible vars (plan 4b) |
+| LocalAI's llama.cpp pin (8ca5a800) already contains the regressed range | likely | low | Informational: other Intel users likely affected; include in the upstream report once bisected |
