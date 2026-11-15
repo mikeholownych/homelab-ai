@@ -103,6 +103,17 @@ from an unmodified upstream commit, so patch boundary is empty.
      leaves a usable last-error in gateway evidence (Ollama captures the runner's last stderr, capped at 8 KB). Add both to the failure-injection set.
    - 4p. Performance (hypothesis): A/B upstream llama.cpp's Vulkan backend against SYCL on the B65 for Coder-30B, Qwen3.6 and Flash-Next (prefill 2K/8K/32K, decode), using the same KL gate.
      Ollama ships Vulkan for Intel by default and has no SYCL build, so its results say nothing about SYCL, but Vulkan may not share the Coder-30B prefill regression. Needs a Vulkan-enabled image build.
+   Additions from the vLLM review (docs read 2026-11-15; not run; llama.cpp metric and flag names checked in our sources at 5fc4f3c8 and a956a852):
+   - 4q. Evidence: gateway-level latency benchmark. Run a client-side load tool (`vllm bench serve` or GuideLLM) from a client machine against the gateway with an operator-issued key; never from the host
+     and never by reading production keys. Fixed seed, request-rate and concurrency sweeps, report TTFT, time per output token and inter-token latency (mean, median, p99), on the deployed build and each candidate.
+     Prompt shapes taken from Nexus Code (short, 2K, 8K, 32K). This closes the open "gateway TTFT/ITL" gap.
+   - 4r. Evidence: metrics mapping. llama.cpp exposes tokens cached, prompt/predicted tokens and seconds, processing and deferred requests, and speculative-decoding counters; it has no TTFT histogram,
+     queue time or KV-usage metric. Derive TTFT and queue time client-side, derive cache-hit ratio as cached prompt tokens over total prompt tokens, and note the mapping for `vllm-top`.
+   - 4s. Performance/agents: split the slot-reuse test (4h) by architecture. Run it separately for Coder-30B (full attention) and for Qwen3.6 and Flash-Next (hybrid, checkpoint-based reuse via `--ctx-checkpoints`),
+     since hybrid models can only reuse prefixes at saved checkpoints.
+   - 4t. Performance (engine comparison, hypothesis): vLLM XPU lists Arc Pro B-Series as validated hardware and Qwen3-Coder-30B-A3B as supported (BF16/online FP8; GPTQ-Int4 checkpoint exists); the host already has
+     `vllm/vllm-openai-xpu:v0.29.0`. Check whether it loads and serves Coder-30B on one B65 within 32 GB, then compare latency and engx task accuracy. Weights differ from our GGUF, so the KL gate does not apply;
+     label it an engine comparison, not a kernel comparison, and run it through the same bench as 4q.
 
 Harness: `harness/` (restore_baseline.sh, pause_reconcile.sh, research_run.sh, kl_gate.sh, kl_score.sh, kl_cpu_reference.sh, kl_cpu_batch_probe.sh, engx_ab.sh).
 Evidence: `evidence/` (raw JSONL, KL outputs, engx results, audits, build log, model SHA-256).

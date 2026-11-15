@@ -27,3 +27,8 @@
 | Gateway behaviour under worker saturation unknown (unbounded wait vs bounded queue and 503) | unknown | medium | NOT TESTED; add to failure injection with queue-depth metric (plan 4o) |
 | Worker crash leaves no usable error in gateway evidence | unknown | medium | NOT TESTED; capture last worker stderr in evidence on failure (plan 4o) |
 | Vulkan backend might avoid the Coder-30B SYCL prefill regression, or be worse elsewhere; untested | unknown | medium | Hypothesis only; A/B on the B65 before drawing any conclusion (plan 4p) |
+| No gateway-level TTFT/ITL evidence for any candidate; microbenchmarks may not predict agent latency | present | high | Add client-side load benchmark through the gateway (plan 4q) |
+| llama.cpp metrics lack TTFT, queue time and KV usage, so evidence and monitoring have blind spots | present | medium | Derive client-side, map to vllm-top vocabulary (plan 4r) |
+| Prefix-reuse results from one model family wrongly applied to the other (full-attention vs hybrid checkpointing) | medium | medium | Test Coder-30B and the hybrids separately (plan 4s) |
+| Engine comparison with vLLM confounded by different weights/quantisation | high if attempted | medium | Compare on engx accuracy plus latency only; label as engine comparison (plan 4t) |
+| vLLM XPU may not fit or run Coder-30B on one 32 GB B65 | unknown | low | Feasibility check before any comparison (plan 4t) |
