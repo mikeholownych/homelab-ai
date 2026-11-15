@@ -33,3 +33,15 @@ HEAD rebuilt with oneAPI 2026.1.1 (same compiler as deployed; APP_REVISION embed
 pp2048 1498, pp8192 1308, pp32768 840, tg 98.7 — same regression as the 2026.2.0 build. **Not a compiler effect; it is in the code.**
 (Caveat: pp512 samples match the 2026.2.0 run to 0.01%, 1266.69/1322.91/1327.70 vs 1266.78/1323.02/1327.74 — looks deterministic
 for that test; other tests differ run to run.)
+
+## Regression bisect (Coder-30B, oneAPI 2026.1.1 builds, GPU 0, pp t/s)
+| build | pp512 | pp2048 | pp8192 | pp32768 | tg128 |
+|---|---|---|---|---|---|
+| 75118a3a (parent of #29245 grouped MoE GEMM) | 967 | 1512 | 1457 | 1012 | 91.6 |
+| 847f447c (#29245) | 1244 | 1573 | 1454 | 1008 | 89.7 |
+| 18c5a95e (#30156 device MoE scheduler) | 1313 | 1461 | 1289 | 828 | 98.6 |
+| a956a852 HEAD | 1306 | 1472/1498 | 1283/1308 | 830/840 | 99.7/98.7 |
+=> #29245 is NOT the cause (it helps pp512 +29%). Regression lies in (847f447c, 18c5a95e], 49 commits.
+Toggles on HEAD at pp8192 (t/s, none restore ~1450): MMID_SCHED=0 1295; MMID_SCHED=3 1352; FA_DPAS=0 1299; FA_ONEDNN=0 1128 (worse);
+FA_ONEDNN=1 1291; ENABLE_ESIMD=0 1303; ENABLE_FUSION=0 1269; ENABLE_DNN=0 1330; MMVQ_WIDE=0 1289; ENABLE_FLASH_ATTN=0 50.
+Regression scales with context (-8% @2K, -11% @8K, -18% @32K) -> suspect attention/KV path or a generic kernel change, not MoE routing.
