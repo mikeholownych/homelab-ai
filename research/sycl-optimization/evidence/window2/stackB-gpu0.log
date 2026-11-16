@@ -1,0 +1,5 @@
+q36 bench [(512, 0, 1413.6), (2048, 0, 1818.6), (8192, 0, 1811.6), (32768, 0, 1674.3), (0, 128, 75.0)]
+q36 kl chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean KLD: 0.004700 ± 0.000169;Same top p: 96.579 ± 0.328 %;
+co bench [(512, 0, 1333.6), (2048, 0, 1730.3), (8192, 0, 1580.2), (32768, 0, 1079.3), (0, 128, 92.1)]
+co kl chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean KLD: 0.005617 ± 0.000176;Same top p: 95.373 ± 0.379 %;
+RESTORED

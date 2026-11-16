@@ -148,3 +148,27 @@ Practical result: HEAD + new oneDNN + old IGC/NEO looks like the right candidate
 head-stackC (new NEO 26.40 + old IGC 2.34.4) and head-stackD (old NEO 26.18 + new IGC 2.42.6) both fail at `dpkg --install`: libze-intel-gpu1/intel-opencl-icd 26.40 depends on `intel-igc-core-2 (>= 2.42.6)`, 26.18 depends on `(<< 2.34.4+~)`. They are a coupled pair.
 => Conclusion: the 32K regression comes from the IGC 2.42.6 + compute runtime 26.40.40196.8 pair (with IGDGMM 22.10.2). Whether it is the compiler or the runtime half is not separable without an intermediate pair
    (an optional point to test: the pair the host itself carries, NEO 26.22.38646.7 + IGC 2.36.5 + L0 1.28.6, from environment-baseline.md). Not pursued: the actionable answer is already known (pin the old pair; report upstream).
+
+### Candidate gate, GPU 0: head-stackB (HEAD source + new oneDNN + OLD IGC 2.34.4/NEO 26.18/IGDGMM 22.10.0), ESIMD=0 (llama-bench 3 reps; t/s)
+| model | pp512 | pp2048 | pp8192 | pp32768 | tg128 | KLD vs CPU truth | same top |
+|---|---|---|---|---|---|---|---|
+| Coder-30B stackB | 1333.6 | 1730.3 | 1580.2 | 1079.3 | 92.1 | 0.005617 | 95.37% |
+| Coder-30B deployed b11347 | 1027 | 1597 | 1478 | 1023 | 92.9 | 0.00563 | 95.18% |
+| Coder-30B HEAD new stack, ESIMD=0 | 1308 | 1653 | 1413 | 872 | 100.3 | 0.00614 | 95.18% |
+| Qwen3.6 stackB | 1413.6 | 1818.6 | 1811.6 | 1674.3 | 75.0 | 0.004700 | 96.58% |
+| Qwen3.6 deployed b11347 | 815 | 1335 | 1299 | - | 62.2 | 0.0047 | - |
+| Qwen3.6 HEAD new stack | 1400 | 1800 | 1777 | - | 80.8 | - | - |
+=> stackB beats deployed on prefill at every length for both models (Coder +30% / +8% / +7% / +5.5%; Qwen3.6 +73% / +36% / +39%), decode is flat for Coder (92.1 vs 92.9) and +21% for Qwen3.6 (75.0 vs 62.2). KL is equivalent to the deployed build (Qwen3.6 identical 0.0047, Coder 0.005617 vs 0.00563).
+Trade-off to record: the NEW stack decodes ~7-8% faster than the old pair on HEAD (Coder 100.3 vs 92.1, Qwen3.6 80.8 vs 75.0) but loses ~15% at 32K prefill (Coder). Which wins depends on the workload mix (agent sessions are long-context prefill heavy with short decode).
+Production restored: "OK: baseline restored, gateway ready, 2/2 workers available". Flash-Next (GPU 1) gate on stackB still to run.
+
+### Candidate gate, GPU 1: head-stackB on Qwen3.8-Flash-Next IQ1_M (llama-bench 3 reps; t/s)
+| config | pp512 | pp2048 | pp8192 | tg128 | KLD vs CPU truth | same top |
+|---|---|---|---|---|---|---|
+| stackB, ESIMD default | 396.1 | 687.0 | 669.2 | 19.1 | - | - |
+| stackB, ESIMD=0 | 596.4 | 716.2 | 696.2 | 19.2 | 0.015054 | 93.26% |
+| deployed b11347 | 434.6 | 677.5 | 666.6 | 19.5 | 0.0153 | 93.06% |
+| HEAD new stack (default ESIMD) | ~595 | 740.1 | 721.1 | 23.0 | 0.0159 | 93.29% |
+=> With ESIMD=0, stackB beats deployed on prefill (+37% / +6% / +4%), decode flat (19.2 vs 19.5), KL equivalent. ESIMD default at pp512 is slower (396, same cold-start-like weakness seen before); ESIMD=0 is the safe setting for all three models.
+Again the new stack decodes faster on HEAD (23.0 vs 19.2) and prefills slightly faster at 2K-8K; the old pair is what restores long-context behaviour on the Coder model.
+Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
