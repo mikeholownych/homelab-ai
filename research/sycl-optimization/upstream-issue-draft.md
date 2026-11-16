@@ -1,4 +1,4 @@
-# DRAFT (not filed) — upstream report: SYCL 32K MoE prefill regression with IGC 2.42.6 + NEO 26.40
+# FILED 2026-11-16 as ggml-org/llama.cpp#32399 (operator approved) — was DRAFT — upstream report: SYCL 32K MoE prefill regression with IGC 2.42.6 + NEO 26.40
 
 Status: tracker re-searched 2026-11-16 via `gh api search/issues`; no existing report. Related, different: #31068
 (XMX-ESIMD MoE pp slower), #31540 (the CI/Dockerfile bump, closed), #26396 (older 200K prefill regression, closed).
