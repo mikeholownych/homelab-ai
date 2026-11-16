@@ -494,9 +494,10 @@ llama_cpp_container_candidate_profiles:
       valid_until: "2026-12-31T00:00:00+00:00"
       endpoint: http://127.0.0.1:8002
 
-  # SYCL research candidate (research/sycl-optimization): llama.cpp HEAD a956a852 built against the pre-#31540 IGC/NEO pins,
-  # XMX-ESIMD off. The image is in the runtime account's store (built from research/sycl-optimization/build/Dockerfile.stackB).
-  # Qualify through the gateway only; do not route production traffic to it.
+  # SYCL research candidate (research/sycl-optimization): llama.cpp HEAD a956a852 built against the
+  # pre-#31540 IGC/NEO pins, XMX-ESIMD off. The image is in the runtime account's store (built from
+  # research/sycl-optimization/build/Dockerfile.stackB). Qualify through the gateway only; do not route
+  # production traffic to it.
   qwen36-stackb:
     replaces: worker1
     replaces_gateway_worker_id: b0-live-llama-worker1
