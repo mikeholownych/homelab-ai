@@ -1,0 +1,13 @@
+flashnext-stackB rep1 T01-pagination           PASS attempts=1 wall=225.0s tokens=4805
+flashnext-stackB rep1 T02-money                PASS attempts=2 wall=504.9s tokens=11580
+flashnext-stackB rep1 T03-cache-collision      PASS attempts=2 wall=237.5s tokens=6244
+flashnext-stackB rep1 T04-dry-run              PASS attempts=1 wall=58.0s tokens=1783
+flashnext-stackB rep1 T05-iterative-tree       PASS attempts=1 wall=80.8s tokens=2343
+flashnext-stackB rep1 T06-api-rename           PASS attempts=1 wall=75.8s tokens=1912
+flashnext-stackB rep1 T07-parse-duration       PASS attempts=2 wall=483.1s tokens=10965
+flashnext-stackB rep1 T08-safe-join            PASS attempts=1 wall=225.2s tokens=4823
+flashnext-stackB rep1 T09-token-bucket         PASS attempts=1 wall=222.8s tokens=4836
+flashnext-stackB rep1 T10-sqlite-migration     PASS attempts=2 wall=464.9s tokens=10456
+flashnext-stackB rep1 T11-test-generation      PASS attempts=2 wall=745.2s tokens=17776
+flashnext-stackB rep1 T12-nested-config        PASS attempts=1 wall=229.1s tokens=5007
+RESULT flashnext-stackB {"reps": 1, "tasks": 12, "validated_rate": 100.0, "validated_per_rep": [12], "first_attempt_rate": 58.3, "median_secs_to_validated": 227.1, "mean_secs_per_task": 296.0, "mean_tokens_per_task": 6878, "per_task_pass": {"T01-pagination": "1/1", "T02-money": "1/1", "T03-cache-collision": "1/1", "T04-dry-run": "1/1", "T05-iterative-tree": "1/1", "T06-api-rename": "1/1", "T07-parse-duration": "1/1", "T08-safe-join": "1/1", "T09-token-bucket": "1/1", "T10-sqlite-migration": "1/1", "T11-test-generation": "1/1", "T12-nested-config": "1/1"}, "always_fail": [], "flaky": []}

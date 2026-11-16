@@ -227,3 +227,12 @@ is therefore a Qwen3.6-on-stackB result (consistent with the earlier Qwen3.6 hea
 `INVALID-engx-flashnext-stackB-actually-qwen3.6-fi-container.txt`. Caught because the stackB unit log showed the bind failure and tokens/s (~78) did not
 match Flash-Next (~19). Fix: container removed, `research_run.sh stop` now also runs `podman rm -f`, `window2_engx_ab.sh` aborts if :18100 is busy.
 The failure-injection results above stand (they were observed on the intended server), but its cleanup leaked.
+
+## 2026-11-16 Flash-Next engx on head-stackB (valid rerun; server verified as Flash-Next via /props, port checked free)
+| Image | Reps | Validated | First attempt | Mean s/task | Fails |
+|---|---|---|---|---|---|
+| deployed b11347 (rep 1 of the interrupted run) | 1 | 11/12 (91.7%) | - | - | T11-test-generation (3 attempts, 33 min) |
+| head-stackB (ESIMD=0) | 1 | 12/12 (100%) | 58.3% | 296.0 | none |
+Not worse than deployed; n=1 rep per image and a single flaky-task difference, so no accuracy-improvement claim. The deployed rep 1 comes from a run that
+was interrupted partway through rep 2 (`engx-flashnext-deployed-partial.txt`); mean tokens/task for stackB 6870. Production restored and verified
+(2/2 workers, gateway ready); no stray research containers (port 18100 free, only the two production containers).
