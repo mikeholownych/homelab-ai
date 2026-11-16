@@ -640,3 +640,11 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (window 2) Full gate on candidate `head-stackB` for Qwen3.6, Flash-Next and Coder: KL, bench, engx, Ansible pin + rollback (plan 4af)
 - [ ] (window 2) Upstream report on IGC 2.42.6 + NEO 26.40 32K regression, after re-searching the tracker (plan 4ag)
 
+
+## Review: SYCL research window 2 (2026-11-16)
+- Done: root cause of the 32K regression (bundled IGC/NEO, not source/oneDNN); candidate `head-stackB` gated on throughput + KL (3 models), engx (Qwen3.6, Coder-30B),
+  dense Qwen3.8-27B sanity; deliverables written; lessons added; Ansible env hook on local branch `feat/llama-worker-env` (`fa7d538`, not pushed).
+- Not done, with reason: Flash-Next engx (harness died; ~3 h/image, recorded as gap); gateway-level latency/failure injection (needs the candidate behind the
+  production gateway = deployment, only via Ansible with rehearsed rollback); registry push + rollback rehearsal (outward-facing, needs operator approval/registry);
+  upstream issue (`research/sycl-optimization/upstream-issue-draft.md`, needs operator go-ahead); PR for the role change (needs operator go-ahead).
+- Decision unchanged: EXPERIMENT FURTHER; nothing deployed; production verified restored after every outage.
