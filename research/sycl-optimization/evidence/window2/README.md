@@ -265,3 +265,20 @@ All 18 requests passed; no 429s, no retries. Reading: through the gateway the ca
 direct llama-bench prefill gains. The candidate's first request after start was slower (6.5 s vs 2.0 s at 3.4K; the production first request 3.7 s was also above its later runs),
 so a warm-up request after each restart is worth planning for. Limits: synthetic text; one client, sequential (no concurrency claim); n=3 per size, one session each; the two arms ran at
 different times; decode rate is NOT reported (replies are ~2 tokens, so the per-row decode figure is meaningless); tool-call behaviour still untested (429 in the earlier probe).
+
+## 2026-11-16 Production deployment (operator instruction): reconverge to main, promote both workers, quota raised
+All through Ansible via the controller snapshot (`reconcile-controller.yml` re-pin + `aihost-reconcile.service`), each step after an idle-gateway check and verified:
+1. **Reconverge to main** (snapshot 8e613ae; check-mode simulation first: 11 predicted changes, all the gateway security release). Gateway now on release `626424c…`; both workers available; vllm-top shows no
+   auth errors (its journal's 401/403 matches were xpu-smi MEI permission noise); authenticated lead probe 6/6.
+2. **Canary** worker2 on the candidate (PR #27, snapshot ad8b473): deep route probe 6/6, kernel `Timedout job` count unchanged (32).
+3. **Rollback rehearsal** (PR #28, revert, snapshot 0f07774): worker2 back on original digest `2f494061…`, ESIMD env removed, gateway healthy, fault count unchanged.
+4. **Promotion of both workers + qualification quota 6 -> 60 rpm** (PR #29, snapshot 6fc5eb6): both workers on `localhost/sycl-research/llama@sha256:6cd97c37…` with `GGML_SYCL_ENABLE_XMX_ESIMD=0`, gateway healthy, 2 workers, fault count 32.
+Post-promotion gateway probes (qualification client, synthetic corpus; evidence `evidence/window2/gateway/post-promo-*.json`):
+| Route | Concurrency | Latency requests | median / TTFT | Multi-turn tool cases |
+|---|---|---|---|---|
+| lead (Qwen3.6) | 1 | 6/6 | 0.146 s / 0.079 s | 3/3 |
+| deep (Flash-Next) | 1 | 6/6 | 0.245 s / 0.139 s | 3/3 |
+| lead | 2 | 6/6 | 0.166 s / 0.096 s | 3/3 |
+| deep | 2 | 6/6 | 0.364 s / 0.255 s | 3/3 |
+The tool cases that returned HTTP 429 under the old 6 rpm quota now pass (12/12 turns sets, all HTTP 200). Rollback = revert PR #29 (the role drains and swaps back; rehearsed in #28).
+Still open from the instruction: key rotation and client updates (Vault), Grafana Vault secrets, soak monitoring.
