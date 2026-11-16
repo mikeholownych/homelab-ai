@@ -131,3 +131,15 @@ Deployed b11347 = 1023 at 32K. Earlier: HEAD with #30156 reverted = 874 (no chan
    This also explains the "bisect" results: each image takes its stack from its own commit's Dockerfile, so the SYCL code commits 41-49 were never the cause.
 Implications: (1) a build bump is two variables, llama.cpp source and runtime stack; pin and test them separately (plan 4b/4m). (2) The pp2048 difference between the two is within noise. (3) Open: which component (oneDNN / IGC / NEO compute runtime / Level Zero) carries the loss; component builds follow.
 Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
+
+### Bisect round 8: which library? (HEAD source, current Dockerfile with ONE group reverted; Coder-30B, GPU 0, ESIMD=0, 3 reps, t/s (sd))
+| image | what is old | pp2048 | pp32768 |
+|---|---|---|---|
+| head-stackA | oneDNN 2026.0.2 only (IGC 2.42.6, NEO 26.40, L0 1.34.0 new) | 1582 (13) | 846.6 (3.6) |
+| head-stackB | IGC 2.34.4 + NEO 26.18 + IGDGMM 22.10.0 only (oneDNN 2026.1.0, L0 1.34.0 new) | 1709 (12) | **1075.6 (3.9)** |
+| head-oldstack | everything old | 1587 (54) | 1043.5 (2.2) |
+| head-a956a852 | nothing old | 1651 (25) | 895.4 (3.4) |
+=> oneDNN is NOT the cause (A is as slow as unmodified HEAD). Reverting IGC/NEO/IGDGMM recovers 32K and is the best of all configs (above the deployed 1023, and fastest at 2K too).
+   The loss comes from the newer IGC (2.42.6) and/or compute runtime (NEO 26.40.40196.8) in the image.
+Next: split IGC vs NEO (head-stackC = only IGC old). Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
+Practical result: HEAD + new oneDNN + old IGC/NEO looks like the right candidate image for the Coder worker; the bump checklist must pin the compute stack (IGC/NEO/IGDGMM) independently of the llama.cpp commit.
