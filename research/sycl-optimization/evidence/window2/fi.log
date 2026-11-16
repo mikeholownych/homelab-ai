@@ -1,0 +1,8 @@
+start: healthy
+baseline request ok=1
+after client abort: health={"status":"ok"} follow-up ok=1
+concurrent(2 req, np1): a=1 b=1
+after hard kill: unit=inactive
+restart after kill: healthy, request ok=1
+kernel xe timeouts since test start: 32 (baseline 32)
+RESTORED

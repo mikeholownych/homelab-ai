@@ -207,3 +207,14 @@ IQ1_M model costs ~3 h per image, so it is recorded as a gap, not re-run.
 Identical PPL, finite, no NaN: #30892 does not reproduce on this model/quant with these flags. Scope: Q4_K_M weights only (the report concerns
 F16 compute paths with fused GEMM); an F16-weight dense model and generation-level output were not tested. Production restored and verified.
 Evidence: `evidence/correctness/dense-ppl-{deployed,stackB}.txt`, `evidence/window2/dense-bench-*.jsonl`.
+
+## 2026-11-16 Failure injection on head-stackB (research server GPU0:18100, Qwen3.6, production flags, ESIMD=0; not via gateway), one short outage
+| Test | Result |
+|---|---|
+| Baseline request | ok |
+| Client abort mid-stream (6 s of a 2000-token stream), then follow-up | health ok, follow-up ok |
+| Two concurrent requests, `-np 1` | both completed (a=1, b=1) |
+| SIGKILL of the server unit mid-request, then restart | unit inactive; restarted healthy; request ok |
+| Kernel xe `Timedout job` count | 32 before and after (no new GPU fault) |
+Scope: single process on one GPU, small prompts; no device-reset injection, OOM, long-context abort, or gateway-side fallback/retry behaviour
+(those need the candidate behind the gateway). Production restored and verified (2/2 workers, gateway ready). Log: `evidence/window2/fi.log`.
