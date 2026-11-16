@@ -1,0 +1,25 @@
+coder-stackB rep1 T01-pagination           PASS attempts=1 wall=14.0s tokens=1127
+coder-stackB rep1 T02-money                FAIL attempts=3 wall=14.4s tokens=3767
+coder-stackB rep1 T03-cache-collision      PASS attempts=2 wall=9.7s tokens=2536
+coder-stackB rep1 T04-dry-run              PASS attempts=1 wall=5.5s tokens=996
+coder-stackB rep1 T05-iterative-tree       PASS attempts=1 wall=3.4s tokens=920
+coder-stackB rep1 T06-api-rename           PASS attempts=1 wall=3.1s tokens=589
+coder-stackB rep1 T07-parse-duration       PASS attempts=1 wall=9.5s tokens=1228
+coder-stackB rep1 T08-safe-join            PASS attempts=2 wall=24.0s tokens=3692
+coder-stackB rep1 T09-token-bucket         PASS attempts=1 wall=2.6s tokens=653
+coder-stackB rep1 T10-sqlite-migration     FAIL attempts=3 wall=18.9s tokens=4076
+coder-stackB rep1 T11-test-generation      PASS attempts=1 wall=14.2s tokens=1462
+coder-stackB rep1 T12-nested-config        PASS attempts=3 wall=11.3s tokens=3441
+coder-stackB rep2 T01-pagination           PASS attempts=1 wall=8.2s tokens=1127
+coder-stackB rep2 T02-money                FAIL attempts=3 wall=14.1s tokens=3835
+coder-stackB rep2 T03-cache-collision      PASS attempts=2 wall=11.2s tokens=2703
+coder-stackB rep2 T04-dry-run              PASS attempts=1 wall=5.0s tokens=983
+coder-stackB rep2 T05-iterative-tree       PASS attempts=1 wall=2.8s tokens=920
+coder-stackB rep2 T06-api-rename           PASS attempts=1 wall=2.8s tokens=589
+coder-stackB rep2 T07-parse-duration       PASS attempts=1 wall=8.5s tokens=1173
+coder-stackB rep2 T08-safe-join            PASS attempts=2 wall=24.3s tokens=3701
+coder-stackB rep2 T09-token-bucket         PASS attempts=1 wall=2.3s tokens=653
+coder-stackB rep2 T10-sqlite-migration     FAIL attempts=3 wall=13.9s tokens=3676
+coder-stackB rep2 T11-test-generation      PASS attempts=1 wall=17.1s tokens=1722
+coder-stackB rep2 T12-nested-config        PASS attempts=3 wall=11.2s tokens=3444
+RESULT coder-stackB {"reps": 2, "tasks": 12, "validated_rate": 83.3, "validated_per_rep": [10, 10], "first_attempt_rate": 58.3, "median_secs_to_validated": 9.0, "mean_secs_per_task": 10.5, "mean_tokens_per_task": 2042, "per_task_pass": {"T01-pagination": "2/2", "T02-money": "0/2", "T03-cache-collision": "2/2", "T04-dry-run": "2/2", "T05-iterative-tree": "2/2", "T06-api-rename": "2/2", "T07-parse-duration": "2/2", "T08-safe-join": "2/2", "T09-token-bucket": "2/2", "T10-sqlite-migration": "0/2", "T11-test-generation": "2/2", "T12-nested-config": "2/2"}, "always_fail": ["T02-money", "T10-sqlite-migration"], "flaky": []}

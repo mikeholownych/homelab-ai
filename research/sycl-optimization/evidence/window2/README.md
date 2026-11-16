@@ -180,3 +180,12 @@ log shows xe `Timedout job ... VM job timed out on non-killed execqueue` on 0000
 also never became healthy, probably because the GPU was already in a bad state. Production was restored and verified
 (2/2 workers, gateway ready). Cause not established (the deployed image failed, so it is not stackB-specific; bench-mode runs on the
 same GPU and image were fine). Not retried blindly on GPU1; to investigate first (dmesg history, server-mode launch differences).
+
+## 2026-11-16 engx A/B on Qwen3-Coder-30B-A3B (GPU0, production flags, no reasoning budget, base corpus, 2 reps x 12 tasks, <=3 attempts)
+| Image | validated | per rep | first-attempt | mean tokens/task | mean s/task | always fail | flaky |
+|---|---|---|---|---|---|---|---|
+| deployed b11347 | 75.0% (18/24) | 8, 10 | 54.2% | 2736 | 14.2 | T02-money, T10-sqlite-migration | T08-safe-join, T11-test-generation |
+| head-stackB (ESIMD=0) | 83.3% (20/24) | 10, 10 | 58.3% | 2042 | 10.5 | T02-money, T10-sqlite-migration | none |
+Same two tasks fail on both images (ceiling/model limit); the extra passes on stackB are on two flaky tasks, so n=2 reps cannot
+claim stackB is more accurate, only that it is not worse. Evidence: `evidence/correctness/engx-coder-{deployed,stackB}.txt`.
+Production restored and verified afterwards (2/2 workers, gateway ready). Flash-Next engx still outstanding (see failed attempt above).

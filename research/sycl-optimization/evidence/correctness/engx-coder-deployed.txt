@@ -1,0 +1,25 @@
+coder-deployed rep1 T01-pagination           PASS attempts=1 wall=12.4s tokens=1163
+coder-deployed rep1 T02-money                FAIL attempts=3 wall=13.7s tokens=3665
+coder-deployed rep1 T03-cache-collision      PASS attempts=2 wall=10.1s tokens=2514
+coder-deployed rep1 T04-dry-run              PASS attempts=1 wall=5.7s tokens=994
+coder-deployed rep1 T05-iterative-tree       PASS attempts=1 wall=3.6s tokens=920
+coder-deployed rep1 T06-api-rename           PASS attempts=1 wall=3.3s tokens=589
+coder-deployed rep1 T07-parse-duration       PASS attempts=1 wall=9.4s tokens=1211
+coder-deployed rep1 T08-safe-join            FAIL attempts=3 wall=34.9s tokens=6501
+coder-deployed rep1 T09-token-bucket         PASS attempts=1 wall=2.9s tokens=653
+coder-deployed rep1 T10-sqlite-migration     FAIL attempts=3 wall=16.4s tokens=3807
+coder-deployed rep1 T11-test-generation      FAIL attempts=3 wall=84.5s tokens=12816
+coder-deployed rep1 T12-nested-config        PASS attempts=3 wall=12.3s tokens=3444
+coder-deployed rep2 T01-pagination           PASS attempts=1 wall=8.2s tokens=1120
+coder-deployed rep2 T02-money                FAIL attempts=3 wall=13.9s tokens=3783
+coder-deployed rep2 T03-cache-collision      PASS attempts=2 wall=10.0s tokens=2563
+coder-deployed rep2 T04-dry-run              PASS attempts=1 wall=5.3s tokens=996
+coder-deployed rep2 T05-iterative-tree       PASS attempts=1 wall=3.0s tokens=920
+coder-deployed rep2 T06-api-rename           PASS attempts=1 wall=2.9s tokens=589
+coder-deployed rep2 T07-parse-duration       PASS attempts=1 wall=9.5s tokens=1258
+coder-deployed rep2 T08-safe-join            PASS attempts=3 wall=36.7s tokens=6917
+coder-deployed rep2 T09-token-bucket         PASS attempts=1 wall=2.4s tokens=653
+coder-deployed rep2 T10-sqlite-migration     FAIL attempts=3 wall=14.7s tokens=3702
+coder-deployed rep2 T11-test-generation      PASS attempts=1 wall=14.2s tokens=1447
+coder-deployed rep2 T12-nested-config        PASS attempts=3 wall=11.3s tokens=3444
+RESULT coder-deployed {"reps": 2, "tasks": 12, "validated_rate": 75.0, "validated_per_rep": [8, 10], "first_attempt_rate": 54.2, "median_secs_to_validated": 8.8, "mean_secs_per_task": 14.2, "mean_tokens_per_task": 2736, "per_task_pass": {"T01-pagination": "2/2", "T02-money": "0/2", "T03-cache-collision": "2/2", "T04-dry-run": "2/2", "T05-iterative-tree": "2/2", "T06-api-rename": "2/2", "T07-parse-duration": "2/2", "T08-safe-join": "1/2", "T09-token-bucket": "2/2", "T10-sqlite-migration": "0/2", "T11-test-generation": "1/2", "T12-nested-config": "2/2"}, "always_fail": ["T02-money", "T10-sqlite-migration"], "flaky": ["T08-safe-join", "T11-test-generation"]}
