@@ -172,3 +172,11 @@ Production restored: "OK: baseline restored, gateway ready, 2/2 workers availabl
 => With ESIMD=0, stackB beats deployed on prefill (+37% / +6% / +4%), decode flat (19.2 vs 19.5), KL equivalent. ESIMD default at pp512 is slower (396, same cold-start-like weakness seen before); ESIMD=0 is the safe setting for all three models.
 Again the new stack decodes faster on HEAD (23.0 vs 19.2) and prefills slightly faster at 2K-8K; the old pair is what restores long-context behaviour on the Coder model.
 Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
+
+## 2026-11-16 Flash-Next engx A/B attempt: FAILED (no accuracy data)
+`harness/window2_engx_ab.sh 1 flashnext ...` (deployed image then head-stackB, research server on GPU1:18100, production flags incl.
+`--reasoning-budget 4096`): the first server died at warmup with `UR_RESULT_ERROR_DEVICE_LOST` in `ggml_sycl_mul_mat_id`; the kernel
+log shows xe `Timedout job ... VM job timed out on non-killed execqueue` on 0000:93:00.0 (GPU1) at 06:07:02. The second server (stackB)
+also never became healthy, probably because the GPU was already in a bad state. Production was restored and verified
+(2/2 workers, gateway ready). Cause not established (the deployed image failed, so it is not stackB-specific; bench-mode runs on the
+same GPU and image were fine). Not retried blindly on GPU1; to investigate first (dmesg history, server-mode launch differences).
