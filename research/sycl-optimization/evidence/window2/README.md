@@ -298,3 +298,9 @@ Still open from the instruction: key rotation and client updates (Vault), Grafan
   Grafana still uses the old admin password that was committed to the repo. Operator action: on the Grafana VM console run `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`; if it prints `vuU1w…` it was rebuilt (`ssh-keygen -R 10.0.8.2`, then run
   the converge: `ansible-playbook -i inventory/production/hosts.yml -i <localhost-venv-inventory> --limit grafana playbooks/site.yml --tags observability` with the vault_integration vars for the observability AppRole and the controller venv's python for localhost); if it prints something else, treat the host as compromised.
 - **Soak snapshot 2026-11-16 17:40Z:** worker1 and worker2 active since 17:07/17:09 with 0 restarts, gateway healthy with 2 workers, kernel `Timedout job` count unchanged (32), reconcile timer active (last two reconciles 16:40Z and 17:04Z, snapshot 6fc5eb6). Longer soak needs time and is not claimed.
+
+## 2026-11-16 Soak check at 18:40Z (about 1.5 h after promotion)
+- Services: worker1, worker2 and gateway active, `NRestarts` 0 for all three; kernel `Timedout job` count still 32 (unchanged); reconcile timer active; gateway healthy.
+- Gateway probe (qualification client, concurrency 1, 3 repeats; evidence `evidence/window2/gateway/soak-1840-engineering-{lead,deep}.json`):
+  lead 6/6, median 0.142 s / TTFT 0.079 s (post-promotion 0.146 / 0.079); deep 6/6, median 0.243 s / TTFT 0.137 s (post-promotion 0.245 / 0.139); tool cases 3/3 on both. No regression, no rollback.
+- Still open: Grafana host convergence (needs the operator to confirm the changed SSH host key of 10.0.8.2); this is one more point in time, not a multi-day soak.
