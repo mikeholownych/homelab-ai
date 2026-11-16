@@ -67,3 +67,9 @@
   worker 2 stayed down ~3 h until I noticed. My monitors waited only for a `RESTORED` line that never came and expired silently.
 - Rule: launch outage harnesses with `setsid` (own session), and have the watcher also check that the harness PID is alive; if it is gone with no
   RESTORED, run `harness/restore_baseline.sh` immediately. Prefer shorter outages (one image per outage) over a multi-hour one.
+
+## 2026-11-16 — a result must be tied to the server that produced it (leaked research container)
+- Pattern: after a SIGKILL test, `systemctl stop` left the podman container alive; the next harness's own server failed to bind the shared port and its
+  client silently talked to the old container, producing a "Flash-Next" result that was really Qwen3.6. Production also shared the GPU with it for ~30 min.
+- Rule: harnesses must check the port is free before starting, stop containers explicitly (`podman rm -f`), and verify the served model
+  (`/props` model_path) before and after any run; sanity-check results against known speeds (tokens/s) before recording them.

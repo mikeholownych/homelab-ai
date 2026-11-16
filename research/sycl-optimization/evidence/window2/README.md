@@ -218,3 +218,12 @@ Evidence: `evidence/correctness/dense-ppl-{deployed,stackB}.txt`, `evidence/wind
 | Kernel xe `Timedout job` count | 32 before and after (no new GPU fault) |
 Scope: single process on one GPU, small prompts; no device-reset injection, OOM, long-context abort, or gateway-side fallback/retry behaviour
 (those need the candidate behind the gateway). Production restored and verified (2/2 workers, gateway ready). Log: `evidence/window2/fi.log`.
+
+## 2026-11-16 INCIDENT: leaked research container; Flash-Next stackB engx result INVALID
+The failure-injection run's SIGKILL test left an orphaned `sycl-research-fi` podman container (Qwen3.6, GPU0, :18100) that `systemctl stop` did
+not remove. It ran next to restored production worker 1 for ~30 min (worker 1 stayed active; no fault seen) and then answered the next
+harness's engx requests, because the Flash-Next head-stackB server could not bind :18100. The "Flash-Next stackB" engx result (11/12, 83.3% first attempt)
+is therefore a Qwen3.6-on-stackB result (consistent with the earlier Qwen3.6 head run, 6601 vs 6527 tokens/task), NOT Flash-Next. File renamed
+`INVALID-engx-flashnext-stackB-actually-qwen3.6-fi-container.txt`. Caught because the stackB unit log showed the bind failure and tokens/s (~78) did not
+match Flash-Next (~19). Fix: container removed, `research_run.sh stop` now also runs `podman rm -f`, `window2_engx_ab.sh` aborts if :18100 is busy.
+The failure-injection results above stand (they were observed on the intended server), but its cleanup leaked.

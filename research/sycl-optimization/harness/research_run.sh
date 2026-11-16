@@ -11,7 +11,7 @@ set -euo pipefail
 HOST="${HOST:-10.0.8.5}"; MODE="$1"; TAG="$2"; shift 2
 UNIT="sycl-research-$TAG"
 case "$MODE" in
-  stop) ssh -o BatchMode=yes "$HOST" "cd /; sudo -n systemctl stop $UNIT.service 2>&1 || true"; exit 0;;
+  stop) ssh -o BatchMode=yes "$HOST" "cd /; sudo -n systemctl stop $UNIT.service 2>&1 || true; sudo -n -u aihost-runtime podman rm -f $UNIT >/dev/null 2>&1 || true"; exit 0;;
 esac
 GPU="$1"; shift
 if [ "$MODE" = server ]; then PORT="$1"; shift; fi
