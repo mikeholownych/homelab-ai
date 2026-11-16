@@ -79,3 +79,5 @@
   (snapshot HEAD) plus only the intended changes instead of reconverging production to a newer main.
 - I grepped the host_vars in my checked-out research branch (older than main) and briefly concluded a secret had survived the security PR; read `origin/main:<path>` when judging main.
 - Rotation must be driven by evidence: test current secrets against the leaked prefixes (booleans only) before rotating consumers I cannot see.
+
+- 2026-11-16: never run ansible `--diff` on tasks that render secret-bearing templates (env files); it wrote Grafana secrets to a log and my grep echoed them. Check logs with `grep -c`, never print matching lines; if exposed, shred the log and rotate immediately.
