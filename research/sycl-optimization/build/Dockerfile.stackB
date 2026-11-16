@@ -106,6 +106,14 @@ RUN mkdir /tmp/neo/ && cd /tmp/neo/ \
   && wget https://github.com/intel/compute-runtime/releases/download/$COMPUTE_RUNTIME_VERSION/libigdgmm12_${IGDGMM_VERSION}_amd64.deb \
   && wget https://github.com/intel/compute-runtime/releases/download/$COMPUTE_RUNTIME_VERSION/libze-intel-gpu1-dbgsym_${COMPUTE_RUNTIME_VERSION_FULL}_amd64.ddeb \
   && wget https://github.com/intel/compute-runtime/releases/download/$COMPUTE_RUNTIME_VERSION/libze-intel-gpu1_${COMPUTE_RUNTIME_VERSION_FULL}_amd64.deb \
+  && printf '%s\n' \
+     "0ce1e715ec5bf30b1304b42acfbda34cc514a0f616dd48c6a31973c4075d8d09  intel-igc-core-${IGC_VERSION_FULL}_amd64.deb" \
+     "09a71e8b6ad432ed0511b09fa4f580c1b44534a60ccb0545212507bf67dc0d1b  intel-igc-opencl-${IGC_VERSION_FULL}_amd64.deb" \
+     "f36cb8a6899353c61cc7261b650f287f4a652acadaad859103bdfc51f93b6e8a  intel-ocloc_${COMPUTE_RUNTIME_VERSION_FULL}_amd64.deb" \
+     "b2d0c924e56b3f9e5837774d68b0c67461b8633035d93ca18b1a8e3e5ead15fa  intel-opencl-icd_${COMPUTE_RUNTIME_VERSION_FULL}_amd64.deb" \
+     "6031a63d6e8a12ce61c14efc15f2c8e727061286e3820b8594e6d00615e04d54  libigdgmm12_${IGDGMM_VERSION}_amd64.deb" \
+     "12b8254e6d3415c32cee9cd13943030b991d91212445c79fe1cc27176a72eca4  libze-intel-gpu1_${COMPUTE_RUNTIME_VERSION_FULL}_amd64.deb" \
+     | sha256sum -c - \
   && dpkg --install *.deb
 
 RUN apt-get update \
