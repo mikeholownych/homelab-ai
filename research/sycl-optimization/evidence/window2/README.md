@@ -251,3 +251,17 @@ Reading: warm short-request latency is lower on the candidate (~20-30%); the fir
 need a warm-up request. Not established: long-context (agent-sized) TTFT through the gateway, concurrency, fallback/retry behaviour, and tool-call behaviour: all
 three multi-turn tool cases returned HTTP 429 `limited` on BOTH runs (qualification client quota), so they say nothing. Worker1 was out of service for ~1 minute per
 attempt. The drain failure in attempt 2 was not explained (error text is hidden by `no_log`; the retry with identical inputs succeeded).
+
+## 2026-11-16 Long-context latency through the gateway: stackB candidate vs production lead (Qwen3.6, same model file)
+`evaluations/engx/long_context_probe.py` (PR #26): streaming, cache bypass, reasoning off, unique nonce first (no prefix reuse), 3 sequential requests per size, via the
+authenticated gateway from the controller. Candidate through the durable transaction (`candidate/qwen36-stackb`, restored_verified); production through `engineering/lead`
+(no outage, gateway idle beforehand). Prompt sizes are measured from usage. Evidence: `evidence/window2/gateway/{candidate-stackB-long,baseline-lead-long}.json`.
+| Prompt tokens | Production TTFT (3 runs, median) | Candidate TTFT (3 runs, median) | Difference | Prefill tok/s via gateway (prod -> cand, median) |
+|---|---|---|---|---|
+| 3,435 | 3.71 / 2.59 / 2.70 s (2.70) | 6.47 / 1.99 / 2.08 s (2.08) | -23% | 1272 -> 1649 |
+| 13,617 | 9.72 / 9.77 / 9.86 s (9.77) | 7.69 / 7.80 / 7.80 s (7.80) | -20% | 1393 -> 1745 |
+| 41,009 | 31.91 / 32.23 / 32.71 s (32.23) | 24.94 / 25.27 / 25.23 s (25.23) | -22% | 1272 -> 1625 |
+All 18 requests passed; no 429s, no retries. Reading: through the gateway the candidate cuts long-prompt TTFT by about a fifth at 3K-41K tokens, consistent with the
+direct llama-bench prefill gains. The candidate's first request after start was slower (6.5 s vs 2.0 s at 3.4K; the production first request 3.7 s was also above its later runs),
+so a warm-up request after each restart is worth planning for. Limits: synthetic text; one client, sequential (no concurrency claim); n=3 per size, one session each; the two arms ran at
+different times; decode rate is NOT reported (replies are ~2 tokens, so the per-row decode figure is meaningless); tool-call behaviour still untested (429 in the earlier probe).
