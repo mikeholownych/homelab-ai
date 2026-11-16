@@ -19,6 +19,9 @@ ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
   --device local-ai.intel/gpu=all --group-add keep-groups \
   -e ONEAPI_DEVICE_SELECTOR=level_zero:0,1 -e ZE_AFFINITY_MASK={{ llama_worker.gpu }} \
   -e SYCL_PI_LEVEL_ZERO_USE_IMMEDIATE_COMMANDLISTS=1 \
+{% for env_key, env_value in (llama_worker.env | default({})).items() %}
+  -e {{ env_key }}={{ env_value }} \
+{% endfor %}
   -v /dev/dri/by-path:/dev/dri/by-path:ro \
   -v {{ llama_cpp_container_model_dir }}:/models:ro \
   -v {{ llama_worker.config_dir }}/worker-api-key:/cfg/api-key:ro \
