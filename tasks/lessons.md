@@ -73,3 +73,9 @@
   client silently talked to the old container, producing a "Flash-Next" result that was really Qwen3.6. Production also shared the GPU with it for ~30 min.
 - Rule: harnesses must check the port is free before starting, stop containers explicitly (`podman rm -f`), and verify the served model
   (`/props` model_path) before and after any run; sanity-check results against known speeds (tokens/s) before recording them.
+
+## 2026-11-16 — check the deployed identity before a transaction, and check the right tree before grepping
+- A durable candidate transaction's baseline refuses when the host's gateway release differs from the source's pin; build the source from the deployed commit
+  (snapshot HEAD) plus only the intended changes instead of reconverging production to a newer main.
+- I grepped the host_vars in my checked-out research branch (older than main) and briefly concluded a secret had survived the security PR; read `origin/main:<path>` when judging main.
+- Rotation must be driven by evidence: test current secrets against the leaked prefixes (booleans only) before rotating consumers I cannot see.

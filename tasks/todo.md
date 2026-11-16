@@ -665,3 +665,11 @@ stop at any step that needs a credential I do not hold.
 - [ ] 6. Promotion PR: worker1 + worker2 image_ref (digest) + env ESIMD=0, gateway runtime_image_digest; rollback = revert; rehearse rollback on one worker
 - [ ] 7. Qualification client quota to optimised level; rerun concurrency + tool-call probes through the gateway
 - [ ] 8. Final verification, evidence, docs, lessons; post-deploy soak check
+
+## Review: production deployment (2026-11-16)
+- [x] 1-3 Simulated then reconverged production to main (gateway security release `626424c`), verified (health, authenticated probe, vllm-top)
+- [x] 6 Promotion: canary on worker2 (#27) -> rollback rehearsal (#28, verified) -> both workers + quota (#29); both routes verified
+- [x] 7 Qualification quota 6 -> 60 rpm; concurrency 1 and 2 and multi-turn tool probes pass on lead and deep (12/12 tool cases)
+- [x] 4 Key rotation round 1 (worker keys, compat key) through Vault; verified. Client tokens not rotated (no live exposure found, see evidence README)
+- [ ] 5 Grafana Vault secrets: needs an observability AppRole/policy decision (new Vault infrastructure); not done
+- [ ] 8 Soak: watch lead/deep routes and the kernel log over the next days; rollback = revert PR #29 and re-pin the snapshot
