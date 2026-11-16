@@ -648,3 +648,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
   production gateway = deployment, only via Ansible with rehearsed rollback); registry push + rollback rehearsal (outward-facing, needs operator approval/registry);
   upstream issue (`research/sycl-optimization/upstream-issue-draft.md`, needs operator go-ahead); PR for the role change (needs operator go-ahead).
 - Decision unchanged: EXPERIMENT FURTHER; nothing deployed; production verified restored after every outage.
+
+## Review addendum: SYCL candidate through Ansible/gateway (2026-11-16)
+- Done with operator approval: upstream report (llama.cpp#32399), PRs #22/#23/#24 merged (CI green), durable candidate transaction run (3rd attempt passed, restored_verified), baseline-vs-candidate gateway latency probe.
+- Open (decisions/gaps): production reconverge to main (gateway security release + owed human steps), long-context gateway TTFT/concurrency, promoting the image to routed pools with a rehearsed rollback, package SHA-256 pins; scratch branch `candidate-src/stackb-on-deployed` + worktree `/home/mike/work/aihost-candidate-src` are local only (scratch commit surfaces drain error detail; not for merge).

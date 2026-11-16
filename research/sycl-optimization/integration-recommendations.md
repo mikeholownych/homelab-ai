@@ -28,3 +28,9 @@ Risks: see `risk-register.md` (stack pin must be revisited; the old pair is not 
    after convergence (idempotency).
 4. Supply-chain note: the candidate Dockerfile installs old IGC/NEO from Intel's release assets; pin their SHA-256 in the Dockerfile before building
    the registry image.
+
+## Update 2026-11-16 (after operator approval): candidate path exercised through Ansible and the gateway
+- Merged: per-worker `llama_worker.env` (#22), R4 profile `qwen36-stackb` (#23), `candidate_probe.yml` (#24). Image path is `podman load`-style (local store, pinned by manifest digest `sha256:6cd97c37...`); no external registry was used.
+- Exercised: durable transaction deploy + restore with independent verification, from a source equal to the deployed snapshot plus these changes. Not deployed to the routed pools; production serves the original image.
+- Still required before promoting to the routed lead/deep pools: long-context TTFT and concurrency through the gateway (the stock probe is short-prompt only and the qualification client hit its 429 quota on tool cases),
+  a rehearsed rollback of an image change in the routed pool (the transaction restores worker1, but the pin itself has not been changed), reconverging production to `main` (gateway security release; owed operator steps), warm-up request after worker restart (cold first request 6.6 s), and SHA-256 pins for the old IGC/NEO packages in the Dockerfile.
