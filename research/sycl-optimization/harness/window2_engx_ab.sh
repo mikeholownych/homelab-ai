@@ -6,6 +6,8 @@ GPU="$1"; TAG="$2"; MP="$3"; RB="$4"; shift 4
 trap 'bash harness/restore_baseline.sh > '$O'/engx-'$TAG'-restore.log 2>&1; echo RESTORED >> '$O'/engx-'$TAG'.log' EXIT
 : > $O/engx-$TAG.log
 bash harness/pause_reconcile.sh >/dev/null && ssh -o BatchMode=yes $H "cd /; sudo -n systemctl stop aihost-llama-worker$((GPU+1)).service"
+# let the GPU/VM release after the production worker stops (first Flash-Next attempt hung the xe VM when started immediately)
+sleep 20
 BASE=ghcr.io/ggml-org/llama.cpp@sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
 for v in deployed stackB; do
   if [ $v = deployed ]; then IMG=$BASE; EE=""; else IMG=localhost/sycl-research/llama:head-stackB; EE="GGML_SYCL_ENABLE_XMX_ESIMD=0"; fi
