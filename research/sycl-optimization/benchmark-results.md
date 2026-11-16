@@ -4,7 +4,7 @@ Raw data, scripts and per-step notes: `evidence/window1/`, `evidence/window2/REA
 (B65, one model per GPU, -fa 1 -b 4096 -ub 2048), 3-5 reps unless noted; t/s. Deployed = pinned production image b11347 (IGC 2.34.4 / NEO 26.18 era stack).
 Nothing here was measured through the gateway (see "Not tested").
 
-## Candidate: HEAD source (a956a852) + current oneDNN + old IGC/NEO pair (`head-stackB`), GPU_SYCL_ENABLE_XMX_ESIMD=0
+## Candidate: HEAD source (a956a852) + current oneDNN + old IGC/NEO pair (`head-stackB`), GGML_SYCL_ENABLE_XMX_ESIMD=0
 | model (GPU) | pp512 | pp2048 | pp8192 | pp32768 | tg128 | KLD vs CPU | deployed KLD |
 |---|---|---|---|---|---|---|---|
 | Qwen3.6-35B-A3B Q4_K_M (0): candidate | 1413.6 | 1818.6 | 1811.6 | 1674.3 | 75.0 | 0.004700 | 0.0047 |
