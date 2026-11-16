@@ -143,3 +143,8 @@ Production restored: "OK: baseline restored, gateway ready, 2/2 workers availabl
    The loss comes from the newer IGC (2.42.6) and/or compute runtime (NEO 26.40.40196.8) in the image.
 Next: split IGC vs NEO (head-stackC = only IGC old). Production restored: "OK: baseline restored, gateway ready, 2/2 workers available".
 Practical result: HEAD + new oneDNN + old IGC/NEO looks like the right candidate image for the Coder worker; the bump checklist must pin the compute stack (IGC/NEO/IGDGMM) independently of the llama.cpp commit.
+
+### Bisect round 9: IGC and NEO cannot be split (packaging)
+head-stackC (new NEO 26.40 + old IGC 2.34.4) and head-stackD (old NEO 26.18 + new IGC 2.42.6) both fail at `dpkg --install`: libze-intel-gpu1/intel-opencl-icd 26.40 depends on `intel-igc-core-2 (>= 2.42.6)`, 26.18 depends on `(<< 2.34.4+~)`. They are a coupled pair.
+=> Conclusion: the 32K regression comes from the IGC 2.42.6 + compute runtime 26.40.40196.8 pair (with IGDGMM 22.10.2). Whether it is the compiler or the runtime half is not separable without an intermediate pair
+   (an optional point to test: the pair the host itself carries, NEO 26.22.38646.7 + IGC 2.36.5 + L0 1.28.6, from environment-baseline.md). Not pursued: the actionable answer is already known (pin the old pair; report upstream).

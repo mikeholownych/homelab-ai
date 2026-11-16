@@ -636,3 +636,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention)
 - [ ] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892)
 - [ ] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use
+- [ ] (window 2) Record runtime-stack versions per image; test old vs new stack with the same source on every bump (plan 4ae)
+- [ ] (window 2) Full gate on candidate `head-stackB` for Qwen3.6, Flash-Next and Coder: KL, bench, engx, Ansible pin + rollback (plan 4af)
+- [ ] (window 2) Upstream report on IGC 2.42.6 + NEO 26.40 32K regression, after re-searching the tracker (plan 4ag)
+

@@ -43,3 +43,7 @@
 | Per-op backend bugs invisible to end-to-end KL (we build with tests off) | unknown | medium | NOT TESTED; `test-backend-ops` on a research build (plan 4ab) |
 | F16 NaN on dense models (upstream #30892) escapes a MoE-only gate; Dockerfile defaults `GGML_SYCL_F16=ON` | unknown | medium | Add dense-model check or F16 note to bump gate (plan 4ac) |
 | HEAD router/sleep-idle server flags assumed present or safe in the deployed build | unknown | low | Verify against `--help` per build before any use (plan 4ad) |
+| Inherited runtime stack (IGC/NEO/oneDNN) changes performance independently of the llama.cpp commit; a source-only bisect misattributes it | confirmed | high | Record stack versions per image, bench old vs new stack with the same source, pin the stack explicitly (plan 4ae) |
+| IGC 2.42.6 + NEO 26.40 slow 32K MoE prefill (about -15% on Coder-30B) | confirmed on B65 | medium | Use the old pair for the candidate image (plan 4af); upstream report (plan 4ag) |
+| Old IGC/NEO pair is unmaintained or insecure; staying on it long term is its own risk | unknown | medium | Re-test each upstream stack release; do not treat the pin as permanent |
+
