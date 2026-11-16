@@ -198,3 +198,12 @@ stopped until I noticed at 09:49 and ran `harness/restore_baseline.sh` (OK, 2/2 
 ~3 h (stop at ~06:45, restored 09:49). Cause of the harness death not established (the Coder run under the same launch method survived).
 No head-stackB engx data exists for Flash-Next. Flash-Next stays gated on KL (0.015054 vs 0.0153) and throughput only; engx on this
 IQ1_M model costs ~3 h per image, so it is recorded as a gap, not re-run.
+
+## 2026-11-16 Dense-model F16 sanity (plan 4ac, upstream #30892), Qwen3.8-27B-UD-Q4_K_M on GPU0, one short outage
+| Image | PPL (3 chunks, ctx 2048) | NaN lines | pp512 | pp2048 | tg64 |
+|---|---|---|---|---|---|
+| deployed b11347 | 10.3575 +/- 0.51427 | 0 | 535.4 | 836.1 | 15.0 |
+| head-stackB (ESIMD=0) | 10.3575 +/- 0.51427 | 0 | 575.9 | 859.1 | 15.7 |
+Identical PPL, finite, no NaN: #30892 does not reproduce on this model/quant with these flags. Scope: Q4_K_M weights only (the report concerns
+F16 compute paths with fused GEMM); an F16-weight dense model and generation-level output were not tested. Production restored and verified.
+Evidence: `evidence/correctness/dense-ppl-{deployed,stackB}.txt`, `evidence/window2/dense-bench-*.jsonl`.
