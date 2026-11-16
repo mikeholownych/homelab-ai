@@ -9,7 +9,7 @@ Required before deployment (the operator's rule: HEAD goes to production only th
 1. Build the image with the stack pinned explicitly (a Dockerfile override, not upstream's default), record the digest and all component versions (plan 4ae/4af).
 2. Ansible-managed image pin plus a rehearsed rollback to the current digest; per-worker env (ESIMD=0) in the same change.
 3. Gateway-level validation: client-side TTFT/ITL under realistic load, trace replay, failure injection, `-np 1` confirmed (plan 4q, 4w, 4o).
-4. engx on Coder and Flash-Next (only Qwen3.6 done), and the dense-model F16 check (plan 4ac).
+4. DONE (window 2): engx on Coder (20/24 vs 18/24) and Flash-Next (12/12 vs 11/12, n=1), dense-model F16 check (identical finite PPL), research-server failure injection (abort, concurrency, SIGKILL+restart). Not done: gateway-level failure injection/fallback (needs the candidate behind the gateway).
 5. Decide the decode-vs-long-prefill trade-off with real workload data (the new stack decodes 7-8% faster, the old pair prefills 15% faster at 32K).
 
 Open upstream items: report the IGC 2.42.6 + NEO 26.40 32K regression (plan 4ag), after re-searching the tracker for the multi-sequence bug and XMX-ESIMD (#31068).

@@ -19,7 +19,7 @@ Nothing here was measured through the gateway (see "Not tested").
 2. The upstream image's newer IGC 2.42.6 + NEO 26.40 stack costs Coder-30B about 15% at 32K prefill. oneDNN is not the cause. Source commits are not the cause (revert of #30156 changed nothing).
 3. The new stack decodes about 7-8% faster than the old pair, so the choice is workload dependent (agent sessions: long prefill, short decode).
 4. Accuracy: KL against a CPU reference is equivalent for deployed, HEAD and candidate on all three models. The deployed b11347 has a latent multi-sequence batch bug at `-b 4096` with 2 sequences (KLD 0.338) that `-np 1` avoids.
-5. engx (Qwen3.6): HEAD 23/24 vs deployed 22/24, no truncations; Coder and Flash-Next engx not run.
+5. engx (Qwen3.6): HEAD 23/24 vs deployed 22/24, no truncations; Coder (stackB 20/24 vs deployed 18/24, same two always-fail tasks) and Flash-Next (stackB 12/12 vs deployed 11/12, n=1) engx run in window 2: not worse; dense Qwen3.8-27B PPL identical and finite; research-server failure injection passed (see evidence/window2/README.md).
 
 ## Not tested (do not infer from this document)
 Gateway-level TTFT/latency, `-np 2` concurrency, multi-GPU, long-context retrieval and KV quantisation, reliability and failure injection, expert cache, an independent reviewer, engx on Coder/Flash-Next, the Ansible image pin and rollback, soak/duration runs.
