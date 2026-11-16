@@ -3,6 +3,10 @@
   ansible.builtin.include_role:
     name: vault_integration
     tasks_from: main.yml
+    # include_role tags apply to the include only; without apply the Vault read is skipped under --tags observability
+    # (the documented grafana converge) and the role then fails closed on an empty password.
+    apply:
+      tags: [observability, telemetry, vault]
   vars:
     vault_integration_operation: read
     vault_integration_secret_ref: "{{ observability_grafana_vault_secret_path }}"
