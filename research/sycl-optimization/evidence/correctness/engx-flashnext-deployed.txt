@@ -13,3 +13,6 @@ flashnext-deployed rep1 T12-nested-config        PASS attempts=1 wall=227.8s tok
 flashnext-deployed rep2 T01-pagination           PASS attempts=1 wall=228.8s tokens=4935
 flashnext-deployed rep2 T02-money                FAIL attempts=3 wall=590.3s tokens=16085
 flashnext-deployed rep2 T03-cache-collision      PASS attempts=1 wall=28.7s tokens=1264
+flashnext-deployed rep2 T04-dry-run              PASS attempts=1 wall=74.2s tokens=2088
+flashnext-deployed rep2 T05-iterative-tree       PASS attempts=1 wall=41.8s tokens=1575
+flashnext-deployed rep2 T06-api-rename           PASS attempts=1 wall=38.6s tokens=1172

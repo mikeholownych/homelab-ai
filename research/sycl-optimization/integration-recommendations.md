@@ -14,3 +14,17 @@ Required before deployment (the operator's rule: HEAD goes to production only th
 
 Open upstream items: report the IGC 2.42.6 + NEO 26.40 32K regression (plan 4ag), after re-searching the tracker for the multi-sequence bug and XMX-ESIMD (#31068).
 Risks: see `risk-register.md` (stack pin must be revisited; the old pair is not a permanent home).
+
+## Ansible gaps found in `roles/llama_cpp_container` (read-only inspection, 2026-11-16)
+1. **No per-worker environment.** `templates/llama-worker.service.j2` hard-codes four `-e` variables; head-stackB needs
+   `GGML_SYCL_ENABLE_XMX_ESIMD=0`. Add an optional `llama_worker.env` map rendered as `-e K=V`, default empty (no change for current workers),
+   with a role-structure test.
+2. **Digest model assumes a registry.** `tasks/main.yml` asserts `llama_cpp_container_digest` matches `^sha256:[0-9a-f]{64}$` and runs
+   `podman pull <image>@<digest>`. The candidate exists only in `aihost-runtime`'s local store (`localhost/sycl-research/llama:head-stackB`).
+   Options: (a) push to a registry the operator controls and pin that digest (recommended: reproducible, pull-verified, rollback is the old
+   digest already in `llama_cpp_container_digest`); (b) a `podman load` task from a built archive with sha256 check. Do not point units at a tag.
+3. **Rollback** = revert the digest and env vars in host_vars and re-run the role; the old image stays in the store. Rehearse on one worker
+   (GPU1 first) with the same idle-check/EXIT-trap discipline, verify through the gateway, and confirm `ansible-playbook --check` shows 0 changes
+   after convergence (idempotency).
+4. Supply-chain note: the candidate Dockerfile installs old IGC/NEO from Intel's release assets; pin their SHA-256 in the Dockerfile before building
+   the registry image.
