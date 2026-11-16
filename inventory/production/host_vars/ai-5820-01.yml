@@ -200,6 +200,10 @@ llama_cpp_container_workers:
     gpu: 1
     port: 8001
     config_dir: /etc/local-ai/llama/worker2
+    # SYCL research image (llama.cpp HEAD a956a852, pre-#31540 IGC/NEO pins), XMX-ESIMD off: see
+    # research/sycl-optimization/integration-recommendations.md. Rollback = remove image_ref and env.
+    image_ref: localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+    env: {GGML_SYCL_ENABLE_XMX_ESIMD: 0}
     model_file: flashnext-gsq-coder/IQ1_M/Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M-00001-of-00002.gguf
     served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
     context: 65536
@@ -433,7 +437,7 @@ orchestrator_gateway_workers:
     model_id: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
     revision: gguf-935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
     artifact_digest: sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2
-    runtime_image_digest: sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451
+    runtime_image_digest: sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
     topology: llama-cpp-sycl
     hardware_class: intel-arc-pro-b65-32g
     gpu_assignment: ["1"]
