@@ -61,3 +61,9 @@
   libraries, base image, env defaults) and vary one at a time; verify by reverting the suspect and checking the number moves.
 - Rule: packaged runtime pairs (IGC/NEO) can be hard-coupled by Debian dependencies; check `dpkg` constraints before planning a
   split bisect, and keep a failed-build log as evidence rather than retrying blindly.
+
+## 2026-11-16 — a long outage harness must survive its launcher and be watched for liveness, not only for its done-marker
+- Pattern: a multi-hour engx outage was started with `nohup ... &` from the tool shell; the process vanished without running its EXIT trap, so
+  worker 2 stayed down ~3 h until I noticed. My monitors waited only for a `RESTORED` line that never came and expired silently.
+- Rule: launch outage harnesses with `setsid` (own session), and have the watcher also check that the harness PID is alive; if it is gone with no
+  RESTORED, run `harness/restore_baseline.sh` immediately. Prefer shorter outages (one image per outage) over a multi-hour one.

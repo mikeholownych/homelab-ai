@@ -189,3 +189,12 @@ same GPU and image were fine). Not retried blindly on GPU1; to investigate first
 Same two tasks fail on both images (ceiling/model limit); the extra passes on stackB are on two flaky tasks, so n=2 reps cannot
 claim stackB is more accurate, only that it is not worse. Evidence: `evidence/correctness/engx-coder-{deployed,stackB}.txt`.
 Production restored and verified afterwards (2/2 workers, gateway ready). Flash-Next engx still outstanding (see failed attempt above).
+
+## 2026-11-16 Flash-Next engx A/B retry (settle wait added): INCOMPLETE, harness died, no stackB data
+The research server started this time (the earlier hang did not recur), and the deployed-image pass ran for ~3 h at ~19.5 t/s
+(rep1 complete, rep2 through T06; partial results in `evidence/correctness/engx-flashnext-deployed.txt`, not a finished RESULT). At ~09:15 the
+workstation harness process disappeared without running its EXIT trap (no RESTORED line); the host server was idle and worker 2 stayed
+stopped until I noticed at 09:49 and ran `harness/restore_baseline.sh` (OK, 2/2 workers, gateway ready). Worker 2 was therefore down
+~3 h (stop at ~06:45, restored 09:49). Cause of the harness death not established (the Coder run under the same launch method survived).
+No head-stackB engx data exists for Flash-Next. Flash-Next stays gated on KL (0.015054 vs 0.0153) and throughput only; engx on this
+IQ1_M model costs ~3 h per image, so it is recorded as a gap, not re-run.
