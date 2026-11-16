@@ -11,6 +11,7 @@
     probe_base: https://10.0.8.5:8443
     probe_models: [engineering/lead, engineering/deep]
     probe_label: sequential
+    probe_script: controlled_probe.py
     probe_concurrency: 1
     probe_repeats: 3
   tasks:
@@ -93,7 +94,7 @@
           ansible.builtin.command:
             argv:
               - "{{ probe_python }}"
-              - "{{ probe_source_root }}/evaluations/engx/controlled_probe.py"
+              - "{{ probe_source_root }}/evaluations/engx/{{ probe_script }}"
               - --base
               - "{{ probe_base }}"
               - --model

@@ -14,7 +14,8 @@
     probe_ca: /home/mike/.config/nexus/t5820-gateway-ca.crt
     probe_base: https://10.0.8.5:8443
     probe_models: ["candidate/{{ candidate }}"]
-    probe_label: "{{ candidate }}"
+    probe_label: "{{ candidate_probe_label | default(candidate) }}"
+    probe_script: "{{ candidate_probe_script | default('controlled_probe.py') }}"
     probe_concurrency: 1
     probe_repeats: 3
   tasks:
@@ -99,7 +100,7 @@
           ansible.builtin.command:
             argv:
               - "{{ probe_python }}"
-              - "{{ probe_source_root }}/evaluations/engx/controlled_probe.py"
+              - "{{ probe_source_root }}/evaluations/engx/{{ probe_script }}"
               - --base
               - "{{ probe_base }}"
               - --model
