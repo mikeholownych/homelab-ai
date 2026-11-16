@@ -314,3 +314,9 @@ Still open from the instruction: key rotation and client updates (Vault), Grafan
 - worker1, worker2, gateway active, `NRestarts` 0; kernel `Timedout job` count 32 (unchanged); reconcile timer active.
 - Gateway probe (concurrency 1, 3 repeats; `evidence/window2/gateway/soak-2010-engineering-{lead,deep}.json`): lead 6/6, median 0.138 s / TTFT 0.082 s (post-promotion 0.146 / 0.079); deep 6/6, median 0.247 s / TTFT 0.144 s (post-promotion 0.245 / 0.139); tool cases 3/3 on both. No regression, no rollback.
 - Grafana convergence is done (see above). Remaining: only longer-horizon soak; the hourly reconcile continues to run from the pinned snapshot.
+
+## 2026-11-16 Final soak point at 21:14Z (about 4.5 h after promotion)
+- worker1, worker2, gateway active, `NRestarts` 0; kernel `Timedout job` count 32 (unchanged); reconcile timer active.
+- Probe 1 (`soak-2110-*`): lead 6/6, median 0.174 s / TTFT 0.107 s (a slower reading); deep 6/6, 0.243 / 0.138 s; tool cases 3/3 on both.
+- Repeat (`soak-2120-*`, same conditions, minutes later): lead 6/6, 0.147 s / 0.079 s (back at the post-promotion 0.146 / 0.079); deep 6/6, 0.244 / 0.139 s; tool cases 3/3. The slower first lead reading was noise (n=6 per probe), not a regression. No rollback.
+- Verdict for the soak window: stable over about 4.5 h with three probe points plus service checks. Not a multi-day soak; the hourly reconcile keeps running from the pinned snapshot, rollback per `sycl-production-deployment-2026-11-16`.
