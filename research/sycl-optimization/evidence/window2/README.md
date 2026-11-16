@@ -236,3 +236,18 @@ The failure-injection results above stand (they were observed on the intended se
 Not worse than deployed; n=1 rep per image and a single flaky-task difference, so no accuracy-improvement claim. The deployed rep 1 comes from a run that
 was interrupted partway through rep 2 (`engx-flashnext-deployed-partial.txt`); mean tokens/task for stackB 6870. Production restored and verified
 (2/2 workers, gateway ready); no stray research containers (port 18100 free, only the two production containers).
+
+## 2026-11-16 Gateway-level qualification of the stackB candidate (durable candidate transaction, via the authenticated gateway)
+Path: `controller_candidate_transaction.yml` (baseline -> `candidate.yml` swap of worker1 for profile `qwen36-stackb` -> `candidate_probe.yml` -> restore -> independent
+verification), from a source checkout = the deployed reconcile snapshot (d8e3774) + only the candidate changes (#22, #23, #24); production was NOT reconverged to main.
+Attempts: (1) baseline_rejected: host gateway release 4d8ab8b vs main's pin 626424c (nothing changed); (2) deploy failed at "drain worker1" (HTTP -1), production
+restored and verified; (3) passed end to end, `restored_verified`, worker1/worker2/gateway healthy, no candidate unit left.
+Probe (`controlled_probe.py`, concurrency 1, 3 repeats, synthetic short prompts; evidence in `evidence/window2/gateway/`):
+| | requests passed | first request (cold) | median non-stream | median stream | median TTFT |
+|---|---|---|---|---|---|
+| candidate stackB via `candidate/qwen36-stackb` | 6/6 | 6.63 s | 0.093 s | 0.143 s | 0.074 s |
+| production lead (deployed b11347) via `engineering/lead` | 6/6 | 1.38 s | 0.124 s | 0.174 s | 0.104 s |
+Reading: warm short-request latency is lower on the candidate (~20-30%); the first request after the candidate started took 6.6 s (JIT/warm-up), so restarts
+need a warm-up request. Not established: long-context (agent-sized) TTFT through the gateway, concurrency, fallback/retry behaviour, and tool-call behaviour: all
+three multi-turn tool cases returned HTTP 429 `limited` on BOTH runs (qualification client quota), so they say nothing. Worker1 was out of service for ~1 minute per
+attempt. The drain failure in attempt 2 was not explained (error text is hidden by `no_log`; the retry with identical inputs succeeded).
