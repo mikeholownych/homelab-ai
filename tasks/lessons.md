@@ -52,3 +52,12 @@
 
 - Rule: before re-pinning the reconcile snapshot to a merge commit, fast-forward local `main`: the snapshot role's git
   checkout fetches only local branches/tags, so an `origin/main`-only commit fails with "reference is not a tree".
+
+## 2026-11-16 — a bisect over source commits must hold the build environment fixed (SYCL 32K regression)
+- Pattern: I bisected llama.cpp commits using each commit's own `.devops/intel.Dockerfile`, concluded the regression "enters
+  at 18c5a95e", and was wrong: the Dockerfile bump (oneDNN, IGC, NEO, IGDGMM, Level Zero; d5bbcd1f3) rode along with the source.
+  Reverting the suspect source change did nothing (874 vs 872), which exposed it.
+- Rule: before attributing a perf change to source, list every input that changes between the two builds (toolchain, runtime
+  libraries, base image, env defaults) and vary one at a time; verify by reverting the suspect and checking the number moves.
+- Rule: packaged runtime pairs (IGC/NEO) can be hard-coupled by Debian dependencies; check `dpkg` constraints before planning a
+  split bisect, and keep a failed-build log as evidence rather than retrying blindly.
