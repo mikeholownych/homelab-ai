@@ -652,3 +652,16 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 ## Review addendum: SYCL candidate through Ansible/gateway (2026-11-16)
 - Done with operator approval: upstream report (llama.cpp#32399), PRs #22/#23/#24 merged (CI green), durable candidate transaction run (3rd attempt passed, restored_verified), baseline-vs-candidate gateway latency probe.
 - Open (decisions/gaps): production reconverge to main (gateway security release + owed human steps), long-context gateway TTFT/concurrency, promoting the image to routed pools with a rehearsed rollback, package SHA-256 pins; scratch branch `candidate-src/stackb-on-deployed` + worktree `/home/mike/work/aihost-candidate-src` are local only (scratch commit surfaces drain error detail; not for merge).
+
+## Plan: deploy the validated SYCL stack to production (operator instruction 2026-11-16)
+Instruction: reconverge production to main; promote the image to the routed pools with a rehearsed rollback; set the qualification client's quota to optimised levels;
+rotate required keys and update configured clients. Constraints: Ansible only, drain-and-swap, idle checks, never print/log/commit secrets, verify after every step,
+stop at any step that needs a credential I do not hold.
+- [ ] 1. Simulate (check-mode) reconcile of main against ai-5820-01; review the diff (gateway security release, anything unexpected)
+- [ ] 2. Inventory external gateway callers (vllm-top, engx, nexus, other) and how each authenticates; provision admin/qualification clients the hardened gateway needs, BEFORE the gateway restarts
+- [ ] 3. Re-pin controller snapshot to main (reconcile-controller.yml), converge; verify gateway, workers, clients (restored_verified-style checks)
+- [ ] 4. Key rotation (worker keys, gateway client tokens, hermes token) via the role's own mechanism; update clients; verify
+- [ ] 5. Vault: Grafana secrets (needs Vault access; stop if absent)
+- [ ] 6. Promotion PR: worker1 + worker2 image_ref (digest) + env ESIMD=0, gateway runtime_image_digest; rollback = revert; rehearse rollback on one worker
+- [ ] 7. Qualification client quota to optimised level; rerun concurrency + tool-call probes through the gateway
+- [ ] 8. Final verification, evidence, docs, lessons; post-deploy soak check
