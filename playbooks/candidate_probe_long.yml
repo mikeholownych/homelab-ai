@@ -1,0 +1,8 @@
+---
+# Experiment playbook for controller_candidate_transaction.yml: long-context latency probe through the gateway
+# (see evaluations/engx/long_context_probe.py). Same guards and evidence handling as candidate_probe.yml.
+- name: Long-context qualification of a declared candidate profile
+  ansible.builtin.import_playbook: candidate_probe.yml
+  vars:
+    candidate_probe_script: long_context_probe.py
+    candidate_probe_label: "{{ candidate }}-long"
