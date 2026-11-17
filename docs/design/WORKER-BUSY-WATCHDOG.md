@@ -1,13 +1,20 @@
 # Worker busy-watchdog (design)
 
-Status: design, not implemented. Backlog item: "busy-watchdog keyed on oldest in-flight request; graceful stop then forced kill".
+Status: implemented, shipped DISABLED (nothing runs it until an operator starts it; see Operation). Backlog item: "busy-watchdog keyed on oldest in-flight request; graceful stop then forced kill".
 
 ## Problem
 A SYCL llama.cpp worker can wedge on a GPU job (the host logs 32 kernel `Timedout job` events since the 2026-11 incidents; one
 research harness failure left a worker down for hours because nothing restarted it). `Restart=on-failure` does not help: the
 process is alive but making no progress, so systemd sees nothing to restart and the gateway keeps routing to it.
 
-## Signal
+## Signal (as implemented)
+The implementation keys on the **engine's own progress**, not on the gateway's request table: the gateway already scrapes each worker's
+stats and now exports `aihost_engine_stalled_seconds{worker_id}` = seconds during which the engine reported running requests while none of
+its progress counters (in-flight prompt/generation tokens, completed token totals) changed; 0 when idle, progressing or unknown. This also
+catches a worker that stays pinned after the gateway cancelled the request (the gateway then holds no in-flight entry for it), which the
+request-age signal below would miss. Logic: `orchestrator_runtime/watchdog.py`; executor: `scripts/worker_watchdog.py`.
+
+### Original design signal
 "Busy" is keyed on the **oldest in-flight request**, not on process liveness or CPU:
 - The gateway already tracks in-flight requests per worker with a start time and streamed-byte counter.
 - A worker is **stuck** when its oldest in-flight request has produced no new token/byte for `stuck_after_s`
@@ -35,3 +42,17 @@ The action runs from the controller (Ansible/systemd), never from a workload pat
 - Fault injection on a non-production worker: SIGSTOP the container to emulate a wedge; expect cancel, drain, stop, kill, restart, readiness, in that order, and no routing to the worker in between.
 - Cancel path already verified on the HEAD image (window-2 failure injection: client abort mid-stream, follow-up request OK).
 - Production rollout through Ansible after the idle check, canary worker first.
+
+## Operation (implemented)
+- `scripts/worker_watchdog.py` runs on the controller, reads `aihost_engine_stalled_seconds` from the gateway `/metrics`, and walks the ladder:
+  drain (gateway admin API) -> graceful `systemctl stop` -> `systemctl kill -s SIGKILL` only if the stop failed -> restart -> wait for the gateway to
+  report the worker ready (300 s, else abandon) -> undrain. A worker whose stall clears while draining is simply undrained. Defaults: stuck after
+  120 s, drain wait 30 s, at most 3 restarts per worker per hour; beyond that the worker stays drained and an `alert` record is written once.
+  Each rung is one JSON line in `--evidence`. DRY-RUN unless `--apply`.
+- Needs: a gateway client with the `admin` scope (token file, never printed), SSH key access to the host, and passwordless `sudo systemctl`
+  for the worker units. None of that is provisioned by default, which is why it is disabled.
+- Verified: unit tests with a fake clock for the ladder, rate limit and abandon paths; executor tests with fake gateway/systemd (order, kill only
+  after a failed stop, no action on other workers, dry run touches nothing, never-ready abandon); gateway stall gauge tested against a fake engine.
+  Not yet verified live: the SIGSTOP fault-injection rehearsal on a non-production worker (needs the admin client and a canary window).
+- Rollout when wanted: provision the admin client, run `--once` dry-run against production for a day, rehearse with SIGSTOP on a research worker,
+  then enable on one worker (canary) before both.
