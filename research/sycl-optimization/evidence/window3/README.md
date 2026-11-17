@@ -226,3 +226,14 @@ The container now reaches the model and then fails during engine initialisation,
 the dense AWQ 7B works (earlier section). A comparison on the Coder model is therefore not possible with this engine version; the like-for-like reference measured
 in the same window was llama.cpp SYCL on the Coder GGUF (same client): decode gap p50 11.9 ms (about 84 tok/s), TTFT 0.017 s warm on a cached 1k-token prompt
 (first request 7.1 s with kernel warm-up). Worth re-trying on a later vLLM XPU release or with a different quantisation (GPTQ-Int8 does not fit with KV cache).
+
+## Gateway release with the stall gauge (2026-11-17)
+PR #36 (merged to main `a0672ac`) ships `aihost_engine_stalled_seconds` and the watchdog logic; the gateway release id was bumped to
+`t5820-gateway-e5ea30644dc113eaa5c0ede5706002e6a302c462` (the commit that last changed gateway code, as the release-identity test requires).
+Deployed through the established path: idle check (0 activity in 6 min), `reconcile-controller.yml` re-pin to `a0672ac`, `aihost-reconcile.service`.
+After: gateway active since 10:00 UTC, `NRestarts` 0, `current` -> `t5820-gateway-e5ea306…`, no errors in the gateway journal, kernel `Timedout job` count 32,
+workers 2/2. Probe `post-watchdog` (6/6 requests per route, 3/3 tool cases per route): lead median 0.150 s / TTFT 0.084 s, deep 0.253 s / 0.140 s, against
+the post-promotion baseline 0.146/0.079 and 0.245/0.139 (noise level). Not verified live: the new gauge itself (`/metrics` needs a monitoring credential that was not
+read here); it is covered by `tests/test_orchestrator_metrics_contract.py`. The watchdog executor stays disabled.
+Rollback: revert `eb18de5` (release id back to `626424cbf584…`, whose release directory remains on the host), fast-forward local main, then
+`playbooks/reconcile-controller.yml -e reconcile_controller_snapshot_ref=<that main sha>` and run `aihost-reconcile.service` after an idle check.
