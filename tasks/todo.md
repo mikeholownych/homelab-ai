@@ -482,7 +482,7 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
       could not work there (CA key on the controller; it ran site.yml). Built controller-side (`a909c3d`..`cdfa1c0`): pinned
       snapshot, hourly user timer, stamp on the host observed by the validator. First runs fixed two role conflicts (gateway
       readiness script owned twice; lifecycle units installed then removed each run); steady state changes only the stamp.
-- [ ] V9 pcie_aspm=performance on the kernel command line is not a valid policy (live policy: default); use
+- [x] V9 pcie_aspm=performance on the kernel command line is not a valid policy (live policy: default); use — DONE 2026-11-17: verified live on ai-5820-01: cmdline has pcie_aspm.policy=performance once, transparent_hugepage=always once, live policy [performance].
       pcie_aspm.policy=performance and add a validation check; transparent_hugepage=always is duplicated.
 - [x] V10 R6 gateway client tokens are Vault records (`526bda1`, evidence `a520267`). Found on the way: Vault credential
       convergence had been broken since the 2026-10-07 access changes (its checks were refused); repaired in `526bda1`.
@@ -554,7 +554,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] Release id bumped to t5820-gateway-ce1937c27e88
 - [x] Live qualification (approved 2026-11-05): `engineering/lead` / `coding.routine` → **not qualified**
       (9/12 tasks, LB 0.567 < 0.6; clean rerun after runner fix b752c41). No grant; criteria unchanged.
-- [ ] Deploy (approved 2026-11-05) **failed and rolled back**: CAIS SIGHUP handler killed the just-restarted gateway;
+- [x] Deploy (approved 2026-11-05) **failed and rolled back**: CAIS SIGHUP handler killed the just-restarted gateway; — DONE (superseded): the retry on the next item succeeded.
       journaled activation restored e1ef079868d9; snapshot re-pinned to fb4089d; 15:01 reconcile green.
       Fixed in a54c17e (reload after strict readiness, enforce only) + role test. Retry needs a new go-ahead.
 - [x] Deploy retry (approved 2026-11-05): snapshot 664a7e24849b, reconcile 0 failed / 0 rescued; gateway
@@ -607,9 +607,9 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
   pipeline): 382 passed, 1 skipped (pre-existing). yamllint + ansible-lint (production profile) clean.
 
 ## SYCL research window 2 - plan additions (2026-11-15, from LocalAI review)
-- [ ] Locate Coder-30B prefill regression: bisect (493253fe good, 39febd2a bad); 7377bada8 build in progress; then upstream report with b11347 multi-seq bug
+- [x] Locate Coder-30B prefill regression: bisect (493253fe good, 39febd2a bad); 7377bada8 build in progress; then upstream report with b11347 multi-seq bug — DONE 2026-11-16: root cause = d5bbcd1f3 (#31540) IGC/NEO/oneDNN pin bump; upstream report ggml-org/llama.cpp#32399.
 - [ ] Reliability: busy-watchdog design keyed on oldest in-flight request; graceful stop then forced kill; cancel test on HEAD image
-- [ ] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build
+- [x] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build — DONE 2026-11-16 in substance: per-worker env (#22), candidate profile qwen36-stackb (#23), SHA-256-pinned debs (#25), rollback rehearsed (#28); production now on the digest-pinned research image.
 - [ ] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report)
 - [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence
 - [ ] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check
