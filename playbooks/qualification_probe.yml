@@ -42,7 +42,7 @@
           - probe_repeats | int <= 5
           - probe_models | difference(['engineering/lead', 'engineering/deep']) | length == 0
           - probe_label is match('^[a-z0-9-]+$')
-          - probe_mode in ['qualification', 'load', 'alternate', 'fork', 'replay', 'tokens', 'hold']
+          - probe_mode in ['qualification', 'load', 'alternate', 'fork', 'replay', 'tokens', 'hold', 'conv']
     - name: Create private controller evidence directory
       ansible.builtin.file:
         path: "{{ probe_output_root }}"
@@ -137,7 +137,7 @@
           become: false
           changed_when: false
           no_log: true
-          when: probe_mode in ['load', 'alternate', 'fork', 'replay', 'tokens', 'hold']
+          when: probe_mode in ['load', 'alternate', 'fork', 'replay', 'tokens', 'hold', 'conv']
           loop: "{{ probe_models }}"
       always:
         - name: Stop this run's resource sampler

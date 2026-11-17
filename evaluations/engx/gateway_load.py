@@ -219,19 +219,32 @@ def hold(gateway, result, output):
     return result
 
 
+def conv(gateway, result, output):
+    """One fixed ~16k-token conversation turn (no nonce: the identical prompt every run) so a later run shows whether the worker still holds it:
+    TTFT and cached prompt tokens. Used to validate slot-state restore after a restart."""
+    prompt = "Slot persistence conversation context. " * 2200
+    row = strip(stream_request(gateway, None, max_tokens=8, messages=[{"role": "user", "content": prompt + "\nReply with one word."}]))
+    result["conv"] = row
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"output": str(output), "ttft": row["ttft_seconds"], "cached": row["cached_prompt_tokens"], "prompt": row["prompt_tokens"]}))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay", "tokens", "hold"], default="load")
+    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay", "tokens", "hold", "conv"], default="load")
     args = parser.parse_args()
     assert sum(c * PER_LEVEL for c in LEVELS) + 3 <= MAX_REQUESTS
     gateway = Gateway(args.base, args.model, json.load(sys.stdin)["qualification"], args.ca)
     result = {"started_at": datetime.now(timezone.utc).isoformat(), "model": gateway.models(), "sweep": {}, "interleave": {}}
-    if args.scenario in ("alternate", "fork", "replay", "tokens", "hold"):
-        {"alternate": alternate, "fork": fork, "replay": replay, "tokens": tokens, "hold": hold}[args.scenario](gateway, result, args.output)
+    if args.scenario in ("alternate", "fork", "replay", "tokens", "hold", "conv"):
+        {"alternate": alternate, "fork": fork, "replay": replay, "tokens": tokens, "hold": hold, "conv": conv}[args.scenario](gateway, result, args.output)
         return
     prompt = "Synthetic neutral context. " * 256
     for level in LEVELS:
