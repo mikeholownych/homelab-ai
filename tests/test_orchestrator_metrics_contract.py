@@ -299,3 +299,56 @@ def test_stalled_seconds_grows_only_while_running_work_makes_no_progress(monkeyp
         _Llama.METRICS = ("llamacpp:prompt_tokens_total 1000\nllamacpp:prompt_tokens_cached_total 9000\nllamacpp:prompt_seconds_total 12.5\n"
                           "llamacpp:tokens_predicted_total 400\nllamacpp:tokens_predicted_seconds_total 5.25\nllamacpp:requests_processing 1\nllamacpp:requests_deferred 0\n")
         server.shutdown(); server.server_close()
+
+
+def test_a_worker_that_goes_unresponsive_while_running_keeps_a_growing_stall_but_a_crash_clears_it(monkeypatch):
+    import socket
+    import urllib.error
+    metrics = MetricsRegistry()
+    server, w, health = _engine_health(metrics)
+    clock = [5000.0]
+    monkeypatch.setattr(health_module.time, "monotonic", lambda: clock[0])
+    series = 'aihost_engine_stalled_seconds{worker_id="w1",pool="lead",engine="llama.cpp"}'
+    try:
+        health.collect_all_engine_stats()                       # running=1, counters fixed: stall clock starts at 0
+        real_urlopen = health_module.urllib.request.urlopen
+
+        def hang(*a, **k):
+            raise urllib.error.URLError(socket.timeout("timed out"))   # accepted the connection, never answered (wedge / SIGSTOP)
+        monkeypatch.setattr(health_module.urllib.request, "urlopen", hang)
+        clock[0] += 200
+        health.collect_all_engine_stats()
+        assert f"{series} 200" in metrics.render_prometheus_text()     # the dark worker is a stalled worker
+        health._engine_stats["w1"]["observed_at"] -= 600               # its other series age out ...
+        clock[0] += 50
+        health.collect_all_engine_stats()
+        text = metrics.render_prometheus_text()
+        assert f"{series} 250" in text and "aihost_engine_requests_running{" not in text   # ... but the alarm stays
+
+        def refused(*a, **k):
+            raise urllib.error.URLError(ConnectionRefusedError(111, "refused"))   # crashed or restarting: not a stall
+        monkeypatch.setattr(health_module.urllib.request, "urlopen", refused)
+        health.collect_all_engine_stats()
+        assert series not in metrics.render_prometheus_text()
+        monkeypatch.setattr(health_module.urllib.request, "urlopen", real_urlopen)
+    finally:
+        server.shutdown(); server.server_close()
+
+
+def test_an_unresponsive_idle_worker_is_not_reported_as_stalled(monkeypatch):
+    import socket
+    import urllib.error
+    metrics = MetricsRegistry()
+    server, w, health = _engine_health(metrics)
+    try:
+        _Llama.METRICS = "llamacpp:requests_processing 0\nllamacpp:tokens_predicted_total 5\n"
+        health.collect_all_engine_stats()
+        monkeypatch.setattr(health_module.urllib.request, "urlopen",
+                            lambda *a, **k: (_ for _ in ()).throw(urllib.error.URLError(socket.timeout("timed out"))))
+        health.collect_all_engine_stats()
+        lines = [l for l in metrics.render_prometheus_text().splitlines() if l.startswith("aihost_engine_stalled_seconds{")]
+        assert all(l.endswith(" 0") for l in lines)             # absent or zero, never a made-up stall
+    finally:
+        _Llama.METRICS = ("llamacpp:prompt_tokens_total 1000\nllamacpp:prompt_tokens_cached_total 9000\nllamacpp:prompt_seconds_total 12.5\n"
+                          "llamacpp:tokens_predicted_total 400\nllamacpp:tokens_predicted_seconds_total 5.25\nllamacpp:requests_processing 1\nllamacpp:requests_deferred 0\n")
+        server.shutdown(); server.server_close()

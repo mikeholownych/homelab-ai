@@ -202,19 +202,31 @@ def tokens(gateway, result, output):
     return result
 
 
+def hold(gateway, result, output):
+    """One long streamed generation, used to keep a worker busy while a fault is injected (watchdog rehearsal). Records how it ended."""
+    row = strip(stream_request(gateway, "Synthetic neutral context. " * 64 + "\nWrite a very long numbered list of 400 short sentences about databases.",
+                               max_tokens=1200))
+    result["hold"] = row
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"output": str(output), "status": row["status"], "failure_class": row["failure_class"]}))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay", "tokens"], default="load")
+    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay", "tokens", "hold"], default="load")
     args = parser.parse_args()
     assert sum(c * PER_LEVEL for c in LEVELS) + 3 <= MAX_REQUESTS
     gateway = Gateway(args.base, args.model, json.load(sys.stdin)["qualification"], args.ca)
     result = {"started_at": datetime.now(timezone.utc).isoformat(), "model": gateway.models(), "sweep": {}, "interleave": {}}
-    if args.scenario in ("alternate", "fork", "replay", "tokens"):
-        {"alternate": alternate, "fork": fork, "replay": replay, "tokens": tokens}[args.scenario](gateway, result, args.output)
+    if args.scenario in ("alternate", "fork", "replay", "tokens", "hold"):
+        {"alternate": alternate, "fork": fork, "replay": replay, "tokens": tokens, "hold": hold}[args.scenario](gateway, result, args.output)
         return
     prompt = "Synthetic neutral context. " * 256
     for level in LEVELS:

@@ -29,6 +29,15 @@ class StallTracker:
             return 0.0
         return max(0.0, now - last[1])
 
+    def unresponsive(self, worker_id: str, now: float) -> float:
+        """The engine accepted the connection but did not answer in time (a wedged main loop answers /metrics no better than
+        it answers requests). If work was running at the last reading, the stall clock keeps counting from the last progress."""
+        last = self._state.get(worker_id)
+        return max(0.0, now - last[1]) if last is not None else 0.0
+
+    def active(self, worker_id: str) -> bool:
+        return worker_id in self._state
+
     def forget(self, worker_id: str) -> None:
         self._state.pop(worker_id, None)
 

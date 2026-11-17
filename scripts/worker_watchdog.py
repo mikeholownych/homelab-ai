@@ -62,7 +62,7 @@ class Gateway:
 class Systemd:
     """systemctl on the inference host over SSH (key auth, passwordless sudo for systemctl on the worker units)."""
 
-    def __init__(self, host: str, timeout: float = 60.0) -> None:
+    def __init__(self, host: str, timeout: float = 90.0) -> None:
         self.host, self.timeout = host, timeout
 
     def _run(self, *args: str) -> bool:
@@ -141,9 +141,13 @@ def main() -> int:
     ap.add_argument("--evidence", type=Path, default=Path("worker-watchdog-evidence.jsonl"))
     ap.add_argument("--apply", action="store_true", help="act; without it the watchdog only logs the next rung")
     ap.add_argument("--once", action="store_true")
+    ap.add_argument("--show", action="store_true", help="print the stalled-seconds reading per worker and exit (read-only)")
     args = ap.parse_args()
     units = dict(u.split("=", 1) for u in args.unit)
     gw = Gateway(args.base, args.ca, args.token_file.read_text().strip())
+    if args.show:
+        print(json.dumps({"stalled_seconds": gw.stalled()}))
+        return 0
     sd, verify = Systemd(args.host), {}
     ladder = Ladder(Policy(args.stuck_after, args.drain_wait, args.max_restarts_per_hour))
 
