@@ -580,6 +580,19 @@ def create_asgi_gateway(
         return JSONResponse(result, status_code=404 if result["status"] == "not_found" else 200,
                             headers={"X-Request-ID": req_id})
 
+    async def handle_admin_worker_slot(request: Request) -> Response:
+        req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
+        if is_origin_refused(request, "admin_worker_slot"):
+            return refuse_origin_response(req_id, "admin_worker_slot", request.client.host if request.client else "127.0.0.1")
+        client = get_client(request)
+        if client is None:
+            return unauthorized_response(req_id, "admin_worker_slot")
+        if "admin" not in client.scopes:
+            return forbidden_response(req_id, "admin scope required")
+        result = runtime.worker_slot(request.path_params["worker_id"], request.path_params["action"], actor=client.client_id)
+        code = {"not_found": 404, "unsupported": 422}.get(result["status"], 200)
+        return JSONResponse(result, status_code=code, headers={"X-Request-ID": req_id})
+
     async def handle_admin_reload(request: Request) -> Response:
         req_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         if is_origin_refused(request, "admin_reload"):
@@ -840,6 +853,7 @@ def create_asgi_gateway(
         Route("/v1/admin/status", handle_admin_status, methods=["GET"]),
         Route("/v1/admin/workers/{worker_id}/recover", handle_admin_worker_recover, methods=["POST"]),
         Route("/admin/workers", handle_admin_workers, methods=["GET"]),
+        Route("/admin/workers/{worker_id}/slot/{action}", handle_admin_worker_slot, methods=["POST"]),
         Route("/admin/workers/{worker_id}/{action}", handle_admin_worker_action, methods=["POST"]),
         Route("/admin", handle_admin_ui, methods=["GET"]),
     ]

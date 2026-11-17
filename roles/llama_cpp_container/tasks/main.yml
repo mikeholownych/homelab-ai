@@ -89,6 +89,20 @@
        + (llama_cpp_container_workers.values() | map(attribute='config_dir') | list) }}
   when: llama_cpp_container_enabled | bool
 
+- name: Create the private slot-state directories (conversation-derived data, owner only)
+  ansible.builtin.file:
+    path: "{{ llama_cpp_container_slot_dir }}{{ item }}"
+    state: directory
+    owner: "{{ llama_cpp_container_user }}"
+    group: "{{ llama_cpp_container_user }}"
+    mode: "0700"
+  loop: >-
+    {{ [''] + (llama_cpp_container_workers.values() | map(attribute='worker_id')
+              | map('regex_replace', '^', '/') | list) }}
+  when:
+    - llama_cpp_container_enabled | bool
+    - llama_cpp_container_slot_persistence | bool
+
 - name: Read existing per-worker API credentials
   ansible.builtin.slurp:
     src: "{{ item.value.config_dir }}/worker-api-key"

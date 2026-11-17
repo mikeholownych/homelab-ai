@@ -85,6 +85,28 @@
   no_log: true
   when: llama_cpp_container_drained | bool
 
+# Save the conversation state of a drained, idle worker before a planned restart
+# (best effort: a failure only means a cold start).
+- name: "Save slot state before the planned restart of {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ llama_cpp_container_admin_base }}/{{ llama_item.value.worker_id }}/slot/save"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
+    ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    status_code: [200, 404, 422]
+    timeout: 90
+  delegate_to: localhost
+  become: false
+  register: llama_cpp_container_slot_save
+  failed_when: false
+  no_log: true
+  when:
+    - llama_cpp_container_slot_persistence | bool
+    - llama_cpp_container_drained | bool
+    - llama_cpp_container_target_state != 'stopped'
+    - llama_cpp_container_unit_changed | bool
+
 - name: "Stop the worker whose GPU is lent to a candidate: {{ llama_item.value.service_name }}"
   ansible.builtin.systemd_service:
     name: "{{ llama_item.value.service_name }}"
@@ -136,6 +158,31 @@
   when:
     - llama_cpp_container_admin_token.content is defined
     - llama_cpp_container_target_state != 'stopped'
+
+# Restore the saved state once the worker is healthy and still drained (so no request can race the restore).
+# The file name carries a model/image/context fingerprint: a restart that changed any of them finds nothing
+# and starts cold. Best effort.
+- name: "Restore slot state after the planned restart of {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "{{ llama_cpp_container_admin_base }}/{{ llama_item.value.worker_id }}/slot/restore"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ llama_cpp_container_admin_token.content | b64decode | trim }}"
+    ca_path: "{{ orchestrator_gateway_tls_ca_fetch_dest }}"
+    status_code: [200, 404, 422]
+    timeout: 90
+  delegate_to: localhost
+  become: false
+  failed_when: false
+  no_log: true
+  when:
+    - llama_cpp_container_slot_persistence | bool
+    - llama_cpp_container_target_state != 'stopped'
+    - llama_cpp_container_unit_changed | bool
+    - (llama_cpp_container_slot_save.status | default(0)) == 200
+    - >-
+      (llama_cpp_container_drain_view.json.workers[llama_item.value.worker_id].drain.state
+      | default('active')) == 'drained'
 
 # Undrain whenever the gateway still holds this worker drained (this run drained it, or a candidate previously
 # borrowed its GPU), so a returning worker never stays out of rotation.

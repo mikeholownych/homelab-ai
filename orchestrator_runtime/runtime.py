@@ -959,6 +959,44 @@ class OrchestratorRuntime:
         self.evidence.append("worker_undrained", worker_id=worker_id, actor=actor)
         return {"status": "active", "worker_id": worker_id}
 
+    # ================================================================== slot-state persistence (llama.cpp --slot-save-path)
+    def slot_state_name(self, record: "WorkerRecord") -> str:
+        """File name for a worker's saved slot state. The fingerprint (model artifact, runtime image, context window) means state saved by a
+        different model or image is never found, so a restart that changes either starts cold instead of loading incompatible state."""
+        fingerprint = _hash([record.artifact_digest, record.runtime_image_digest, record.model_id, record.context_limit])[:12]
+        return f"{record.worker_id}-{fingerprint}.bin"
+
+    def worker_slot(self, worker_id: str, action: str, *, actor: str = "admin") -> dict[str, Any]:
+        """Save or restore slot 0 of a llama.cpp worker through the gateway (the gateway holds the worker credential; worker ports stay closed).
+        Admin-initiated only; the file name is derived here, never taken from the caller. Never returns conversation content."""
+        if action not in ("save", "restore"):
+            return {"status": "unsupported", "worker_id": worker_id, "reason": "unknown_action"}
+        record = self.registry.record(worker_id)
+        if record is None:
+            return {"status": "not_found", "worker_id": worker_id}
+        if record.engine != "llama.cpp" or not record.endpoint or not str(record.endpoint).startswith(("http://", "https://")):
+            return {"status": "unsupported", "worker_id": worker_id, "reason": "engine_has_no_slot_persistence"}
+        headers = {"Content-Type": "application/json"}
+        if record.auth_token:
+            headers["Authorization"] = f"Bearer {record.auth_token}"
+        body = json.dumps({"filename": self.slot_state_name(record)}).encode()
+        request = urllib.request.Request(record.endpoint.rstrip("/") + f"/slots/0?action={action}", body, headers, method="POST")
+        started = time.monotonic()
+        try:
+            with urllib.request.urlopen(request, timeout=60.0) as response:
+                payload = json.loads(response.read(1_000_000).decode("utf-8", errors="replace") or "{}")
+            result = {"status": "saved" if action == "save" else "restored", "worker_id": worker_id,
+                      "tokens": payload.get("n_saved" if action == "save" else "n_restored"),
+                      "bytes": payload.get("n_written" if action == "save" else "n_read"), "seconds": round(time.monotonic() - started, 2)}
+        except urllib.error.HTTPError as error:
+            # 400/404 with --slot-save-path unset, or no saved file for this fingerprint yet: not an error worth failing a restart over.
+            result = {"status": "unavailable", "worker_id": worker_id, "http_status": error.code}
+        except Exception as error:
+            result = {"status": "failed", "worker_id": worker_id, "error": type(error).__name__}
+        self.evidence.append(f"worker_slot_{action}", worker_id=worker_id, actor=actor, outcome=result["status"],
+                             tokens=result.get("tokens"), bytes=result.get("bytes"))
+        return result
+
     # ================================================================== R12 graceful stop
     def begin_shutdown(self) -> None:
         self.shutting_down.set()

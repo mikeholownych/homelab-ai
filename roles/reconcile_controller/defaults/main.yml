@@ -39,3 +39,7 @@ reconcile_controller_watchdog_units:
   b0-live-llama-deep-worker2: aihost-llama-worker2.service
 reconcile_controller_watchdog_stuck_after: 120
 reconcile_controller_watchdog_max_restarts_per_hour: 3
+# Idle slot-state saves (and restore after a restart) per worker, in seconds; 0 turns the feature off.
+# Needs --slot-save-path on the workers (roles/llama_cpp_container: llama_cpp_container_slot_persistence)
+# and the gateway admin slot route.
+reconcile_controller_watchdog_slot_save_interval: 300

@@ -21,6 +21,8 @@ class FakeLlama:
         self.reasoning = reasoning
         self.delay = 0.0
         self.stream_delay = 0.0
+        self.slot_files: dict[str, int] | None = None   # None: --slot-save-path not set (the endpoint answers 400); else filename -> saved tokens
+        self.slot_tokens = 1234                         # tokens a save would report
         self.truncate_after: int | None = None  # streaming: drop the connection after this many words (a worker killed mid-generation)
         self.finish_reason = "stop"
         self.content = "ok"
@@ -77,6 +79,19 @@ class FakeLlama:
                     return
                 if self.path == "/tokenize":
                     self._json(200, {"tokens": list(range(len(body.get("content", "").split())))})
+                    return
+                if self.path.startswith("/slots/0?action="):
+                    action = self.path.split("action=", 1)[1]
+                    name = body.get("filename", "")
+                    if fake.slot_files is None:
+                        self._json(400, {"error": {"message": "slot save is disabled"}})
+                    elif action == "save":
+                        fake.slot_files[name] = fake.slot_tokens
+                        self._json(200, {"id_slot": 0, "filename": name, "n_saved": fake.slot_tokens, "n_written": fake.slot_tokens * 100})
+                    elif action == "restore" and name in fake.slot_files:
+                        self._json(200, {"id_slot": 0, "filename": name, "n_restored": fake.slot_files[name], "n_read": fake.slot_files[name] * 100})
+                    else:
+                        self._json(404, {"error": {"message": "no such file"}})
                     return
                 if self.path != "/v1/chat/completions":
                     self._json(404, {"error": "nope"})

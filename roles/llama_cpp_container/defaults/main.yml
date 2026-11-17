@@ -35,3 +35,13 @@ llama_cpp_container_admin_client: ansible-admin
 llama_cpp_container_drain_timeout_seconds: 900
 # R4: candidate worker profiles (see playbooks/candidate.yml). Units of profiles that are not active are removed.
 llama_cpp_container_candidate_profiles: {}
+
+# Slot-state persistence (llama.cpp --slot-save-path): a planned restart saves the worker's conversation state
+# through the gateway admin API (after it is drained and idle) and restores it once the worker is healthy again,
+# so the next turn of a long conversation is a cache hit instead of a cold prefill (an 18k-token conversation:
+# 14.6 s cold, 0.4 s after restore). State is conversation-derived, so the directory is private (0700, the runtime
+# account), is never exposed by the gateway (no route to /slots; only the admin save and restore actions) and file
+# names carry a model/image/context fingerprint so a restart that changes the model or image starts cold. Set
+# false to remove --slot-save-path at the next unit change.
+llama_cpp_container_slot_persistence: true
+llama_cpp_container_slot_dir: "{{ llama_cpp_container_home }}/slots"

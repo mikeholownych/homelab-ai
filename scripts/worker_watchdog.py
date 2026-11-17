@@ -18,18 +18,24 @@ import ssl
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from orchestrator_runtime.watchdog import Action, Ladder, Policy  # noqa: E402
 
+_RUNNING = re.compile(r'^aihost_engine_requests_running\{[^}]*worker_id="([^"]+)"[^}]*\}\s+([-+0-9.eE]+)', re.M)
 _STALLED = re.compile(r'^aihost_engine_stalled_seconds\{[^}]*worker_id="([^"]+)"[^}]*\}\s+([-+0-9.eE]+)', re.M)
 READY_WAIT_S = 300.0
 
 
 def parse_stalled(text: str) -> dict[str, float]:
     return {m.group(1): float(m.group(2)) for m in _STALLED.finditer(text)}
+
+
+def parse_running(text: str) -> dict[str, float]:
+    return {m.group(1): float(m.group(2)) for m in _RUNNING.finditer(text)}
 
 
 class Gateway:
@@ -45,8 +51,19 @@ class Gateway:
         with urllib.request.urlopen(req, context=self.context, timeout=self.timeout) as r:
             return r.read()
 
+    running: dict[str, float] = {}
+
     def stalled(self) -> dict[str, float]:
-        return parse_stalled(self._call("/metrics").decode("utf-8", "replace"))
+        text = self._call("/metrics").decode("utf-8", "replace")
+        self.running = parse_running(text)
+        return parse_stalled(text)
+
+    def slot(self, worker: str, action: str) -> dict:
+        """Save or restore a worker's conversation state through the gateway (admin scope). Never raises on an HTTP status."""
+        try:
+            return json.loads(self._call(f"/admin/workers/{worker}/slot/{action}", "POST"))
+        except urllib.error.HTTPError as error:
+            return {"status": "unavailable", "http_status": error.code}
 
     def drain(self, worker: str) -> bool:
         return json.loads(self._call(f"/admin/workers/{worker}/drain", "POST")).get("status") == "drained"
@@ -84,7 +101,8 @@ class Systemd:
         return self._run("restart", unit)
 
 
-def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply: bool, evidence, verify_started: dict[str, float]) -> list[dict]:
+def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply: bool, evidence, verify_started: dict[str, float],
+             slot_saved: dict[str, float] | None = None, slot_interval: float = 0.0) -> list[dict]:
     """One pass over every worker: ask the ladder, perform (or just log) the action, report back. Returns the evidence records."""
     stalled = gw.stalled()
     records = []
@@ -104,6 +122,14 @@ def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply
                         ladder.abandon(worker, now)
                         records.append({"worker": worker, "action": "abandon", "reason": "never became ready", "ts": now})
                     break
+            if action is Action.UNDRAIN and ladder.phase(worker) == "verifying" and apply and slot_interval > 0:
+                # The restarted worker is back and still drained: put its saved conversation state back before readmitting it
+                # (best effort; a different model or image has a different file name and simply finds nothing).
+                restored = gw.slot(worker, "restore")
+                records.append({"worker": worker, "action": "slot_restore", "applied": True, "ts": now,
+                                "outcome": restored.get("status"), "tokens": restored.get("tokens"), "seconds": restored.get("seconds")})
+                if slot_saved is not None:
+                    slot_saved[worker] = now
             record = {"worker": worker, "action": action.value, "stalled_s": value, "unit": unit, "applied": apply, "ts": now}
             if not apply:
                 records.append(record)
@@ -126,6 +152,13 @@ def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply
             ladder.performed(worker, action, now, ok)
             if action in (Action.UNDRAIN, Action.ALERT):
                 break
+        # Periodic save while the worker is healthy and idle, so a crash or a watchdog restart can still restore a recent state.
+        if (apply and slot_interval > 0 and slot_saved is not None and ladder.phase(worker) == "healthy" and value == 0.0
+                and getattr(gw, "running", {}).get(worker) == 0.0 and now - slot_saved.get(worker, -slot_interval) >= slot_interval):
+            saved = gw.slot(worker, "save")
+            slot_saved[worker] = now
+            records.append({"worker": worker, "action": "slot_save", "applied": True, "ts": now, "outcome": saved.get("status"),
+                            "tokens": saved.get("tokens"), "bytes": saved.get("bytes"), "seconds": saved.get("seconds")})
     for r in records:
         evidence(r)
     return records
@@ -146,6 +179,8 @@ def main() -> int:
                     help="seconds to wait for a systemctl kill/restart over SSH before treating it as failed")
     ap.add_argument("--stop-timeout", type=float, default=None,
                     help="seconds to wait for the graceful stop before the ladder escalates to a forced kill (default: --systemctl-timeout, above TimeoutStopSec)")
+    ap.add_argument("--slot-save-interval", type=float, default=0.0,
+                    help="seconds between idle slot-state saves per worker, and restore after a restart (0 = off; needs --slot-save-path on the workers)")
     ap.add_argument("--evidence", type=Path, default=Path("worker-watchdog-evidence.jsonl"))
     ap.add_argument("--apply", action="store_true", help="act; without it the watchdog only logs the next rung")
     ap.add_argument("--once", action="store_true")
@@ -156,7 +191,7 @@ def main() -> int:
     if args.show:
         print(json.dumps({"stalled_seconds": gw.stalled()}))
         return 0
-    sd, verify = Systemd(args.host, args.systemctl_timeout, args.stop_timeout), {}
+    sd, verify, saved = Systemd(args.host, args.systemctl_timeout, args.stop_timeout), {}, {}
     ladder = Ladder(Policy(args.stuck_after, args.drain_wait, args.max_restarts_per_hour))
 
     def evidence(record: dict) -> None:
@@ -166,7 +201,8 @@ def main() -> int:
 
     while True:
         try:
-            run_once(gw, sd, ladder, units, time.monotonic(), apply=args.apply, evidence=evidence, verify_started=verify)
+            run_once(gw, sd, ladder, units, time.monotonic(), apply=args.apply, evidence=evidence, verify_started=verify,
+                     slot_saved=saved, slot_interval=args.slot_save_interval)
         except Exception as error:  # the watchdog must not die on a transient gateway error
             print(json.dumps({"error": type(error).__name__}), flush=True)
         if args.once:
