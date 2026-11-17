@@ -1,0 +1,13 @@
+idle confirmed 2026-11-17T07:16:36Z
+== coder30b 2026-11-17T07:16:57Z
+{"step": "cold", "wall_s": 16.95, "prompt_n": 18013, "cache_n": 0, "prompt_ms": 16569}
+{"step": "continuation", "wall_s": 0.46, "prompt_n": 19, "cache_n": 18005, "prompt_ms": 170}
+{"step": "fork-mid-prompt", "wall_s": 5.32, "prompt_n": 6009, "cache_n": 9004, "prompt_ms": 4405}
+{"step": "original-again", "wall_s": 7.35, "prompt_n": 9009, "cache_n": 9004, "prompt_ms": 6977}
+== qwen36 2026-11-17T07:20:28Z
+{"step": "cold", "wall_s": 14.66, "prompt_n": 18015, "cache_n": 0, "prompt_ms": 14356}
+{"step": "continuation", "wall_s": 1.69, "prompt_n": 2064, "cache_n": 15963, "prompt_ms": 1393}
+{"step": "fork-mid-prompt", "wall_s": 8.7, "prompt_n": 15015, "cache_n": 0, "prompt_ms": 8332}
+{"step": "original-again", "wall_s": 10.22, "prompt_n": 18015, "cache_n": 0, "prompt_ms": 9919}
+dmesg timedout: 32
+RESTORED rc=0

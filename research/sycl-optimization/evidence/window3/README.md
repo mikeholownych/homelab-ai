@@ -133,3 +133,25 @@ f8_e4m3 cases with `-p '^(?!.*f8_e4m3)'` (`harness/backend_ops_filter.sh`) and c
 Reading: no numerical mismatch against the CPU reference in any supported MUL_MAT_ID (MoE routing, all quant types incl. q4_K,
 IQ types), MUL_MAT or flash-attention case on the deployed build. Limits: f8_e4m3 is untested (none of our models use it), and an
 unsupported f8 case aborting the process is an upstream test-suite gap worth a one-line mention if reported.
+
+## Slot-reuse split: Coder-30B (full attention) vs Qwen3.6-35B-A3B (hybrid) (backlog 627, 2026-11-17)
+
+Research server on GPU0 (production image and flags, `-np 1`, `-c 65536`, port 18100, not via the gateway), same ~18k-token four-step
+client for both models (`harness/window3_slot_reuse.sh`, `harness/slot_reuse_client.py`; llama-server `timings`: `cache_n` reused,
+`prompt_n` computed). One worker1 outage, idle gate, restore rc 0, `Timedout job` count unchanged at 32.
+
+| Step | Coder-30B (full attention): computed / reused, wall | Qwen3.6 (hybrid): computed / reused, wall |
+|---|---|---|
+| cold | 18013 / 0, 16.9 s | 18015 / 0, 14.7 s (first request on a fresh server includes kernel warm-up) |
+| continuation | **19 / 18005, 0.46 s** | 2064 / 15963, 1.69 s |
+| fork at mid-prompt | **6009 / 9004, 5.3 s** | 15015 / **0**, 8.7 s |
+| original again | 9009 / 9004, 7.4 s | 18015 / **0**, 10.2 s |
+
+- Full attention (Coder): the KV cache is truncated at the first differing token, so a continuation is essentially free and a fork
+  keeps everything before the divergence point (half the prompt here). Returning to the original then reuses that same shared half.
+- Hybrid (Qwen3.6; Flash-Next behaved the same through the gateway): reuse needs a stored recurrent-state checkpoint, taken every
+  ~2k tokens, so a continuation recomputes up to ~2k tokens and any divergence inside the prompt discards everything, including the
+  earlier conversation. This matches the gateway fork test (same 8.7 s fork and ~10 s return on lead).
+- Consequence for model choice and client design: a workload that edits or compacts earlier context favours the full-attention Coder model;
+  an append-only agent loop is cheap on either. If Coder-30B is ever routed again, the gateway's affinity map is worth more there
+  than on the hybrids.

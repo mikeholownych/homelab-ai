@@ -624,7 +624,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (Ollama review) Build Vulkan-enabled llama.cpp image; A/B vs SYCL on B65 for the three models
 - [x] (vLLM review) Gateway-level load benchmark from a client machine (TTFT, TPOT, ITL percentiles; sweeps; Nexus Code prompt shapes) — gateway_load.py + probe_mode load: sweeps 1/2/4, TTFT/TPOT/chunk-gap percentiles, no errors (window3 README); Nexus-shaped long prompts covered by the 10k interleave
 - [x] (vLLM review) Map llama.cpp metrics to evidence/vllm-top vocabulary; derive TTFT/queue time client-side — research/sycl-optimization/metrics-mapping.md (mapping exists in engine_stats.py; vllm-top adapter gap noted as a separate item)
-- [ ] (vLLM review) Split slot-reuse test: Coder-30B (full attention) vs Qwen3.6/Flash-Next (hybrid, ctx checkpoints)
+- [x] (vLLM review) Split slot-reuse test: Coder-30B (full attention) vs Qwen3.6/Flash-Next (hybrid, ctx checkpoints) — continuation 19 new tokens (Coder) vs 2064 (Qwen3.6); fork keeps 9004 of 15013 tokens on Coder, 0 on Qwen3.6 (window3 README)
 - [ ] (vLLM review) Feasibility: vllm-openai-xpu v0.29.0 serving Coder-30B on one B65; engine comparison on engx + latency only
 - [x] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter — research/sycl-optimization/gateway-semantics.md (semantics from code, 82 covering tests pass; 408 gap noted)
 - [x] (SGLang review) Hybrid-model checkpoint test: request-end checkpoint on `-np 1`, continuation vs mid-prompt fork TTFT — continuation 1.6 s (lead) / 3.8 s (deep), mid-prompt fork no reuse (8.7 / 21.3 s) and evicts the original; keep prefixes append-only (window3 README)
