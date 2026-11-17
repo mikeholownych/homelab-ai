@@ -2,3 +2,9 @@ idle confirmed 2026-11-17T09:30:46Z
 == coder-awq 2026-11-17T09:31:08Z
 c700b7aa572a19a98e586064dfa0e3b83f5bf158cda04ae463356201dc527d20
 coder-awq healthy=0 after_s=143
+== coder-sycl-llamaserver 2026-11-17T09:33:44Z
+{"rep": 0, "ttft_s": 7.144, "wall_s": 7.56, "gap_p50_ms": 11.9, "completion_tokens": 36, "prompt_tokens": 1039}
+{"rep": 1, "ttft_s": 0.017, "wall_s": 0.46, "gap_p50_ms": 12.0, "completion_tokens": 36, "prompt_tokens": 1039}
+{"rep": 2, "ttft_s": 0.017, "wall_s": 0.44, "gap_p50_ms": 11.9, "completion_tokens": 36, "prompt_tokens": 1039}
+dmesg timedout: 32
+RESTORED rc=0
