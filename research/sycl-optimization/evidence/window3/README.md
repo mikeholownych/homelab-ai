@@ -293,3 +293,21 @@ was left alone while a long generation ran on production worker2 and its contain
 
 Timeline from the check log: no evidence for the first 2 minutes (below the 120 s threshold), drain at about 13:51:05, the worker `deactivating` then `active` again by 13:51:53, readmitted at about 13:53, units active, restore rc 0, `Timedout job` count unchanged at 32.
 So the acting path is validated under the unattended service with the shipped defaults, not only under hand-started runs.
+
+### MoE Coder-30B on vLLM XPU and SGLang XPU with the FP8 checkpoint across both B65s (items 628 and 633, second attempt, 2026-11-17)
+The single-GPU AWQ attempts above failed in the engines' MoE kernels. The official `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8` checkpoint (31 GB, downloaded to the host)
+split over both cards with tensor parallelism (about 15.5 GB of weights each) works on both engines. `harness/window3_moe_tp2.sh` (evidence: `moe-tp2/`, first run
+`moe-tp2-run1-shmsize-flag-error/` failed on a script flag conflict before starting anything): idle gate, BOTH production workers stopped for the window, the watchdog service
+paused, research servers on :18200 (not via the gateway), restore rc 0 with 2/2 workers and the watchdog active afterwards, `Timedout job` count unchanged at 32.
+
+| Engine (TP=2, 8k context) | Ready after | 1039-token prompt, about 40 tokens out | Decode gap p50 |
+|---|---|---|---|
+| vLLM XPU 0.29.0 | 358 s | TTFT 1.14 s first, 0.26 s, 0.17 s | 76-78 ms (about 13 tok/s) |
+| SGLang XPU 0.5.23 (`intel_xpu` attention) | 212 s | TTFT 6.3 s first (warm-up), 0.24 s, 0.19 s | 86-89 ms (about 11.5 tok/s) |
+| *Reference: llama.cpp SYCL, Qwen3-Coder-30B Q4_K_M, ONE GPU (same client, earlier window)* | about 100 s load | TTFT 0.017 s warm (cached), 7.1 s first | **11.9 ms (about 84 tok/s)** |
+
+Reading: both engines can serve the MoE Coder model on this hardware, so the earlier "not servable" conclusion applies only to the 4-bit AWQ route. But they need both cards (so
+both production workers would have to be given up), start slower, and decode 6.5-7.5x slower per stream than llama.cpp on a single card (FP8 weights are twice the size and TP=2 adds
+cross-card traffic). llama.cpp SYCL remains the right engine for these models here. Not done: an engx task-accuracy comparison (the harness expects the gateway's TLS/auth surface; the
+research servers are plain HTTP on the host) and batched-throughput or long-context sweeps, where continuous batching might narrow the gap; those would be the next experiment if concurrency
+beyond one request per worker ever matters.

@@ -1,0 +1,10 @@
+idle confirmed 2026-11-17T14:19:33Z
+== vllm-fp8-tp2 2026-11-17T14:20:05Z
+Error: invalid config provided: cannot set shmsize when running in the {host } IPC Namespace
+vllm-fp8-tp2 healthy=0 after_s=1
+== sglang-fp8-tp2 2026-11-17T14:20:23Z
+Error: invalid config provided: cannot set shmsize when running in the {host } IPC Namespace
+sglang-fp8-tp2 healthy=0 after_s=1
+dmesg timedout: 32
+RESTORED rc=0
+watchdog: active
