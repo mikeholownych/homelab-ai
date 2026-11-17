@@ -13,7 +13,8 @@
     probe_label: sequential
     probe_concurrency: 1
     probe_repeats: 3
-    probe_mode: qualification  # or load: evaluations/engx/gateway_load.py (fixed bounded sweep 1/2/4, 3 per level, plus an interleave)
+    # load/alternate/fork/replay run evaluations/engx/gateway_load.py (bounded; see that file)
+    probe_mode: qualification
   tasks:
     - name: Require external reconciliation ownership before sampling or inference
       ansible.builtin.command:
