@@ -5,7 +5,11 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from orchestrator_gateway import create_asgi_gateway
+import pytest
+
+pytest.importorskip("starlette")   # the repository-quality job installs only the base requirements; the gateway job has starlette
+
+from orchestrator_gateway import create_asgi_gateway  # noqa: E402
 from orchestrator_runtime import CapabilityRegistry, Client, ClientRegistry, EvidenceStore, InMemoryAdapter, OrchestratorRuntime, WorkerRecord
 from orchestrator_runtime.clients import token_digest
 
