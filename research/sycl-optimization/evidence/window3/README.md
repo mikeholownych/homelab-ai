@@ -93,3 +93,20 @@ Those need a larger run; at 18k tokens the three-way case already costs 10-25 s 
   turn) pays a full prefill on lead/deep (10-25 s at 18k, about 6.7-14 s per 10k). Nexus Code should keep the prefix append-only; this
   is also why the tool block (item 620) must stay byte-stable across turns.
 - Not tested: the Coder-30B full-attention model (not deployed; item 627), and `-np 2` slots.
+
+## Trace replay from a real Nexus session (backlog 631, 2026-11-17)
+
+`gateway_load.py --scenario replay`: the local Nexus session with the most tool-call cut points under 120k characters (digest
+`1121b29305cd`; content is sent to the gateway only, never written: the result files hold shapes, token counts and timings),
+replayed as eight successive agent steps (2 to 46 messages, 6.5k to 10.6k prompt tokens), once per route. Raw:
+`gateway/replay-1-load-engineering-{lead,deep}.json`.
+
+| Route | Step 1 (cold) | Step 2 | Steps 3-8 cached share | Whole 8-step session |
+|---|---|---|---|---|
+| lead | 0 of 6491 cached | 76% | 96-97% | 13.5 s |
+| deep | 0 of 6491 cached | 76% | 97% | 35.8 s |
+
+Each step re-uses everything except the newest turn plus a ~300-token tail (the checkpoint granularity), so an append-only agent
+session is almost entirely prefix-cached: cold prefill happens once. TTFT is blank for most steps because the model answered with
+a tool call (no text delta); wall time per step is in the raw rows. The replay shows the intended workload shape is the cheap
+case from the fork test; a rewrite of earlier history would break it (see the fork section). One session only, no sanitised corpus.

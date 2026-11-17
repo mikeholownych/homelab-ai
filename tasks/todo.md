@@ -628,7 +628,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (vLLM review) Feasibility: vllm-openai-xpu v0.29.0 serving Coder-30B on one B65; engine comparison on engx + latency only
 - [x] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter — research/sycl-optimization/gateway-semantics.md (semantics from code, 82 covering tests pass; 408 gap noted)
 - [x] (SGLang review) Hybrid-model checkpoint test: request-end checkpoint on `-np 1`, continuation vs mid-prompt fork TTFT — continuation 1.6 s (lead) / 3.8 s (deep), mid-prompt fork no reuse (8.7 / 21.3 s) and evicts the original; keep prefixes append-only (window3 README)
-- [ ] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time
+- [x] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time — one real session replayed through the gateway: 96-97% cached after step 2, session 13.5 s (lead) / 35.8 s (deep) (window3 README)
 - [x] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom — three alternating 18k-token conversations all retained (TTFT 10 s -> 0.33 s lead, 25 s -> 0.75 s deep); eviction point not reached (window3 README)
 - [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
 - [x] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist — PR #33

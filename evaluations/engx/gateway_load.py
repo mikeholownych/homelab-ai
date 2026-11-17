@@ -24,10 +24,13 @@ PER_LEVEL = 3
 MAX_REQUESTS = 40
 
 
-def stream_request(gateway, prompt, max_tokens=128):
-    body = {"model": gateway.model, "messages": [{"role": "user", "content": prompt + "\nReply with one short sentence."}],
+def stream_request(gateway, prompt, max_tokens=128, messages=None, tools=None):
+    messages = messages or [{"role": "user", "content": prompt + "\nReply with one short sentence."}]
+    body = {"model": gateway.model, "messages": messages,
             "temperature": 0, "max_tokens": max_tokens, "cache": False, "stream": True,
             "stream_options": {"include_usage": True}}
+    if tools:
+        body["tools"] = tools
     req = urllib.request.Request(gateway.base + "/v1/chat/completions", json.dumps(body).encode(), gateway.headers)
     start = time.monotonic()
     row = {"status": None, "ttft_seconds": None, "chunk_gaps_seconds": [], "completion_tokens": None, "prompt_tokens": None,
@@ -132,19 +135,62 @@ def fork(gateway, result, output):
     return result
 
 
+def replay_plan(sessions, steps=8, max_chars=120_000):
+    """One real session unfolding like an agent run: successive cut points (each ends where the agent called a tool) of the
+    session with the most such points that fit max_chars. Returns (digest, [(message_count, prefix, tools)])."""
+    import hashlib
+    import qualify
+    best = None
+    for name, raw in sessions:
+        msgs = qualify.normalise(raw)
+        if not msgs:
+            continue
+        cuts = [i for i, m in enumerate(msgs) if m["role"] == "assistant" and m.get("tool_calls") and i
+                and msgs[i - 1]["role"] in ("user", "tool") and len(json.dumps(msgs[:i])) <= max_chars]
+        if best is None or len(cuts) > len(best[2]):
+            best = (name, msgs, cuts)
+    if not best or not best[2]:
+        return None, []
+    name, msgs, cuts = best
+    step = max(1, len(cuts) // steps)
+    tools = qualify.derived_tools(msgs)
+    return hashlib.sha256(name.encode()).hexdigest()[:12], [(i, msgs[:i], tools) for i in cuts[::step][:steps]]
+
+
+def replay(gateway, result, output):
+    """Trace replay (local sessions, content never written): per-step TTFT, prompt tokens and cached share, plus total time."""
+    import os
+    import qualify
+    digest, plan = replay_plan(qualify.load_sessions(os.path.expanduser("~/.nexus/sessions")))
+    result["replay"] = {"session_digest": digest, "steps": []}
+    t0 = time.monotonic()
+    for count, prefix, tools in plan:
+        row = strip(stream_request(gateway, None, max_tokens=256, messages=prefix, tools=tools))
+        row["messages"] = count
+        done, cached = row.get("prompt_tokens"), row.get("cached_prompt_tokens")
+        row["cache_hit_ratio"] = (cached / done) if done and cached is not None else None
+        result["replay"]["steps"].append(row)
+    result["replay"]["session_seconds"] = time.monotonic() - t0
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"output": str(output), "steps": len(plan)}))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--scenario", choices=["load", "alternate", "fork"], default="load")
+    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay"], default="load")
     args = parser.parse_args()
     assert sum(c * PER_LEVEL for c in LEVELS) + 3 <= MAX_REQUESTS
     gateway = Gateway(args.base, args.model, json.load(sys.stdin)["qualification"], args.ca)
     result = {"started_at": datetime.now(timezone.utc).isoformat(), "model": gateway.models(), "sweep": {}, "interleave": {}}
-    if args.scenario in ("alternate", "fork"):
-        {"alternate": alternate, "fork": fork}[args.scenario](gateway, result, args.output)
+    if args.scenario in ("alternate", "fork", "replay"):
+        {"alternate": alternate, "fork": fork, "replay": replay}[args.scenario](gateway, result, args.output)
         return
     prompt = "Synthetic neutral context. " * 256
     for level in LEVELS:

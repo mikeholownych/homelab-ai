@@ -1,0 +1,212 @@
+{
+  "started_at": "2026-11-17T05:51:57.337028+00:00",
+  "model": {
+    "id": "engineering/lead",
+    "object": "model",
+    "owned_by": "aihost-orchestrator",
+    "context_length": 65536,
+    "max_model_len": 65536,
+    "max_completion_tokens": 8192,
+    "limits_version": "baf252a4827ca0d4",
+    "reasoning": {
+      "budget": 8192,
+      "mode": "off"
+    },
+    "serving": [
+      {
+        "worker_id": "b0-live-llama-worker1",
+        "pool": "lead",
+        "role": "production",
+        "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+        "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+        "quantization": "Q4_K - Medium",
+        "engine": "llama.cpp",
+        "engine_version": "b0-unknown",
+        "capacity_source": "observed"
+      }
+    ],
+    "capabilities": {
+      "tools": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "parallel_tool_calls": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "structured_output": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "vision": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "reasoning": {
+        "available": true,
+        "provenance": "declared",
+        "evidence": [
+          "engine"
+        ]
+      },
+      "reasoning_controllable": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "reasoning-profile-probe-qwen36-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "streaming": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "output_contract_compliance": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-contract-qwen36-reasoning-on-pinned-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "fim": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "embeddings": {
+        "available": false,
+        "provenance": "unavailable"
+      }
+    }
+  },
+  "sweep": {},
+  "interleave": {},
+  "replay": {
+    "session_digest": "1121b29305cd",
+    "steps": [
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 31,
+        "prompt_tokens": 6491,
+        "cached_prompt_tokens": 0,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 4.999442339991219,
+        "chunk_gap_count": 0,
+        "messages": 2,
+        "cache_hit_ratio": 0.0
+      },
+      {
+        "status": 200,
+        "ttft_seconds": 1.6506451559253037,
+        "completion_tokens": 53,
+        "prompt_tokens": 8588,
+        "cached_prompt_tokens": 6487,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 2.4844736689701676,
+        "tpot_seconds": 0.01603516371240123,
+        "chunk_gap_count": 19,
+        "messages": 10,
+        "cache_hit_ratio": 0.7553563111318118
+      },
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 32,
+        "prompt_tokens": 8915,
+        "cached_prompt_tokens": 8584,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 0.9707526210695505,
+        "chunk_gap_count": 0,
+        "messages": 16,
+        "cache_hit_ratio": 0.9628715647784633
+      },
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 32,
+        "prompt_tokens": 9242,
+        "cached_prompt_tokens": 8946,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 1.0228684339672327,
+        "chunk_gap_count": 0,
+        "messages": 22,
+        "cache_hit_ratio": 0.9679723003678857
+      },
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 32,
+        "prompt_tokens": 9572,
+        "cached_prompt_tokens": 9273,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 0.9767951070098206,
+        "chunk_gap_count": 0,
+        "messages": 28,
+        "cache_hit_ratio": 0.9687630589218554
+      },
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 32,
+        "prompt_tokens": 9899,
+        "cached_prompt_tokens": 9603,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 0.9897914299508557,
+        "chunk_gap_count": 0,
+        "messages": 34,
+        "cache_hit_ratio": 0.9700979896959289
+      },
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 32,
+        "prompt_tokens": 10226,
+        "cached_prompt_tokens": 9930,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 1.011944408994168,
+        "chunk_gap_count": 0,
+        "messages": 40,
+        "cache_hit_ratio": 0.9710541756307451
+      },
+      {
+        "status": 200,
+        "ttft_seconds": null,
+        "completion_tokens": 33,
+        "prompt_tokens": 10553,
+        "cached_prompt_tokens": 10257,
+        "finish_reason": "tool_calls",
+        "failure_class": null,
+        "seconds": 1.030887875938788,
+        "chunk_gap_count": 0,
+        "messages": 46,
+        "cache_hit_ratio": 0.971951103951483
+      }
+    ],
+    "session_seconds": 13.495518411044031
+  },
+  "finished_at": "2026-11-17T05:52:34.344577+00:00"
+}

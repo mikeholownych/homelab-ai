@@ -121,3 +121,15 @@ def test_gateway_load_fork_steps(tmp_path, monkeypatch):
     monkeypatch.setattr(load, "stream_request", lambda g, t, max_tokens=128: {"status": 200, "chunk_gaps_seconds": [], "len": len(t)})
     result = load.fork(object(), {}, tmp_path / "o.json")
     assert [r["step"] for r in result["fork"]] == ["cold", "continuation", "fork-mid-prompt", "original-again"]
+
+
+def test_gateway_load_replay_plan_picks_successive_tool_call_cuts():
+    load = module("gateway_load")
+    msgs = [{"role": "user", "content": "go"}]
+    for n in range(5):
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [
+            {"function": {"name": "read_file", "arguments": "{}"}}]})
+        msgs.append({"role": "tool", "content": "ok"})
+    digest, plan = load.replay_plan([("s.json", msgs)], steps=3)
+    assert len(digest) == 12 and 1 <= len(plan) <= 3
+    assert [p[0] for p in plan] == sorted(p[0] for p in plan) and plan[0][2][0]["function"]["name"] == "read_file"
