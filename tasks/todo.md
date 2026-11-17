@@ -626,7 +626,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] (vLLM review) Map llama.cpp metrics to evidence/vllm-top vocabulary; derive TTFT/queue time client-side — research/sycl-optimization/metrics-mapping.md (mapping exists in engine_stats.py; vllm-top adapter gap noted as a separate item)
 - [ ] (vLLM review) Split slot-reuse test: Coder-30B (full attention) vs Qwen3.6/Flash-Next (hybrid, ctx checkpoints)
 - [ ] (vLLM review) Feasibility: vllm-openai-xpu v0.29.0 serving Coder-30B on one B65; engine comparison on engx + latency only
-- [ ] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter
+- [x] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter — research/sycl-optimization/gateway-semantics.md (semantics from code, 82 covering tests pass; 408 gap noted)
 - [ ] (SGLang review) Hybrid-model checkpoint test: request-end checkpoint on `-np 1`, continuation vs mid-prompt fork TTFT
 - [ ] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time
 - [x] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom — three alternating 18k-token conversations all retained (TTFT 10 s -> 0.33 s lead, 25 s -> 0.75 s deep); eviction point not reached (window3 README)
