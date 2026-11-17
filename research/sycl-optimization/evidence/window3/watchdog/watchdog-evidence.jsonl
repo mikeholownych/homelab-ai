@@ -1,4 +1,4 @@
-{"worker": "b0-live-llama-deep-worker2", "action": "drain", "stalled_s": 40.05927070893813, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 697188.015058145, "ok": true}
-{"worker": "b0-live-llama-deep-worker2", "action": "stop", "stalled_s": 48.071739102946594, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 697198.047130544, "ok": true}
-{"worker": "b0-live-llama-deep-worker2", "action": "restart", "stalled_s": 48.071739102946594, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 697198.047130544, "ok": true}
-{"worker": "b0-live-llama-deep-worker2", "action": "undrain", "stalled_s": 48.071739102946594, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 697198.047130544, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "drain", "stalled_s": 40.06229596992489, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 698603.253502282, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "stop", "stalled_s": 48.07279715698678, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 698613.281520713, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "restart", "stalled_s": 48.07279715698678, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 698613.281520713, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "undrain", "stalled_s": 0.0, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 698740.421139815, "ok": true}

@@ -1,0 +1,16 @@
+idle confirmed 2026-11-17T11:16:12Z
+gauge before: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+gauge while busy: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+SIGSTOP 2026-11-17T11:16:28Z
+llama-sycl-worker2
+11:16:28 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+11:16:44 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 12.018290910986252, "b0-live-llama-worker1": 0.0}}
+11:16:59 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 28.042172831017524, "b0-live-llama-worker1": 0.0}}
+11:17:14 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 44.06520689604804, "b0-live-llama-worker1": 0.0}}
+11:17:30 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 60.0909940659767, "b0-live-llama-worker1": 0.0}}
+11:17:45 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+gauge after: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+units: active active 
+dmesg timedout: 32
+trap undrain b0-live-llama-deep-worker2 True
+RESTORED rc=0

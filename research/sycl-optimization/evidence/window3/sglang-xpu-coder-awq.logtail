@@ -1,0 +1,80 @@
+[2026-11-17 11:53:00] Init parallel ends. elapsed=0.15 s
+[2026-11-17 11:53:00] awq quantization is not fully optimized yet. The speed can be slower than non-quantized models.
+[2026-11-17 11:53:00] Memory baseline taken. mem usage=0.00 GB
+[2026-11-17 11:53:01] Cannot detect CUDA architecture.
+[2026-11-17 11:53:01] Ignore import error when loading sglang.srt.models.inkling: No module named 'cutlass'
+[2026-11-17 11:53:02] Load weight begin. avail mem=31.88 GB
+[2026-11-17 11:53:03] Scheduler hit an exception: Traceback (most recent call last):
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/managers/scheduler.py", line 6362, in run_scheduler_process
+    scheduler = Scheduler(server_args, port_args)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/managers/scheduler.py", line 568, in __init__
+    self.init_model_worker()
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/managers/scheduler.py", line 1130, in init_model_worker
+    self.init_tp_model_worker()
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/managers/scheduler.py", line 1033, in init_tp_model_worker
+    self.tp_worker = TpModelWorker(**worker_kwargs)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/managers/tp_worker.py", line 319, in __init__
+    self._init_model_runner()
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/managers/tp_worker.py", line 487, in _init_model_runner
+    self._model_runner = ModelRunner(
+                         ^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/model_executor/model_runner.py", line 499, in __init__
+    self.initialize()
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/model_executor/model_runner.py", line 715, in initialize
+    self.load_model()
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/model_executor/model_runner.py", line 1312, in load_model
+    loaded = load_model_with_memory_saver(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/model_executor/model_runner_components/load_model_utils.py", line 346, in load_model_with_memory_saver
+    model = loader.load_model(
+            ^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/model_loader/loader.py", line 1014, in load_model
+    model = _initialize_model(
+            ^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/model_loader/loader.py", line 309, in _initialize_model
+    model = model_class(**kwargs)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/models/qwen3_moe.py", line 1014, in __init__
+    self.model = Qwen3MoeModel(
+                 ^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/models/qwen3_moe.py", line 979, in __init__
+    super().__init__(
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/models/qwen2_moe.py", line 1132, in __init__
+    self.layers, self.start_layer, self.end_layer = make_pp_layers(
+                                                    ^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 1695, in make_pp_layers
+    return make_layers(
+           ^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 1666, in make_layers
+    + get_offloader().wrap_modules(
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/utils/offloader.py", line 40, in wrap_modules
+    return list(all_modules_generator)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 1667, in <genexpr>
+    (build(stack, idx) for idx in range(start_layer, end_layer)),
+     ^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/utils/common.py", line 1653, in build
+    layer = layer_fn(idx=idx, prefix=add_prefix(idx, prefix))
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/models/qwen2_moe.py", line 1134, in <lambda>
+    lambda idx, prefix: decoder_layer_type(
+                        ^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/models/qwen3_moe.py", line 847, in __init__
+    self.mlp = Qwen3MoeSparseMoeBlock(
+               ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/models/qwen3_moe.py", line 265, in __init__
+    self.experts = get_moe_impl_class(quant_config)(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/layer.py", line 500, in __init__
+    self.quant_method = quant_config.get_quant_method(self, prefix)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/venv/lib/python3.12/site-packages/sglang/srt/layers/quantization/awq/awq.py", line 233, in get_quant_method
+    raise NotImplementedError(
+NotImplementedError: AWQ MoE is not yet supported on XPU (dense-only phase).
+
+[2026-11-17 11:53:03] Received sigquit from a child process. It usually means the child failed.
+[2026-11-17 11:53:03] kill_process_tree called: parent_pid=1, include_parent=True, pid=1
+[2026-11-17 11:53:03] kill_process_tree called: parent_pid=1, include_parent=False, pid=1
