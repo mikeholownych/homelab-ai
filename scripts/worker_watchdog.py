@@ -62,7 +62,7 @@ class Gateway:
 class Systemd:
     """systemctl on the inference host over SSH (key auth, passwordless sudo for systemctl on the worker units)."""
 
-    def __init__(self, host: str, timeout: float = 60.0) -> None:
+    def __init__(self, host: str, timeout: float = 90.0) -> None:
         self.host, self.timeout = host, timeout
 
     def _run(self, *args: str) -> bool:
