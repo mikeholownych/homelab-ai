@@ -72,17 +72,26 @@ class FakeGateway:
     def __init__(self, stalled):
         self.stalled_map, self.calls, self.ready_now = stalled, [], True
 
-    def stalled(self): return dict(self.stalled_map)
+    fresh_after_restart = False
+
+    def stalled(self):
+        if self.fresh_after_restart:
+            self.stalled_map = {w: 0.0 for w in self.stalled_map}
+        return dict(self.stalled_map)
     def drain(self, w): self.calls.append(("drain", w)); return True
     def undrain(self, w): self.calls.append(("undrain", w)); self.stalled_map[w] = 0.0; return True
     def ready(self, w): return self.ready_now
 
 
 class FakeSystemd:
-    def __init__(self, stop_ok=True): self.calls, self.stop_ok = [], stop_ok
+    def __init__(self, stop_ok=True, gw=None): self.calls, self.stop_ok, self.gw = [], stop_ok, gw
     def stop(self, u): self.calls.append(("stop", u)); return self.stop_ok
     def kill(self, u): self.calls.append(("kill", u)); return True
-    def restart(self, u): self.calls.append(("restart", u)); return True
+    def restart(self, u):
+        self.calls.append(("restart", u))
+        if self.gw is not None:                       # the engine comes back: later readings are fresh and idle
+            self.gw.fresh_after_restart = True
+        return True
 
 
 def test_parse_stalled_reads_the_gateway_series_by_worker():
@@ -104,9 +113,13 @@ def test_dry_run_logs_only_the_next_rung_and_touches_nothing():
 
 def test_apply_walks_the_ladder_in_order_and_records_every_rung():
     from scripts.worker_watchdog import run_once
-    gw, sd, log = FakeGateway({"w1": 500}), FakeSystemd(), []
+    gw, log = FakeGateway({"w1": 500}), []
+    sd = FakeSystemd(gw=gw)
     ladder, verify = Ladder(Policy(drain_wait_s=0)), {}
     run_once(gw, sd, ladder, {"w1": "u1"}, 0.0, apply=True, evidence=log.append, verify_started=verify)
+    assert [r["action"] for r in log] == ["drain", "stop", "restart"]        # not readmitted in the same pass: the reading is stale
+    assert ladder.phase("w1") == "verifying" and ("undrain", "w1") not in gw.calls
+    run_once(gw, sd, ladder, {"w1": "u1"}, 5.0, apply=True, evidence=log.append, verify_started=verify)   # next poll: fresh idle reading
     assert [r["action"] for r in log] == ["drain", "stop", "restart", "undrain"]
     assert gw.calls == [("drain", "w1"), ("undrain", "w1")] and sd.calls == [("stop", "u1"), ("restart", "u1")]
     assert ladder.phase("w1") == "healthy" and all(r["ok"] for r in log)
