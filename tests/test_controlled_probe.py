@@ -71,3 +71,23 @@ def test_multiturn_probe_grades_tool_results_and_final_state():
                     "finish_reason": "tool_calls" if "tool_calls" in message else "stop"}]}
 
     assert probe.stateful_tool_case(GoodGateway(), 2)["passed"]
+
+
+def test_chat_rows_record_finish_reason_truncation_and_output_rate(monkeypatch):
+    import io
+    import json as _json
+    probe = module("controlled_probe")
+
+    class Resp(io.BytesIO):
+        status = 200
+        headers = {"X-AIHost-Cache": "BYPASS"}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    body = {"choices": [{"message": {"content": "x"}, "finish_reason": "length"}],
+            "usage": {"completion_tokens": 128, "prompt_tokens": 10}}
+    monkeypatch.setattr(probe.urllib.request, "urlopen", lambda *a, **k: Resp(_json.dumps(body).encode()))
+    gateway = probe.Gateway("https://gw.invalid", "m", "k", None)
+    row, _ = gateway.chat([{"role": "user", "content": "hi"}])
+    assert row["finish_reason"] == "length" and row["truncated"] is True
+    assert row["output_tokens_per_second"] > 0

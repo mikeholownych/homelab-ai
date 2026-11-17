@@ -615,8 +615,8 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check — `harness/kl_predeploy_gate.sh` (compare mode verified on stored scores incl. a failing case; `run` mode needs a research window)
 - [ ] (colibri review) Gateway test: long agent turn -> short interleaved request -> long turn; TTFT on deployed vs HEAD, `--cache-ram` default vs raised
 - [ ] (colibri review) Candidate: MTP speculative decoding; first find an MTP-bearing GGUF (ours show no nextn/mtp tensor names), then A/B with greedy-equality check
-- [ ] (AnythingLLM review) Check gateway route stickiness; measure TTFT with/without a sticky window if conversations bounce between workers
-- [ ] (AnythingLLM review) Gateway benchmarks record token counts, output tps, duration, truncated flag
+- [x] (AnythingLLM review) Check gateway route stickiness; measure TTFT with/without a sticky window if conversations bounce between workers — settled by code: rendezvous hashing + warm-worker map keyed on session id or conversation prefix (tests/test_orchestrator_runtime.py:384); today each model is a single-worker pool so conversations cannot bounce; re-measure only when a pool gets a second worker
+- [x] (AnythingLLM review) Gateway benchmarks record token counts, output tps, duration, truncated flag — controlled_probe rows now carry finish_reason, truncated, output_tokens_per_second (plus existing usage/seconds); test added
 - [ ] (AnythingLLM review) Measure Nexus Code tool-definition tokens per turn; A/B a reduced tool set only if material
 - [x] (Ollama review) Write image-bump checklist (diff review, inspect built source, full gate) and add to deployment gate — done in docs/operations/LLAMA-IMAGE-BUMP.md (#31)
 - [x] (Ollama review) Patch policy: additive only, upstream PR linked, removal condition recorded — done in the same doc (#31)

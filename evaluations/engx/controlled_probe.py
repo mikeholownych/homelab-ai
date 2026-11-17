@@ -89,6 +89,12 @@ class Gateway:
                             "usage": usage}
                 row.update(seconds=time.monotonic() - start, usage=data.get("usage") or {})
                 row["cached_prompt_tokens"] = cached_tokens(row["usage"])
+                choice = (data.get("choices") or [{}])[0]
+                row["finish_reason"] = choice.get("finish_reason")
+                row["truncated"] = row["finish_reason"] == "length"
+                done = row["usage"].get("completion_tokens")
+                if done and row["seconds"] > 0:
+                    row["output_tokens_per_second"] = done / row["seconds"]
                 row["passed"] = True
                 return row, data
         except urllib.error.HTTPError as error:
