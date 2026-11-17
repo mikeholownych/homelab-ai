@@ -1,0 +1,155 @@
+{
+  "started_at": "2026-11-17T05:43:44.315402+00:00",
+  "model": {
+    "id": "engineering/deep",
+    "object": "model",
+    "owned_by": "aihost-orchestrator",
+    "context_length": 65536,
+    "max_model_len": 65536,
+    "max_completion_tokens": 12288,
+    "limits_version": "153827e69beebde3",
+    "reasoning": {
+      "budget": 4096,
+      "mode": "on"
+    },
+    "serving": [
+      {
+        "worker_id": "b0-live-llama-deep-worker2",
+        "pool": "deep",
+        "role": "production",
+        "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+        "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+        "quantization": "IQ1_M - 1.75 bpw",
+        "engine": "llama.cpp",
+        "engine_version": "b0-unknown",
+        "capacity_source": "observed"
+      }
+    ],
+    "capabilities": {
+      "tools": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "parallel_tool_calls": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "structured_output": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "vision": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "reasoning": {
+        "available": true,
+        "provenance": "declared",
+        "evidence": [
+          "engine"
+        ]
+      },
+      "reasoning_controllable": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "reasoning-profile-probe-flashnext-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "streaming": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "output_contract_compliance": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-contract-deep-flashnext-4096-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "fim": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "embeddings": {
+        "available": false,
+        "provenance": "unavailable"
+      }
+    }
+  },
+  "sweep": {},
+  "interleave": {},
+  "fork": [
+    {
+      "status": 200,
+      "ttft_seconds": 25.428823343943805,
+      "completion_tokens": 20,
+      "prompt_tokens": 18020,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 26.612474304973148,
+      "tpot_seconds": 0.06229741900154438,
+      "chunk_gap_count": 18,
+      "step": "cold"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 3.7621014799224213,
+      "completion_tokens": 17,
+      "prompt_tokens": 18032,
+      "cached_prompt_tokens": 15968,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 4.772732027922757,
+      "tpot_seconds": 0.06316440925002098,
+      "chunk_gap_count": 15,
+      "step": "continuation"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 21.3292924920097,
+      "completion_tokens": 18,
+      "prompt_tokens": 15020,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 22.37043901195284,
+      "tpot_seconds": 0.06124391293783179,
+      "chunk_gap_count": 16,
+      "step": "fork-mid-prompt"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 24.97538178495597,
+      "completion_tokens": 20,
+      "prompt_tokens": 18020,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 26.158291009953246,
+      "tpot_seconds": 0.06225838026301445,
+      "chunk_gap_count": 18,
+      "step": "original-again"
+    }
+  ],
+  "finished_at": "2026-11-17T05:45:04.264944+00:00"
+}

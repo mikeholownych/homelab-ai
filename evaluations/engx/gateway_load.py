@@ -113,19 +113,38 @@ def alternate(gateway, result, output):
     return result
 
 
+def fork(gateway, result, output):
+    """Hybrid-model checkpoint behaviour: a cold long turn, its continuation (prefix + new turn), a mid-prompt fork (first half
+    shared, different second half), then the original again. Cached-token counts and TTFT per step show what the slot kept."""
+    unit = "Synthetic neutral context for fork. "
+    base = unit * 3000
+    steps = [("cold", base), ("continuation", base + "\nNext question: summarise the above in one line."),
+             ("fork-mid-prompt", unit * 1500 + "Different second half. " * 1500), ("original-again", base)]
+    result["fork"] = []
+    for name, text in steps:
+        row = strip(stream_request(gateway, text, max_tokens=32))
+        row["step"] = name
+        result["fork"].append(row)
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"output": str(output), "fork": [(r["step"], r["status"]) for r in result["fork"]]}))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--scenario", choices=["load", "alternate"], default="load")
+    parser.add_argument("--scenario", choices=["load", "alternate", "fork"], default="load")
     args = parser.parse_args()
     assert sum(c * PER_LEVEL for c in LEVELS) + 3 <= MAX_REQUESTS
     gateway = Gateway(args.base, args.model, json.load(sys.stdin)["qualification"], args.ca)
     result = {"started_at": datetime.now(timezone.utc).isoformat(), "model": gateway.models(), "sweep": {}, "interleave": {}}
-    if args.scenario == "alternate":
-        alternate(gateway, result, args.output)
+    if args.scenario in ("alternate", "fork"):
+        {"alternate": alternate, "fork": fork}[args.scenario](gateway, result, args.output)
         return
     prompt = "Synthetic neutral context. " * 256
     for level in LEVELS:

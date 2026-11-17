@@ -72,3 +72,24 @@ All three conversations were still cached after the other two had run, so the de
 3 x 18k tokens per worker without eviction, a 30-40x TTFT difference. Host RAM at the time: 10 GB used, 50 GB available of 61.
 Not measured: the point at which eviction starts (more or longer conversations; 64K-token ones), and idle-vs-active eviction order.
 Those need a larger run; at 18k tokens the three-way case already costs 10-25 s per cold turn.
+
+## Hybrid-model checkpoint: continuation vs mid-prompt fork (backlog 630, 2026-11-17)
+
+`gateway_load.py --scenario fork` (raw: `gateway/fork-1-load-engineering-{lead,deep}.json`). One ~18k-token conversation, four steps, `-np 1`.
+
+| Step | lead TTFT / cached of prompt | deep TTFT / cached of prompt |
+|---|---|---|
+| cold | 10.4 s / 0 of 18020 | 25.4 s / 0 of 18020 |
+| continuation (same prefix + one new turn) | 1.6 s / 15968 of 18032 | 3.8 s / 15968 of 18032 |
+| fork at mid-prompt (first half shared, second half new) | 8.7 s / 0 of 15020 | 21.3 s / 0 of 15020 |
+| original again (after the fork) | 10.1 s / 0 of 18020 | 25.0 s / 0 of 18020 |
+
+- Continuation reuses the prior state up to a checkpoint (15968 tokens; the last ~2k are recomputed), so an agent that only appends
+  is cheap: 6x faster on lead, 7x on deep.
+- A fork inside the prompt gets NO reuse on these hybrid (recurrent + attention) models: the shared first half is recomputed in full,
+  and it also cost the earlier conversation its cache (original-again was cold). This is the opposite of the alternating test, where
+  complete repeats of three conversations were all retained, so the loss comes from the fork, not from capacity.
+- Consequence: anything that rewrites earlier history (context compaction, edited system prompt or tool list mid-session, a regenerated earlier
+  turn) pays a full prefill on lead/deep (10-25 s at 18k, about 6.7-14 s per 10k). Nexus Code should keep the prefix append-only; this
+  is also why the tool block (item 620) must stay byte-stable across turns.
+- Not tested: the Coder-30B full-attention model (not deployed; item 627), and `-np 2` slots.

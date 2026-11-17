@@ -114,3 +114,10 @@ def test_gateway_load_alternate_runs_two_rounds_over_three_distinct_prefixes(tmp
     result = load.alternate(object(), {}, tmp_path / "o.json")
     assert len(seen) == 6 and len(set(seen)) == 3 and seen[:3] == seen[3:]
     assert [r["round"] for r in result["alternate"]] == [1, 1, 1, 2, 2, 2]
+
+
+def test_gateway_load_fork_steps(tmp_path, monkeypatch):
+    load = module("gateway_load")
+    monkeypatch.setattr(load, "stream_request", lambda g, t, max_tokens=128: {"status": 200, "chunk_gaps_seconds": [], "len": len(t)})
+    result = load.fork(object(), {}, tmp_path / "o.json")
+    assert [r["step"] for r in result["fork"]] == ["cold", "continuation", "fork-mid-prompt", "original-again"]
