@@ -24,12 +24,12 @@ reconcile_controller_gateway_backup_keep: 7
 reconcile_controller_gateway_backup_schedule: daily
 
 # Worker busy-watchdog (docs/design/WORKER-BUSY-WATCHDOG.md, scripts/worker_watchdog.py): a long-running user service
-# on the controller. The unit is installed and started by default but is DRY-RUN: it logs the rung it would take and
-# touches nothing. It runs only once the operator has put a gateway admin-scope client token in the token file
-# (ConditionPathExists); this role never creates or copies that secret. Acting for real is a separate, explicit
-# switch: reconcile_controller_watchdog_apply: true.
+# on the controller. Operator decision 2026-11-17: it ACTS (drain, graceful stop, forced kill, restart, readmit; at most
+# max_restarts_per_hour per worker, then an alert). It runs only while the operator-provisioned gateway admin-scope
+# token file exists (ConditionPathExists); this role never creates or copies that secret. Set apply to false for dry-run
+# (logs the rung it would take, touches nothing); remove the token file to stop it entirely.
 reconcile_controller_watchdog_enabled: true
-reconcile_controller_watchdog_apply: false
+reconcile_controller_watchdog_apply: true
 reconcile_controller_watchdog_base: "https://10.0.8.5:8443"
 reconcile_controller_watchdog_ca: "{{ ansible_facts.env.HOME }}/.config/nexus/t5820-gateway-ca.crt"
 reconcile_controller_watchdog_token_file: "{{ ansible_facts.env.HOME }}/.config/aihost/watchdog.token"
