@@ -279,3 +279,17 @@ counts as failed) and `--max-restarts-per-hour 2`, three consecutive SIGSTOPs wh
 
 So the whole ladder is now observed live: drain, graceful stop, forced kill after a failed stop, restart, readmit gated on a fresh idle reading, and the per-hour restart limit.
 Scheduling: `roles/reconcile_controller` installs `aihost-worker-watchdog.service` (dry-run by default, starts only when the operator provisions the admin-scope token file; see the design doc).
+
+### Unattended validation: the scheduled service handled a real stall (2026-11-17)
+`harness/window3_watchdog_service_check.sh` (evidence: `watchdog-service/`). The executor was NOT started by the script: `aihost-worker-watchdog.service` (APPLY mode, role defaults, snapshot main `1f7a0ac`, running since 13:47 UTC)
+was left alone while a long generation ran on production worker2 and its container was SIGSTOPped at 13:48:43Z. The service's own evidence file (`~/.local/share/aihost/reconcile/evidence/worker-watchdog.jsonl`, first lines ever written) recorded:
+
+| Record | Stalled (s) | ok | applied |
+|---|---|---|---|
+| drain | 124.2 | true | true |
+| stop | 156.2 | true | true |
+| restart | 156.2 | true | true |
+| undrain | 0.0 (fresh idle reading after the model reloaded) | true | true |
+
+Timeline from the check log: no evidence for the first 2 minutes (below the 120 s threshold), drain at about 13:51:05, the worker `deactivating` then `active` again by 13:51:53, readmitted at about 13:53, units active, restore rc 0, `Timedout job` count unchanged at 32.
+So the acting path is validated under the unattended service with the shipped defaults, not only under hand-started runs.

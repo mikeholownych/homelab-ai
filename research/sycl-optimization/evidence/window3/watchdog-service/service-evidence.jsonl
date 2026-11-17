@@ -1,0 +1,4 @@
+{"worker": "b0-live-llama-deep-worker2", "action": "drain", "stalled_s": 124.185912646004, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 706410.100385151, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "stop", "stalled_s": 156.23205348302145, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 706440.126727189, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "restart", "stalled_s": 156.23205348302145, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 706440.126727189, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "undrain", "stalled_s": 0.0, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 706581.689323266, "ok": true}
