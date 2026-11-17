@@ -411,7 +411,12 @@ def create_gateway(
         def _admin(self, client: Client, path: str, request_id: str) -> int:
             if "admin" not in client.scopes:
                 return self._forbidden(request_id, "admin scope required")
-            parts = path.strip("/").split("/")  # admin/workers/<id>/<action>
+            parts = path.strip("/").split("/")  # admin/workers/<id>/<action>  or  admin/workers/<id>/slot/<save|restore>
+            if len(parts) == 5 and parts[3] == "slot":
+                result = runtime.worker_slot(parts[2], parts[4], actor=client.client_id)
+                status = {"not_found": HTTPStatus.NOT_FOUND, "unsupported": HTTPStatus.UNPROCESSABLE_ENTITY}.get(result["status"], HTTPStatus.OK)
+                self._send(status, result, request_id)
+                return status
             if len(parts) != 4 or parts[3] not in ("drain", "undrain"):
                 self._send(HTTPStatus.NOT_FOUND, {"error": {"message": "unsupported endpoint", "type": "not_found"}}, request_id)
                 return HTTPStatus.NOT_FOUND

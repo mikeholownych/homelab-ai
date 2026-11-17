@@ -17,6 +17,7 @@ ExecStart={{ reconcile_controller_snapshot_dir }}/.venv/bin/python {{ reconcile_
 {% endfor -%}
   --stuck-after {{ reconcile_controller_watchdog_stuck_after }} \
   --max-restarts-per-hour {{ reconcile_controller_watchdog_max_restarts_per_hour }} \
+  --slot-save-interval {{ reconcile_controller_watchdog_slot_save_interval }} \
   --evidence {{ reconcile_controller_evidence_dir }}/worker-watchdog.jsonl{{ ' \\\n  --apply' if reconcile_controller_watchdog_apply | bool else '' }}
 
 Restart=on-failure

@@ -73,6 +73,11 @@ class FakeGateway:
         self.stalled_map, self.calls, self.ready_now = stalled, [], True
 
     fresh_after_restart = False
+    running: dict = {}
+
+    def slot(self, w, action):
+        self.calls.append(("slot-" + action, w))
+        return {"status": "saved" if action == "save" else "restored", "tokens": 1234, "seconds": 0.2}
 
     def stalled(self):
         if self.fresh_after_restart:
@@ -180,6 +185,7 @@ def _render_unit(apply):
                       reconcile_controller_watchdog_base="https://gw:8443", reconcile_controller_watchdog_ca="/h/ca",
                       reconcile_controller_watchdog_host="host", reconcile_controller_watchdog_stuck_after=120,
                       reconcile_controller_watchdog_max_restarts_per_hour=3, reconcile_controller_evidence_dir="/h/ev",
+                      reconcile_controller_watchdog_slot_save_interval=300,
                       reconcile_controller_watchdog_units={"w1": "u1.service", "w2": "u2.service"})
 
 
@@ -187,6 +193,7 @@ def test_scheduled_unit_is_dry_run_by_default_and_needs_the_operators_token_file
     unit = _render_unit(False)
     assert "ConditionPathExists=/h/t" in unit and "--apply" not in unit and "dry-run" in unit
     assert "--unit w1=u1.service" in unit and "--unit w2=u2.service" in unit and "--max-restarts-per-hour 3" in unit
+    assert "--slot-save-interval 300" in unit
 
 
 def test_scheduled_unit_acts_only_when_apply_is_switched_on_and_every_continuation_line_is_intact():
@@ -195,3 +202,36 @@ def test_scheduled_unit_acts_only_when_apply_is_switched_on_and_every_continuati
     exec_block = unit.split("ExecStart=")[1].split("\nRestart=")[0]
     assert "\n\n" not in exec_block                      # a blank line would end the systemd line continuation
     assert exec_block.rstrip().endswith("--apply")
+
+
+def test_idle_workers_are_saved_on_the_interval_and_busy_stalled_or_dry_run_workers_are_not():
+    from scripts.worker_watchdog import run_once
+    gw, log, saved = FakeGateway({"w1": 0.0, "w2": 0.0, "w3": 200.0}), [], {}
+    gw.running = {"w1": 0.0, "w2": 1.0, "w3": 1.0}                         # w1 idle, w2 serving, w3 stalled
+    units = {"w1": "u1", "w2": "u2", "w3": "u3"}
+    ladder = Ladder(Policy(stuck_after_s=10_000))                           # keep the ladder out of this test
+    run_once(gw, FakeSystemd(), ladder, units, 1000.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
+    assert [r["action"] for r in log] == ["slot_save"] and log[0]["worker"] == "w1" and log[0]["tokens"] == 1234
+    log.clear(); gw.calls.clear()
+    run_once(gw, FakeSystemd(), ladder, units, 1100.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
+    assert log == []                                                         # interval not elapsed
+    run_once(gw, FakeSystemd(), ladder, units, 1400.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
+    assert [r["worker"] for r in log] == ["w1"]                              # interval elapsed, still only the idle worker
+    log.clear(); gw.calls.clear()
+    run_once(gw, FakeSystemd(), ladder, units, 9999.0, apply=False, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
+    assert all(c[0] != "slot-save" for c in gw.calls)                        # dry run never saves
+    run_once(gw, FakeSystemd(), ladder, units, 99999.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=0)
+    assert all(c[0] != "slot-save" for c in gw.calls)                        # interval 0 = feature off
+
+
+def test_a_restarted_worker_gets_its_saved_state_restored_before_it_is_readmitted():
+    from scripts.worker_watchdog import run_once
+    gw, log = FakeGateway({"w1": 500}), []
+    sd = FakeSystemd(gw=gw)
+    ladder, verify, saved = Ladder(Policy(drain_wait_s=0)), {}, {}
+    run_once(gw, sd, ladder, {"w1": "u1"}, 0.0, apply=True, evidence=log.append, verify_started=verify, slot_saved=saved, slot_interval=300)
+    assert [r["action"] for r in log] == ["drain", "stop", "restart"]       # not ready yet: nothing restored, not readmitted
+    run_once(gw, sd, ladder, {"w1": "u1"}, 5.0, apply=True, evidence=log.append, verify_started=verify, slot_saved=saved, slot_interval=300)
+    order = [c[0] for c in gw.calls]
+    assert order.index("slot-restore") < order.index("undrain")             # restore first, then readmit
+    assert [r["action"] for r in log][-2:] == ["slot_restore", "undrain"] and log[-2]["tokens"] == 1234

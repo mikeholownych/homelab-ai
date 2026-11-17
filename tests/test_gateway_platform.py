@@ -690,3 +690,37 @@ def test_a_worker_killed_mid_stream_is_an_error_event_never_a_clean_stop(fakes, 
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_worker_slot_save_and_restore_use_a_fingerprinted_file_and_never_a_caller_name(fakes, tmp_path):
+    fake = fakes()
+    fake.slot_files = {}
+    worker = llama_worker("w1", fake)
+    runtime = build(tmp_path, [(worker, fake)])
+    saved = runtime.worker_slot("w1", "save")
+    assert saved["status"] == "saved" and saved["tokens"] == 1234
+    (name,) = fake.slot_files
+    assert name.startswith("w1-") and name.endswith(".bin") and name == runtime.slot_state_name(runtime.registry.record("w1"))
+    restored = runtime.worker_slot("w1", "restore")
+    assert restored["status"] == "restored" and restored["tokens"] == 1234
+    kinds = [r["event"] for r in runtime.evidence.records()]
+    assert "worker_slot_save" in kinds and "worker_slot_restore" in kinds
+    assert all("filename" not in r and "content" not in r for r in runtime.evidence.records() if r["event"].startswith("worker_slot"))
+
+
+def test_worker_slot_restore_never_loads_state_saved_for_a_different_model_or_image(fakes, tmp_path):
+    fake = fakes()
+    fake.slot_files = {}
+    runtime = build(tmp_path, [(llama_worker("w1", fake), fake)])
+    runtime.worker_slot("w1", "save")
+    record = runtime.registry.record("w1")
+    object.__setattr__(record, "runtime_image_digest", "sha256:" + "9" * 64)     # the restart changed the image
+    assert runtime.worker_slot("w1", "restore")["status"] == "unavailable"       # different fingerprint: not found, starts cold
+
+
+def test_worker_slot_degrades_quietly_when_persistence_is_off_or_the_worker_is_unknown(fakes, tmp_path):
+    fake = fakes()                                                                # slot_files None: --slot-save-path not set
+    runtime = build(tmp_path, [(llama_worker("w1", fake), fake)])
+    assert runtime.worker_slot("w1", "save")["status"] == "unavailable"
+    assert runtime.worker_slot("nope", "save")["status"] == "not_found"
+    assert runtime.worker_slot("w1", "../../etc/passwd")["status"] == "unsupported"
