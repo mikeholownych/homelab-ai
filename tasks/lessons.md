@@ -81,3 +81,10 @@
 - Rotation must be driven by evidence: test current secrets against the leaked prefixes (booleans only) before rotating consumers I cannot see.
 
 - 2026-11-16: never run ansible `--diff` on tasks that render secret-bearing templates (env files); it wrote Grafana secrets to a log and my grep echoed them. Check logs with `grep -c`, never print matching lines; if exposed, shred the log and rotate immediately.
+
+## Never `git stash` / `git stash pop` as a pair around a clean tree (2026-11-17)
+`git stash` with nothing to stash creates no entry, and the following `git stash pop` then pops an OLDER, unrelated stash (a 2026-09 WIP with 36 untracked docs), leaving
+conflict markers and stray files. Rule: do not use stash to compare a test before and after a change; check out the other revision in a separate worktree
+(`git worktree add`) or run the test on the committed parent. If a stash step is unavoidable, check `git stash list` count before and after and pop by name
+(`git stash pop stash@{0}` only after confirming it is the one just created). Recovery used here: `git reset --hard HEAD` (all work was committed), then delete only the
+untracked files that are also in the stash's untracked tree (`git ls-tree -r --name-only 'stash@{0}^3'`), and leave the old stash entry in place.
