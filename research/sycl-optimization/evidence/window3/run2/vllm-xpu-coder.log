@@ -1,0 +1,6 @@
+idle confirmed 2026-11-17T07:43:26Z
+== coder-gguf 2026-11-17T07:43:47Z
+5ab5361e55bb41e0f01aeaee49e3bcc7671a7327eaf2e02531a3389bcd880689
+coder-gguf healthy=0 after_s=54
+dmesg timedout: 32
+RESTORED rc=0

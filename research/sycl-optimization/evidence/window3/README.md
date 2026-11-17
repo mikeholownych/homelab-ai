@@ -110,3 +110,104 @@ Each step re-uses everything except the newest turn plus a ~300-token tail (the 
 session is almost entirely prefix-cached: cold prefill happens once. TTFT is blank for most steps because the model answered with
 a tool call (no text delta); wall time per step is in the raw rows. The replay shows the intended workload shape is the cheap
 case from the fork test; a rewrite of earlier history would break it (see the fork section). One session only, no sanitised corpus.
+
+## test-backend-ops on the production build (backlog 636, 2026-11-17)
+
+Build: `test-backend-ops` compiled from llama.cpp a956a852 with the production (old-stack, `8766c027`) `intel.Dockerfile`
+and only `-DLLAMA_BUILD_TESTS=OFF` -> `ON` (Dockerfile copy kept out of the repo; the build used `docker build --target build`).
+The binary was copied to the host research dir and run INSIDE the deployed image (`sha256:6cd97c37…`, its libraries and
+runtime stack) on GPU0 with `GGML_SYCL_ENABLE_XMX_ESIMD=0`, one worker1 outage, idle gate and restore trap
+(`harness/window3_backend_ops.sh`; restore rc 0; kernel `Timedout job` count unchanged at 32).
+
+| Op | Result on SYCL0 (Arc Pro B65) | Not supported (skipped by the harness) |
+|---|---|---|
+| MUL_MAT_ID | 1152 / 1152 passed | 8 |
+| FLASH_ATTN_EXT | 4375 / 4375 passed | 1335 |
+| MUL_MAT | 2427 / 2427 passed | 625 |
+
+Run 1 (`run1-f8-abort/`) aborted in all three ops at `convert.cpp:773: fatal error: unsupport data type=f8_e4m3`: the SYCL backend
+has no f8_e4m3 dequantisation and the test suite does not skip those cases, so test-backend-ops crashes instead of reporting
+"not supported". Before the abort: MUL_MAT_ID 130 OK, MUL_MAT 159 OK, FLASH_ATTN_EXT 4297 OK, 0 failures. Run 2 excludes
+f8_e4m3 cases with `-p '^(?!.*f8_e4m3)'` (`harness/backend_ops_filter.sh`) and completes.
+
+Reading: no numerical mismatch against the CPU reference in any supported MUL_MAT_ID (MoE routing, all quant types incl. q4_K,
+IQ types), MUL_MAT or flash-attention case on the deployed build. Limits: f8_e4m3 is untested (none of our models use it), and an
+unsupported f8 case aborting the process is an upstream test-suite gap worth a one-line mention if reported.
+
+## Slot-reuse split: Coder-30B (full attention) vs Qwen3.6-35B-A3B (hybrid) (backlog 627, 2026-11-17)
+
+Research server on GPU0 (production image and flags, `-np 1`, `-c 65536`, port 18100, not via the gateway), same ~18k-token four-step
+client for both models (`harness/window3_slot_reuse.sh`, `harness/slot_reuse_client.py`; llama-server `timings`: `cache_n` reused,
+`prompt_n` computed). One worker1 outage, idle gate, restore rc 0, `Timedout job` count unchanged at 32.
+
+| Step | Coder-30B (full attention): computed / reused, wall | Qwen3.6 (hybrid): computed / reused, wall |
+|---|---|---|
+| cold | 18013 / 0, 16.9 s | 18015 / 0, 14.7 s (first request on a fresh server includes kernel warm-up) |
+| continuation | **19 / 18005, 0.46 s** | 2064 / 15963, 1.69 s |
+| fork at mid-prompt | **6009 / 9004, 5.3 s** | 15015 / **0**, 8.7 s |
+| original again | 9009 / 9004, 7.4 s | 18015 / **0**, 10.2 s |
+
+- Full attention (Coder): the KV cache is truncated at the first differing token, so a continuation is essentially free and a fork
+  keeps everything before the divergence point (half the prompt here). Returning to the original then reuses that same shared half.
+- Hybrid (Qwen3.6; Flash-Next behaved the same through the gateway): reuse needs a stored recurrent-state checkpoint, taken every
+  ~2k tokens, so a continuation recomputes up to ~2k tokens and any divergence inside the prompt discards everything, including the
+  earlier conversation. This matches the gateway fork test (same 8.7 s fork and ~10 s return on lead).
+- Consequence for model choice and client design: a workload that edits or compacts earlier context favours the full-attention Coder model;
+  an append-only agent loop is cheap on either. If Coder-30B is ever routed again, the gateway's affinity map is worth more there
+  than on the hybrids.
+
+## vLLM XPU feasibility on one B65 (backlog 628, 2026-11-17)
+
+`harness/window3_vllm_xpu.sh`: `docker.io/vllm/vllm-openai-xpu:v0.29.0` (already in the aihost-runtime store), research server on :18200
+(not via the gateway), GPU0 with worker1 stopped, idle gate, restore trap (rc 0 each time; `Timedout job` count unchanged at 32).
+
+| Attempt | Result |
+|---|---|
+| Qwen2.5-7B-Instruct-AWQ (cached; `--quantization awq`, 8k context) | **Runs.** Healthy after 141 s. 1060-token prompt, 39 tokens out: TTFT 0.44 s (first), 0.13 s, 0.06 s; decode gap p50 about 24 ms (about 42 tok/s). Proves the image drives the B65 (device found, kernels run). |
+| Our Qwen3-Coder-30B-A3B Q4_K_M GGUF (`--tokenizer` and `--hf-config-path` pointing at the HF repo's config/tokenizer files) | **Did not load (3 attempts).** vLLM 0.29.0 stops during config resolution in `transformers`: it reads the `.gguf` as a JSON config (`UnicodeDecodeError`, "not a valid JSON file"), with and without `--hf-config-path`. It never reached the model or the GPU, so this says nothing about MoE kernels. |
+
+Conclusion: the engine is feasible on this hardware for a dense AWQ model, and the comparison harness (`harness/engine_probe_client.py`) works against it,
+but Coder-30B was not demonstrated. The remaining routes need HF-format weights: FP8 is about 31 GB (does not fit with KV cache on a 32 GB card),
+BF16 is about 61 GB with online FP8 quantisation (a 61 GB download and about 61 GB of host RAM pressure). That was judged out of
+proportion for an engine comparison whose weights would differ from our GGUFs anyway (the KL gate would not apply). Logs: `run1/`, `run2/`,
+`vllm-xpu-coder-gguf.logtail`. Side effect to know: an accidental root-podman pull of the same image was killed before it completed; the root store holds no vllm image.
+
+## MTP speculative decoding A/B (backlog 617, 2026-11-17)
+
+Weights: `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` UD-Q4_K_M (22.7 GB; carries the MTP head, unlike our deployed GGUF), downloaded to the host
+model dir. `harness/window3_mtp_ab.sh`: production image and flags, GPU0, research server (not via the gateway), six fixed prompts,
+temperature 0, 256 tokens max, thinking off; worker1 stopped for the window, restore rc 0, `Timedout job` count unchanged at 32.
+Runs: **base** (deployed GGUF, no speculation), **mtp-off** (MTP GGUF, `--spec-type none`), **mtp-on** (`--spec-type draft-mtp --spec-draft-n-max 3`).
+
+| Run | Mean decode (tok/s) | Per-prompt range | Draft acceptance |
+|---|---|---|---|
+| base | 71.4 | 70.8-71.9 | n/a |
+| mtp-off | 71.7 | 71.3-72.2 | n/a |
+| mtp-on | **68.7** | 57.4-78.4 | 56-94% by prompt (136/237 on prose, 188/199 on SQL) |
+
+- Speed: MTP does not pay on this build and hardware. High acceptance on code (84-94%) gives +5 to +9% on the best prompts, but prose
+  (57% acceptance) is 20% slower, and the mean is 4% below plain decoding. The drafting and verification overhead on the B65 eats
+  the savings at `--spec-draft-n-max 3`. Not tried: other draft lengths, `--spec-draft-p-min` thresholds; the evidence does not
+  suggest a large win.
+- Greedy equality: not established. Even base vs mtp-off (same flags, nominally the same weights, different GGUF files) matched on only
+  1 of 6 prompts, so output hashes cannot separate "speculation changes text" from "these two files and batch shapes differ numerically".
+  mtp-off vs mtp-on matched on 2 of 6. On this stack, token-exact equality is not a usable pass/fail criterion for speculative decoding;
+  a KL or task-accuracy comparison would be needed if the speed ever justified it.
+- Decision: do not adopt MTP for the routed workers. The deployed GGUF has no MTP head anyway; adopting it would mean switching weights as well.
+
+## Vulkan vs SYCL on the B65 (backlog 624, 2026-11-17)
+
+Image: official `.devops/vulkan.Dockerfile` (`full` target) built from the same llama.cpp commit a956a852, loaded as
+`localhost/sycl-research/llama:vulkan-a956a852` into the aihost-runtime store (Mesa open-source driver, Intel BMG G31, KHR_coopmat, fp16 and bf16 on).
+SYCL = the production image. `harness/window3_vulkan_ab.sh`: `llama-bench -ngl 99 -fa 1 -b 4096 -ub 2048 -p 512,8192 -n 128 -r 2`, GPU0, worker1 stopped for
+the window, restore rc 0, `Timedout job` count unchanged at 32. Raw: `vulkan/*.jsonl`. Performance only; Vulkan was not run through an accuracy gate.
+
+| Model | pp512 SYCL / Vulkan (t/s) | pp8192 SYCL / Vulkan | tg128 SYCL / Vulkan |
+|---|---|---|---|
+| Qwen3.6-35B-A3B Q4_K_M | 1412 / 1165 (0.83x) | 1812 / 1352 (0.75x) | 75.0 / 24.3 (0.32x) |
+| Qwen3-Coder-30B-A3B Q4_K_M | 1333 / 1302 (0.98x) | 1591 / 853 (0.54x) | 92.2 / 39.6 (0.43x) |
+| Flash-Next IQ1_M | 572 / 414 (0.72x) | 666 / 522 (0.78x) | 19.1 / 11.3 (0.59x) |
+
+Vulkan is slower on every model and every test, most of all in decode (0.32-0.59x) and long-prompt prefill on the MoE Coder model (0.54x).
+Decision: no case for Vulkan on this hardware; SYCL stays. Cost note: building and shipping the image took about 40 minutes of workstation
+time; the Vulkan image remains in the aihost-runtime store (2.7 GB) for any later re-check and can be removed with `podman rmi`.
