@@ -1,0 +1,40 @@
+Nov 17 17:05:33 ai-5820-01 sycl-research-cf[3701104]: 2.16.104.040 I srv          load:   --model
+Nov 17 17:05:33 ai-5820-01 sycl-research-cf[3701104]: 2.16.104.040 I srv          load:   /models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
+Nov 17 17:05:33 ai-5820-01 sycl-research-cf[3701104]: 2.16.104.040 I srv          load:   --n-gpu-layers
+Nov 17 17:05:33 ai-5820-01 sycl-research-cf[3701104]: 2.16.104.041 I srv          load:   99
+Nov 17 17:05:33 ai-5820-01 sycl-research-cf[3701104]: 2.16.104.041 I srv          load:   --parallel
+Nov 17 17:05:33 ai-5820-01 sycl-research-cf[3701104]: 2.16.104.042 I srv          load:   1
+Nov 17 17:05:34 ai-5820-01 sycl-research-cf[3701104]: [35225] 0.00.187.963 I srv    load_model: loading model '/models/qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf'
+Nov 17 17:05:43 ai-5820-01 sycl-research-cf[3701104]: [35225] 0.09.924.297 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'
+Nov 17 17:05:43 ai-5820-01 sycl-research-cf[3701104]: [35225] 0.09.927.209 I srv  server_run_i: model loaded
+Nov 17 17:05:44 ai-5820-01 sycl-research-cf[3701104]: 2.27.071.804 I srv  ensure_model: waiting until model name=coder is fully loaded...
+Nov 17 17:05:44 ai-5820-01 sycl-research-cf[3701104]: 2.27.071.810 I srv  ensure_model: slot available, loading queued model name=coder
+Nov 17 17:05:44 ai-5820-01 sycl-research-cf[3701104]: 2.27.071.816 I srv        unload: stopping model instance name=qwen36
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.951 I srv          load: spawning server instance with name=coder on port 49357
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.988 I srv          load: spawning server instance with args:
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.992 I srv          load:   /app/llama-server
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.993 I srv          load:   --host
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.994 I srv          load:   127.0.0.1
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.994 I srv          load:   --jinja
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.995 I srv          load:   --log-colors
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.995 I srv          load:   off
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.996 I srv          load:   --port
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.996 I srv          load:   49357
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.997 I srv          load:   --alias
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.998 I srv          load:   coder
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.998 I srv          load:   --ctx-size
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.334.999 I srv          load:   8192
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.000 I srv          load:   --flash-attn
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.001 I srv          load:   on
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.002 I srv          load:   --lazy-mode
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.004 I srv          load:   on
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.005 I srv          load:   --model
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.006 I srv          load:   /models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.006 I srv          load:   --n-gpu-layers
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.007 I srv          load:   99
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.007 I srv          load:   --parallel
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: 2.27.335.008 I srv          load:   1
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: [49357] 0.00.200.805 I srv    load_model: loading model '/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf'
+Nov 17 17:05:45 ai-5820-01 sycl-research-cf[3701104]: [49357] 0.00.522.987 W load: control-looking token: 128247 '</s>' was not control-type; this is probably a bug in the model. its type will be overridden
+Nov 17 17:05:53 ai-5820-01 sycl-research-cf[3701104]: [49357] 0.08.032.848 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'
+Nov 17 17:05:53 ai-5820-01 sycl-research-cf[3701104]: [49357] 0.08.035.079 I srv  server_run_i: model loaded
