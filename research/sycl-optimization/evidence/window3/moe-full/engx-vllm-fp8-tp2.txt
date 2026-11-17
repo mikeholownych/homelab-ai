@@ -1,0 +1,7 @@
+vllm-fp8-tp2 rep1 T01-pagination           PASS attempts=1 wall=18.2s tokens=717
+vllm-fp8-tp2 rep1 T02-money                FAIL attempts=3 wall=67.5s tokens=3600
+vllm-fp8-tp2 rep1 T03-cache-collision      PASS attempts=3 wall=83.6s tokens=4703
+vllm-fp8-tp2 rep1 T04-dry-run              PASS attempts=1 wall=29.0s tokens=983
+vllm-fp8-tp2 rep1 T05-iterative-tree       PASS attempts=1 wall=14.7s tokens=920
+vllm-fp8-tp2 rep1 T07-parse-duration       FAIL attempts=3 wall=178.0s tokens=6436
+RESULT vllm-fp8-tp2 {"reps": 1, "tasks": 6, "validated_rate": 66.7, "validated_per_rep": [4], "first_attempt_rate": 50.0, "median_secs_to_validated": 23.6, "mean_secs_per_task": 65.2, "mean_tokens_per_task": 2893, "per_task_pass": {"T01-pagination": "1/1", "T02-money": "0/1", "T03-cache-collision": "1/1", "T04-dry-run": "1/1", "T05-iterative-tree": "1/1", "T07-parse-duration": "0/1"}, "always_fail": ["T02-money", "T07-parse-duration"], "flaky": []}

@@ -1,0 +1,40 @@
+idle confirmed 2026-11-17T15:09:37Z
+== llamacpp 2026-11-17T15:10:08Z
+llamacpp ready_s=76
+-- llamacpp sweeps 15:11:25
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 219, "wall_s": 4.51, "aggregate_tok_s": 48.5, "ttft_p50": 1.184, "ttft_p95": 1.184}
+{"mode": "batch", "level": 2, "requests": 4, "completion_tokens": 465, "wall_s": 10.16, "aggregate_tok_s": 45.8, "ttft_p50": 1.772, "ttft_p95": 1.772}
+{"mode": "batch", "level": 4, "requests": 8, "completion_tokens": 842, "wall_s": 15.33, "aggregate_tok_s": 54.9, "ttft_p50": 2.488, "ttft_p95": 2.655}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3934, "ttft_s": 3.67, "prefill_tok_s": 1072.0}
+{"mode": "longctx", "target_tokens": 12000, "prompt_tokens": 11739, "ttft_s": 7.66, "prefill_tok_s": 1532.0}
+-- llamacpp-np4 engx 15:12:14
+engx llamacpp-np4: RESULT llamacpp-np4 {"reps": 1, "tasks": 6, "validated_rate": 83.3, "validated_per_rep": [5], "first_attempt_rate": 66.7, "median_secs_to_validated": 8.9, "mean_secs_per_task": 8.5, "mean_tokens_per_task": 1761, "per_task_pass": {"T01-pagination": "1/1", "T02-
+== vllm-fp8-tp2 2026-11-17T15:15:10Z
+8233e38978ad1f261882b74510371c0c7bb0da40fad7778c1e7de5809879fd9e
+vllm-fp8-tp2 ready_s=359
+-- vllm-fp8-tp2 sweeps 15:21:10
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 221, "wall_s": 17.34, "aggregate_tok_s": 12.7, "ttft_p50": 0.278, "ttft_p95": 0.278}
+{"mode": "batch", "level": 2, "requests": 4, "completion_tokens": 495, "wall_s": 20.25, "aggregate_tok_s": 24.4, "ttft_p50": 0.475, "ttft_p95": 0.48}
+{"mode": "batch", "level": 4, "requests": 8, "completion_tokens": 903, "wall_s": 20.53, "aggregate_tok_s": 44.0, "ttft_p50": 0.351, "ttft_p95": 0.825}
+{"mode": "batch", "level": 8, "requests": 16, "completion_tokens": 1865, "wall_s": 22.23, "aggregate_tok_s": 83.9, "ttft_p50": 0.815, "ttft_p95": 1.492}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3935, "ttft_s": 0.71, "prefill_tok_s": 5549.0}
+{"mode": "longctx", "target_tokens": 12000, "prompt_tokens": 11739, "ttft_s": 2.3, "prefill_tok_s": 5094.0}
+{"mode": "longctx", "target_tokens": 28000, "prompt_tokens": 27350, "ttft_s": 6.81, "prefill_tok_s": 4014.0}
+-- vllm-fp8-tp2 engx 15:22:45
+engx vllm-fp8-tp2: RESULT vllm-fp8-tp2 {"reps": 1, "tasks": 6, "validated_rate": 66.7, "validated_per_rep": [4], "first_attempt_rate": 50.0, "median_secs_to_validated": 23.6, "mean_secs_per_task": 65.2, "mean_tokens_per_task": 2893, "per_task_pass": {"T01-pagination": "1/1", "T0
+== sglang-fp8-tp2 2026-11-17T15:29:53Z
+501b0a5468560d323316f9c8094ada86ce11aef1c7eaa0b6f910e5ae0adda6dc
+sglang-fp8-tp2 ready_s=193
+-- sglang-fp8-tp2 sweeps 15:33:08
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 230, "wall_s": 35.06, "aggregate_tok_s": 6.6, "ttft_p50": 14.503, "ttft_p95": 14.503}
+{"mode": "batch", "level": 2, "requests": 4, "completion_tokens": 472, "wall_s": 25.34, "aggregate_tok_s": 18.6, "ttft_p50": 0.334, "ttft_p95": 2.683}
+{"mode": "batch", "level": 4, "requests": 8, "completion_tokens": 869, "wall_s": 25.19, "aggregate_tok_s": 34.5, "ttft_p50": 2.007, "ttft_p95": 2.711}
+{"mode": "batch", "level": 8, "requests": 16, "completion_tokens": 1763, "wall_s": 26.83, "aggregate_tok_s": 65.7, "ttft_p50": 1.527, "ttft_p95": 2.793}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3934, "ttft_s": 0.77, "prefill_tok_s": 5097.0}
+{"mode": "longctx", "target_tokens": 12000, "prompt_tokens": 11738, "ttft_s": 3.54, "prefill_tok_s": 3312.0}
+{"mode": "longctx", "target_tokens": 28000, "prompt_tokens": 27350, "ttft_s": 6.01, "prefill_tok_s": 4552.0}
+-- sglang-fp8-tp2 engx 15:35:24
+engx sglang-fp8-tp2: RESULT sglang-fp8-tp2 {"reps": 1, "tasks": 6, "validated_rate": 83.3, "validated_per_rep": [5], "first_attempt_rate": 66.7, "median_secs_to_validated": 34.1, "mean_secs_per_task": 59.0, "mean_tokens_per_task": 1852, "per_task_pass": {"T01-pagination": "1/1", "
+dmesg timedout: 32
+RESTORED rc=0
+watchdog: active
