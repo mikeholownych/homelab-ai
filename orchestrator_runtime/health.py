@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import threading
 import time
 import urllib.error
@@ -460,7 +461,8 @@ class HealthManager:
                 except Exception:
                     slots = None
             stats = engine_stats.extract(engine, body, slots)
-        except Exception:
+        except Exception as exc:
+            self._engine_unreachable(worker_record, exc)
             return
         if stats is not None:
             stats["observed_at"] = time.time()
@@ -487,6 +489,25 @@ class HealthManager:
             else:
                 metric.remove(**labels)
 
+    @staticmethod
+    def _is_timeout(exc: BaseException) -> bool:
+        return isinstance(exc, (TimeoutError, socket.timeout)) or (
+            isinstance(exc, urllib.error.URLError) and isinstance(exc.reason, (TimeoutError, socket.timeout)))
+
+    def _engine_unreachable(self, worker_record: dict[str, Any], exc: BaseException) -> None:
+        """A failed stats read. A *timeout* from a worker that was running work is a stall (the wedged main loop cannot answer
+        /metrics either), so the stall clock keeps counting; a refused connection or an HTTP error (crash, model loading) is the
+        health checker's business and clears the stall state instead of guessing."""
+        worker_id = worker_record["worker_id"]
+        if not self.metrics:
+            return
+        labels = self._engine_labels(worker_record)
+        if self._is_timeout(exc) and self._stalls.active(worker_id):
+            self.metrics.engine_stalled_seconds.set(self._stalls.unresponsive(worker_id, time.monotonic()), **labels)
+        else:
+            self._stalls.forget(worker_id)
+            self.metrics.engine_stalled_seconds.remove(**labels)
+
     _PROGRESS_KEYS = ("prompt_tokens_in_flight", "generation_tokens_in_flight", "prompt_tokens_total", "generation_tokens_total")
 
     def _export_stall(self, worker_id: str, stats: dict[str, Any], labels: dict[str, str]) -> None:
@@ -502,8 +523,8 @@ class HealthManager:
         if not self.metrics:
             return
         labels = self._engine_labels(worker_record)
-        self._stalls.forget(worker_record["worker_id"])
-        self.metrics.engine_stalled_seconds.remove(**labels)
+        if not self._stalls.active(worker_record["worker_id"]):  # an unresponsive worker keeps its stall series: that is the alarm
+            self.metrics.engine_stalled_seconds.remove(**labels)
         for attribute in _ENGINE_METRICS.values():
             getattr(self.metrics, attribute).remove(**labels)
 
@@ -511,6 +532,9 @@ class HealthManager:
         """Refresh engine statistics for every worker (independent of health probing)."""
         for w in self.registry.snapshot():
             if w.get("status") == "stopped":
+                self._stalls.forget(w["worker_id"])
+                if self.metrics:
+                    self.metrics.engine_stalled_seconds.remove(**self._engine_labels(w))
                 continue
             endpoint, token = w.get("endpoint"), w.get("auth_token")
             if not endpoint or not str(endpoint).startswith(("http://", "https://")):
