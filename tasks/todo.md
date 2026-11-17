@@ -612,14 +612,14 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build — DONE 2026-11-16 in substance: per-worker env (#22), candidate profile qwen36-stackb (#23), SHA-256-pinned debs (#25), rollback rehearsed (#28); production now on the digest-pinned research image.
 - [x] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report) — DONE 2026-11-17: research/sycl-optimization/evidence/window3/README.md (3 load modes, kill mid-load, collision; no hang; flag is -lm).
 - [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence
-- [ ] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check
+- [x] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check — `harness/kl_predeploy_gate.sh` (compare mode verified on stored scores incl. a failing case; `run` mode needs a research window)
 - [ ] (colibri review) Gateway test: long agent turn -> short interleaved request -> long turn; TTFT on deployed vs HEAD, `--cache-ram` default vs raised
 - [ ] (colibri review) Candidate: MTP speculative decoding; first find an MTP-bearing GGUF (ours show no nextn/mtp tensor names), then A/B with greedy-equality check
 - [ ] (AnythingLLM review) Check gateway route stickiness; measure TTFT with/without a sticky window if conversations bounce between workers
 - [ ] (AnythingLLM review) Gateway benchmarks record token counts, output tps, duration, truncated flag
 - [ ] (AnythingLLM review) Measure Nexus Code tool-definition tokens per turn; A/B a reduced tool set only if material
-- [ ] (Ollama review) Write image-bump checklist (diff review, inspect built source, full gate) and add to deployment gate
-- [ ] (Ollama review) Patch policy: additive only, upstream PR linked, removal condition recorded
+- [x] (Ollama review) Write image-bump checklist (diff review, inspect built source, full gate) and add to deployment gate — done in docs/operations/LLAMA-IMAGE-BUMP.md (#31)
+- [x] (Ollama review) Patch policy: additive only, upstream PR linked, removal condition recorded — done in the same doc (#31)
 - [ ] (Ollama review) Failure injection: worker saturation (queue bound, 503, queue-depth metric) and crash last-error in evidence
 - [ ] (Ollama review) Build Vulkan-enabled llama.cpp image; A/B vs SYCL on B65 for the three models
 - [ ] (vLLM review) Gateway-level load benchmark from a client machine (TTFT, TPOT, ITL percentiles; sweeps; Nexus Code prompt shapes)
