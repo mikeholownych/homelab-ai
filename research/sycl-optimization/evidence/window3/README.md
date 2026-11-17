@@ -18,3 +18,14 @@ Conclusions: load time is the same in all three modes (about 97 s, dominated by 
 (`cannot allocate 18543 MiB … 9605 MiB free of 32656 MiB`, exit due to model loading error) and does not disturb the running server. Observation: the colliding process takes a general protection fault in libc during exit after the failed load
 (`dmesg`: llama-server … in libc.so.6, once per mode run); it is exit-time only, with the failure already reported, but worth knowing if a supervisor ever restarts a worker into a full GPU.
 Limits: one model (the 22 GB MoE), one GPU, memory-resident files (page cache warm: buff/cache about 52 GB), so a cold-cache load from disk was not measured.
+
+## Nexus Code tool-definition tokens per turn (backlog 620, 2026-11-17)
+
+Method: imported every `toolDefinition` from `nexus-code/cli/src/core/capability_definitions/*.ts` (36 tools, compact JSON).
+Size 17,012 characters. Token count is an estimate (no exact tokenizer call: that needs a client key, which was not read):
+about 4.3k tokens at 4 chars/token, 5.7k at the gateway's conservative 3 chars/token. That is roughly 7-9% of a 64K context.
+
+Verdict: not material. The tool block is the constant prefix of every request, so after the first turn it is served from the
+prefix/slot cache (the gateway keeps a conversation on one worker), and it costs prefill only once per conversation.
+No reduced-tool-set A/B was run (the item says only if material). Caveat: assumes the CLI sends all 36 tools; a per-mode subset would be smaller.
+Re-measure exactly with `qualify.py`'s `/v1/tokenize` path if tool count grows past ~60.

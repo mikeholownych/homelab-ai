@@ -617,7 +617,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (colibri review) Candidate: MTP speculative decoding; first find an MTP-bearing GGUF (ours show no nextn/mtp tensor names), then A/B with greedy-equality check
 - [x] (AnythingLLM review) Check gateway route stickiness; measure TTFT with/without a sticky window if conversations bounce between workers — settled by code: rendezvous hashing + warm-worker map keyed on session id or conversation prefix (tests/test_orchestrator_runtime.py:384); today each model is a single-worker pool so conversations cannot bounce; re-measure only when a pool gets a second worker
 - [x] (AnythingLLM review) Gateway benchmarks record token counts, output tps, duration, truncated flag — controlled_probe rows now carry finish_reason, truncated, output_tokens_per_second (plus existing usage/seconds); test added
-- [ ] (AnythingLLM review) Measure Nexus Code tool-definition tokens per turn; A/B a reduced tool set only if material
+- [x] (AnythingLLM review) Measure Nexus Code tool-definition tokens per turn; A/B a reduced tool set only if material — measured: 36 tools, 17 KB, ~4.3-5.7k tokens (estimate), cached after turn 1; not material, no A/B (window3 README)
 - [x] (Ollama review) Write image-bump checklist (diff review, inspect built source, full gate) and add to deployment gate — done in docs/operations/LLAMA-IMAGE-BUMP.md (#31)
 - [x] (Ollama review) Patch policy: additive only, upstream PR linked, removal condition recorded — done in the same doc (#31)
 - [ ] (Ollama review) Failure injection: worker saturation (queue bound, 503, queue-depth metric) and crash last-error in evidence
