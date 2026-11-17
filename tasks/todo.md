@@ -631,12 +631,12 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time
 - [ ] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom
 - [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
-- [ ] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist
+- [x] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist — PR #33
 - [x] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback — moot as written: no Coder worker is deployed; both live workers carry ESIMD=0 via llama_worker.env and passed the gate (Qwen3.6 and Flash-Next verified, soak clean)
 - [ ] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention)
-- [ ] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892)
-- [ ] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use
-- [ ] (window 2) Record runtime-stack versions per image; test old vs new stack with the same source on every bump (plan 4ae)
+- [x] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892) — done in window 2 (2026-11-16): Qwen3.8-27B Q4_K_M PPL finite and identical, #30892 not reproduced; note added to the bump doc (PR #33)
+- [x] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use — verified from --help: router and sleep-idle are opt-in and absent from the worker units (window3 README)
+- [x] (window 2) Record runtime-stack versions per image; test old vs new stack with the same source on every bump (plan 4ae) — stack versions recorded per image in the window-2 README; step added to the bump doc (PR #33)
 - [x] (window 2) Full gate on candidate `head-stackB` for Qwen3.6, Flash-Next and Coder: KL, bench, engx, Ansible pin + rollback (plan 4af) — superseded: stackB (new IGC/NEO) was rejected for the 32K regression; production runs the old-stack HEAD image, which passed the full gate (KL, bench, engx, canary, rollback rehearsal). No Coder worker is deployed.
 - [x] (window 2) Upstream report on IGC 2.42.6 + NEO 26.40 32K regression, after re-searching the tracker (plan 4ag) — filed as ggml-org/llama.cpp#32399 on 2026-11-16 (operator approved; see upstream-issue-draft.md)
 

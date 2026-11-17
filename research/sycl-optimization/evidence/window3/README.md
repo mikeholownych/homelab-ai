@@ -29,3 +29,11 @@ Verdict: not material. The tool block is the constant prefix of every request, s
 prefix/slot cache (the gateway keeps a conversation on one worker), and it costs prefill only once per conversation.
 No reduced-tool-set A/B was run (the item says only if material). Caveat: assumes the CLI sends all 36 tools; a per-mode subset would be smaller.
 Re-measure exactly with `qualify.py`'s `/v1/tokenize` path if tool count grows past ~60.
+
+## HEAD router and sleep-idle flags (backlog 638, 2026-11-17)
+
+`llama-server --help` of the deployed image (`sha256:6cd97c37…`): router mode is opt-in (`--models-dir`, `--models-preset`,
+`--models-max` default 4, `--models-memory-margin`, `--models-autoload` default on, all "default: disabled" unless a models dir
+or preset is given). `--sleep-idle-seconds` defaults to -1 (disabled). Neither flag is in the production worker units
+(grep count 0 in both), so both features are inert in production. Any use needs its own gate: a sleeping worker would break the
+gateway's health and idle assumptions (the idle check greps for activity, a sleep/wake cycle reloads the 22 GB model, ~97 s).
