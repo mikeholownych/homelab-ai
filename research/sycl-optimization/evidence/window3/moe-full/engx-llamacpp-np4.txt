@@ -1,0 +1,7 @@
+llamacpp-np4 rep1 T01-pagination           PASS attempts=1 wall=8.9s tokens=1115
+llamacpp-np4 rep1 T02-money                FAIL attempts=3 wall=14.1s tokens=3771
+llamacpp-np4 rep1 T03-cache-collision      PASS attempts=2 wall=9.4s tokens=2514
+llamacpp-np4 rep1 T04-dry-run              PASS attempts=1 wall=5.6s tokens=994
+llamacpp-np4 rep1 T05-iterative-tree       PASS attempts=1 wall=3.4s tokens=920
+llamacpp-np4 rep1 T07-parse-duration       PASS attempts=1 wall=9.9s tokens=1253
+RESULT llamacpp-np4 {"reps": 1, "tasks": 6, "validated_rate": 83.3, "validated_per_rep": [5], "first_attempt_rate": 66.7, "median_secs_to_validated": 8.9, "mean_secs_per_task": 8.5, "mean_tokens_per_task": 1761, "per_task_pass": {"T01-pagination": "1/1", "T02-money": "0/1", "T03-cache-collision": "1/1", "T04-dry-run": "1/1", "T05-iterative-tree": "1/1", "T07-parse-duration": "1/1"}, "always_fail": ["T02-money"], "flaky": []}

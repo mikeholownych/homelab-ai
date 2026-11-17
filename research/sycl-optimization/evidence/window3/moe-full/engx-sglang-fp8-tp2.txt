@@ -1,0 +1,7 @@
+sglang-fp8-tp2 rep1 T01-pagination           PASS attempts=1 wall=20.4s tokens=716
+sglang-fp8-tp2 rep1 T02-money                FAIL attempts=3 wall=88.5s tokens=3700
+sglang-fp8-tp2 rep1 T03-cache-collision      PASS attempts=1 wall=43.3s tokens=1169
+sglang-fp8-tp2 rep1 T04-dry-run              PASS attempts=1 wall=34.1s tokens=983
+sglang-fp8-tp2 rep1 T05-iterative-tree       PASS attempts=1 wall=17.7s tokens=920
+sglang-fp8-tp2 rep1 T07-parse-duration       PASS attempts=2 wall=150.0s tokens=3625
+RESULT sglang-fp8-tp2 {"reps": 1, "tasks": 6, "validated_rate": 83.3, "validated_per_rep": [5], "first_attempt_rate": 66.7, "median_secs_to_validated": 34.1, "mean_secs_per_task": 59.0, "mean_tokens_per_task": 1852, "per_task_pass": {"T01-pagination": "1/1", "T02-money": "0/1", "T03-cache-collision": "1/1", "T04-dry-run": "1/1", "T05-iterative-tree": "1/1", "T07-parse-duration": "1/1"}, "always_fail": ["T02-money"], "flaky": []}

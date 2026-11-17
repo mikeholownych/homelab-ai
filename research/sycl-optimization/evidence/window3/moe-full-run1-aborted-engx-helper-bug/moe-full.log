@@ -1,0 +1,11 @@
+idle confirmed 2026-11-17T14:57:54Z
+== llamacpp 2026-11-17T14:58:25Z
+llamacpp ready_s=75
+-- llamacpp sweeps 14:59:42
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 221, "wall_s": 4.53, "aggregate_tok_s": 48.7, "ttft_p50": 1.148, "ttft_p95": 1.148}
+{"mode": "batch", "level": 2, "requests": 4, "completion_tokens": 423, "wall_s": 9.22, "aggregate_tok_s": 45.9, "ttft_p50": 1.442, "ttft_p95": 1.442}
+{"mode": "batch", "level": 4, "requests": 8, "completion_tokens": 922, "wall_s": 17.03, "aggregate_tok_s": 54.1, "ttft_p50": 2.889, "ttft_p95": 3.063}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3934, "ttft_s": 3.63, "prefill_tok_s": 1085.0}
+{"mode": "longctx", "target_tokens": 12000, "prompt_tokens": 11739, "ttft_s": 7.64, "prefill_tok_s": 1536.0}
+RESTORED rc=0
+watchdog: active

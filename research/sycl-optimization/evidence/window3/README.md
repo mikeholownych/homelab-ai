@@ -311,3 +311,35 @@ both production workers would have to be given up), start slower, and decode 6.5
 cross-card traffic). llama.cpp SYCL remains the right engine for these models here. Not done: an engx task-accuracy comparison (the harness expects the gateway's TLS/auth surface; the
 research servers are plain HTTP on the host) and batched-throughput or long-context sweeps, where continuous batching might narrow the gap; those would be the next experiment if concurrency
 beyond one request per worker ever matters.
+
+### Batched throughput, long-context prefill and engx accuracy: llama.cpp vs vLLM XPU vs SGLang XPU on the MoE Coder-30B (items 628/633, 2026-11-17)
+`harness/window3_moe_full.sh` (evidence: `moe-full/`; an earlier run, `moe-full-run1-aborted-engx-helper-bug/`, died on a shell bug in the engx helper after the llama.cpp part, and is kept only for that reason).
+One window, both production workers stopped after an idle check, watchdog and reconcile paused, restore rc 0 (2/2 workers, watchdog active), `Timedout job` count unchanged at 32.
+Same client and model family for all three: llama.cpp SYCL (production image) Qwen3-Coder-30B-A3B **Q4_K_M on ONE card with `-np 4`**; vLLM XPU 0.29.0 and SGLang XPU 0.5.23 serving the official **FP8** checkpoint with **TP=2 across both cards**, 32k context.
+
+**Aggregate decode throughput** (N concurrent streams, 1k-token prompts, 128 tokens out, 2 requests per stream; tokens/s over the whole level):
+
+| Concurrent streams | llama.cpp (1 card, -np 4) | vLLM XPU (2 cards) | SGLang XPU (2 cards) |
+|---|---|---|---|
+| 1 | 48.5 | 12.7 | 6.6 (first level includes a 14 s warm-up TTFT) |
+| 2 | 45.8 | 24.4 | 18.6 |
+| 4 | 54.9 | 44.0 | 34.5 |
+| 8 | not run (-np 4) | **83.9** | 65.7 |
+
+**Cold prefill** (one prompt, unique prefix, TTFT and prompt tokens/s): llama.cpp 4k: 3.67 s (1,072 t/s), 12k: 7.66 s (1,532 t/s). vLLM 4k: 0.71 s (5,549 t/s), 12k: 2.3 s (5,094 t/s), 28k: 6.8 s (4,014 t/s).
+SGLang 4k: 0.77 s (5,097 t/s), 12k: 3.5 s (3,312 t/s), 28k: 6.0 s (4,552 t/s). (llama.cpp was run to 12k only: 16k per slot at -np 4.)
+
+**engx task accuracy** (corpus base, tasks T01 T02 T03 T04 T05 T07, one rep, up to 3 attempts, temperature 0; `moe-full/engx-*.txt`):
+
+| Engine | Validated | First attempt | Mean s per task | Mean tokens per task | Failed |
+|---|---|---|---|---|---|
+| llama.cpp Q4_K_M, 1 card | 5/6 (83.3%) | 4/6 | 8.5 | 1,761 | T02 |
+| SGLang FP8, TP=2 | 5/6 (83.3%) | 4/6 | 59.0 | 1,852 | T02 |
+| vLLM FP8, TP=2 | 4/6 (66.7%) | 3/6 | 65.2 | 2,893 | T02, T07 |
+
+Reading:
+- **Accuracy:** no engine is more accurate. T02 fails everywhere (it also failed in every earlier llama.cpp run); vLLM additionally missed T07 (it passed on llama.cpp and SGLang). With 6 tasks and one rep, one task of difference is within noise, so the honest conclusion is parity, with no sign that FP8 on these engines buys accuracy.
+- **Single-stream latency:** llama.cpp is 7x faster per task (8.5 s against 59-65 s) and uses half the hardware.
+- **Where the engines win:** prefill, 3.5-5x faster on long prompts, and concurrency scaling: vLLM reaches 83.9 tok/s at 8 streams and rises about linearly, while llama.cpp with `-np 4` stays flat near 46-55 tok/s from 1 to 4 streams (its batching did not help on this card).
+  The break-even for batched decode is about 4-5 concurrent streams (vLLM 44.0 at 4 against 54.9 for llama.cpp, then 83.9 at 8).
+- **Decision:** for this host's workload (one interactive agent session per worker, `-np 1`, append-only prompts that hit the prefix cache) llama.cpp SYCL stays the engine. vLLM XPU would only pay if the routed load became many concurrent streams or very long cold prompts, and it would take both cards from the production pool. Not tested: more than 8 streams, vLLM/SGLang prefix caching for the append-only pattern, FP8 on one card (does not fit).
