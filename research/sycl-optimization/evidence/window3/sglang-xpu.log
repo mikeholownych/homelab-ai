@@ -1,0 +1,12 @@
+idle confirmed 2026-11-17T11:50:01Z
+== awq7b 2026-11-17T11:50:23Z
+4302ed741c3321480df4a2cef2732283b849fbe2a702c2d058db949b7d2df8a1
+awq7b healthy=1 after_s=85
+{"rep": 0, "ttft_s": 6.337, "wall_s": 7.42, "gap_p50_ms": 23.0, "completion_tokens": 47, "prompt_tokens": 1060}
+{"rep": 1, "ttft_s": 0.104, "wall_s": 1.18, "gap_p50_ms": 23.1, "completion_tokens": 47, "prompt_tokens": 1060}
+{"rep": 2, "ttft_s": 0.056, "wall_s": 1.11, "gap_p50_ms": 22.9, "completion_tokens": 47, "prompt_tokens": 1060}
+== coder-awq 2026-11-17T11:52:18Z
+c9d1c2e9ccc41d9a251138f36abab4f773e01feda89e41d43d20d5e934036a14
+coder-awq healthy=0 after_s=47
+dmesg timedout: 32
+RESTORED rc=0

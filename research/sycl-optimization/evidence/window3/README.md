@@ -237,3 +237,32 @@ the post-promotion baseline 0.146/0.079 and 0.245/0.139 (noise level). Not verif
 read here); it is covered by `tests/test_orchestrator_metrics_contract.py`. The watchdog executor stays disabled.
 Rollback: revert `eb18de5` (release id back to `626424cbf584…`, whose release directory remains on the host), fast-forward local main, then
 `playbooks/reconcile-controller.yml -e reconcile_controller_snapshot_ref=<that main sha>` and run `aihost-reconcile.service` after an idle check.
+
+## Live validation of the busy-watchdog on production worker2 (2026-11-17)
+Gateway releases involved: `68b2a70` (stall gauge with unresponsive-worker handling), then `cd2a08b` (truncated-stream fix). Harness: `harness/window3_watchdog_rehearsal.sh`
+(idle gate; one long generation through the gateway to the deep route; `podman kill --signal SIGSTOP` on the worker2 container; the executor
+`scripts/worker_watchdog.py --apply --stuck-after 40 --drain-wait 10` using the `ansible-admin` client over SSH into a 0700 temp file, shredded on exit;
+EXIT trap thaws, undrains and runs `restore_baseline.sh`, rc 0 every time). Runs kept as `watchdog-run1-idle-freeze/`, `watchdog-run2-hold-too-short/`,
+`watchdog-run3-first-live/`, final `watchdog/`.
+
+What the live runs established, in order:
+1. **Gauge live on the running gateway:** `aihost_engine_stalled_seconds` is exported per worker (0 while idle or progressing). A frozen *idle* worker is correctly not a stall (run 1).
+2. **Design flaw found before the first live stall:** a wedged llama-server cannot answer /metrics, so "unreadable" must not mean "unknown". Fixed (`68b2a70`): a read timeout from a worker that was running work keeps the stall clock counting; refused/HTTP errors clear it.
+3. **Run 3 (first real stall):** the gauge grew 12 -> 28 -> 44 -> 60 s; the executor drained at 40 s, stopped (systemd SIGKILLed the frozen container after about 20 s), restarted. Two bugs surfaced:
+   (a) the gateway ended the truncated stream with `finish_reason: stop` and no usage (a truncated answer looked complete) -> fixed: a stream with neither a finish chunk nor `[DONE]` is a provider failure / SSE error event (test fails without the fix);
+   (b) the executor undrained in the same pass as the restart because the gateway still showed the old worker as ready -> fixed: readmit needs a fresh stalled reading of exactly 0 plus the gateway's readiness.
+4. **Run 4 (all fixes live, release `cd2a08b`):** SIGSTOP 11:40:03Z; gauge 0 -> 16 -> 28 -> 44 -> 60 s; evidence records: drain at 40.1 s, stop ok at 48.1 s, restart ok, then **undrain 127 s after the restart**, when the series reappeared at 0 (the Flash-Next load takes about 97 s); the held request ended with `finish_reason: None` and no usage instead of a false `stop`; worker2 served again afterwards (restore rc 0, units active, `Timedout job` count unchanged at 32, worker1 untouched). Ladder order observed: drain, graceful stop, restart, readmit; the forced-kill rung was not needed because the stop completed (systemd's own SIGKILL after the stop timeout). Kill-on-failed-stop, rate limit and abandon are covered by unit tests only.
+Remaining unvalidated live: the forced-kill rung and the rate-limit/abandon paths; the executor is still not scheduled (it needs a decision to run unattended; see the design doc's Operation section).
+
+## SGLang XPU on the B65 (backlog 633, 2026-11-17)
+`harness/window3_sglang_xpu.sh`: `lmsysorg/sglang:v0.5.23-xpu` (10.5 GB, pulled into the aihost-runtime store), `--device xpu --attention-backend intel_xpu`,
+research server :18200 (not via the gateway), GPU0 with worker1 stopped for the window, idle gate, restore rc 0, `Timedout job` count unchanged at 32.
+
+| Attempt | Result |
+|---|---|
+| Qwen2.5-7B-Instruct-AWQ (dense, 8k context) | **Runs.** Ready after 85 s. 1060-token prompt, 47 tokens out: TTFT 6.3 s first request (kernel warm-up), 0.10 s, 0.06 s; decode gap p50 about 23 ms (about 43 tok/s), the same as vLLM XPU (24 ms). |
+| Qwen3-Coder-30B-A3B AWQ (QuantTrio, 16.8 GB) | **Not supported.** The scheduler stops with `NotImplementedError: AWQ MoE is not yet supported on XPU (dense-only phase).` |
+
+Engine comparison on the models that matter here (MoE): llama.cpp SYCL is the only engine that serves them on the B65 today. vLLM XPU 0.29.0 fails in its fused-MoE kernel and SGLang XPU v0.5.23 says MoE-on-XPU
+is not implemented for AWQ; both do run dense AWQ models at the same decode speed (about 23-24 ms/token). Logs: `sglang-xpu-*.logtail`, `sglang-xpu.log`. Re-check on newer releases of either engine;
+the SGLang image (about 25 GB on disk) can be removed with `podman rmi` if root-disk space is needed (host root was 87% used after the pull).

@@ -1,15 +1,22 @@
-idle confirmed 2026-11-17T11:16:12Z
+idle confirmed 2026-11-17T11:39:47Z
 gauge before: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
 gauge while busy: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
-SIGSTOP 2026-11-17T11:16:28Z
+SIGSTOP 2026-11-17T11:40:03Z
 llama-sycl-worker2
-11:16:28 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
-11:16:44 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 12.018290910986252, "b0-live-llama-worker1": 0.0}}
-11:16:59 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 28.042172831017524, "b0-live-llama-worker1": 0.0}}
-11:17:14 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 44.06520689604804, "b0-live-llama-worker1": 0.0}}
-11:17:30 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 60.0909940659767, "b0-live-llama-worker1": 0.0}}
-11:17:45 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
-gauge after: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:40:04 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+11:40:19 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 16.023340937914327, "b0-live-llama-worker1": 0.0}}
+11:40:34 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 28.04361904389225, "b0-live-llama-worker1": 0.0}}
+11:40:50 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 44.067371229990385, "b0-live-llama-worker1": 0.0}}
+11:41:05 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 60.09112305089366, "b0-live-llama-worker1": 0.0}}
+11:41:20 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:41:35 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:41:51 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:42:06 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:42:21 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:42:37 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:42:52 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+11:43:07 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+gauge after: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
 units: active active 
 dmesg timedout: 32
 trap undrain b0-live-llama-deep-worker2 True

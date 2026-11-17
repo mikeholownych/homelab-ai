@@ -1,0 +1,80 @@
+[2026-11-17 11:51:26] OpenAI Responses API (/v1/responses) disabled: OpenAIServingResponses init failed (ImportError: cannot import name 'ResponseFunctionShellToolCall' from 'openai.types.responses' (/opt/venv/lib/python3.12/site-packages/openai/types/responses/__init__.py))
+[2026-11-17 11:51:26] INFO:     Application startup complete.
+[2026-11-17 11:51:26] INFO:     Uvicorn running on http://127.0.0.1:18200 (Press CTRL+C to quit)
+[2026-11-17 11:51:27] INFO:     127.0.0.1:44222 - "GET /model_info HTTP/1.1" 200 OK
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42496 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42508 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42522 - "GET /health HTTP/1.1" 503 Service Unavailable
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42528 - "GET /props HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42538 - "GET /props HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] Endpoint '/get_server_info' is deprecated and will be removed in a future version. Please use '/server_info' instead.
+[2026-11-17 11:51:36] Endpoint '/get_server_info' is deprecated and will be removed in a future version. Please use '/server_info' instead.
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42562 - "GET /api/version HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42570 - "GET /api/version HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42562 - "GET /info HTTP/1.1" 404 Not Found
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42570 - "GET /info HTTP/1.1" 404 Not Found
+/opt/venv/lib/python3.12/site-packages/sglang/srt/entrypoints/http_server.py:489: FastAPIDeprecationWarning: ORJSONResponse is deprecated, FastAPI now serializes data directly to JSON bytes via Pydantic when a return type or response model is set, which is faster and doesn't need a custom response class. Read more in the FastAPI docs: https://fastapi.tiangolo.com/advanced/custom-response/#orjson-or-response-model and https://fastapi.tiangolo.com/tutorial/response-model/
+  return await original_handler(ORJSONRequest(request.scope, request.receive))
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42562 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42570 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42562 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:36] INFO:     127.0.0.1:42570 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:37] INFO:     127.0.0.1:42580 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:37] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:38] INFO:     127.0.0.1:42580 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:38] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:39] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:39] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:40] Triton kernel 'alloc_extend_kernel' took 13.13 s to compile after serving started. Serving-time compilation can stall the engine; pre-compile it during engine init.
+[2026-11-17 11:51:40] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:40] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:41] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:41] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:42] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:42] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:43] Prefill batch, #new-seq: 1, #new-token: 6, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 0.33
+[2026-11-17 11:51:43] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:43] INFO:     127.0.0.1:44236 - "POST /generate HTTP/1.1" 200 OK
+[2026-11-17 11:51:43] INFO:     127.0.0.1:34592 - "POST /freeze_gc HTTP/1.1" 200 OK
+[2026-11-17 11:51:43] The server is fired up and ready to roll!
+[2026-11-17 11:51:43] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:44] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:44] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:45] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:46] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:46] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:47] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:47] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 0.26
+[2026-11-17 11:51:47] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:48] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:48] INFO:     127.0.0.1:34602 - "GET /health HTTP/1.1" 200 OK
+[2026-11-17 11:51:48] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:49] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:49] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:50] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:50] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:51] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:51] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:52] INFO:     127.0.0.1:42596 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:52] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:53] INFO:     127.0.0.1:55590 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:53] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:54] INFO:     127.0.0.1:55598 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:54] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:55] INFO:     127.0.0.1:55598 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:55] Prefill batch, #new-seq: 1, #new-token: 1060, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 134.60
+[2026-11-17 11:51:55] INFO:     127.0.0.1:34608 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 11:51:55] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:56] Decode batch, #running-req: 1, #token: 1152, token usage: 0.00, cuda graph: False, gen throughput (token/s): 1.30, #queue-req: 0
+[2026-11-17 11:51:56] INFO:     127.0.0.1:55604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:56] Prefill batch, #new-seq: 1, #new-token: 36, #cached-token: 1024, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 30.40
+[2026-11-17 11:51:56] INFO:     127.0.0.1:55606 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 11:51:56] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:57] Decode batch, #running-req: 1, #token: 1152, token usage: 0.00, cuda graph: False, gen throughput (token/s): 39.72, #queue-req: 0
+[2026-11-17 11:51:57] INFO:     127.0.0.1:55604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:57] Prefill batch, #new-seq: 1, #new-token: 36, #cached-token: 1024, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 31.77
+[2026-11-17 11:51:57] INFO:     127.0.0.1:55612 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 11:51:57] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:58] Decode batch, #running-req: 1, #token: 1152, token usage: 0.00, cuda graph: False, gen throughput (token/s): 41.38, #queue-req: 0
+[2026-11-17 11:51:58] INFO:     127.0.0.1:55604 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 11:51:59] INFO:     127.0.0.1:42604 - "GET /v1/models HTTP/1.1" 200 OK

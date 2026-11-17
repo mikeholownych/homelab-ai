@@ -41,9 +41,14 @@ def stream_request(gateway, prompt, max_tokens=128, messages=None, tools=None):
             row["status"] = response.status
             for line in response:
                 line = line.decode().strip()
+                if line == "event: error":
+                    row["failure_class"] = "stream_error"   # the gateway reports a failed stream as an SSE error event
+                    continue
                 if not line.startswith("data:") or line == "data: [DONE]":
                     continue
                 chunk = json.loads(line[5:])
+                if "error" in chunk and "choices" not in chunk:
+                    continue
                 usage = chunk.get("usage")
                 if usage:
                     row["completion_tokens"] = usage.get("completion_tokens")

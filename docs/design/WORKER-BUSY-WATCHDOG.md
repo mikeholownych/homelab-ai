@@ -53,6 +53,6 @@ The action runs from the controller (Ansible/systemd), never from a workload pat
   for the worker units. None of that is provisioned by default, which is why it is disabled.
 - Verified: unit tests with a fake clock for the ladder, rate limit and abandon paths; executor tests with fake gateway/systemd (order, kill only
   after a failed stop, no action on other workers, dry run touches nothing, never-ready abandon); gateway stall gauge tested against a fake engine.
-  Not yet verified live: the SIGSTOP fault-injection rehearsal on a non-production worker (needs the admin client and a canary window).
+  Verified live on production worker2 with a real SIGSTOP (2026-11-17, evidence/window3/watchdog): drain, graceful stop, restart, readmit only after a fresh idle reading; the forced-kill rung and rate limit are unit-tested only. Not scheduled: running it unattended is a separate operator decision.
 - Rollout when wanted: provision the admin client, run `--once` dry-run against production for a day, rehearse with SIGSTOP on a research worker,
   then enable on one worker (canary) before both.
