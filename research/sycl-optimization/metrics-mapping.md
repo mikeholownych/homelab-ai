@@ -3,7 +3,8 @@
 The mapping already exists in code: `orchestrator_runtime/engine_stats.py` scrapes each worker's `/metrics` and the gateway
 re-exports the values as `aihost_engine_*` (`health.py` `_ENGINE_METRICS`, `metrics.py`). vllm-top reads `vllm:*` names
 (`vllm-top/src/metrics.rs`) and detects llama.cpp only by the `llamacpp:` prefix (`discover.rs`), so it shows no engine
-numbers for a llama.cpp worker directly; the gateway's `aihost_engine_*` series are the bridge.
+numbers for a llama.cpp worker directly. The bridge is the gateway: vllm-top's `Gateway` source kind (`config.rs`, `orchestrator.rs`) reads
+each worker's republished `engine_stats` from the gateway's `/health` (engine-agnostic, no worker credential), so llama.cpp workers do get an engine panel.
 
 | vllm-top / vLLM name | llama.cpp source | Gateway export | Status |
 |---|---|---|---|
@@ -28,5 +29,6 @@ numbers for a llama.cpp worker directly; the gateway's `aihost_engine_*` series 
   Streaming chunks are not guaranteed one token each, so report the percentile of chunk gaps and the tokens-per-chunk count.
 - Gateway `aihost_inference_duration_seconds` is not TTFT; it is full worker-call wall time.
 
-Gap, not fixed here: vllm-top shows no engine panel for a llama.cpp worker. Closing it means a llama.cpp metric adapter in
-`vllm-top/src/metrics.rs` (or pointing it at the gateway's `aihost_engine_*` series). That is a separate code item.
+Correction (2026-11-17): an earlier version of this file listed a "vllm-top has no engine panel for llama.cpp" gap. That was wrong: the
+`Gateway` source above already provides it. The remaining limit is that llama.cpp exposes no latency histograms, so TTFT, queue time and ITL
+stay client-derived (section above).

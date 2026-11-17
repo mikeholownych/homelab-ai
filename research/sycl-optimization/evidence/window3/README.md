@@ -211,3 +211,18 @@ the window, restore rc 0, `Timedout job` count unchanged at 32. Raw: `vulkan/*.j
 Vulkan is slower on every model and every test, most of all in decode (0.32-0.59x) and long-prompt prefill on the MoE Coder model (0.54x).
 Decision: no case for Vulkan on this hardware; SYCL stays. Cost note: building and shipping the image took about 40 minutes of workstation
 time; the Vulkan image remains in the aihost-runtime store (2.7 GB) for any later re-check and can be removed with `podman rmi`.
+
+### Exact tool-block tokens (follow-up to 620, 2026-11-17)
+`gateway_load.py --scenario tokens` (snapshot of the 36 Nexus tool definitions in `evaluations/engx/data/nexus_tools.json`) through the gateway's
+`/v1/tokenize` (worker's own tokenizer, `source: exact`): the tool block costs **4,632 tokens on lead and 4,628 on deep** (17,011 characters), inside
+the earlier 4.3-5.7k estimate. Raw: `gateway/tokens-1-load-engineering-{lead,deep}.json`. The verdict stands: constant prefix, cached after turn 1, not material.
+
+### vLLM XPU on Coder-30B with HF-format 4-bit weights (follow-up to 628, 2026-11-17)
+`QuantTrio/Qwen3-Coder-30B-A3B-Instruct-AWQ` (16.8 GB, downloaded to the host model dir) served by `vllm-openai-xpu:v0.29.0`
+(`--quantization awq --max-model-len 16384 --gpu-memory-utilization 0.9`, GPU0, research window, restore rc 0, `Timedout job` count unchanged at 32).
+The container now reaches the model and then fails during engine initialisation, in the XPU fused-MoE path:
+`vllm_xpu_kernels/fused_moe_interface.py` `torch.ops._xpu_C.cutlass_grouped_gemm_interface` -> `RuntimeError: ptr_A.size(1) must match ptr_B.size(1)`
+(`xpu_moe.py:177`; log tail `vllm-xpu-coder-awq.logtail`, window log `vllm-xpu-coder-awq.log`). So vLLM XPU 0.29.0 cannot serve this AWQ MoE checkpoint on the B65;
+the dense AWQ 7B works (earlier section). A comparison on the Coder model is therefore not possible with this engine version; the like-for-like reference measured
+in the same window was llama.cpp SYCL on the Coder GGUF (same client): decode gap p50 11.9 ms (about 84 tok/s), TTFT 0.017 s warm on a cached 1k-token prompt
+(first request 7.1 s with kernel warm-up). Worth re-trying on a later vLLM XPU release or with a different quantisation (GPTQ-Int8 does not fit with KV cache).

@@ -18,6 +18,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from . import engine_stats
+from .watchdog import StallTracker
 
 # Engine stats older than this are not published (they would look current but be stale).
 ENGINE_STATS_MAX_AGE_SECONDS = 15.0
@@ -80,6 +81,7 @@ class HealthManager:
         self.scheduling_mode = scheduling_mode or os.environ.get("ORCHESTRATOR_SCHEDULING_MODE", "CONFIGURATION_B_PLUS")
         self._states: dict[str, WorkerHealthState] = {}
         self._engine_stats: dict[str, dict[str, Any]] = {}
+        self._stalls = StallTracker()
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._poll_thread: threading.Thread | None = None
@@ -476,6 +478,7 @@ class HealthManager:
         if not self.metrics:
             return
         labels = self._engine_labels(worker_record)
+        self._export_stall(worker_record["worker_id"], stats, labels)
         for key, attribute in _ENGINE_METRICS.items():
             metric = getattr(self.metrics, attribute)
             value = stats.get(key)
@@ -484,10 +487,23 @@ class HealthManager:
             else:
                 metric.remove(**labels)
 
+    _PROGRESS_KEYS = ("prompt_tokens_in_flight", "generation_tokens_in_flight", "prompt_tokens_total", "generation_tokens_total")
+
+    def _export_stall(self, worker_id: str, stats: dict[str, Any], labels: dict[str, str]) -> None:
+        """Watchdog input: how long the engine has been running work without any progress counter moving."""
+        values = [stats.get(k) for k in self._PROGRESS_KEYS]
+        known = [float(v) for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
+        running = stats.get("requests_running")
+        running = float(running) if isinstance(running, (int, float)) and not isinstance(running, bool) else None
+        stalled = self._stalls.update(worker_id, time.monotonic(), running, sum(known) if known else None)
+        self.metrics.engine_stalled_seconds.set(stalled, **labels)
+
     def _retire_engine_metrics(self, worker_record: dict[str, Any]) -> None:
         if not self.metrics:
             return
         labels = self._engine_labels(worker_record)
+        self._stalls.forget(worker_record["worker_id"])
+        self.metrics.engine_stalled_seconds.remove(**labels)
         for attribute in _ENGINE_METRICS.values():
             getattr(self.metrics, attribute).remove(**labels)
 

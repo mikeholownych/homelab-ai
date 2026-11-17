@@ -29,6 +29,17 @@ attempt() { # tag servedname timeout_s -- vllm args
   ssh -o BatchMode=yes $H "cd /; sudo -n -u aihost-runtime podman logs --tail 80 sycl-research-vllm 2>&1" | sed 's/\x1b\[[0-9;]*m//g' > $O/vllm-xpu-$tag.logtail
   ssh -o BatchMode=yes $H "cd /; sudo -n -u aihost-runtime podman rm -f sycl-research-vllm >/dev/null 2>&1"; sleep 10
 }
+if [ "${ONLY:-}" = coder-awq ]; then
+  attempt coder-awq coder30b-awq 1800 -- --model /models/gguf/hf-qwen3-coder-30b-awq --quantization awq --max-model-len 16384 --gpu-memory-utilization 0.9
+  # Same client against llama-server SYCL on the same GGUF-quantised model for a like-for-like latency comparison.
+  echo "== coder-sycl-llamaserver $(date -u +%FT%TZ)" >> $L
+  EXTRA_ENV="GGML_SYCL_ENABLE_XMX_ESIMD=0" harness/research_run.sh server vk 0 18100 localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9 -- -m /models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf -c 16384 --jinja -np 1 -fa on -b 4096 -ub 2048 --lazy-mode on -ngl 99 >/dev/null
+  for i in $(seq 1 150); do ssh -o BatchMode=yes $H "curl -sf -m3 127.0.0.1:18100/health >/dev/null" && break; sleep 4; done
+  ssh -o BatchMode=yes $H "python3 - 18100 coder" < harness/engine_probe_client.py >> $L 2>&1
+  harness/research_run.sh stop vk >/dev/null 2>&1
+  echo "dmesg timedout: $(ssh -o BatchMode=yes $H 'sudo -n dmesg | grep -ci "timedout job"')" >> $L
+  exit 0
+fi
 [ "${ONLY:-}" = coder ] || attempt awq7b qwen25-7b-awq 900 -- --model Qwen/Qwen2.5-7B-Instruct-AWQ --quantization awq --max-model-len 8192 --gpu-memory-utilization 0.85
 attempt coder-gguf coder30b-gguf 1500 -- --model /models/gguf/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf --tokenizer /tok --hf-config-path /tok --max-model-len 8192 --gpu-memory-utilization 0.9
 echo "dmesg timedout: $(ssh -o BatchMode=yes $H 'sudo -n dmesg | grep -ci "timedout job"')" >> $L

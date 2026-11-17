@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from orchestrator_runtime import CapabilityRegistry, EvidenceStore, HealthManager, MetricsRegistry, OrchestratorRuntime, ProviderError
 from orchestrator_runtime.metrics import Counter, Gauge, MirroredCounter
+from orchestrator_runtime import health as health_module
 from orchestrator_runtime.runtime import _token_counts
 from tests.test_orchestrator_runtime import _CapturingAdapter, worker
 
@@ -277,3 +278,24 @@ def test_worker_info_joins_a_worker_to_its_gpu_and_model():
     line = next(l for l in text.splitlines() if l.startswith("aihost_worker_info{"))
     assert 'worker_id="w1"' in line and 'pool="lead"' in line and 'engine="llama.cpp"' in line and line.endswith(" 1")
     assert re.search(r'gpu="[^"]+"', line)
+
+
+def test_stalled_seconds_grows_only_while_running_work_makes_no_progress(monkeypatch):
+    metrics = MetricsRegistry()
+    server, w, health = _engine_health(metrics)
+    clock = [1000.0]
+    monkeypatch.setattr(health_module.time, "monotonic", lambda: clock[0])
+    try:
+        health.collect_all_engine_stats()                       # default fixture: 1 running, counters fixed
+        assert 'aihost_engine_stalled_seconds{worker_id="w1",pool="lead",engine="llama.cpp"} 0' in metrics.render_prometheus_text()
+        clock[0] += 150
+        health.collect_all_engine_stats()                       # same counters 150 s later
+        assert 'aihost_engine_stalled_seconds{worker_id="w1",pool="lead",engine="llama.cpp"} 150' in metrics.render_prometheus_text()
+        _Llama.METRICS = _Llama.METRICS.replace("tokens_predicted_total 400", "tokens_predicted_total 401")
+        clock[0] += 10
+        health.collect_all_engine_stats()                       # a token completed: clock restarts
+        assert 'aihost_engine_stalled_seconds{worker_id="w1",pool="lead",engine="llama.cpp"} 0' in metrics.render_prometheus_text()
+    finally:
+        _Llama.METRICS = ("llamacpp:prompt_tokens_total 1000\nllamacpp:prompt_tokens_cached_total 9000\nllamacpp:prompt_seconds_total 12.5\n"
+                          "llamacpp:tokens_predicted_total 400\nllamacpp:tokens_predicted_seconds_total 5.25\nllamacpp:requests_processing 1\nllamacpp:requests_deferred 0\n")
+        server.shutdown(); server.server_close()

@@ -178,19 +178,43 @@ def replay(gateway, result, output):
     return result
 
 
+def tokens(gateway, result, output):
+    """Exact prompt-token cost of the Nexus Code tool block on this route, via the gateway's /v1/tokenize (the worker's own tokenizer)."""
+    tools = json.loads((Path(__file__).resolve().parent / "data" / "nexus_tools.json").read_text())
+    messages = [{"role": "user", "content": "hello"}]
+
+    def count(**extra):
+        body = json.dumps({"model": gateway.model, "messages": messages, **extra}).encode()
+        req = urllib.request.Request(gateway.base + "/v1/tokenize", body, gateway.headers)
+        with urllib.request.urlopen(req, context=gateway.context, timeout=120) as r:
+            return json.load(r)
+
+    bare, full = count(), count(tools=tools)
+    result["tokens"] = {"tools": len(tools), "tools_json_chars": len(json.dumps(tools, separators=(",", ":"))),
+                        "prompt_tokens_without_tools": bare.get("prompt_tokens"), "prompt_tokens_with_tools": full.get("prompt_tokens"),
+                        "source": full.get("source")}
+    if isinstance(bare.get("prompt_tokens"), int) and isinstance(full.get("prompt_tokens"), int):
+        result["tokens"]["tool_block_tokens"] = full["prompt_tokens"] - bare["prompt_tokens"]
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"output": str(output), "tokens": result["tokens"]}))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay"], default="load")
+    parser.add_argument("--scenario", choices=["load", "alternate", "fork", "replay", "tokens"], default="load")
     args = parser.parse_args()
     assert sum(c * PER_LEVEL for c in LEVELS) + 3 <= MAX_REQUESTS
     gateway = Gateway(args.base, args.model, json.load(sys.stdin)["qualification"], args.ca)
     result = {"started_at": datetime.now(timezone.utc).isoformat(), "model": gateway.models(), "sweep": {}, "interleave": {}}
-    if args.scenario in ("alternate", "fork", "replay"):
-        {"alternate": alternate, "fork": fork, "replay": replay}[args.scenario](gateway, result, args.output)
+    if args.scenario in ("alternate", "fork", "replay", "tokens"):
+        {"alternate": alternate, "fork": fork, "replay": replay, "tokens": tokens}[args.scenario](gateway, result, args.output)
         return
     prompt = "Synthetic neutral context. " * 256
     for level in LEVELS:

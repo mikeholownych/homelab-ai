@@ -655,3 +655,14 @@ def test_sigusr1_dumps_every_thread_stack_without_stopping():
         proc.send_signal(signal.SIGTERM)
         _out, err = proc.communicate(timeout=10)
     assert "serve_forever" in err and proc.returncode == 0
+
+
+def test_worker_408_is_a_worker_failure_not_a_caller_fault_and_never_a_408_to_the_client(fakes, tmp_path):
+    """Gateway semantics for 408 (backlog 629): an upstream 408 is not blamed on the caller (no `rejected`/400); it is a blocked
+    worker failure. Client-side cancellation is 499 and queue deadline expiry is 504 (tests above); the gateway never emits 408."""
+    fake = fakes()
+    fake.fail_status = 408
+    runtime = build(tmp_path, [(llama_worker("w1", fake), fake)])
+    result = runtime.complete(chat())
+    assert result["status"] == "blocked" and result["failure_class"] in ("worker", "provider")
+    assert result.get("http_status") != 408 and result["status"] != "rejected"

@@ -386,6 +386,10 @@ class MetricsRegistry:
         engine_labels = ("worker_id", "pool", "engine")
         self.engine_requests_running = self._register_gauge(
             "aihost_engine_requests_running", "Requests the engine is processing right now.", engine_labels)
+        self.engine_stalled_seconds = self._register_gauge(
+            "aihost_engine_stalled_seconds",
+            "Seconds the engine has reported running requests while none of its progress counters (in-flight or completed "
+            "tokens) changed. 0 when idle, progressing or unknown. Input to the worker busy-watchdog.", engine_labels)
         self.engine_requests_waiting = self._register_gauge(
             "aihost_engine_requests_waiting", "Requests deferred inside the engine, waiting for a free slot.", engine_labels)
         self.engine_kv_cache_usage_ratio = self._register_gauge(

@@ -133,3 +133,25 @@ def test_gateway_load_replay_plan_picks_successive_tool_call_cuts():
     digest, plan = load.replay_plan([("s.json", msgs)], steps=3)
     assert len(digest) == 12 and 1 <= len(plan) <= 3
     assert [p[0] for p in plan] == sorted(p[0] for p in plan) and plan[0][2][0]["function"]["name"] == "read_file"
+
+
+def test_gateway_load_tokens_scenario_reports_tool_block_cost(tmp_path, monkeypatch):
+    import io
+    import json as _json
+    load = module("gateway_load")
+
+    class Resp(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake_urlopen(req, **kw):
+        sent = _json.loads(req.data)
+        return Resp(_json.dumps({"prompt_tokens": 5000 if "tools" in sent else 9, "source": "exact"}).encode())
+
+    monkeypatch.setattr(load.urllib.request, "urlopen", fake_urlopen)
+
+    class G:
+        base, model, headers, context = "https://gw.invalid", "m", {}, None
+
+    result = load.tokens(G(), {}, tmp_path / "t.json")
+    assert result["tokens"]["tool_block_tokens"] == 4991 and result["tokens"]["tools"] >= 30 and result["tokens"]["source"] == "exact"
