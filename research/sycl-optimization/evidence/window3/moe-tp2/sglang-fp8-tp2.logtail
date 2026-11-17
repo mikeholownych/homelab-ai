@@ -1,0 +1,120 @@
+[2026-11-17 14:39:29] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:30] INFO:     127.0.0.1:42316 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:30] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:31] INFO:     127.0.0.1:42326 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:31 TP1] multimem all-gather disabled (Torch not compiled with CUDA enabled)
+[2026-11-17 14:39:31 TP0] multimem all-gather disabled (Torch not compiled with CUDA enabled)
+[2026-11-17 14:39:34 TP0] Prefill batch, #new-seq: 1, #new-token: 6, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 0.13
+[2026-11-17 14:39:35] INFO:     127.0.0.1:57754 - "GET /health HTTP/1.1" 503 Service Unavailable
+[2026-11-17 14:39:35] INFO:     127.0.0.1:38048 - "POST /generate HTTP/1.1" 200 OK
+[2026-11-17 14:39:38] INFO:     127.0.0.1:57768 - "POST /freeze_gc HTTP/1.1" 200 OK
+[2026-11-17 14:39:38] The server is fired up and ready to roll!
+[2026-11-17 14:39:38] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:38] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:39] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:39] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:40] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:40] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:41] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:41] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:42] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:42] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:43] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:43] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:44] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:44] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:45] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:45] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:46] INFO:     127.0.0.1:42304 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:46] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:47] INFO:     127.0.0.1:48382 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:47] INFO:     127.0.0.1:57778 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:48] INFO:     127.0.0.1:48382 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:48] INFO:     127.0.0.1:48398 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:49] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:49] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:50] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:50] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:50 TP0] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 0.06
+[2026-11-17 14:39:51] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:51] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:52] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:52] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:53] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:53] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:54] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:54] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:55] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:55] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:56] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:56] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:57] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:57] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41084 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41090 - "GET /props HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] Endpoint '/get_server_info' is deprecated and will be removed in a future version. Please use '/server_info' instead.
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41098 - "GET /get_server_info HTTP/1.1" 200 OK
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41098 - "GET /api/version HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41098 - "GET /info HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41098 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41098 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /props HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] Endpoint '/get_server_info' is deprecated and will be removed in a future version. Please use '/server_info' instead.
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /get_server_info HTTP/1.1" 200 OK
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /api/version HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /info HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 14:39:58] INFO:     127.0.0.1:41104 - "GET /v1/models HTTP/1.1" 200 OK
+[2026-11-17 14:39:58] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:58] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:59] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:39:59] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:00] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:00] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:02] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:02] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:03] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:03] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:04] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:04] INFO:     127.0.0.1:48408 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:05] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:05] INFO:     127.0.0.1:50550 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:06] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:06] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:06 TP0] Prefill batch, #new-seq: 1, #new-token: 1, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 0.06
+[2026-11-17 14:40:07] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:07] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:07] INFO:     127.0.0.1:50562 - "GET /health HTTP/1.1" 200 OK
+[2026-11-17 14:40:08] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:08] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:09] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:09] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:10] INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:10] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:11] INFO:     127.0.0.1:52508 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:11] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:12] INFO:     127.0.0.1:52522 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:12] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:13] INFO:     127.0.0.1:52528 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:13] INFO:     127.0.0.1:50552 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:14] INFO:     127.0.0.1:52538 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:14] INFO:     127.0.0.1:52546 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:14 TP0] Prefill batch, #new-seq: 1, #new-token: 1039, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 130.32
+[2026-11-17 14:40:14] INFO:     127.0.0.1:50576 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 14:40:15] INFO:     127.0.0.1:52548 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:15] INFO:     127.0.0.1:52546 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:16] INFO:     127.0.0.1:52548 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:16] INFO:     127.0.0.1:52546 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:17 TP0] Decode batch, #running-req: 1, #token: 1152, token usage: 0.00, cuda graph: False, gen throughput (token/s): 0.45, #queue-req: 0
+[2026-11-17 14:40:17] INFO:     127.0.0.1:52548 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:17] INFO:     127.0.0.1:52546 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:18 TP0] Prefill batch, #new-seq: 1, #new-token: 15, #cached-token: 1024, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 4.08
+[2026-11-17 14:40:18] INFO:     127.0.0.1:52564 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 14:40:18] INFO:     127.0.0.1:52548 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:18] INFO:     127.0.0.1:52546 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:19] INFO:     127.0.0.1:52548 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:19] INFO:     127.0.0.1:52546 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 14:40:21 TP0] Decode batch, #running-req: 1, #token: 1152, token usage: 0.00, cuda graph: False, gen throughput (token/s): 10.35, #queue-req: 0
+[2026-11-17 14:40:21 TP0] Prefill batch, #new-seq: 1, #new-token: 15, #cached-token: 1024, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 4.45
+[2026-11-17 14:40:21] INFO:     127.0.0.1:47132 - "POST /v1/chat/completions HTTP/1.1" 200 OK

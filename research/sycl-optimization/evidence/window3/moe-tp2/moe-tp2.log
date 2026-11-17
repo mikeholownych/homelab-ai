@@ -1,0 +1,16 @@
+idle confirmed 2026-11-17T14:29:19Z
+== vllm-fp8-tp2 2026-11-17T14:29:51Z
+e193e29df95b15694d34bcaf5cab42aec837d935b90470b1682d1ccfe479b623
+vllm-fp8-tp2 healthy=1 after_s=358
+{"rep": 0, "ttft_s": 1.142, "wall_s": 3.68, "gap_p50_ms": 78.1, "completion_tokens": 32, "prompt_tokens": 1039}
+{"rep": 1, "ttft_s": 0.257, "wall_s": 3.24, "gap_p50_ms": 75.9, "completion_tokens": 40, "prompt_tokens": 1039}
+{"rep": 2, "ttft_s": 0.171, "wall_s": 3.3, "gap_p50_ms": 77.2, "completion_tokens": 40, "prompt_tokens": 1039}
+== sglang-fp8-tp2 2026-11-17T14:36:32Z
+c3bb8f3ced461ddff38af38bda1a539daabf6ef74932314e9e61bda96c686b2e
+sglang-fp8-tp2 healthy=1 after_s=212
+{"rep": 0, "ttft_s": 6.346, "wall_s": 9.71, "gap_p50_ms": 86.3, "completion_tokens": 39, "prompt_tokens": 1039}
+{"rep": 1, "ttft_s": 0.239, "wall_s": 3.42, "gap_p50_ms": 89.0, "completion_tokens": 36, "prompt_tokens": 1039}
+{"rep": 2, "ttft_s": 0.19, "wall_s": 3.25, "gap_p50_ms": 86.6, "completion_tokens": 36, "prompt_tokens": 1039}
+dmesg timedout: 32
+RESTORED rc=0
+watchdog: active
