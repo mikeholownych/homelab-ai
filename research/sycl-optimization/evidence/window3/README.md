@@ -211,3 +211,8 @@ the window, restore rc 0, `Timedout job` count unchanged at 32. Raw: `vulkan/*.j
 Vulkan is slower on every model and every test, most of all in decode (0.32-0.59x) and long-prompt prefill on the MoE Coder model (0.54x).
 Decision: no case for Vulkan on this hardware; SYCL stays. Cost note: building and shipping the image took about 40 minutes of workstation
 time; the Vulkan image remains in the aihost-runtime store (2.7 GB) for any later re-check and can be removed with `podman rmi`.
+
+### Exact tool-block tokens (follow-up to 620, 2026-11-17)
+`gateway_load.py --scenario tokens` (snapshot of the 36 Nexus tool definitions in `evaluations/engx/data/nexus_tools.json`) through the gateway's
+`/v1/tokenize` (worker's own tokenizer, `source: exact`): the tool block costs **4,632 tokens on lead and 4,628 on deep** (17,011 characters), inside
+the earlier 4.3-5.7k estimate. Raw: `gateway/tokens-1-load-engineering-{lead,deep}.json`. The verdict stands: constant prefix, cached after turn 1, not material.
