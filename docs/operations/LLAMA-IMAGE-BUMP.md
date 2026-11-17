@@ -6,13 +6,18 @@ Applies to any change of the llama.cpp worker image or its Intel runtime stack (
 
 ## Image-bump checklist (all steps are gates; record evidence for each)
 
+0. **Search upstream first.** Before building or debugging, search the llama.cpp issue and PR tracker (`gh api search/issues`)
+   for the symptom and for the commit range. Record what was found, including "nothing relevant", in the bump record.
 1. **Diff review.** Compare the new upstream commit range with the deployed build. Read every change that touches `ggml-sycl`,
    the Dockerfile/CI pins (IGC, NEO, oneDNN, oneAPI versions) and server slot/cache code. Note any pin change explicitly.
-2. **Inspect what was built.** Record the image digest, `llama-server --version` (build number and commit) and the runtime
-   package versions inside the image. Never deploy by tag; deploy by digest (`localhost/...@sha256:...` or `ghcr.io/...@sha256:...`).
+2. **Inspect what was built.** Record the image digest, the Intel runtime stack versions (IGC, NEO, IGDGMM, Level Zero, oneDNN, oneAPI)
+   as read from the image, which stack the previous image used, and rerun the same source against the old stack when any of them
+   moved (the 32K regression of 2026-11 came from the stack, not the source). Also record `llama-server --version` (build number and
+   commit). Never deploy by tag; deploy by digest (`localhost/...@sha256:...` or `ghcr.io/...@sha256:...`).
    Pin third-party debs by SHA-256 in the build recipe.
 3. **Accuracy gate.** KL divergence against the deployed build on a fixed prompt set, and dense perplexity: no NaN, KL not worse
-   than the deployed build. Accuracy takes precedence over throughput.
+   than the deployed build. The deployed MoE models would not catch the dense-model F16 NaN reported upstream (#30892, the
+   Dockerfile defaults `GGML_SYCL_F16=ON`), so include one dense model; on 2026-11-16 Qwen3.8-27B Q4_K_M gave identical, finite PPL. Accuracy takes precedence over throughput.
 4. **Performance gate.** Prefill and decode at short and long context (including 32K and larger), compared with the deployed
    build on the same hardware state. A regression beyond noise at any size blocks the bump.
 5. **Behaviour gate.** Engineering task A/B (engx) on every routed model; tool-call and multi-turn cases; failure injection
