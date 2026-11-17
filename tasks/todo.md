@@ -623,7 +623,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (Ollama review) Failure injection: worker saturation (queue bound, 503, queue-depth metric) and crash last-error in evidence
 - [ ] (Ollama review) Build Vulkan-enabled llama.cpp image; A/B vs SYCL on B65 for the three models
 - [ ] (vLLM review) Gateway-level load benchmark from a client machine (TTFT, TPOT, ITL percentiles; sweeps; Nexus Code prompt shapes)
-- [ ] (vLLM review) Map llama.cpp metrics to evidence/vllm-top vocabulary; derive TTFT/queue time client-side
+- [x] (vLLM review) Map llama.cpp metrics to evidence/vllm-top vocabulary; derive TTFT/queue time client-side — research/sycl-optimization/metrics-mapping.md (mapping exists in engine_stats.py; vllm-top adapter gap noted as a separate item)
 - [ ] (vLLM review) Split slot-reuse test: Coder-30B (full attention) vs Qwen3.6/Flash-Next (hybrid, ctx checkpoints)
 - [ ] (vLLM review) Feasibility: vllm-openai-xpu v0.29.0 serving Coder-30B on one B65; engine comparison on engx + latency only
 - [ ] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter
