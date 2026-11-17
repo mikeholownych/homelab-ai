@@ -1,0 +1,40 @@
+[2026-11-17 21:45:34 TP0] Decode batch, #running-req: 27, #token: 30208, token usage: 0.13, cuda graph: False, gen throughput (token/s): 315.87, #queue-req: 0
+[2026-11-17 21:45:34] INFO:     127.0.0.1:39106 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:34] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:35] INFO:     127.0.0.1:39106 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:35] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:36] INFO:     127.0.0.1:39106 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:36] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:37] INFO:     127.0.0.1:39106 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:37] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:38 TP0] Decode batch, #running-req: 2, #token: 2560, token usage: 0.01, cuda graph: False, gen throughput (token/s): 132.80, #queue-req: 0
+[2026-11-17 21:45:38] INFO:     127.0.0.1:39106 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:38] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:39] INFO:     127.0.0.1:39106 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:39] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:40] INFO:     127.0.0.1:50926 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:41] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:41] INFO:     127.0.0.1:50926 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:41] parallel_prompt_encode: tokenizers encode_batch runs serially in this process (TOKENIZERS_PARALLELISM off or process forked after tokenizers used its pool); using the original encode.
+[2026-11-17 21:45:42] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:42 TP0] Prefill batch, #new-seq: 1, #new-token: 4096, #cached-token: 0, token usage: 0.03, #running-req: 0, #queue-req: 0, #pending-token: 3188, cuda graph: False, input throughput (token/s): 255.85
+[2026-11-17 21:45:42] INFO:     127.0.0.1:50926 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:43] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:43 TP0] Prefill batch, #new-seq: 1, #new-token: 3188, #cached-token: 0, token usage: 0.03, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 3400.80
+[2026-11-17 21:45:43] INFO:     127.0.0.1:50930 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:43] INFO:     127.0.0.1:50926 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:43 TP0] Prefill batch, #new-seq: 1, #new-token: 601, #cached-token: 7168, token usage: 0.03, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1857.37
+[2026-11-17 21:45:43] INFO:     127.0.0.1:45188 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:44] INFO:     127.0.0.1:47440 - "GET /metrics HTTP/1.1" 404 Not Found
+[2026-11-17 21:45:44 TP0] Prefill batch, #new-seq: 1, #new-token: 574, #cached-token: 7680, token usage: 0.04, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1442.00
+[2026-11-17 21:45:44] INFO:     127.0.0.1:45190 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:44 TP0] Prefill batch, #new-seq: 1, #new-token: 547, #cached-token: 8192, token usage: 0.04, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1339.11
+[2026-11-17 21:45:44] INFO:     127.0.0.1:45192 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:44 TP0] Prefill batch, #new-seq: 1, #new-token: 520, #cached-token: 8704, token usage: 0.04, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1607.40
+[2026-11-17 21:45:44] INFO:     127.0.0.1:45208 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:45 TP0] Prefill batch, #new-seq: 1, #new-token: 621, #cached-token: 9088, token usage: 0.04, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1538.32
+[2026-11-17 21:45:45] INFO:     127.0.0.1:45210 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:45 TP0] Prefill batch, #new-seq: 1, #new-token: 594, #cached-token: 9600, token usage: 0.04, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1837.01
+[2026-11-17 21:45:45] INFO:     127.0.0.1:45220 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+[2026-11-17 21:45:45 TP0] Prefill batch, #new-seq: 1, #new-token: 567, #cached-token: 10112, token usage: 0.05, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: False, input throughput (token/s): 1772.30
+[2026-11-17 21:45:45] INFO:     127.0.0.1:45228 - "POST /v1/chat/completions HTTP/1.1" 200 OK

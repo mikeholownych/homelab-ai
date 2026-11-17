@@ -1,0 +1,47 @@
+idle confirmed 2026-11-17T21:29:02Z
+== llamacpp 2026-11-17T21:29:34Z
+llamacpp ready_s=66
+-- llamacpp prefix
+{"step": 1, "prompt_tokens": 7284, "cached_tokens": 0, "ttft_s": 9.44, "wall_s": 9.46}
+{"step": 2, "prompt_tokens": 7769, "cached_tokens": 7274, "ttft_s": 0.65, "wall_s": 0.69}
+{"step": 3, "prompt_tokens": 8254, "cached_tokens": 7759, "ttft_s": 0.7, "wall_s": 0.71}
+{"step": 4, "prompt_tokens": 8739, "cached_tokens": 8244, "ttft_s": 0.52, "wall_s": 0.54}
+{"step": 5, "prompt_tokens": 9224, "cached_tokens": 8729, "ttft_s": 0.52, "wall_s": 0.56}
+{"step": 6, "prompt_tokens": 9709, "cached_tokens": 9214, "ttft_s": 0.51, "wall_s": 0.54}
+{"step": 7, "prompt_tokens": 10194, "cached_tokens": 9699, "ttft_s": 0.52, "wall_s": 0.56}
+{"step": 8, "prompt_tokens": 10679, "cached_tokens": 10184, "ttft_s": 0.52, "wall_s": 0.56}
+== vllm-fp8-tp2 2026-11-17T21:32:56Z
+6097605b09c9b801b8822fc8a10a57009ba90417b4c4183ea1124732f0882258
+vllm-fp8-tp2 ready_s=343
+-- vllm-fp8-tp2 batch
+{"mode": "batch", "level": 8, "requests": 16, "completion_tokens": 1826, "wall_s": 22.64, "aggregate_tok_s": 80.7, "ttft_p50": 0.676, "ttft_p95": 1.553}
+{"mode": "batch", "level": 16, "requests": 32, "completion_tokens": 3709, "wall_s": 24.52, "aggregate_tok_s": 151.3, "ttft_p50": 0.88, "ttft_p95": 2.897}
+{"mode": "batch", "level": 32, "requests": 64, "completion_tokens": 7331, "wall_s": 29.8, "aggregate_tok_s": 246.0, "ttft_p50": 0.967, "ttft_p95": 5.323}
+-- vllm-fp8-tp2 prefix
+{"step": 1, "prompt_tokens": 7283, "cached_tokens": null, "ttft_s": 1.35, "wall_s": 1.41}
+{"step": 2, "prompt_tokens": 7768, "cached_tokens": null, "ttft_s": 0.27, "wall_s": 0.41}
+{"step": 3, "prompt_tokens": 8253, "cached_tokens": null, "ttft_s": 0.22, "wall_s": 0.35}
+{"step": 4, "prompt_tokens": 8738, "cached_tokens": null, "ttft_s": 0.28, "wall_s": 0.34}
+{"step": 5, "prompt_tokens": 9223, "cached_tokens": null, "ttft_s": 0.26, "wall_s": 0.4}
+{"step": 6, "prompt_tokens": 9708, "cached_tokens": null, "ttft_s": 0.28, "wall_s": 0.35}
+{"step": 7, "prompt_tokens": 10193, "cached_tokens": null, "ttft_s": 0.29, "wall_s": 0.35}
+{"step": 8, "prompt_tokens": 10678, "cached_tokens": null, "ttft_s": 0.23, "wall_s": 0.3}
+== sglang-fp8-tp2 2026-11-17T21:40:38Z
+8568f28f5c697fb200122ee64f6545acad027c9df07e0b7130c1c71dffad41e2
+sglang-fp8-tp2 ready_s=179
+-- sglang-fp8-tp2 batch
+{"mode": "batch", "level": 8, "requests": 16, "completion_tokens": 1767, "wall_s": 28.17, "aggregate_tok_s": 62.7, "ttft_p50": 3.474, "ttft_p95": 4.331}
+{"mode": "batch", "level": 16, "requests": 32, "completion_tokens": 3561, "wall_s": 29.84, "aggregate_tok_s": 119.4, "ttft_p50": 0.899, "ttft_p95": 3.315}
+{"mode": "batch", "level": 32, "requests": 64, "completion_tokens": 7158, "wall_s": 34.15, "aggregate_tok_s": 209.6, "ttft_p50": 1.711, "ttft_p95": 4.46}
+-- sglang-fp8-tp2 prefix
+{"step": 1, "prompt_tokens": 7284, "cached_tokens": null, "ttft_s": 2.76, "wall_s": 2.86}
+{"step": 2, "prompt_tokens": 7769, "cached_tokens": null, "ttft_s": 0.22, "wall_s": 0.4}
+{"step": 3, "prompt_tokens": 8254, "cached_tokens": null, "ttft_s": 0.22, "wall_s": 0.41}
+{"step": 4, "prompt_tokens": 8739, "cached_tokens": null, "ttft_s": 0.22, "wall_s": 0.32}
+{"step": 5, "prompt_tokens": 9224, "cached_tokens": null, "ttft_s": 0.23, "wall_s": 0.4}
+{"step": 6, "prompt_tokens": 9709, "cached_tokens": null, "ttft_s": 0.23, "wall_s": 0.32}
+{"step": 7, "prompt_tokens": 10194, "cached_tokens": null, "ttft_s": 0.23, "wall_s": 0.32}
+{"step": 8, "prompt_tokens": 10679, "cached_tokens": null, "ttft_s": 0.23, "wall_s": 0.33}
+dmesg timedout: 32
+RESTORED rc=0
+watchdog: active

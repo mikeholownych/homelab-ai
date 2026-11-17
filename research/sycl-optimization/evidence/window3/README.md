@@ -376,3 +376,27 @@ Private by default: the save directory was created `0700` owned by the runtime u
 **C. Router with a model limit** (`--models-preset`, `--models-max`, `--models-memory-margin 2048`, two models that cannot both stay resident on one 32 GB card): first load 96 s; qwen36 -> coder swap 37.8 s (first coder load); swapping back 11.2 s and 9.2 s with a warm page cache.
 With `--models-max 2` the numbers were identical because the memory margin unloads the least recently used model to fit the next (`unload: stopping model instance name=qwen36` in the router log, `conditional/router-max2.logtail`): a model limit above the number that fits in VRAM does not make a second model resident.
 For the "concurrency groups / pinned models" idea the answer is that two models can share one card only by swapping at about 9-12 s warm (up to 40-100 s cold), so pinning one model per card, as production does, remains the right design; the router is usable for an occasional-use third model.
+
+### Engine comparison follow-ups: more concurrency and the append-only prefix-cache pattern (2026-11-17)
+`harness/window3_engine_scale.sh` (evidence: `engine-scale/`): same setup as the full MoE window (both production workers stopped after an idle check, watchdog and reconcile paused,
+restore rc 0, `Timedout job` count unchanged at 32). llama.cpp is Q4_K_M on one card with `-np 1` (production shape); vLLM XPU and SGLang XPU serve the FP8 checkpoint with TP=2.
+
+**Concurrency beyond 8 streams** (aggregate decode tok/s, 1k-token prompts, 128 tokens out, 2 requests per stream):
+
+| Streams | vLLM XPU | SGLang XPU |
+|---|---|---|
+| 8 | 80.7 | 62.7 |
+| 16 | 151.3 | 119.4 |
+| 32 | **246.0** (TTFT p95 5.3 s) | 209.6 (TTFT p95 4.5 s) |
+
+Both scale almost linearly to 32 streams (vLLM about 7.7 tok/s per stream at 32), against llama.cpp's flat 46-55 tok/s total at 1-4 streams. The engines win clearly once there are more than 4-5 concurrent streams.
+
+**Append-only agent pattern** (one conversation grown over 8 steps from a 7.3k-token base by about 485 tokens per step; TTFT per step):
+
+| Step | llama.cpp (1 card) | vLLM XPU | SGLang XPU |
+|---|---|---|---|
+| 1 (cold) | 9.44 s | 1.35 s | 2.76 s |
+| 2-8 | 0.52-0.70 s (7.3-10.2k tokens cached of 7.8-10.7k) | 0.22-0.29 s | about 0.22-0.23 s |
+
+Both engines' prefix caches work for the append-only pattern: after the cold first step every later step is 0.2-0.3 s, about 2x faster than llama.cpp's 0.5-0.7 s, and the cold prefill is 4-7x faster. Neither engine reports `cached_tokens` through the OpenAI usage here, so the evidence is the TTFT drop, not a token count.
+Net: the engines are better at prefill and at concurrency; llama.cpp is still about 7x faster per single-stream decode (earlier section) and uses half the hardware. A deployment choice would hinge on the expected number of simultaneous agent sessions: one or two per worker (today) favours llama.cpp; many concurrent sessions would favour vLLM XPU, at the price of both cards.
