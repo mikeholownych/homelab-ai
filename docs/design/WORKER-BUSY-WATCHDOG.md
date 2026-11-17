@@ -53,6 +53,14 @@ The action runs from the controller (Ansible/systemd), never from a workload pat
   for the worker units. None of that is provisioned by default, which is why it is disabled.
 - Verified: unit tests with a fake clock for the ladder, rate limit and abandon paths; executor tests with fake gateway/systemd (order, kill only
   after a failed stop, no action on other workers, dry run touches nothing, never-ready abandon); gateway stall gauge tested against a fake engine.
-  Verified live on production worker2 with a real SIGSTOP (2026-11-17, evidence/window3/watchdog): drain, graceful stop, restart, readmit only after a fresh idle reading; the forced-kill rung and rate limit are unit-tested only. Not scheduled: running it unattended is a separate operator decision.
+  Verified live on production worker2 with real SIGSTOPs (2026-11-17, evidence/window3/watchdog and watchdog-cycles): drain, graceful stop, forced kill after a failed stop, restart, readmit only after a fresh idle reading, and the per-hour restart limit (third stall alerts instead of restarting). Scheduled as a dry-run user service (see Scheduling); acting for real is an explicit operator switch.
 - Rollout when wanted: provision the admin client, run `--once` dry-run against production for a day, rehearse with SIGSTOP on a research worker,
   then enable on one worker (canary) before both.
+
+## Scheduling (roles/reconcile_controller)
+The executor runs as the controller user service `aihost-worker-watchdog.service`, installed with the reconcile snapshot by
+`playbooks/reconcile-controller.yml`. Defaults: enabled but **dry-run** (`reconcile_controller_watchdog_apply: false`): it logs the next rung to
+`<evidence dir>/worker-watchdog.jsonl` and acts on nothing. It starts only when `reconcile_controller_watchdog_token_file`
+(default `~/.config/aihost/watchdog.token`) exists, because the role never creates or copies the admin-scope gateway token; the operator provisions it.
+Switching to real action is one explicit variable (`reconcile_controller_watchdog_apply: true`) plus a re-run of the playbook; rollback is setting it back
+to false (or stopping the unit). Timings are the role defaults (stuck after 120 s, 3 restarts per hour).

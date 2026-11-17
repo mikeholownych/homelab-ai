@@ -141,3 +141,57 @@ def test_a_worker_that_never_becomes_ready_is_abandoned_not_readmitted():
     assert ladder.phase("w1") == "verifying" and ("undrain", "w1") not in gw.calls
     run_once(gw, sd, ladder, {"w1": "u1"}, READY_WAIT_S + 1, apply=True, evidence=log.append, verify_started=verify)
     assert ladder.phase("w1") == "abandoned" and log[-1]["action"] == "abandon"
+
+
+def test_systemd_uses_the_short_stop_timeout_only_for_the_graceful_stop(monkeypatch):
+    import subprocess
+    from scripts.worker_watchdog import Systemd
+    seen = []
+
+    def fake_run(argv, **kw):
+        seen.append((argv[-2], kw["timeout"]))
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    sd = Systemd("h", timeout=90, stop_timeout=5)
+    sd.stop("u"); sd.kill("u"); sd.restart("u")
+    assert seen == [("stop", 5), ("-s", 90), ("restart", 90)] or [t for _, t in seen] == [5, 90, 90]
+
+
+def test_a_timed_out_stop_is_a_failed_stop(monkeypatch):
+    import subprocess
+    from scripts.worker_watchdog import Systemd
+
+    def boom(argv, **kw):
+        raise subprocess.TimeoutExpired(argv, kw["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", boom)
+    assert Systemd("h", stop_timeout=1).stop("u") is False
+
+
+def _render_unit(apply):
+    import jinja2
+    from pathlib import Path
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined, trim_blocks=True)
+    env.filters["bool"] = lambda x: x in (True, "true", "True")
+    tpl = env.from_string((Path(__file__).parents[1] / "roles/reconcile_controller/templates/aihost-worker-watchdog.service.j2").read_text())
+    return tpl.render(reconcile_controller_watchdog_apply=apply, reconcile_controller_snapshot_ref="a" * 40,
+                      reconcile_controller_watchdog_token_file="/h/t", reconcile_controller_snapshot_dir="/h/snap",
+                      reconcile_controller_watchdog_base="https://gw:8443", reconcile_controller_watchdog_ca="/h/ca",
+                      reconcile_controller_watchdog_host="host", reconcile_controller_watchdog_stuck_after=120,
+                      reconcile_controller_watchdog_max_restarts_per_hour=3, reconcile_controller_evidence_dir="/h/ev",
+                      reconcile_controller_watchdog_units={"w1": "u1.service", "w2": "u2.service"})
+
+
+def test_scheduled_unit_is_dry_run_by_default_and_needs_the_operators_token_file():
+    unit = _render_unit(False)
+    assert "ConditionPathExists=/h/t" in unit and "--apply" not in unit and "dry-run" in unit
+    assert "--unit w1=u1.service" in unit and "--unit w2=u2.service" in unit and "--max-restarts-per-hour 3" in unit
+
+
+def test_scheduled_unit_acts_only_when_apply_is_switched_on_and_every_continuation_line_is_intact():
+    unit = _render_unit(True)
+    assert unit.count("--apply") == 1 and "APPLY" in unit.splitlines()[1]
+    exec_block = unit.split("ExecStart=")[1].split("\nRestart=")[0]
+    assert "\n\n" not in exec_block                      # a blank line would end the systemd line continuation
+    assert exec_block.rstrip().endswith("--apply")

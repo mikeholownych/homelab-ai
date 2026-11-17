@@ -1,0 +1,11 @@
+{"worker": "b0-live-llama-deep-worker2", "action": "drain", "stalled_s": 40.0594006589381, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700359.841073029, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "stop", "stalled_s": 48.0709886449622, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700369.894061811, "ok": false}
+{"worker": "b0-live-llama-deep-worker2", "action": "kill", "stalled_s": 48.0709886449622, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700369.894061811, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "restart", "stalled_s": 48.0709886449622, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700369.894061811, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "undrain", "stalled_s": 0.0, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700491.677880986, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "drain", "stalled_s": 40.05900674103759, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700581.877602983, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "stop", "stalled_s": 48.06890038703568, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700591.904897522, "ok": false}
+{"worker": "b0-live-llama-deep-worker2", "action": "kill", "stalled_s": 48.06890038703568, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700591.904897522, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "restart", "stalled_s": 48.06890038703568, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700591.904897522, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "undrain", "stalled_s": 0.0, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700713.690886558, "ok": true}
+{"worker": "b0-live-llama-deep-worker2", "action": "alert", "stalled_s": 40.058815337950364, "unit": "aihost-llama-worker2.service", "applied": true, "ts": 700803.902215493, "ok": true}

@@ -22,3 +22,20 @@ reconcile_controller_gateway_backup_host: "{{ ansible_facts.user_id }}@10.0.8.5"
 reconcile_controller_gateway_backup_root: "{{ ansible_facts.env.HOME }}/.local/share/aihost/gateway-backups"
 reconcile_controller_gateway_backup_keep: 7
 reconcile_controller_gateway_backup_schedule: daily
+
+# Worker busy-watchdog (docs/design/WORKER-BUSY-WATCHDOG.md, scripts/worker_watchdog.py): a long-running user service
+# on the controller. The unit is installed and started by default but is DRY-RUN: it logs the rung it would take and
+# touches nothing. It runs only once the operator has put a gateway admin-scope client token in the token file
+# (ConditionPathExists); this role never creates or copies that secret. Acting for real is a separate, explicit
+# switch: reconcile_controller_watchdog_apply: true.
+reconcile_controller_watchdog_enabled: true
+reconcile_controller_watchdog_apply: false
+reconcile_controller_watchdog_base: "https://10.0.8.5:8443"
+reconcile_controller_watchdog_ca: "{{ ansible_facts.env.HOME }}/.config/nexus/t5820-gateway-ca.crt"
+reconcile_controller_watchdog_token_file: "{{ ansible_facts.env.HOME }}/.config/aihost/watchdog.token"
+reconcile_controller_watchdog_host: "10.0.8.5"
+reconcile_controller_watchdog_units:
+  b0-live-llama-worker1: aihost-llama-worker1.service
+  b0-live-llama-deep-worker2: aihost-llama-worker2.service
+reconcile_controller_watchdog_stuck_after: 120
+reconcile_controller_watchdog_max_restarts_per_hour: 3

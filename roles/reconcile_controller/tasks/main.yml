@@ -105,3 +105,32 @@
     enabled: "{{ reconcile_controller_gateway_backup_enabled | bool }}"
     state: "{{ 'started' if (reconcile_controller_gateway_backup_enabled | bool) else 'stopped' }}"
   tags: [reconcile, gateway_backup]
+
+- name: Validate the worker busy-watchdog settings
+  ansible.builtin.assert:
+    that:
+      - reconcile_controller_watchdog_units | length > 0
+      - reconcile_controller_watchdog_stuck_after | int >= 30
+      - reconcile_controller_watchdog_max_restarts_per_hour | int >= 1
+      - reconcile_controller_watchdog_base is match('^https://')
+      - reconcile_controller_watchdog_host is match('^[A-Za-z0-9_.@:-]+$')
+  tags: [reconcile, worker_watchdog]
+
+- name: Install the worker busy-watchdog unit
+  ansible.builtin.template:
+    src: aihost-worker-watchdog.service.j2
+    dest: "{{ reconcile_controller_unit_dir }}/aihost-worker-watchdog.service"
+    mode: "0644"
+  register: reconcile_controller_watchdog_unit
+  tags: [reconcile, worker_watchdog]
+
+- name: Establish the worker busy-watchdog service state
+  ansible.builtin.systemd_service:
+    name: aihost-worker-watchdog.service
+    scope: user
+    daemon_reload: "{{ reconcile_controller_watchdog_unit.changed }}"
+    enabled: "{{ reconcile_controller_watchdog_enabled | bool }}"
+    state: >-
+      {{ 'stopped' if not (reconcile_controller_watchdog_enabled | bool)
+         else ('restarted' if reconcile_controller_watchdog_unit.changed else 'started') }}
+  tags: [reconcile, worker_watchdog]
