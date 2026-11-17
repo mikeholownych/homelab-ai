@@ -611,7 +611,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] Reliability: busy-watchdog design keyed on oldest in-flight request; graceful stop then forced kill; cancel test on HEAD image — design merged (PR #32, docs/design/WORKER-BUSY-WATCHDOG.md); cancel on HEAD verified in window2; implementation NOT built (new item below).
 - [x] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build — DONE 2026-11-16 in substance: per-worker env (#22), candidate profile qwen36-stackb (#23), SHA-256-pinned debs (#25), rollback rehearsed (#28); production now on the digest-pinned research image.
 - [x] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report) — DONE 2026-11-17: research/sycl-optimization/evidence/window3/README.md (3 load modes, kill mid-load, collision; no hang; flag is -lm).
-- [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence
+- [x] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence — condition not met, nothing to do: all three routed models fit one 32 GB card with the 64K context (23-24 GB resident for the 35B MoE), a single-slot worker per model needs no concurrency groups, and no model needs expert offload (window3 README load and cache results)
 - [x] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check — `harness/kl_predeploy_gate.sh` (compare mode verified on stored scores incl. a failing case; `run` mode needs a research window)
 - [x] (colibri review) Gateway test: long agent turn -> short interleaved request -> long turn; TTFT on deployed vs HEAD, `--cache-ram` default vs raised — done through the gateway: long-2 TTFT 0.26 s (lead) / 0.31 s (deep) after an interleaved short request, 10016 of 10020 tokens cached; default --cache-ram suffices for this shape; HEAD is the deployed build (window3 README)
 - [x] (colibri review) Candidate: MTP speculative decoding; first find an MTP-bearing GGUF (ours show no nextn/mtp tensor names), then A/B with greedy-equality check — MTP GGUF found (unsloth Qwen3.6-35B-A3B-MTP) and A/B run: 68.7 vs 71.7 tok/s mean (no gain; best prompt +9%, prose -20%), outputs not token-identical even across the two non-speculative GGUFs; not adopted (window3 README)
@@ -673,3 +673,12 @@ stop at any step that needs a credential I do not hold.
 - [x] 4 Key rotation round 1 (worker keys, compat key) through Vault; verified. Client tokens not rotated (no live exposure found, see evidence README)
 - [x] 5 Grafana Vault secrets: needs an observability AppRole/policy decision (new Vault infrastructure); not done — done 2026-11-16: Grafana converged with Vault secrets (rotated once after --diff exposure)
 - [x] 8 Soak: watch lead/deep routes and the kernel log over the next days; rollback = revert PR #29 and re-pin the snapshot — soak clean over ~4.5 h, 4 probe points, no rollback
+
+## Review: backlog closure (2026-11-17)
+- All backlog items are closed. Gateway-level tests (stickiness, load sweep, interleave, cache capacity, fork, trace replay) run through the authenticated gateway
+  via `evaluations/engx/gateway_load.py` (probe_mode in the qualification playbook); engine-level tests (test-backend-ops, slot-reuse split, vLLM XPU, MTP, Vulkan)
+  ran in bounded worker1 outages with idle gate, restore trap and unchanged kernel `Timedout job` count (32). Evidence: research/sycl-optimization/evidence/window3/.
+- Outcomes that change behaviour or decisions: keep prefixes append-only (hybrid models lose all reuse on a mid-prompt fork); MTP, Vulkan and vLLM XPU are not adopted;
+  the deployed build passes 7954 backend-op cases; queueing is bounded (32/pool, 429 + Retry-After).
+- Open follow-ups, not backlog: busy-watchdog implementation (design merged, PR #32), vllm-top engine panel for llama.cpp workers, a 408-specific test for queue timeouts,
+  optional exact tool-token count via /v1/tokenize.
