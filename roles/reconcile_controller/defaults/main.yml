@@ -25,8 +25,8 @@ reconcile_controller_gateway_backup_schedule: daily
 
 # Worker busy-watchdog (docs/design/WORKER-BUSY-WATCHDOG.md, scripts/worker_watchdog.py): a long-running user service
 # on the controller. Operator decision 2026-11-17: it ACTS (drain, graceful stop, forced kill, restart, readmit; at most
-# max_restarts_per_hour per worker, then an alert). It runs only while the operator-provisioned gateway admin-scope token
-# file exists (ConditionPathExists); this role never creates or copies that secret. Set apply to false for dry-run
+# max_restarts_per_hour per worker, then an alert). It runs only while the operator-provisioned gateway admin-scope
+# token file exists (ConditionPathExists); this role never creates or copies that secret. Set apply to false for dry-run
 # (logs the rung it would take, touches nothing); remove the token file to stop it entirely.
 reconcile_controller_watchdog_enabled: true
 reconcile_controller_watchdog_apply: true
