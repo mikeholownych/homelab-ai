@@ -62,19 +62,20 @@ class Gateway:
 class Systemd:
     """systemctl on the inference host over SSH (key auth, passwordless sudo for systemctl on the worker units)."""
 
-    def __init__(self, host: str, timeout: float = 90.0) -> None:
+    def __init__(self, host: str, timeout: float = 90.0, stop_timeout: float | None = None) -> None:
         self.host, self.timeout = host, timeout
+        self.stop_timeout = timeout if stop_timeout is None else stop_timeout   # short only to rehearse the forced-kill rung
 
-    def _run(self, *args: str) -> bool:
+    def _run(self, *args: str, timeout: float | None = None) -> bool:
         try:
             r = subprocess.run(["ssh", "-o", "BatchMode=yes", self.host, "sudo", "-n", "systemctl", *args],
-                               capture_output=True, timeout=self.timeout)
+                               capture_output=True, timeout=timeout or self.timeout)
             return r.returncode == 0
         except subprocess.TimeoutExpired:
             return False
 
     def stop(self, unit: str) -> bool:
-        return self._run("stop", unit)
+        return self._run("stop", unit, timeout=self.stop_timeout)
 
     def kill(self, unit: str) -> bool:
         return self._run("kill", "-s", "SIGKILL", unit)
@@ -141,6 +142,10 @@ def main() -> int:
     ap.add_argument("--drain-wait", type=float, default=30.0)
     ap.add_argument("--max-restarts-per-hour", type=int, default=3)
     ap.add_argument("--interval", type=float, default=15.0)
+    ap.add_argument("--systemctl-timeout", type=float, default=90.0,
+                    help="seconds to wait for a systemctl kill/restart over SSH before treating it as failed")
+    ap.add_argument("--stop-timeout", type=float, default=None,
+                    help="seconds to wait for the graceful stop before the ladder escalates to a forced kill (default: --systemctl-timeout, above TimeoutStopSec)")
     ap.add_argument("--evidence", type=Path, default=Path("worker-watchdog-evidence.jsonl"))
     ap.add_argument("--apply", action="store_true", help="act; without it the watchdog only logs the next rung")
     ap.add_argument("--once", action="store_true")
@@ -151,7 +156,7 @@ def main() -> int:
     if args.show:
         print(json.dumps({"stalled_seconds": gw.stalled()}))
         return 0
-    sd, verify = Systemd(args.host), {}
+    sd, verify = Systemd(args.host, args.systemctl_timeout, args.stop_timeout), {}
     ladder = Ladder(Policy(args.stuck_after, args.drain_wait, args.max_restarts_per_hour))
 
     def evidence(record: dict) -> None:

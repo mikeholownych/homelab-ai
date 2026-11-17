@@ -266,3 +266,16 @@ research server :18200 (not via the gateway), GPU0 with worker1 stopped for the 
 Engine comparison on the models that matter here (MoE): llama.cpp SYCL is the only engine that serves them on the B65 today. vLLM XPU 0.29.0 fails in its fused-MoE kernel and SGLang XPU v0.5.23 says MoE-on-XPU
 is not implemented for AWQ; both do run dense AWQ models at the same decode speed (about 23-24 ms/token). Logs: `sglang-xpu-*.logtail`, `sglang-xpu.log`. Re-check on newer releases of either engine;
 the SGLang image (about 25 GB on disk) can be removed with `podman rmi` if root-disk space is needed (host root was 87% used after the pull).
+
+### Forced-kill and rate-limit rungs, live (2026-11-17)
+`harness/window3_watchdog_cycles.sh` (evidence: `watchdog-cycles/`): one executor session on production worker2 with `--stop-timeout 5` (the graceful stop needs about 20 s, so it
+counts as failed) and `--max-restarts-per-hour 2`, three consecutive SIGSTOPs while a long generation ran. Restore rc 0, units active, `Timedout job` count unchanged at 32.
+
+| Cycle | Evidence records |
+|---|---|
+| 1 | drain (40.1 s stalled) -> stop **ok=False** (timed out) -> kill ok -> restart ok -> undrain ok after a fresh idle reading |
+| 2 | the same sequence, second restart counted |
+| 3 | stall reached 40 s -> **alert** only: no drain, no third restart; the worker is left to the operator (abandoned) |
+
+So the whole ladder is now observed live: drain, graceful stop, forced kill after a failed stop, restart, readmit gated on a fresh idle reading, and the per-hour restart limit.
+Scheduling: `roles/reconcile_controller` installs `aihost-worker-watchdog.service` (dry-run by default, starts only when the operator provisions the admin-scope token file; see the design doc).

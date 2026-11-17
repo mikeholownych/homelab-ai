@@ -1,0 +1,49 @@
+idle confirmed 2026-11-17T12:09:05Z
+== cycle 1 2026-11-17T12:09:05Z
+SIGSTOP 2026-11-17T12:09:20Z
+llama-sycl-worker2
+12:09:21 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+12:09:37 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 16.021709550986998, "b0-live-llama-worker1": 0.0}}
+12:09:52 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 32.04707366600633, "b0-live-llama-worker1": 0.0}}
+12:10:08 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 48.0709886449622, "b0-live-llama-worker1": 0.0}}
+12:10:23 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 60.08586234494578, "b0-live-llama-worker1": 0.0}}
+12:10:39 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:10:54 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:11:10 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:11:25 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:11:40 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:11:55 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:12:11 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+12:12:26 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+cycle 1 done: drain=1 stop=1 kill=1 restart=1 undrain=1 alert=0
+0
+== cycle 2 2026-11-17T12:12:46Z
+SIGSTOP 2026-11-17T12:13:01Z
+llama-sycl-worker2
+12:13:02 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+12:13:17 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 12.015599822043441, "b0-live-llama-worker1": 0.0}}
+12:13:33 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 28.03989246301353, "b0-live-llama-worker1": 0.0}}
+12:13:48 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 44.06385215604678, "b0-live-llama-worker1": 0.0}}
+12:14:03 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 60.085850952076726, "b0-live-llama-worker1": 0.0}}
+12:14:19 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:14:34 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:14:50 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:15:05 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:15:20 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:15:35 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:15:51 gauge: {"stalled_seconds": {"b0-live-llama-worker1": 0.0}}
+12:16:06 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+cycle 2 done: drain=2 stop=2 kill=2 restart=2 undrain=2 alert=0
+0
+== cycle 3 2026-11-17T12:16:26Z
+SIGSTOP 2026-11-17T12:16:41Z
+llama-sycl-worker2
+12:16:42 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+12:16:57 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 12.017586502013728, "b0-live-llama-worker1": 0.0}}
+12:17:13 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 28.04144094302319, "b0-live-llama-worker1": 0.0}}
+12:17:28 gauge: {"stalled_seconds": {"b0-live-llama-deep-worker2": 44.06569997500628, "b0-live-llama-worker1": 0.0}}
+cycle 3 done: drain=2 stop=2 kill=2 restart=2 undrain=2 alert=1
+units: active active 
+dmesg timedout: 32
+trap undrain b0-live-llama-deep-worker2 True
+RESTORED rc=0
