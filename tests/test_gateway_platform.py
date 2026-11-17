@@ -666,3 +666,27 @@ def test_worker_408_is_a_worker_failure_not_a_caller_fault_and_never_a_408_to_th
     result = runtime.complete(chat())
     assert result["status"] == "blocked" and result["failure_class"] in ("worker", "provider")
     assert result.get("http_status") != 408 and result["status"] != "rejected"
+
+
+def test_a_worker_killed_mid_stream_is_an_error_event_never_a_clean_stop(fakes, tmp_path):
+    """Found in the live watchdog rehearsal: the worker was killed mid-generation and the gateway ended the stream with
+    finish_reason "stop" and no usage, so a truncated answer looked complete. A stream with neither a finish chunk nor [DONE] is a failure."""
+    fake = fakes()
+    fake.content = "one two three four five six"
+    fake.stream_delay = 0.01
+    fake.truncate_after = 3
+    runtime = build(tmp_path, [(llama_worker("w1", fake), fake)])
+    server = GatewayServer(("127.0.0.1", 0), create_gateway(runtime, "tok"))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        conn = HTTPConnection(*server.server_address, timeout=10)
+        conn.request("POST", "/v1/chat/completions", body=json.dumps(chat(stream=True)),
+                     headers={"Authorization": "Bearer tok", "Content-Type": "application/json"})
+        response = conn.getresponse()
+        body = response.read().decode()
+        assert "event: error" in body, body
+        assert "[DONE]" not in body
+        assert '"finish_reason":"stop"' not in body.replace(" ", "")
+    finally:
+        server.shutdown()
+        server.server_close()

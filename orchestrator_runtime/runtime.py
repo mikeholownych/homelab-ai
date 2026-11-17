@@ -463,6 +463,7 @@ class OpenAIProviderAdapter:
             tool_calls: dict[int, dict[str, Any]] = {}
             finish_reason: str | None = None
             usage: dict[str, Any] | None = None
+            saw_done = False
             while True:
                 if cancel is not None and cancel.is_set():
                     raise RequestCancelled()
@@ -480,6 +481,7 @@ class OpenAIProviderAdapter:
                     break
                 raw = value.decode(errors="replace")
                 if raw == "[DONE]":
+                    saw_done = True
                     break
                 try:
                     event = json.loads(raw)
@@ -509,6 +511,10 @@ class OpenAIProviderAdapter:
                 if choices:
                     on_chunk({"choices": [{"index": choices[0].get("index", 0),
                                             "delta": choices[0].get("delta") or {}, "finish_reason": None}]})
+            if not saw_done and finish_reason is None:
+                # The connection ended with neither a finish chunk nor [DONE]: the worker died or was killed mid-generation.
+                # Reporting that as a normal "stop" would hand the client a truncated answer as if it were complete.
+                raise ProviderError("provider stream ended before completion")
             return {"content": "".join(content), "reasoning_content": "".join(reasoning),
                     "tool_calls": [tool_calls[i] for i in sorted(tool_calls)], "provider_status": response.status,
                     "provider_finish_reason": finish_reason, "usage": usage}

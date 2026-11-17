@@ -204,8 +204,8 @@ def tokens(gateway, result, output):
 
 def hold(gateway, result, output):
     """One long streamed generation, used to keep a worker busy while a fault is injected (watchdog rehearsal). Records how it ended."""
-    row = strip(stream_request(gateway, "Synthetic neutral context. " * 64 + "\nWrite a very long numbered list of 400 short sentences about databases.",
-                               max_tokens=1200))
+    prompt = "Synthetic neutral context. " * 64 + "\nOutput the integers from 1 to 900, one per line, with no other text and no commentary."
+    row = strip(stream_request(gateway, None, max_tokens=1200, messages=[{"role": "user", "content": prompt}]))
     result["hold"] = row
     result["finished_at"] = datetime.now(timezone.utc).isoformat()
     output.parent.mkdir(parents=True, exist_ok=True)

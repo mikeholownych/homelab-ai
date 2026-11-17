@@ -38,17 +38,19 @@ echo "idle confirmed $(date -u +%FT%TZ)" >> $L
 echo "gauge before: $(wd --show 2>&1)" >> $L
 bash harness/pause_reconcile.sh >/dev/null
 # 1. keep worker2 busy
+HOLD=/home/mike/work/correctness-20261023/wd-hold-load-engineering-deep.json; rm -f $HOLD
 S=$O/hold.out
 ( cd $ROOT && /home/mike/.local/share/aihost/reconcile/snapshot/.venv/bin/ansible-playbook -i inventory/production/hosts.yml playbooks/controller_qualification_probe.yml \
   -e '{"probe_label":"wd-hold","probe_mode":"hold","probe_models":["engineering/deep"],"probe_repeats":1,"probe_concurrency":1}' \
   -e qualification_ansible=/home/mike/.local/share/aihost/reconcile/snapshot/.venv/bin/ansible-playbook > $ROOT/research/sycl-optimization/$S 2>&1 ) &
-sleep 25
+sleep 15
 echo "gauge while busy: $(wd --show 2>&1)" >> $L
+[ -f $HOLD ] && { echo "ABORT: the hold request already finished, worker is idle; nothing to wedge" >> $L; exit 2; }
 # 2. wedge it
 echo "SIGSTOP $(date -u +%FT%TZ)" >> $L
 ssh -o BatchMode=yes $H "cd /; sudo -n -u aihost-runtime podman kill --signal SIGSTOP $CONT" >> $L 2>&1
 # 3. watchdog with shortened timings (stuck after 40 s of silence, drain wait 10 s)
-wd --apply --stuck-after 40 --drain-wait 10 --interval 5 --evidence $O/watchdog-evidence.jsonl > $O/watchdog.out 2>&1 &
+$PY $ROOT/scripts/worker_watchdog.py --base $BASE --ca $CA --token-file $TF --host $H --unit $WID=$UNIT --apply --stuck-after 40 --drain-wait 10 --interval 5 --evidence $O/watchdog-evidence.jsonl > $O/watchdog.out 2>&1 &
 WDPID=$!
 t0=$(date +%s)
 while [ $(( $(date +%s)-t0 )) -lt 900 ]; do

@@ -1,0 +1,6 @@
+idle confirmed 2026-11-17T11:09:19Z
+gauge before: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+gauge while busy: {"stalled_seconds": {"b0-live-llama-deep-worker2": 0.0, "b0-live-llama-worker1": 0.0}}
+ABORT: the hold request already finished, worker is idle; nothing to wedge
+trap undrain b0-live-llama-deep-worker2 True
+RESTORED rc=0

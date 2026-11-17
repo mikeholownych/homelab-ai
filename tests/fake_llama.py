@@ -21,6 +21,7 @@ class FakeLlama:
         self.reasoning = reasoning
         self.delay = 0.0
         self.stream_delay = 0.0
+        self.truncate_after: int | None = None  # streaming: drop the connection after this many words (a worker killed mid-generation)
         self.finish_reason = "stop"
         self.content = "ok"
         self.reasoning_content = ""
@@ -94,7 +95,9 @@ class FakeLlama:
                         self.end_headers()
                         try:
                             words = fake.content.split(" ") or [""]
-                            for word in words:
+                            for n, word in enumerate(words):
+                                if fake.truncate_after is not None and n >= fake.truncate_after:
+                                    return  # connection closes with no finish chunk and no [DONE]
                                 if fake.stream_delay:
                                     time.sleep(fake.stream_delay)
                                 if _peer_closed(self.connection):

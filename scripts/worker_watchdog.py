@@ -95,7 +95,10 @@ def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply
                 break
             if action is Action.UNDRAIN and ladder.phase(worker) == "verifying":
                 verify_started.setdefault(worker, now)
-                if apply and not gw.ready(worker):
+                # Ready only when the gateway shows a FRESH reading of exactly 0 stalled seconds (a restarted engine answering /metrics
+                # again, idle) and its own readiness view agrees. Found in the live rehearsal: right after the restart the gateway still
+                # showed the old worker as ready, so readiness alone readmitted it before it was back.
+                if apply and not (stalled.get(worker) == 0.0 and gw.ready(worker)):
                     if now - verify_started[worker] > READY_WAIT_S:
                         ladder.abandon(worker, now)
                         records.append({"worker": worker, "action": "abandon", "reason": "never became ready", "ts": now})
