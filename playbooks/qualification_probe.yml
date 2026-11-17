@@ -40,7 +40,7 @@
           - probe_repeats | int <= 5
           - probe_models | difference(['engineering/lead', 'engineering/deep']) | length == 0
           - probe_label is match('^[a-z0-9-]+$')
-          - probe_mode in ['qualification', 'load']
+          - probe_mode in ['qualification', 'load', 'alternate']
     - name: Create private controller evidence directory
       ansible.builtin.file:
         path: "{{ probe_output_root }}"
@@ -128,12 +128,14 @@
               - "{{ probe_ca }}"
               - --output
               - "{{ probe_output_root }}/{{ probe_label }}-load-{{ item | replace('/', '-') }}.json"
+              - --scenario
+              - "{{ 'load' if probe_mode == 'load' else 'alternate' }}"
             stdin: "{{ {'qualification': probe_token.content | b64decode | trim} | to_json }}"
           delegate_to: "{{ probe_controller }}"
           become: false
           changed_when: false
           no_log: true
-          when: probe_mode == 'load'
+          when: probe_mode in ['load', 'alternate']
           loop: "{{ probe_models }}"
       always:
         - name: Stop this run's resource sampler

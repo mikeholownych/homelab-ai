@@ -102,3 +102,15 @@ def test_gateway_load_summaries_and_bounds():
     s = load.summarize(rows)
     assert s["statuses"] == {"200": 4, "429": 1} and s["ttft_max"] == 0.4 and s["gap_p99"] == 0.02
     assert "chunk_gaps_seconds" not in load.strip(rows[0]) and load.strip(rows[0])["chunk_gap_count"] == 2
+
+
+def test_gateway_load_alternate_runs_two_rounds_over_three_distinct_prefixes(tmp_path, monkeypatch):
+    load = module("gateway_load")
+    seen = []
+    def fake(gateway, text, max_tokens=128):
+        seen.append(text[:16])
+        return {"status": 200, "chunk_gaps_seconds": [], "cached_prompt_tokens": 0}
+    monkeypatch.setattr(load, "stream_request", fake)
+    result = load.alternate(object(), {}, tmp_path / "o.json")
+    assert len(seen) == 6 and len(set(seen)) == 3 and seen[:3] == seen[3:]
+    assert [r["round"] for r in result["alternate"]] == [1, 1, 1, 2, 2, 2]

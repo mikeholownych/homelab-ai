@@ -96,16 +96,37 @@ def strip(row):
     return row
 
 
+def alternate(gateway, result, output):
+    """Cache capacity: ROUNDS rounds over CONVERSATIONS distinct long prefixes (A B C A B C). Round 1 is cold; in later rounds the
+    cached share of each prompt shows whether the worker still holds that conversation after the others ran."""
+    convs = [f"Conversation {name}. " + (f"Synthetic neutral context for {name}. " * 3000) for name in "ABC"]
+    result["alternate"] = []
+    for rnd in range(2):
+        for name, text in zip("ABC", convs):
+            row = strip(stream_request(gateway, text, max_tokens=32))
+            row.update(round=rnd + 1, conversation=name)
+            result["alternate"].append(row)
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, indent=2) + "\n")
+    print(json.dumps({"output": str(output), "alternate": [(r["conversation"], r["status"]) for r in result["alternate"]]}))
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ca", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--scenario", choices=["load", "alternate"], default="load")
     args = parser.parse_args()
     assert sum(c * PER_LEVEL for c in LEVELS) + 3 <= MAX_REQUESTS
     gateway = Gateway(args.base, args.model, json.load(sys.stdin)["qualification"], args.ca)
     result = {"started_at": datetime.now(timezone.utc).isoformat(), "model": gateway.models(), "sweep": {}, "interleave": {}}
+    if args.scenario == "alternate":
+        alternate(gateway, result, args.output)
+        return
     prompt = "Synthetic neutral context. " * 256
     for level in LEVELS:
         with concurrent.futures.ThreadPoolExecutor(max_workers=level) as pool:

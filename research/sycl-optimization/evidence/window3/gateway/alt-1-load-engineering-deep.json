@@ -1,0 +1,187 @@
+{
+  "started_at": "2026-11-17T05:35:06.986071+00:00",
+  "model": {
+    "id": "engineering/deep",
+    "object": "model",
+    "owned_by": "aihost-orchestrator",
+    "context_length": 65536,
+    "max_model_len": 65536,
+    "max_completion_tokens": 12288,
+    "limits_version": "153827e69beebde3",
+    "reasoning": {
+      "budget": 4096,
+      "mode": "on"
+    },
+    "serving": [
+      {
+        "worker_id": "b0-live-llama-deep-worker2",
+        "pool": "deep",
+        "role": "production",
+        "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+        "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+        "quantization": "IQ1_M - 1.75 bpw",
+        "engine": "llama.cpp",
+        "engine_version": "b0-unknown",
+        "capacity_source": "observed"
+      }
+    ],
+    "capabilities": {
+      "tools": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "parallel_tool_calls": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "structured_output": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "vision": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "reasoning": {
+        "available": true,
+        "provenance": "declared",
+        "evidence": [
+          "engine"
+        ]
+      },
+      "reasoning_controllable": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "reasoning-profile-probe-flashnext-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "streaming": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-flashnext-deep-bounded-4096-2026-10-08"
+        ],
+        "verified_at": "2026-10-08"
+      },
+      "output_contract_compliance": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-contract-deep-flashnext-4096-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "fim": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "embeddings": {
+        "available": false,
+        "provenance": "unavailable"
+      }
+    }
+  },
+  "sweep": {},
+  "interleave": {},
+  "alternate": [
+    {
+      "status": 200,
+      "ttft_seconds": 25.345038905041292,
+      "completion_tokens": 11,
+      "prompt_tokens": 18022,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 25.99288129794877,
+      "tpot_seconds": 0.0647842392907478,
+      "chunk_gap_count": 9,
+      "round": 1,
+      "conversation": "A"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 25.437556455028243,
+      "completion_tokens": 18,
+      "prompt_tokens": 18022,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 26.50177456100937,
+      "tpot_seconds": 0.06260106505771332,
+      "chunk_gap_count": 16,
+      "round": 1,
+      "conversation": "B"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 25.331822409993038,
+      "completion_tokens": 16,
+      "prompt_tokens": 18022,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 26.277364704059437,
+      "tpot_seconds": 0.06303615293775995,
+      "chunk_gap_count": 14,
+      "round": 1,
+      "conversation": "C"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 0.7376920919632539,
+      "completion_tokens": 11,
+      "prompt_tokens": 18022,
+      "cached_prompt_tokens": 18018,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 1.3879137919284403,
+      "tpot_seconds": 0.06502216999651864,
+      "chunk_gap_count": 9,
+      "round": 2,
+      "conversation": "A"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 0.7881328959483653,
+      "completion_tokens": 18,
+      "prompt_tokens": 18022,
+      "cached_prompt_tokens": 18018,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 1.8494502779794857,
+      "tpot_seconds": 0.06243043423712473,
+      "chunk_gap_count": 16,
+      "round": 2,
+      "conversation": "B"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 0.7432926339097321,
+      "completion_tokens": 16,
+      "prompt_tokens": 18022,
+      "cached_prompt_tokens": 18018,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 1.6876485949615017,
+      "tpot_seconds": 0.06295706407011797,
+      "chunk_gap_count": 14,
+      "round": 2,
+      "conversation": "C"
+    }
+  ],
+  "finished_at": "2026-11-17T05:36:30.712859+00:00"
+}

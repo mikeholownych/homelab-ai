@@ -629,7 +629,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter
 - [ ] (SGLang review) Hybrid-model checkpoint test: request-end checkpoint on `-np 1`, continuation vs mid-prompt fork TTFT
 - [ ] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time
-- [ ] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom
+- [x] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom — three alternating 18k-token conversations all retained (TTFT 10 s -> 0.33 s lead, 25 s -> 0.75 s deep); eviction point not reached (window3 README)
 - [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
 - [x] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist — PR #33
 - [x] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback — moot as written: no Coder worker is deployed; both live workers carry ESIMD=0 via llama_worker.env and passed the gate (Qwen3.6 and Flash-Next verified, soak clean)

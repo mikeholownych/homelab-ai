@@ -57,3 +57,18 @@ concurrency level per client slot.
   with 10016/10020 prompt tokens served from cache; deep: 14.0 s, 0.43 s, 0.31 s, again 10016 cached. The intervening short
   request does NOT evict the long prefix on the deployed build with the default `--cache-ram`, so no raised-cache comparison is
   needed for this shape. Not tested: several different long conversations alternating (capacity, item 632).
+
+## Cache capacity with alternating long conversations (backlog 632, 2026-11-17)
+
+`gateway_load.py --scenario alternate` (playbook `probe_mode: alternate`): three distinct ~18k-token prefixes A, B, C sent A B C A B C
+through the gateway to each route (raw: `gateway/alt-1-load-engineering-{lead,deep}.json`).
+
+| Route | Round 1 TTFT (cold) | Round 2 TTFT | Round 2 cached tokens |
+|---|---|---|---|
+| lead (Qwen3.6-35B) | 10.0-10.1 s | 0.32-0.35 s | 18018 of 18022 for A, B and C |
+| deep (Flash-Next) | 25.3-25.4 s | 0.74-0.79 s | 18018 of 18022 for A, B and C |
+
+All three conversations were still cached after the other two had run, so the deployed `--cache-ram` default holds at least
+3 x 18k tokens per worker without eviction, a 30-40x TTFT difference. Host RAM at the time: 10 GB used, 50 GB available of 61.
+Not measured: the point at which eviction starts (more or longer conversations; 64K-token ones), and idle-vs-active eviction order.
+Those need a larger run; at 18k tokens the three-way case already costs 10-25 s per cold turn.
