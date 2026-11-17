@@ -212,7 +212,7 @@ llama_cpp_container_workers:
     served_name: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
     context: 65536
     args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
-           "--lazy-mode", "on"]
+           "--lazy-mode", "on", "--cache-ram", "8192"]
     reasoning_budget: 4096
     cpuset_cpus: "2,3,6,7"
 
