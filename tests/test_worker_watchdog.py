@@ -74,6 +74,7 @@ class FakeGateway:
 
     fresh_after_restart = False
     running: dict = {}
+    progress: dict = {}
 
     def slot(self, w, action):
         self.calls.append(("slot-" + action, w))
@@ -206,17 +207,23 @@ def test_scheduled_unit_acts_only_when_apply_is_switched_on_and_every_continuati
 
 def test_idle_workers_are_saved_on_the_interval_and_busy_stalled_or_dry_run_workers_are_not():
     from scripts.worker_watchdog import run_once
-    gw, log, saved = FakeGateway({"w1": 0.0, "w2": 0.0, "w3": 200.0}), [], {}
+    gw, log, saved, prog = FakeGateway({"w1": 0.0, "w2": 0.0, "w3": 200.0}), [], {}, {}
     gw.running = {"w1": 0.0, "w2": 1.0, "w3": 1.0}                         # w1 idle, w2 serving, w3 stalled
+    gw.progress = {"w1": 500.0, "w2": 900.0, "w3": 900.0}
     units = {"w1": "u1", "w2": "u2", "w3": "u3"}
     ladder = Ladder(Policy(stuck_after_s=10_000))                           # keep the ladder out of this test
-    run_once(gw, FakeSystemd(), ladder, units, 1000.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
+    run_once(gw, FakeSystemd(), ladder, units, 1000.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300, slot_progress=prog)
     assert [r["action"] for r in log] == ["slot_save"] and log[0]["worker"] == "w1" and log[0]["tokens"] == 1234
     log.clear(); gw.calls.clear()
     run_once(gw, FakeSystemd(), ladder, units, 1100.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
     assert log == []                                                         # interval not elapsed
-    run_once(gw, FakeSystemd(), ladder, units, 1400.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
-    assert [r["worker"] for r in log] == ["w1"]                              # interval elapsed, still only the idle worker
+    run_once(gw, FakeSystemd(), ladder, units, 1400.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300,
+             slot_progress=prog)
+    assert log == []                                                         # interval elapsed but w1 completed nothing new: no rewrite of an unchanged state
+    gw.progress["w1"] = 650.0                                                # w1 finished more work
+    run_once(gw, FakeSystemd(), ladder, units, 1800.0, apply=True, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300,
+             slot_progress=prog)
+    assert [r["worker"] for r in log] == ["w1"]                              # only the changed, idle worker is saved
     log.clear(); gw.calls.clear()
     run_once(gw, FakeSystemd(), ladder, units, 9999.0, apply=False, evidence=log.append, verify_started={}, slot_saved=saved, slot_interval=300)
     assert all(c[0] != "slot-save" for c in gw.calls)                        # dry run never saves
@@ -235,3 +242,12 @@ def test_a_restarted_worker_gets_its_saved_state_restored_before_it_is_readmitte
     order = [c[0] for c in gw.calls]
     assert order.index("slot-restore") < order.index("undrain")             # restore first, then readmit
     assert [r["action"] for r in log][-2:] == ["slot_restore", "undrain"] and log[-2]["tokens"] == 1234
+
+
+def test_parse_progress_sums_prompt_and_generation_tokens_per_worker():
+    from scripts.worker_watchdog import parse_progress
+    text = ('aihost_engine_prompt_tokens_total{worker_id="w1",pool="lead",engine="llama.cpp"} 1000\n'
+            'aihost_engine_generation_tokens_total{worker_id="w1",pool="lead",engine="llama.cpp"} 250\n'
+            'aihost_engine_prompt_tokens_cached_total{worker_id="w1",pool="lead",engine="llama.cpp"} 9999\n'
+            'aihost_engine_prompt_tokens_total{worker_id="w2",pool="deep",engine="llama.cpp"} 7\n')
+    assert parse_progress(text) == {"w1": 1250.0, "w2": 7.0}
