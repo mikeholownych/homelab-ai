@@ -13,7 +13,7 @@ deployed build (2026-11-17, window-3 README): save 0.18 s (567 MB for 18k tokens
   The gateway never exposes `/slots` itself and its evidence records hold counts only (tokens, bytes), no names or content.
 - **Planned restarts (Ansible):** `roles/llama_cpp_container/tasks/start_worker.yml` saves after the worker is drained and idle, restores once it is healthy and still drained, then
   undrains. Both steps are best effort: a failure means a cold start, never a failed deployment.
-- **Watchdog restarts:** `scripts/worker_watchdog.py --slot-save-interval 300` saves idle workers every 5 minutes and restores a restarted worker before readmitting it. A
+- **Watchdog restarts:** `scripts/worker_watchdog.py --slot-save-interval 300` saves an idle worker at most every 5 minutes, and only if it completed work since its last save (a state file is hundreds of MB, 356 MB even for a short Flash-Next conversation, so an unchanged state is never rewritten), and restores a restarted worker before readmitting it. A
   wedged worker cannot save, so recovery uses the last idle save (a stale state is harmless: reuse needs a prefix match, otherwise llama.cpp discards it).
 
 ## Operating it

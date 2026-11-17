@@ -26,12 +26,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from orchestrator_runtime.watchdog import Action, Ladder, Policy  # noqa: E402
 
 _RUNNING = re.compile(r'^aihost_engine_requests_running\{[^}]*worker_id="([^"]+)"[^}]*\}\s+([-+0-9.eE]+)', re.M)
+_TOKENS = re.compile(r'^aihost_engine_(?:prompt|generation)_tokens_total\{[^}]*worker_id="([^"]+)"[^}]*\}\s+([-+0-9.eE]+)', re.M)
 _STALLED = re.compile(r'^aihost_engine_stalled_seconds\{[^}]*worker_id="([^"]+)"[^}]*\}\s+([-+0-9.eE]+)', re.M)
 READY_WAIT_S = 300.0
 
 
 def parse_stalled(text: str) -> dict[str, float]:
     return {m.group(1): float(m.group(2)) for m in _STALLED.finditer(text)}
+
+
+def parse_progress(text: str) -> dict[str, float]:
+    """Per worker: prompt plus generation tokens the engine has completed (grows only when a request finished work)."""
+    totals: dict[str, float] = {}
+    for m in _TOKENS.finditer(text):
+        totals[m.group(1)] = totals.get(m.group(1), 0.0) + float(m.group(2))
+    return totals
 
 
 def parse_running(text: str) -> dict[str, float]:
@@ -52,10 +61,12 @@ class Gateway:
             return r.read()
 
     running: dict[str, float] = {}
+    progress: dict[str, float] = {}
 
     def stalled(self) -> dict[str, float]:
         text = self._call("/metrics").decode("utf-8", "replace")
         self.running = parse_running(text)
+        self.progress = parse_progress(text)
         return parse_stalled(text)
 
     def slot(self, worker: str, action: str) -> dict:
@@ -102,10 +113,12 @@ class Systemd:
 
 
 def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply: bool, evidence, verify_started: dict[str, float],
-             slot_saved: dict[str, float] | None = None, slot_interval: float = 0.0) -> list[dict]:
+             slot_saved: dict[str, float] | None = None, slot_interval: float = 0.0,
+             slot_progress: dict[str, float] | None = None) -> list[dict]:
     """One pass over every worker: ask the ladder, perform (or just log) the action, report back. Returns the evidence records."""
     stalled = gw.stalled()
     records = []
+    slot_progress = slot_progress if slot_progress is not None else {}
     for worker, unit in units.items():
         value = stalled.get(worker, 0.0)
         for _ in range(6):  # the rungs after a drain follow each other without waiting for the next poll
@@ -153,10 +166,16 @@ def run_once(gw, sd, ladder: Ladder, units: dict[str, str], now: float, *, apply
             if action in (Action.UNDRAIN, Action.ALERT):
                 break
         # Periodic save while the worker is healthy and idle, so a crash or a watchdog restart can still restore a recent state.
+        # Only when the worker has completed work since the last save: a state file is hundreds of MB (the hybrid models' recurrent state),
+        # so rewriting an unchanged one every interval would be pure disk wear.
+        progress = getattr(gw, "progress", {}).get(worker)
         if (apply and slot_interval > 0 and slot_saved is not None and ladder.phase(worker) == "healthy" and value == 0.0
-                and getattr(gw, "running", {}).get(worker) == 0.0 and now - slot_saved.get(worker, -slot_interval) >= slot_interval):
+                and getattr(gw, "running", {}).get(worker) == 0.0 and now - slot_saved.get(worker, -slot_interval) >= slot_interval
+                and progress and progress != slot_progress.get(worker)):   # 0/None: nothing completed since (re)start, nothing to save
             saved = gw.slot(worker, "save")
             slot_saved[worker] = now
+            if saved.get("status") == "saved":
+                slot_progress[worker] = progress
             records.append({"worker": worker, "action": "slot_save", "applied": True, "ts": now, "outcome": saved.get("status"),
                             "tokens": saved.get("tokens"), "bytes": saved.get("bytes"), "seconds": saved.get("seconds")})
     for r in records:
@@ -191,7 +210,7 @@ def main() -> int:
     if args.show:
         print(json.dumps({"stalled_seconds": gw.stalled()}))
         return 0
-    sd, verify, saved = Systemd(args.host, args.systemctl_timeout, args.stop_timeout), {}, {}
+    sd, verify, saved, progress = Systemd(args.host, args.systemctl_timeout, args.stop_timeout), {}, {}, {}
     ladder = Ladder(Policy(args.stuck_after, args.drain_wait, args.max_restarts_per_hour))
 
     def evidence(record: dict) -> None:
@@ -202,7 +221,7 @@ def main() -> int:
     while True:
         try:
             run_once(gw, sd, ladder, units, time.monotonic(), apply=args.apply, evidence=evidence, verify_started=verify,
-                     slot_saved=saved, slot_interval=args.slot_save_interval)
+                     slot_saved=saved, slot_interval=args.slot_save_interval, slot_progress=progress)
         except Exception as error:  # the watchdog must not die on a transient gateway error
             print(json.dumps({"error": type(error).__name__}), flush=True)
         if args.once:
