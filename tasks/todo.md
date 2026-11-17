@@ -632,13 +632,13 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom
 - [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
 - [ ] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist
-- [ ] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback
+- [x] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback — moot as written: no Coder worker is deployed; both live workers carry ESIMD=0 via llama_worker.env and passed the gate (Qwen3.6 and Flash-Next verified, soak clean)
 - [ ] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention)
 - [ ] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892)
 - [ ] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use
 - [ ] (window 2) Record runtime-stack versions per image; test old vs new stack with the same source on every bump (plan 4ae)
-- [ ] (window 2) Full gate on candidate `head-stackB` for Qwen3.6, Flash-Next and Coder: KL, bench, engx, Ansible pin + rollback (plan 4af)
-- [ ] (window 2) Upstream report on IGC 2.42.6 + NEO 26.40 32K regression, after re-searching the tracker (plan 4ag)
+- [x] (window 2) Full gate on candidate `head-stackB` for Qwen3.6, Flash-Next and Coder: KL, bench, engx, Ansible pin + rollback (plan 4af) — superseded: stackB (new IGC/NEO) was rejected for the 32K regression; production runs the old-stack HEAD image, which passed the full gate (KL, bench, engx, canary, rollback rehearsal). No Coder worker is deployed.
+- [x] (window 2) Upstream report on IGC 2.42.6 + NEO 26.40 32K regression, after re-searching the tracker (plan 4ag) — filed as ggml-org/llama.cpp#32399 on 2026-11-16 (operator approved; see upstream-issue-draft.md)
 
 
 ## Review: SYCL research window 2 (2026-11-16)
@@ -657,19 +657,19 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 Instruction: reconverge production to main; promote the image to the routed pools with a rehearsed rollback; set the qualification client's quota to optimised levels;
 rotate required keys and update configured clients. Constraints: Ansible only, drain-and-swap, idle checks, never print/log/commit secrets, verify after every step,
 stop at any step that needs a credential I do not hold.
-- [ ] 1. Simulate (check-mode) reconcile of main against ai-5820-01; review the diff (gateway security release, anything unexpected)
-- [ ] 2. Inventory external gateway callers (vllm-top, engx, nexus, other) and how each authenticates; provision admin/qualification clients the hardened gateway needs, BEFORE the gateway restarts
-- [ ] 3. Re-pin controller snapshot to main (reconcile-controller.yml), converge; verify gateway, workers, clients (restored_verified-style checks)
-- [ ] 4. Key rotation (worker keys, gateway client tokens, hermes token) via the role's own mechanism; update clients; verify
-- [ ] 5. Vault: Grafana secrets (needs Vault access; stop if absent)
-- [ ] 6. Promotion PR: worker1 + worker2 image_ref (digest) + env ESIMD=0, gateway runtime_image_digest; rollback = revert; rehearse rollback on one worker
-- [ ] 7. Qualification client quota to optimised level; rerun concurrency + tool-call probes through the gateway
-- [ ] 8. Final verification, evidence, docs, lessons; post-deploy soak check
+- [x] 1. Simulate (check-mode) reconcile of main against ai-5820-01; review the diff (gateway security release, anything unexpected)
+- [x] 2. Inventory external gateway callers (vllm-top, engx, nexus, other) and how each authenticates; provision admin/qualification clients the hardened gateway needs, BEFORE the gateway restarts
+- [x] 3. Re-pin controller snapshot to main (reconcile-controller.yml), converge; verify gateway, workers, clients (restored_verified-style checks)
+- [x] 4. Key rotation (worker keys, gateway client tokens, hermes token) via the role's own mechanism; update clients; verify — worker + compat keys rotated; client tokens not rotated by operator decision (no live exposure)
+- [x] 5. Vault: Grafana secrets (needs Vault access; stop if absent)
+- [x] 6. Promotion PR: worker1 + worker2 image_ref (digest) + env ESIMD=0, gateway runtime_image_digest; rollback = revert; rehearse rollback on one worker
+- [x] 7. Qualification client quota to optimised level; rerun concurrency + tool-call probes through the gateway
+- [x] 8. Final verification, evidence, docs, lessons; post-deploy soak check
 
 ## Review: production deployment (2026-11-16)
 - [x] 1-3 Simulated then reconverged production to main (gateway security release `626424c`), verified (health, authenticated probe, vllm-top)
 - [x] 6 Promotion: canary on worker2 (#27) -> rollback rehearsal (#28, verified) -> both workers + quota (#29); both routes verified
 - [x] 7 Qualification quota 6 -> 60 rpm; concurrency 1 and 2 and multi-turn tool probes pass on lead and deep (12/12 tool cases)
 - [x] 4 Key rotation round 1 (worker keys, compat key) through Vault; verified. Client tokens not rotated (no live exposure found, see evidence README)
-- [ ] 5 Grafana Vault secrets: needs an observability AppRole/policy decision (new Vault infrastructure); not done
-- [ ] 8 Soak: watch lead/deep routes and the kernel log over the next days; rollback = revert PR #29 and re-pin the snapshot
+- [x] 5 Grafana Vault secrets: needs an observability AppRole/policy decision (new Vault infrastructure); not done — done 2026-11-16: Grafana converged with Vault secrets (rotated once after --diff exposure)
+- [x] 8 Soak: watch lead/deep routes and the kernel log over the next days; rollback = revert PR #29 and re-pin the snapshot — soak clean over ~4.5 h, 4 probe points, no rollback
