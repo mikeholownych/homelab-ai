@@ -1,0 +1,2 @@
+flashnext-stackB RESULT flashnext-stackB {"reps": 1, "tasks": 12, "validated_rate": 100.0, "validated_per_rep": [12], "first_attempt_rate": 58.3, "median_secs_to_validated": 227.1, "mean_secs_per_task": 296.0, "mean_tokens_per_task": 687
+RESTORED

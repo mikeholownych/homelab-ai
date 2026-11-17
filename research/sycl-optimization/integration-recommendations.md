@@ -1,0 +1,38 @@
+# Integration recommendation (as of 2026-11-16)
+
+**Decision: EXPERIMENT FURTHER. Do not deploy anything yet.** The candidate is promising, but the production path (Ansible image pin with a tested rollback) and several gates are not done.
+
+Candidate: `head-stackB` = llama.cpp a956a852 + current oneDNN + the OLD IGC 2.34.4 / NEO 26.18 / IGDGMM 22.10.0 pair, with `GGML_SYCL_ENABLE_XMX_ESIMD=0` for every worker.
+Why: prefill beats deployed at every tested length on all three models, decode is at parity (Coder, Flash-Next) or better (Qwen3.6), KL is equivalent.
+
+Required before deployment (the operator's rule: HEAD goes to production only through Ansible with a tested rollback):
+1. Build the image with the stack pinned explicitly (a Dockerfile override, not upstream's default), record the digest and all component versions (plan 4ae/4af).
+2. Ansible-managed image pin plus a rehearsed rollback to the current digest; per-worker env (ESIMD=0) in the same change.
+3. Gateway-level validation: client-side TTFT/ITL under realistic load, trace replay, failure injection, `-np 1` confirmed (plan 4q, 4w, 4o).
+4. DONE (window 2): engx on Coder (20/24 vs 18/24) and Flash-Next (12/12 vs 11/12, n=1), dense-model F16 check (identical finite PPL), research-server failure injection (abort, concurrency, SIGKILL+restart). Not done: gateway-level failure injection/fallback (needs the candidate behind the gateway).
+5. Decide the decode-vs-long-prefill trade-off with real workload data (the new stack decodes 7-8% faster, the old pair prefills 15% faster at 32K).
+
+Open upstream items: report the IGC 2.42.6 + NEO 26.40 32K regression (plan 4ag), after re-searching the tracker for the multi-sequence bug and XMX-ESIMD (#31068).
+Risks: see `risk-register.md` (stack pin must be revisited; the old pair is not a permanent home).
+
+## Ansible gaps found in `roles/llama_cpp_container` (read-only inspection, 2026-11-16)
+1. **No per-worker environment.** `templates/llama-worker.service.j2` hard-codes four `-e` variables; head-stackB needs
+   `GGML_SYCL_ENABLE_XMX_ESIMD=0`. Add an optional `llama_worker.env` map rendered as `-e K=V`, default empty (no change for current workers),
+   with a role-structure test.
+2. **Digest model assumes a registry.** `tasks/main.yml` asserts `llama_cpp_container_digest` matches `^sha256:[0-9a-f]{64}$` and runs
+   `podman pull <image>@<digest>`. The candidate exists only in `aihost-runtime`'s local store (`localhost/sycl-research/llama:head-stackB`).
+   Options: (a) push to a registry the operator controls and pin that digest (recommended: reproducible, pull-verified, rollback is the old
+   digest already in `llama_cpp_container_digest`); (b) a `podman load` task from a built archive with sha256 check. Do not point units at a tag.
+3. **Rollback** = revert the digest and env vars in host_vars and re-run the role; the old image stays in the store. Rehearse on one worker
+   (GPU1 first) with the same idle-check/EXIT-trap discipline, verify through the gateway, and confirm `ansible-playbook --check` shows 0 changes
+   after convergence (idempotency).
+4. Supply-chain note: the candidate Dockerfile installs old IGC/NEO from Intel's release assets; pin their SHA-256 in the Dockerfile before building
+   the registry image.
+
+## Update 2026-11-16 (after operator approval): candidate path exercised through Ansible and the gateway
+- Merged: per-worker `llama_worker.env` (#22), R4 profile `qwen36-stackb` (#23), `candidate_probe.yml` (#24). Image path is `podman load`-style (local store, pinned by manifest digest `sha256:6cd97c37...`); no external registry was used.
+- Exercised: durable transaction deploy + restore with independent verification, from a source equal to the deployed snapshot plus these changes. Not deployed to the routed pools; production serves the original image.
+- Still required before promoting to the routed lead/deep pools: long-context TTFT and concurrency through the gateway (the stock probe is short-prompt only and the qualification client hit its 429 quota on tool cases),
+  a rehearsed rollback of an image change in the routed pool (the transaction restores worker1, but the pin itself has not been changed), reconverging production to `main` (gateway security release; owed operator steps), warm-up request after worker restart (cold first request 6.6 s), and SHA-256 pins for the old IGC/NEO packages in the Dockerfile.
+
+- Update (long-context gateway probe): through the gateway the candidate has about 20-23% lower TTFT than production at 3K/14K/41K-token prompts (details in `evidence/window2/README.md`). This closes the "long-context TTFT through the gateway" gap for sequential single-client load; concurrency and tool-call behaviour remain untested.

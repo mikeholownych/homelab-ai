@@ -14,6 +14,8 @@
     probe_script: controlled_probe.py
     probe_concurrency: 1
     probe_repeats: 3
+    # load/alternate/fork/replay run evaluations/engx/gateway_load.py (bounded; see that file)
+    probe_mode: qualification
   tasks:
     - name: Require external reconciliation ownership before sampling or inference
       ansible.builtin.command:
@@ -40,6 +42,7 @@
           - probe_repeats | int <= 5
           - probe_models | difference(['engineering/lead', 'engineering/deep']) | length == 0
           - probe_label is match('^[a-z0-9-]+$')
+          - probe_mode in ['qualification', 'load', 'alternate', 'fork', 'replay']
     - name: Create private controller evidence directory
       ansible.builtin.file:
         path: "{{ probe_output_root }}"
@@ -112,6 +115,29 @@
           become: false
           changed_when: false
           no_log: true
+          when: probe_mode == 'qualification'
+          loop: "{{ probe_models }}"
+        - name: Run the bounded gateway load sweep and interleave through authenticated TLS
+          ansible.builtin.command:
+            argv:
+              - "{{ probe_python }}"
+              - "{{ probe_source_root }}/evaluations/engx/gateway_load.py"
+              - --base
+              - "{{ probe_base }}"
+              - --model
+              - "{{ item }}"
+              - --ca
+              - "{{ probe_ca }}"
+              - --output
+              - "{{ probe_output_root }}/{{ probe_label }}-load-{{ item | replace('/', '-') }}.json"
+              - --scenario
+              - "{{ probe_mode }}"
+            stdin: "{{ {'qualification': probe_token.content | b64decode | trim} | to_json }}"
+          delegate_to: "{{ probe_controller }}"
+          become: false
+          changed_when: false
+          no_log: true
+          when: probe_mode in ['load', 'alternate', 'fork', 'replay']
           loop: "{{ probe_models }}"
       always:
         - name: Stop this run's resource sampler

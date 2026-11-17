@@ -1,0 +1,4 @@
+fn bench [GGML_SYCL_X=1] [(512, 0, 396.1), (2048, 0, 687.0), (8192, 0, 669.2), (0, 128, 19.1)]
+fn bench [GGML_SYCL_ENABLE_XMX_ESIMD=0] [(512, 0, 596.4), (2048, 0, 716.2), (8192, 0, 696.2), (0, 128, 19.2)]
+fn kl chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean KLD: 0.015054 ± 0.000486;Same top p: 93.255 ± 0.453 %;
+RESTORED

@@ -482,7 +482,7 @@ Findings from the 2026-10-09 validation review (fixed, tested and deployed unles
       could not work there (CA key on the controller; it ran site.yml). Built controller-side (`a909c3d`..`cdfa1c0`): pinned
       snapshot, hourly user timer, stamp on the host observed by the validator. First runs fixed two role conflicts (gateway
       readiness script owned twice; lifecycle units installed then removed each run); steady state changes only the stamp.
-- [ ] V9 pcie_aspm=performance on the kernel command line is not a valid policy (live policy: default); use
+- [x] V9 pcie_aspm=performance on the kernel command line is not a valid policy (live policy: default); use — DONE 2026-11-17: verified live on ai-5820-01: cmdline has pcie_aspm.policy=performance once, transparent_hugepage=always once, live policy [performance].
       pcie_aspm.policy=performance and add a validation check; transparent_hugepage=always is duplicated.
 - [x] V10 R6 gateway client tokens are Vault records (`526bda1`, evidence `a520267`). Found on the way: Vault credential
       convergence had been broken since the 2026-10-07 access changes (its checks were refused); repaired in `526bda1`.
@@ -554,7 +554,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [x] Release id bumped to t5820-gateway-ce1937c27e88
 - [x] Live qualification (approved 2026-11-05): `engineering/lead` / `coding.routine` → **not qualified**
       (9/12 tasks, LB 0.567 < 0.6; clean rerun after runner fix b752c41). No grant; criteria unchanged.
-- [ ] Deploy (approved 2026-11-05) **failed and rolled back**: CAIS SIGHUP handler killed the just-restarted gateway;
+- [x] Deploy (approved 2026-11-05) **failed and rolled back**: CAIS SIGHUP handler killed the just-restarted gateway; — DONE (superseded): the retry on the next item succeeded.
       journaled activation restored e1ef079868d9; snapshot re-pinned to fb4089d; 15:01 reconcile green.
       Fixed in a54c17e (reload after strict readiness, enforce only) + role test. Retry needs a new go-ahead.
 - [x] Deploy retry (approved 2026-11-05): snapshot 664a7e24849b, reconcile 0 failed / 0 rescued; gateway
@@ -605,3 +605,71 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 ### Results
 - `scripts/check-gateway-quality`: 245 passed. Broader suites (inventory, contracts, routing, runtime, gateway,
   pipeline): 382 passed, 1 skipped (pre-existing). yamllint + ansible-lint (production profile) clean.
+
+## SYCL research window 2 - plan additions (2026-11-15, from LocalAI review)
+- [x] Locate Coder-30B prefill regression: bisect (493253fe good, 39febd2a bad); 7377bada8 build in progress; then upstream report with b11347 multi-seq bug — DONE 2026-11-16: root cause = d5bbcd1f3 (#31540) IGC/NEO/oneDNN pin bump; upstream report ggml-org/llama.cpp#32399.
+- [x] Reliability: busy-watchdog design keyed on oldest in-flight request; graceful stop then forced kill; cancel test on HEAD image — design merged (PR #32, docs/design/WORKER-BUSY-WATCHDOG.md); cancel on HEAD verified in window2; implementation NOT built (new item below).
+- [x] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build — DONE 2026-11-16 in substance: per-worker env (#22), candidate profile qwen36-stackb (#23), SHA-256-pinned debs (#25), rollback rehearsed (#28); production now on the digest-pinned research image.
+- [x] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report) — DONE 2026-11-17: research/sycl-optimization/evidence/window3/README.md (3 load modes, kill mid-load, collision; no hang; flag is -lm).
+- [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence
+- [x] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check — `harness/kl_predeploy_gate.sh` (compare mode verified on stored scores incl. a failing case; `run` mode needs a research window)
+- [x] (colibri review) Gateway test: long agent turn -> short interleaved request -> long turn; TTFT on deployed vs HEAD, `--cache-ram` default vs raised — done through the gateway: long-2 TTFT 0.26 s (lead) / 0.31 s (deep) after an interleaved short request, 10016 of 10020 tokens cached; default --cache-ram suffices for this shape; HEAD is the deployed build (window3 README)
+- [ ] (colibri review) Candidate: MTP speculative decoding; first find an MTP-bearing GGUF (ours show no nextn/mtp tensor names), then A/B with greedy-equality check
+- [x] (AnythingLLM review) Check gateway route stickiness; measure TTFT with/without a sticky window if conversations bounce between workers — settled by code: rendezvous hashing + warm-worker map keyed on session id or conversation prefix (tests/test_orchestrator_runtime.py:384); today each model is a single-worker pool so conversations cannot bounce; re-measure only when a pool gets a second worker
+- [x] (AnythingLLM review) Gateway benchmarks record token counts, output tps, duration, truncated flag — controlled_probe rows now carry finish_reason, truncated, output_tokens_per_second (plus existing usage/seconds); test added
+- [x] (AnythingLLM review) Measure Nexus Code tool-definition tokens per turn; A/B a reduced tool set only if material — measured: 36 tools, 17 KB, ~4.3-5.7k tokens (estimate), cached after turn 1; not material, no A/B (window3 README)
+- [x] (Ollama review) Write image-bump checklist (diff review, inspect built source, full gate) and add to deployment gate — done in docs/operations/LLAMA-IMAGE-BUMP.md (#31)
+- [x] (Ollama review) Patch policy: additive only, upstream PR linked, removal condition recorded — done in the same doc (#31)
+- [x] (Ollama review) Failure injection: worker saturation (queue bound, 503, queue-depth metric) and crash last-error in evidence — queue bound is 32 per pool, full queue -> 429 capacity_exhausted with Retry-After, wait cap 120 s (admission.py; covered by tests/test_gateway_fast_admission.py and test_gateway_platform.py, 50 pass). Live: c=4 queues cleanly with no errors. A live over-bound run is not meaningful through the 60 rpm qualification quota (the quota would reject first); crash behaviour recorded in window 2/3 (SIGKILL, collision).
+- [ ] (Ollama review) Build Vulkan-enabled llama.cpp image; A/B vs SYCL on B65 for the three models
+- [x] (vLLM review) Gateway-level load benchmark from a client machine (TTFT, TPOT, ITL percentiles; sweeps; Nexus Code prompt shapes) — gateway_load.py + probe_mode load: sweeps 1/2/4, TTFT/TPOT/chunk-gap percentiles, no errors (window3 README); Nexus-shaped long prompts covered by the 10k interleave
+- [x] (vLLM review) Map llama.cpp metrics to evidence/vllm-top vocabulary; derive TTFT/queue time client-side — research/sycl-optimization/metrics-mapping.md (mapping exists in engine_stats.py; vllm-top adapter gap noted as a separate item)
+- [ ] (vLLM review) Split slot-reuse test: Coder-30B (full attention) vs Qwen3.6/Flash-Next (hybrid, ctx checkpoints)
+- [ ] (vLLM review) Feasibility: vllm-openai-xpu v0.29.0 serving Coder-30B on one B65; engine comparison on engx + latency only
+- [x] (SGLang review) Define and test gateway semantics: circuit breaker, 429/408 queue behaviour, health-check thresholds, retry with jitter — research/sycl-optimization/gateway-semantics.md (semantics from code, 82 covering tests pass; 408 gap noted)
+- [x] (SGLang review) Hybrid-model checkpoint test: request-end checkpoint on `-np 1`, continuation vs mid-prompt fork TTFT — continuation 1.6 s (lead) / 3.8 s (deep), mid-prompt fork no reuse (8.7 / 21.3 s) and evicts the original; keep prefixes append-only (window3 README)
+- [x] (SGLang review) Trace replay benchmark from sanitised Nexus Code sessions (local only); cache-hit ratio, TTFT, session time — one real session replayed through the gateway: 96-97% cached after step 2, session 13.5 s (lead) / 35.8 s (deep) (window3 README)
+- [x] (SGLang review) `--cache-ram` capacity under 64K conversations; idle-vs-active eviction; host RAM headroom — three alternating 18k-token conversations all retained (TTFT 10 s -> 0.33 s lead, 25 s -> 0.75 s deep); eviction point not reached (window3 README)
+- [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
+- [x] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist — PR #33
+- [x] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback — moot as written: no Coder worker is deployed; both live workers carry ESIMD=0 via llama_worker.env and passed the gate (Qwen3.6 and Flash-Next verified, soak clean)
+- [ ] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention)
+- [x] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892) — done in window 2 (2026-11-16): Qwen3.8-27B Q4_K_M PPL finite and identical, #30892 not reproduced; note added to the bump doc (PR #33)
+- [x] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use — verified from --help: router and sleep-idle are opt-in and absent from the worker units (window3 README)
+- [x] (window 2) Record runtime-stack versions per image; test old vs new stack with the same source on every bump (plan 4ae) — stack versions recorded per image in the window-2 README; step added to the bump doc (PR #33)
+- [x] (window 2) Full gate on candidate `head-stackB` for Qwen3.6, Flash-Next and Coder: KL, bench, engx, Ansible pin + rollback (plan 4af) — superseded: stackB (new IGC/NEO) was rejected for the 32K regression; production runs the old-stack HEAD image, which passed the full gate (KL, bench, engx, canary, rollback rehearsal). No Coder worker is deployed.
+- [x] (window 2) Upstream report on IGC 2.42.6 + NEO 26.40 32K regression, after re-searching the tracker (plan 4ag) — filed as ggml-org/llama.cpp#32399 on 2026-11-16 (operator approved; see upstream-issue-draft.md)
+
+
+## Review: SYCL research window 2 (2026-11-16)
+- Done: root cause of the 32K regression (bundled IGC/NEO, not source/oneDNN); candidate `head-stackB` gated on throughput + KL (3 models), engx (Qwen3.6, Coder-30B),
+  dense Qwen3.8-27B sanity; deliverables written; lessons added; Ansible env hook on local branch `feat/llama-worker-env` (`fa7d538`, not pushed).
+- Not done, with reason: Flash-Next engx (harness died; ~3 h/image, recorded as gap); gateway-level latency/failure injection (needs the candidate behind the
+  production gateway = deployment, only via Ansible with rehearsed rollback); registry push + rollback rehearsal (outward-facing, needs operator approval/registry);
+  upstream issue (`research/sycl-optimization/upstream-issue-draft.md`, needs operator go-ahead); PR for the role change (needs operator go-ahead).
+- Decision unchanged: EXPERIMENT FURTHER; nothing deployed; production verified restored after every outage.
+
+## Review addendum: SYCL candidate through Ansible/gateway (2026-11-16)
+- Done with operator approval: upstream report (llama.cpp#32399), PRs #22/#23/#24 merged (CI green), durable candidate transaction run (3rd attempt passed, restored_verified), baseline-vs-candidate gateway latency probe.
+- Open (decisions/gaps): production reconverge to main (gateway security release + owed human steps), long-context gateway TTFT/concurrency, promoting the image to routed pools with a rehearsed rollback, package SHA-256 pins; scratch branch `candidate-src/stackb-on-deployed` + worktree `/home/mike/work/aihost-candidate-src` are local only (scratch commit surfaces drain error detail; not for merge).
+
+## Plan: deploy the validated SYCL stack to production (operator instruction 2026-11-16)
+Instruction: reconverge production to main; promote the image to the routed pools with a rehearsed rollback; set the qualification client's quota to optimised levels;
+rotate required keys and update configured clients. Constraints: Ansible only, drain-and-swap, idle checks, never print/log/commit secrets, verify after every step,
+stop at any step that needs a credential I do not hold.
+- [x] 1. Simulate (check-mode) reconcile of main against ai-5820-01; review the diff (gateway security release, anything unexpected)
+- [x] 2. Inventory external gateway callers (vllm-top, engx, nexus, other) and how each authenticates; provision admin/qualification clients the hardened gateway needs, BEFORE the gateway restarts
+- [x] 3. Re-pin controller snapshot to main (reconcile-controller.yml), converge; verify gateway, workers, clients (restored_verified-style checks)
+- [x] 4. Key rotation (worker keys, gateway client tokens, hermes token) via the role's own mechanism; update clients; verify — worker + compat keys rotated; client tokens not rotated by operator decision (no live exposure)
+- [x] 5. Vault: Grafana secrets (needs Vault access; stop if absent)
+- [x] 6. Promotion PR: worker1 + worker2 image_ref (digest) + env ESIMD=0, gateway runtime_image_digest; rollback = revert; rehearse rollback on one worker
+- [x] 7. Qualification client quota to optimised level; rerun concurrency + tool-call probes through the gateway
+- [x] 8. Final verification, evidence, docs, lessons; post-deploy soak check
+
+## Review: production deployment (2026-11-16)
+- [x] 1-3 Simulated then reconverged production to main (gateway security release `626424c`), verified (health, authenticated probe, vllm-top)
+- [x] 6 Promotion: canary on worker2 (#27) -> rollback rehearsal (#28, verified) -> both workers + quota (#29); both routes verified
+- [x] 7 Qualification quota 6 -> 60 rpm; concurrency 1 and 2 and multi-turn tool probes pass on lead and deep (12/12 tool cases)
+- [x] 4 Key rotation round 1 (worker keys, compat key) through Vault; verified. Client tokens not rotated (no live exposure found, see evidence README)
+- [x] 5 Grafana Vault secrets: needs an observability AppRole/policy decision (new Vault infrastructure); not done — done 2026-11-16: Grafana converged with Vault secrets (rotated once after --diff exposure)
+- [x] 8 Soak: watch lead/deep routes and the kernel log over the next days; rollback = revert PR #29 and re-pin the snapshot — soak clean over ~4.5 h, 4 probe points, no rollback

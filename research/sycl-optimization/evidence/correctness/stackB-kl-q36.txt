@@ -1,0 +1,51 @@
+0.04.432.252 I cmn          init: llama threadpool init, n_threads = 4
+1.33.786.627 I 
+1.33.786.697 I system_info: n_threads = 4 (n_threads_batch = 4) / 8 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | AVX512 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 | 
+1.33.913.080 I kl_divergence: computing over 3 chunks, n_ctx=2048, batch_size=2048, n_seq=1
+0.23 minutes
+
+chunk             PPL               ln(PPL(Q)/PPL(base))          KL Divergence              Δp RMS            Same top p
+1.38.625.053 I kl_divergence: 4.71 seconds per pass - ETA    1      25.2749 ±    2.4732      -0.00347 ±    0.00316       0.00427 ±    0.00018     1.334 ±  0.098 %    96.285 ±  0.592 %
+   2      23.1566 ±    1.6157      -0.00309 ±    0.00251       0.00496 ±    0.00018     1.334 ±  0.065 %    96.628 ±  0.399 %
+   3      16.2918 ±    0.9116      -0.00166 ±    0.00205       0.00470 ±    0.00017     1.555 ±  0.107 %    96.579 ±  0.328 %
+
+====== Perplexity statistics ======
+Mean PPL(Q)                   :  16.291802 ±   0.911643
+Mean PPL(base)                :  16.318893 ±   0.913052
+Cor(ln(PPL(Q)), ln(PPL(base))):  99.93%
+Mean ln(PPL(Q)/PPL(base))     :  -0.001661 ±   0.002053
+Mean PPL(Q)/PPL(base)         :   0.998340 ±   0.002049
+Mean PPL(Q)-PPL(base)         :  -0.027091 ±   0.033500
+
+====== KL divergence statistics ======
+Mean    KLD:   0.004700 ±   0.000169
+Maximum KLD:   0.206250
+99.9%   KLD:   0.154975
+99.0%   KLD:   0.033721
+95.0%   KLD:   0.014651
+90.0%   KLD:   0.009966
+Median  KLD:   0.002746
+10.0%   KLD:   0.000070
+ 5.0%   KLD:   0.000013
+ 1.0%   KLD:   0.000001
+ 0.1%   KLD:  -0.000002
+Minimum KLD:  -0.000003
+
+====== Token probability statistics ======
+Mean    Δp:  0.036 ± 0.028 %
+Maximum Δp: 25.352%
+99.9%   Δp: 13.281%
+99.0%   Δp:  4.200%
+95.0%   Δp:  2.009%
+90.0%   Δp:  1.140%
+75.0%   Δp:  0.180%
+Median  Δp:  0.000%
+25.0%   Δp: -0.177%
+10.0%   Δp: -0.984%
+ 5.0%   Δp: -1.877%
+ 1.0%   Δp: -4.058%
+ 0.1%   Δp: -9.794%
+Minimum Δp: -21.066%
+RMS Δp    :  1.555 ± 0.107 %
+Same top p: 96.579 ± 0.328 %
+

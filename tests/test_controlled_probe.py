@@ -71,3 +71,65 @@ def test_multiturn_probe_grades_tool_results_and_final_state():
                     "finish_reason": "tool_calls" if "tool_calls" in message else "stop"}]}
 
     assert probe.stateful_tool_case(GoodGateway(), 2)["passed"]
+
+
+def test_chat_rows_record_finish_reason_truncation_and_output_rate(monkeypatch):
+    import io
+    import json as _json
+    probe = module("controlled_probe")
+
+    class Resp(io.BytesIO):
+        status = 200
+        headers = {"X-AIHost-Cache": "BYPASS"}
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    body = {"choices": [{"message": {"content": "x"}, "finish_reason": "length"}],
+            "usage": {"completion_tokens": 128, "prompt_tokens": 10}}
+    monkeypatch.setattr(probe.urllib.request, "urlopen", lambda *a, **k: Resp(_json.dumps(body).encode()))
+    gateway = probe.Gateway("https://gw.invalid", "m", "k", None)
+    row, _ = gateway.chat([{"role": "user", "content": "hi"}])
+    assert row["finish_reason"] == "length" and row["truncated"] is True
+    assert row["output_tokens_per_second"] > 0
+
+
+def test_gateway_load_summaries_and_bounds():
+    load = module("gateway_load")
+    assert sum(c * load.PER_LEVEL for c in load.LEVELS) + 3 <= load.MAX_REQUESTS
+    rows = [{"status": 200, "ttft_seconds": 0.1 * i, "chunk_gaps_seconds": [0.01, 0.02], "finish_reason": "stop",
+             "seconds": 1.0, "tpot_seconds": 0.02} for i in range(1, 5)]
+    rows.append({"status": 429, "ttft_seconds": None, "chunk_gaps_seconds": [], "finish_reason": None, "seconds": 0.01})
+    s = load.summarize(rows)
+    assert s["statuses"] == {"200": 4, "429": 1} and s["ttft_max"] == 0.4 and s["gap_p99"] == 0.02
+    assert "chunk_gaps_seconds" not in load.strip(rows[0]) and load.strip(rows[0])["chunk_gap_count"] == 2
+
+
+def test_gateway_load_alternate_runs_two_rounds_over_three_distinct_prefixes(tmp_path, monkeypatch):
+    load = module("gateway_load")
+    seen = []
+    def fake(gateway, text, max_tokens=128):
+        seen.append(text[:16])
+        return {"status": 200, "chunk_gaps_seconds": [], "cached_prompt_tokens": 0}
+    monkeypatch.setattr(load, "stream_request", fake)
+    result = load.alternate(object(), {}, tmp_path / "o.json")
+    assert len(seen) == 6 and len(set(seen)) == 3 and seen[:3] == seen[3:]
+    assert [r["round"] for r in result["alternate"]] == [1, 1, 1, 2, 2, 2]
+
+
+def test_gateway_load_fork_steps(tmp_path, monkeypatch):
+    load = module("gateway_load")
+    monkeypatch.setattr(load, "stream_request", lambda g, t, max_tokens=128: {"status": 200, "chunk_gaps_seconds": [], "len": len(t)})
+    result = load.fork(object(), {}, tmp_path / "o.json")
+    assert [r["step"] for r in result["fork"]] == ["cold", "continuation", "fork-mid-prompt", "original-again"]
+
+
+def test_gateway_load_replay_plan_picks_successive_tool_call_cuts():
+    load = module("gateway_load")
+    msgs = [{"role": "user", "content": "go"}]
+    for n in range(5):
+        msgs.append({"role": "assistant", "content": "", "tool_calls": [
+            {"function": {"name": "read_file", "arguments": "{}"}}]})
+        msgs.append({"role": "tool", "content": "ok"})
+    digest, plan = load.replay_plan([("s.json", msgs)], steps=3)
+    assert len(digest) == 12 and 1 <= len(plan) <= 3
+    assert [p[0] for p in plan] == sorted(p[0] for p in plan) and plan[0][2][0]["function"]["name"] == "read_file"

@@ -1,0 +1,155 @@
+{
+  "started_at": "2026-11-17T05:43:11.266790+00:00",
+  "model": {
+    "id": "engineering/lead",
+    "object": "model",
+    "owned_by": "aihost-orchestrator",
+    "context_length": 65536,
+    "max_model_len": 65536,
+    "max_completion_tokens": 8192,
+    "limits_version": "baf252a4827ca0d4",
+    "reasoning": {
+      "budget": 8192,
+      "mode": "off"
+    },
+    "serving": [
+      {
+        "worker_id": "b0-live-llama-worker1",
+        "pool": "lead",
+        "role": "production",
+        "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+        "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+        "quantization": "Q4_K - Medium",
+        "engine": "llama.cpp",
+        "engine_version": "b0-unknown",
+        "capacity_source": "observed"
+      }
+    ],
+    "capabilities": {
+      "tools": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "parallel_tool_calls": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "structured_output": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "vision": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "reasoning": {
+        "available": true,
+        "provenance": "declared",
+        "evidence": [
+          "engine"
+        ]
+      },
+      "reasoning_controllable": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "reasoning-profile-probe-qwen36-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "streaming": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "output_contract_compliance": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-contract-qwen36-reasoning-on-pinned-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "fim": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "embeddings": {
+        "available": false,
+        "provenance": "unavailable"
+      }
+    }
+  },
+  "sweep": {},
+  "interleave": {},
+  "fork": [
+    {
+      "status": 200,
+      "ttft_seconds": 10.368334006052464,
+      "completion_tokens": 11,
+      "prompt_tokens": 18020,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 10.586019866052084,
+      "tpot_seconds": 0.021768585999961943,
+      "chunk_gap_count": 9,
+      "step": "cold"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 1.5568385820370167,
+      "completion_tokens": 16,
+      "prompt_tokens": 18032,
+      "cached_prompt_tokens": 15968,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 1.857071653008461,
+      "tpot_seconds": 0.02001553806476295,
+      "chunk_gap_count": 14,
+      "step": "continuation"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 8.677093586069532,
+      "completion_tokens": 15,
+      "prompt_tokens": 15020,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 8.950075350003317,
+      "tpot_seconds": 0.019498697423841804,
+      "chunk_gap_count": 13,
+      "step": "fork-mid-prompt"
+    },
+    {
+      "status": 200,
+      "ttft_seconds": 10.087471824954264,
+      "completion_tokens": 11,
+      "prompt_tokens": 18020,
+      "cached_prompt_tokens": 0,
+      "finish_reason": "stop",
+      "failure_class": null,
+      "seconds": 10.307198602939025,
+      "tpot_seconds": 0.02197267779847607,
+      "chunk_gap_count": 9,
+      "step": "original-again"
+    }
+  ],
+  "finished_at": "2026-11-17T05:43:43.000119+00:00"
+}

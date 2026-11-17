@@ -52,3 +52,32 @@
 
 - Rule: before re-pinning the reconcile snapshot to a merge commit, fast-forward local `main`: the snapshot role's git
   checkout fetches only local branches/tags, so an `origin/main`-only commit fails with "reference is not a tree".
+
+## 2026-11-16 — a bisect over source commits must hold the build environment fixed (SYCL 32K regression)
+- Pattern: I bisected llama.cpp commits using each commit's own `.devops/intel.Dockerfile`, concluded the regression "enters
+  at 18c5a95e", and was wrong: the Dockerfile bump (oneDNN, IGC, NEO, IGDGMM, Level Zero; d5bbcd1f3) rode along with the source.
+  Reverting the suspect source change did nothing (874 vs 872), which exposed it.
+- Rule: before attributing a perf change to source, list every input that changes between the two builds (toolchain, runtime
+  libraries, base image, env defaults) and vary one at a time; verify by reverting the suspect and checking the number moves.
+- Rule: packaged runtime pairs (IGC/NEO) can be hard-coupled by Debian dependencies; check `dpkg` constraints before planning a
+  split bisect, and keep a failed-build log as evidence rather than retrying blindly.
+
+## 2026-11-16 — a long outage harness must survive its launcher and be watched for liveness, not only for its done-marker
+- Pattern: a multi-hour engx outage was started with `nohup ... &` from the tool shell; the process vanished without running its EXIT trap, so
+  worker 2 stayed down ~3 h until I noticed. My monitors waited only for a `RESTORED` line that never came and expired silently.
+- Rule: launch outage harnesses with `setsid` (own session), and have the watcher also check that the harness PID is alive; if it is gone with no
+  RESTORED, run `harness/restore_baseline.sh` immediately. Prefer shorter outages (one image per outage) over a multi-hour one.
+
+## 2026-11-16 — a result must be tied to the server that produced it (leaked research container)
+- Pattern: after a SIGKILL test, `systemctl stop` left the podman container alive; the next harness's own server failed to bind the shared port and its
+  client silently talked to the old container, producing a "Flash-Next" result that was really Qwen3.6. Production also shared the GPU with it for ~30 min.
+- Rule: harnesses must check the port is free before starting, stop containers explicitly (`podman rm -f`), and verify the served model
+  (`/props` model_path) before and after any run; sanity-check results against known speeds (tokens/s) before recording them.
+
+## 2026-11-16 — check the deployed identity before a transaction, and check the right tree before grepping
+- A durable candidate transaction's baseline refuses when the host's gateway release differs from the source's pin; build the source from the deployed commit
+  (snapshot HEAD) plus only the intended changes instead of reconverging production to a newer main.
+- I grepped the host_vars in my checked-out research branch (older than main) and briefly concluded a secret had survived the security PR; read `origin/main:<path>` when judging main.
+- Rotation must be driven by evidence: test current secrets against the leaked prefixes (booleans only) before rotating consumers I cannot see.
+
+- 2026-11-16: never run ansible `--diff` on tasks that render secret-bearing templates (env files); it wrote Grafana secrets to a log and my grep echoed them. Check logs with `grep -c`, never print matching lines; if exposed, shred the log and rotate immediately.

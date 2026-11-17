@@ -1,0 +1,13 @@
+idle confirmed 2026-11-17T01:30:41Z
+== mmap A clean load
+A mmap load_s=98 request_ok=1 used_mb=6250 avail_mb=56443
+== mmap C collision: second server on same GPU
+C mmap second_load=FAIL first_health={"status":"ok"} first_request_ok=1 second_unit=inactive
+== mmap B SIGKILL mid-load then reload
+B mmap after_kill_unit=inactive used_mb=6160 avail_mb=56532
+B mmap reload_s=97 request_ok=1 used_mb=6309 avail_mb=56384
+kernel xe timeouts: 32 (baseline 32)
+== nommap A clean load
+A nommap load_s=FAIL request_ok=0 used_mb=5045 avail_mb=57648
+== nommap C collision: second server on same GPU
+RESTORED rc=0
