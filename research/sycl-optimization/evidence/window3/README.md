@@ -194,3 +194,20 @@ Runs: **base** (deployed GGUF, no speculation), **mtp-off** (MTP GGUF, `--spec-t
   mtp-off vs mtp-on matched on 2 of 6. On this stack, token-exact equality is not a usable pass/fail criterion for speculative decoding;
   a KL or task-accuracy comparison would be needed if the speed ever justified it.
 - Decision: do not adopt MTP for the routed workers. The deployed GGUF has no MTP head anyway; adopting it would mean switching weights as well.
+
+## Vulkan vs SYCL on the B65 (backlog 624, 2026-11-17)
+
+Image: official `.devops/vulkan.Dockerfile` (`full` target) built from the same llama.cpp commit a956a852, loaded as
+`localhost/sycl-research/llama:vulkan-a956a852` into the aihost-runtime store (Mesa open-source driver, Intel BMG G31, KHR_coopmat, fp16 and bf16 on).
+SYCL = the production image. `harness/window3_vulkan_ab.sh`: `llama-bench -ngl 99 -fa 1 -b 4096 -ub 2048 -p 512,8192 -n 128 -r 2`, GPU0, worker1 stopped for
+the window, restore rc 0, `Timedout job` count unchanged at 32. Raw: `vulkan/*.jsonl`. Performance only; Vulkan was not run through an accuracy gate.
+
+| Model | pp512 SYCL / Vulkan (t/s) | pp8192 SYCL / Vulkan | tg128 SYCL / Vulkan |
+|---|---|---|---|
+| Qwen3.6-35B-A3B Q4_K_M | 1412 / 1165 (0.83x) | 1812 / 1352 (0.75x) | 75.0 / 24.3 (0.32x) |
+| Qwen3-Coder-30B-A3B Q4_K_M | 1333 / 1302 (0.98x) | 1591 / 853 (0.54x) | 92.2 / 39.6 (0.43x) |
+| Flash-Next IQ1_M | 572 / 414 (0.72x) | 666 / 522 (0.78x) | 19.1 / 11.3 (0.59x) |
+
+Vulkan is slower on every model and every test, most of all in decode (0.32-0.59x) and long-prompt prefill on the MoE Coder model (0.54x).
+Decision: no case for Vulkan on this hardware; SYCL stays. Cost note: building and shipping the image took about 40 minutes of workstation
+time; the Vulkan image remains in the aihost-runtime store (2.7 GB) for any later re-check and can be removed with `podman rmi`.

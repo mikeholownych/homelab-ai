@@ -1,0 +1,15 @@
+idle confirmed 2026-11-17T08:49:11Z
+== qwen36 sycl 2026-11-17T08:49:34Z
+rc=0 lines=3
+== qwen36 vulkan 2026-11-17T08:51:43Z
+rc=0 lines=3
+== coder sycl 2026-11-17T08:52:37Z
+rc=0 lines=3
+== coder vulkan 2026-11-17T08:54:23Z
+rc=0 lines=3
+== flashnext sycl 2026-11-17T08:55:27Z
+rc=0 lines=3
+== flashnext vulkan 2026-11-17T08:58:32Z
+rc=0 lines=3
+dmesg timedout: 32
+RESTORED rc=0
