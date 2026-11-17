@@ -171,3 +171,26 @@ but Coder-30B was not demonstrated. The remaining routes need HF-format weights:
 BF16 is about 61 GB with online FP8 quantisation (a 61 GB download and about 61 GB of host RAM pressure). That was judged out of
 proportion for an engine comparison whose weights would differ from our GGUFs anyway (the KL gate would not apply). Logs: `run1/`, `run2/`,
 `vllm-xpu-coder-gguf.logtail`. Side effect to know: an accidental root-podman pull of the same image was killed before it completed; the root store holds no vllm image.
+
+## MTP speculative decoding A/B (backlog 617, 2026-11-17)
+
+Weights: `unsloth/Qwen3.6-35B-A3B-MTP-GGUF` UD-Q4_K_M (22.7 GB; carries the MTP head, unlike our deployed GGUF), downloaded to the host
+model dir. `harness/window3_mtp_ab.sh`: production image and flags, GPU0, research server (not via the gateway), six fixed prompts,
+temperature 0, 256 tokens max, thinking off; worker1 stopped for the window, restore rc 0, `Timedout job` count unchanged at 32.
+Runs: **base** (deployed GGUF, no speculation), **mtp-off** (MTP GGUF, `--spec-type none`), **mtp-on** (`--spec-type draft-mtp --spec-draft-n-max 3`).
+
+| Run | Mean decode (tok/s) | Per-prompt range | Draft acceptance |
+|---|---|---|---|
+| base | 71.4 | 70.8-71.9 | n/a |
+| mtp-off | 71.7 | 71.3-72.2 | n/a |
+| mtp-on | **68.7** | 57.4-78.4 | 56-94% by prompt (136/237 on prose, 188/199 on SQL) |
+
+- Speed: MTP does not pay on this build and hardware. High acceptance on code (84-94%) gives +5 to +9% on the best prompts, but prose
+  (57% acceptance) is 20% slower, and the mean is 4% below plain decoding. The drafting and verification overhead on the B65 eats
+  the savings at `--spec-draft-n-max 3`. Not tried: other draft lengths, `--spec-draft-p-min` thresholds; the evidence does not
+  suggest a large win.
+- Greedy equality: not established. Even base vs mtp-off (same flags, nominally the same weights, different GGUF files) matched on only
+  1 of 6 prompts, so output hashes cannot separate "speculation changes text" from "these two files and batch shapes differ numerically".
+  mtp-off vs mtp-on matched on 2 of 6. On this stack, token-exact equality is not a usable pass/fail criterion for speculative decoding;
+  a KL or task-accuracy comparison would be needed if the speed ever justified it.
+- Decision: do not adopt MTP for the routed workers. The deployed GGUF has no MTP head anyway; adopting it would mean switching weights as well.
