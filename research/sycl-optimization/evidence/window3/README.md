@@ -400,3 +400,20 @@ Both scale almost linearly to 32 streams (vLLM about 7.7 tok/s per stream at 32)
 
 Both engines' prefix caches work for the append-only pattern: after the cold first step every later step is 0.2-0.3 s, about 2x faster than llama.cpp's 0.5-0.7 s, and the cold prefill is 4-7x faster. Neither engine reports `cached_tokens` through the OpenAI usage here, so the evidence is the TTFT drop, not a token count.
 Net: the engines are better at prefill and at concurrency; llama.cpp is still about 7x faster per single-stream decode (earlier section) and uses half the hardware. A deployment choice would hinge on the expected number of simultaneous agent sessions: one or two per worker (today) favours llama.cpp; many concurrent sessions would favour vLLM XPU, at the price of both cards.
+
+### Slot-state persistence validated live on a watchdog restart (2026-11-17)
+Deployed: gateway release `636b7fb` (admin route `POST /admin/workers/<id>/slot/<save|restore>`), both worker units with `--slot-save-path /slots` on private 0700 per-worker mounts
+(`/var/lib/aihost-runtime/slots/<worker_id>`), watchdog executor with `--slot-save-interval 300` that saves only after completed work (main `ce8f598`).
+`harness/window3_slot_restore_check.sh` (evidence: `slot-restore/`) drove production worker2 (deep route) while the scheduled watchdog service did all the work:
+
+| Step | Result |
+|---|---|
+| conversation 1: one fixed 11,018-token turn through the gateway | TTFT **16.8 s**, 0 tokens cached |
+| service's idle save (about 4.5 min later) | `slot_save` saved, 11,019 tokens, 693 MB |
+| a different long generation started, worker2 container SIGSTOPped | service: drain, stop, restart (as in the earlier rehearsals) |
+| after the restart: `slot_restore` | **restored 11,019 tokens**, then undrain |
+| the same conversation again | TTFT **0.27 s**, 11,014 of 11,018 prompt tokens cached (about 62x faster than cold) |
+
+Restore restored the conversation that was idle at the last save, not the one in flight when the worker wedged, exactly as designed (a wedged worker cannot save; the generation in flight is lost either way).
+Restore, restart and unit-change paths: `restore` on a changed model/image finds no file (fingerprinted name, unit test), planned Ansible restarts save after the drain and restore before the undrain (task order lint-clean; exercised in the deploy
+only as the no-state case because the workers had no flag yet; the first planned restart after this one will exercise the save/restore tasks). Production state afterwards: 2/2 workers, watchdog active, `Timedout job` count unchanged at 32.

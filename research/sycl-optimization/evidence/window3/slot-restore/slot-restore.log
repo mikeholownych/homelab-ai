@@ -1,0 +1,10 @@
+idle confirmed 2026-11-17T23:20:02Z; watchdog service: active
+conv 1 (cold): {'ttft_seconds': 16.805312367039733, 'prompt_tokens': 11018, 'cached_prompt_tokens': 0}
+service saved worker2 state: 1 after 271 s
+SIGSTOP 2026-11-17T23:25:24Z
+llama-sycl-worker2
+conv 2 (after restart + restore): {'ttft_seconds': 0.26975465402938426, 'prompt_tokens': 11018, 'cached_prompt_tokens': 11014}
+units: active active 
+dmesg timedout: 32
+trap undrain b0-live-llama-deep-worker2 True
+RESTORED rc=0
