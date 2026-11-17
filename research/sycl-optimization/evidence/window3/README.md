@@ -155,3 +155,19 @@ client for both models (`harness/window3_slot_reuse.sh`, `harness/slot_reuse_cli
 - Consequence for model choice and client design: a workload that edits or compacts earlier context favours the full-attention Coder model;
   an append-only agent loop is cheap on either. If Coder-30B is ever routed again, the gateway's affinity map is worth more there
   than on the hybrids.
+
+## vLLM XPU feasibility on one B65 (backlog 628, 2026-11-17)
+
+`harness/window3_vllm_xpu.sh`: `docker.io/vllm/vllm-openai-xpu:v0.29.0` (already in the aihost-runtime store), research server on :18200
+(not via the gateway), GPU0 with worker1 stopped, idle gate, restore trap (rc 0 each time; `Timedout job` count unchanged at 32).
+
+| Attempt | Result |
+|---|---|
+| Qwen2.5-7B-Instruct-AWQ (cached; `--quantization awq`, 8k context) | **Runs.** Healthy after 141 s. 1060-token prompt, 39 tokens out: TTFT 0.44 s (first), 0.13 s, 0.06 s; decode gap p50 about 24 ms (about 42 tok/s). Proves the image drives the B65 (device found, kernels run). |
+| Our Qwen3-Coder-30B-A3B Q4_K_M GGUF (`--tokenizer` and `--hf-config-path` pointing at the HF repo's config/tokenizer files) | **Did not load (3 attempts).** vLLM 0.29.0 stops during config resolution in `transformers`: it reads the `.gguf` as a JSON config (`UnicodeDecodeError`, "not a valid JSON file"), with and without `--hf-config-path`. It never reached the model or the GPU, so this says nothing about MoE kernels. |
+
+Conclusion: the engine is feasible on this hardware for a dense AWQ model, and the comparison harness (`harness/engine_probe_client.py`) works against it,
+but Coder-30B was not demonstrated. The remaining routes need HF-format weights: FP8 is about 31 GB (does not fit with KV cache on a 32 GB card),
+BF16 is about 61 GB with online FP8 quantisation (a 61 GB download and about 61 GB of host RAM pressure). That was judged out of
+proportion for an engine comparison whose weights would differ from our GGUFs anyway (the KL gate would not apply). Logs: `run1/`, `run2/`,
+`vllm-xpu-coder-gguf.logtail`. Side effect to know: an accidental root-podman pull of the same image was killed before it completed; the root store holds no vllm image.

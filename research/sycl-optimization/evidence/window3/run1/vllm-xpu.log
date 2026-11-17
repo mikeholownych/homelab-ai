@@ -1,0 +1,12 @@
+idle confirmed 2026-11-17T07:31:07Z
+== awq7b 2026-11-17T07:31:28Z
+0447312267dc7ebd069d17c527159fa3f170692abb801153283c64cee9ad7374
+awq7b healthy=1 after_s=141
+{"rep": 0, "ttft_s": 0.438, "wall_s": 1.35, "gap_p50_ms": 24.0, "completion_tokens": 39, "prompt_tokens": 1060}
+{"rep": 1, "ttft_s": 0.13, "wall_s": 1.04, "gap_p50_ms": 23.9, "completion_tokens": 39, "prompt_tokens": 1060}
+{"rep": 2, "ttft_s": 0.057, "wall_s": 1.0, "gap_p50_ms": 23.7, "completion_tokens": 39, "prompt_tokens": 1060}
+== coder-gguf 2026-11-17T07:34:10Z
+024b24b29616486f483448bcfcb889fcf6948019776c8dc0372313b3e7f4ac76
+coder-gguf healthy=0 after_s=47
+dmesg timedout: 32
+RESTORED rc=0
