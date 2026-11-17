@@ -19,7 +19,8 @@ def stream(prompt, max_tokens):
             if not line.startswith("data:") or line == "data: [DONE]":
                 continue
             c = json.loads(line[5:]); usage = c.get("usage") or usage
-            if first is None and any((ch.get("delta") or {}).get("content") for ch in c.get("choices") or []):
+            if first is None and any(((ch.get("delta") or {}).get("content") or (ch.get("delta") or {}).get("reasoning_content"))
+                                     for ch in c.get("choices") or []):   # thinking models stream reasoning tokens first
                 first = time.monotonic() - t0
     return {"ttft": first, "wall": time.monotonic() - t0, "completion": usage.get("completion_tokens") or 0, "prompt": usage.get("prompt_tokens")}
 

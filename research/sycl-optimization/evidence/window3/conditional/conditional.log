@@ -1,0 +1,40 @@
+idle confirmed 2026-11-17T16:39:32Z
+== A allgpu 2026-11-17T16:39:59Z
+A allgpu ready_s=99
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 256, "wall_s": 5.23, "aggregate_tok_s": 49.0, "ttft_p50": 0.952, "ttft_p95": 0.952}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3937, "ttft_s": 3.58, "prefill_tok_s": 1098.0}
+== A cmoe-nocache 2026-11-17T16:42:13Z
+A cmoe-nocache ready_s=91
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 256, "wall_s": 14.9, "aggregate_tok_s": 17.2, "ttft_p50": 2.443, "ttft_p95": 2.443}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3936, "ttft_s": 6.18, "prefill_tok_s": 637.0}
+== A cmoe-cache8g 2026-11-17T16:46:16Z
+A cmoe-cache8g ready_s=97
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 256, "wall_s": 10.98, "aggregate_tok_s": 23.3, "ttft_p50": 2.531, "ttft_p95": 2.531}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3936, "ttft_s": 5.85, "prefill_tok_s": 673.0}
+== A cmoe-cache8g-cpu50 2026-11-17T16:50:18Z
+A cmoe-cache8g-cpu50 ready_s=97
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 256, "wall_s": 11.37, "aggregate_tok_s": 22.5, "ttft_p50": 2.565, "ttft_p95": 2.565}
+{"mode": "longctx", "target_tokens": 4000, "prompt_tokens": 3936, "ttft_s": 5.93, "prefill_tok_s": 664.0}
+== B slot persistence 2026-11-17T16:52:39Z
+B first start ready_s=97
+{"step": "cold", "status": 200, "wall_s": 14.61, "prompt_n": 18015, "cache_n": 0}
+{"step": "save", "status": 200, "wall_s": 0.18, "resp": {"n_saved": 18030, "n_written": 567352900, "timings": {"save_ms": 176.864}}}
+slots dir: drwxr-xr-x 5 aihost-runtime root                4096 Nov 17 16:01 ..;-rw-r--r-- 1 aihost-runtime aihost-runtime 567352900 Nov 17 16:54 a.bin;
+B restart ready_s=97
+{"step": "restore", "status": 200, "wall_s": 2.81, "resp": {"n_restored": 18030, "n_read": 567352900}}
+{"step": "after-restore", "status": 200, "wall_s": 0.38, "prompt_n": 4, "cache_n": 18011, "prompt_ms": 72}
+== C router models-max=1 2026-11-17T17:00:18Z
+C max=1 router ready_s=0
+{"model": "qwen36", "status": 200, "wall_s": 96.25, "served": "qwen36", "err": null}
+{"model": "coder", "status": 200, "wall_s": 37.77, "served": "coder", "err": null}
+{"model": "qwen36", "status": 200, "wall_s": 11.17, "served": "qwen36", "err": null}
+{"model": "coder", "status": 200, "wall_s": 9.21, "served": "coder", "err": null}
+== C router models-max=2 2026-11-17T17:03:17Z
+C max=2 router ready_s=1
+{"model": "qwen36", "status": 200, "wall_s": 96.48, "served": "qwen36", "err": null}
+{"model": "coder", "status": 200, "wall_s": 37.6, "served": "coder", "err": null}
+{"model": "qwen36", "status": 200, "wall_s": 11.18, "served": "qwen36", "err": null}
+{"model": "coder", "status": 200, "wall_s": 9.25, "served": "coder", "err": null}
+dmesg timedout: 32
+RESTORED rc=0
+watchdog: active

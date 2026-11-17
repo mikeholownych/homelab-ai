@@ -343,3 +343,36 @@ Reading:
 - **Where the engines win:** prefill, 3.5-5x faster on long prompts, and concurrency scaling: vLLM reaches 83.9 tok/s at 8 streams and rises about linearly, while llama.cpp with `-np 4` stays flat near 46-55 tok/s from 1 to 4 streams (its batching did not help on this card).
   The break-even for batched decode is about 4-5 concurrent streams (vLLM 44.0 at 4 against 54.9 for llama.cpp, then 83.9 at 8).
 - **Decision:** for this host's workload (one interactive agent session per worker, `-np 1`, append-only prompts that hit the prefix cache) llama.cpp SYCL stays the engine. vLLM XPU would only pay if the routed load became many concurrent streams or very long cold prompts, and it would take both cards from the production pool. Not tested: more than 8 streams, vLLM/SGLang prefix caching for the append-only pattern, FP8 on one card (does not fit).
+
+## The conditional features of item 614, validated (2026-11-17)
+`harness/window3_conditional_features.sh` (evidence: `conditional/`; the first run, `conditional-run1/`, is kept: its client recorded no TTFT for the thinking model and its slot test used a context smaller than the prompt, both fixed).
+GPU0, production image and flags, research servers (not via the gateway), one worker1 outage after an idle check, watchdog service and reconcile paused, restore rc 0, `Timedout job` count unchanged at 32.
+
+**A. MoE experts in CPU memory with a GPU expert cache** (Qwen3.6-35B-A3B Q4_K_M, 16k context; aggregate decode over 2 x 128 tokens, cold 4k-token prefill):
+
+| Configuration | Decode (tok/s) | Prefill 4k (tok/s, TTFT) |
+|---|---|---|
+| all on GPU (production) | 49.0 | 1,098 (3.6 s) |
+| `-cmoe` (all experts on CPU), no cache | 17.2 (0.35x) | 637 (6.2 s) |
+| `-cmoe --moe-cache-mib 8192` | 23.3 (0.48x) | 673 (5.9 s) |
+| `-cmoe --moe-cache-mib 8192 --moe-cache-cpu-share 0.5` | 22.5 | 664 |
+
+So the "MoE larger than VRAM" mode works on the B65 and costs about half to two thirds of the throughput; an 8 GB expert cache buys +35% decode over no cache, and `--moe-cache-cpu-share` 0.5 did not help here.
+Nothing in the routed pools needs it today (all three models fit), but a model above about 30 GB could be served this way at roughly 20-25 tok/s for a 35B-A3B-class MoE.
+
+**B. Slot-state persistence across a restart** (`--slot-save-path`, Qwen3.6 hybrid, one 18,015-token conversation):
+
+| Step | Result |
+|---|---|
+| cold prompt | 14.6 s, 18,015 tokens computed |
+| save slot | 0.18 s, 567 MB file (18,030 tokens of KV plus recurrent state) |
+| server restarted (97 s model load), restore | 2.8 s, 18,030 tokens restored |
+| same conversation again | **0.38 s, 4 tokens computed, 18,011 reused** (prompt 72 ms) |
+
+A restart (watchdog or reconcile) would otherwise cost the next turn a cold 10-25 s prefill of a long conversation; restore brings it to 3.2 s end to end, and it works for the hybrid model's recurrent state.
+Private by default: the save directory was created `0700` owned by the runtime user and holds raw conversation state (567 MB for 18k tokens), the gateway has no route to `/slots`, and the endpoints exist only on the worker port, which the gateway-only policy already keeps closed. Wiring it into the restart paths
+(save before a planned stop, restore after) would need a controller-side step with the same constraints as the watchdog; not wired here.
+
+**C. Router with a model limit** (`--models-preset`, `--models-max`, `--models-memory-margin 2048`, two models that cannot both stay resident on one 32 GB card): first load 96 s; qwen36 -> coder swap 37.8 s (first coder load); swapping back 11.2 s and 9.2 s with a warm page cache.
+With `--models-max 2` the numbers were identical because the memory margin unloads the least recently used model to fit the next (`unload: stopping model instance name=qwen36` in the router log, `conditional/router-max2.logtail`): a model limit above the number that fits in VRAM does not make a second model resident.
+For the "concurrency groups / pinned models" idea the answer is that two models can share one card only by swapping at about 9-12 s warm (up to 40-100 s cold), so pinning one model per card, as production does, remains the right design; the router is usable for an occasional-use third model.
