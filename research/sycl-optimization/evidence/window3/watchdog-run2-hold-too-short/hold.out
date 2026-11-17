@@ -1,0 +1,12 @@
+
+PLAY [Own reconciliation lock while running bounded gateway qualification] *****
+
+TASK [Run qualification with bounded exclusive ownership] **********************
+ASYNC POLL on localhost: jid=j343747675174.333845 started=True finished=False
+ASYNC POLL on localhost: jid=j343747675174.333845 started=True finished=False
+ASYNC OK on localhost: jid=j343747675174.333845
+ok: [localhost]
+
+PLAY RECAP *********************************************************************
+localhost                  : ok=1    changed=0    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+
