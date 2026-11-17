@@ -59,8 +59,9 @@ The action runs from the controller (Ansible/systemd), never from a workload pat
 
 ## Scheduling (roles/reconcile_controller)
 The executor runs as the controller user service `aihost-worker-watchdog.service`, installed with the reconcile snapshot by
-`playbooks/reconcile-controller.yml`. Defaults: enabled but **dry-run** (`reconcile_controller_watchdog_apply: false`): it logs the next rung to
-`<evidence dir>/worker-watchdog.jsonl` and acts on nothing. It starts only when `reconcile_controller_watchdog_token_file`
-(default `~/.config/aihost/watchdog.token`) exists, because the role never creates or copies the admin-scope gateway token; the operator provisions it.
-Switching to real action is one explicit variable (`reconcile_controller_watchdog_apply: true`) plus a re-run of the playbook; rollback is setting it back
-to false (or stopping the unit). Timings are the role defaults (stuck after 120 s, 3 restarts per hour).
+`playbooks/reconcile-controller.yml`. **Operator decision 2026-11-17: it acts** (`reconcile_controller_watchdog_apply: true` is the role default):
+drain, graceful stop, forced kill after a failed stop, restart, readmit, with the per-hour restart limit and an `alert` record when it is exhausted.
+It runs only while `reconcile_controller_watchdog_token_file` (default `~/.config/aihost/watchdog.token`, mode 0600) exists, because the role never
+creates or copies the admin-scope gateway token; the operator provisions it (the `ansible-admin` client's token). Evidence: `<evidence dir>/worker-watchdog.jsonl`.
+Stop it: remove the token file (the unit's ConditionPathExists then fails at the next start) or `systemctl --user stop aihost-worker-watchdog`; make it log only:
+set `reconcile_controller_watchdog_apply: false` and re-run the playbook. Timings are the role defaults (stuck after 120 s, 3 restarts per hour).
