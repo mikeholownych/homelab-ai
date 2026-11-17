@@ -1,0 +1,18 @@
+idle confirmed 2026-11-17T02:09:22Z
+== none A clean load
+A none load_s=97 request_ok=1 used_mb=6700 avail_mb=55993
+== none C collision: second server on same GPU
+C none second_load=FAIL first_health={"status":"ok"} first_request_ok=1 second_unit=inactive
+== none B SIGKILL mid-load then reload
+B none after_kill_unit=inactive used_mb=6616 avail_mb=56077
+B none reload_s=97 request_ok=1 used_mb=6735 avail_mb=55958
+kernel xe timeouts: 32 (baseline 32)
+== dio A clean load
+A dio load_s=97 request_ok=1 used_mb=6694 avail_mb=55999
+== dio C collision: second server on same GPU
+C dio second_load=FAIL first_health={"status":"ok"} first_request_ok=1 second_unit=inactive
+== dio B SIGKILL mid-load then reload
+B dio after_kill_unit=inactive used_mb=6605 avail_mb=56088
+B dio reload_s=97 request_ok=1 used_mb=6702 avail_mb=55991
+kernel xe timeouts: 32 (baseline 32)
+RESTORED rc=0

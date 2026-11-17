@@ -608,9 +608,9 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 
 ## SYCL research window 2 - plan additions (2026-11-15, from LocalAI review)
 - [x] Locate Coder-30B prefill regression: bisect (493253fe good, 39febd2a bad); 7377bada8 build in progress; then upstream report with b11347 multi-seq bug — DONE 2026-11-16: root cause = d5bbcd1f3 (#31540) IGC/NEO/oneDNN pin bump; upstream report ggml-org/llama.cpp#32399.
-- [ ] Reliability: busy-watchdog design keyed on oldest in-flight request; graceful stop then forced kill; cancel test on HEAD image
+- [x] Reliability: busy-watchdog design keyed on oldest in-flight request; graceful stop then forced kill; cancel test on HEAD image — design merged (PR #32, docs/design/WORKER-BUSY-WATCHDOG.md); cancel on HEAD verified in window2; implementation NOT built (new item below).
 - [x] Operations: single-variable llama.cpp pin, digest-pinned bases, APP_REVISION embedded, pin + rollback target in Ansible vars; per-worker image pins if Coder stays on deployed build — DONE 2026-11-16 in substance: per-worker env (#22), candidate profile qwen36-stackb (#23), SHA-256-pinned debs (#25), rollback rehearsed (#28); production now on the digest-pinned research image.
-- [ ] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report)
+- [x] Reliability: model load/reload under failure with default mmap and `--no-mmap` (SYCL mmap hang report) — DONE 2026-11-17: research/sycl-optimization/evidence/window3/README.md (3 load modes, kill mid-load, collision; no hang; flag is -lm).
 - [ ] Conditional (not needed today): concurrency groups/pinned models; `--moe-cache-size` for MoE > VRAM; private-by-default slot-state persistence
 - [ ] (colibri review) Automate KL-vs-CPU gate on a fixed prompt set as a pre-deploy check
 - [ ] (colibri review) Gateway test: long agent turn -> short interleaved request -> long turn; TTFT on deployed vs HEAD, `--cache-ram` default vs raised

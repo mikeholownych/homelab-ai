@@ -6,7 +6,8 @@ set -euo pipefail
 HOST="${1:-10.0.8.5}"
 # The workstation-side hourly reconcile timer is paused during research windows; re-enable it first.
 systemctl --user start aihost-reconcile.timer 2>/dev/null || true
-PIN="sha256:2f4940610095fe48aabff3db7f87feb4f553081302b1a5a8744a589eb123b451"
+# Production image pin since the 2026-11-16 promotion (was the stock b11347 digest 2f494061…); update on every image bump.
+PIN="sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9"
 ssh -o BatchMode=yes "$HOST" 'bash -s' -- "$PIN" <<'REMOTE'
 set -euo pipefail
 PIN="$1"
