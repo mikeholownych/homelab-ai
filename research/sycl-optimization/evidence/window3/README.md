@@ -110,3 +110,26 @@ Each step re-uses everything except the newest turn plus a ~300-token tail (the 
 session is almost entirely prefix-cached: cold prefill happens once. TTFT is blank for most steps because the model answered with
 a tool call (no text delta); wall time per step is in the raw rows. The replay shows the intended workload shape is the cheap
 case from the fork test; a rewrite of earlier history would break it (see the fork section). One session only, no sanitised corpus.
+
+## test-backend-ops on the production build (backlog 636, 2026-11-17)
+
+Build: `test-backend-ops` compiled from llama.cpp a956a852 with the production (old-stack, `8766c027`) `intel.Dockerfile`
+and only `-DLLAMA_BUILD_TESTS=OFF` -> `ON` (Dockerfile copy kept out of the repo; the build used `docker build --target build`).
+The binary was copied to the host research dir and run INSIDE the deployed image (`sha256:6cd97c37…`, its libraries and
+runtime stack) on GPU0 with `GGML_SYCL_ENABLE_XMX_ESIMD=0`, one worker1 outage, idle gate and restore trap
+(`harness/window3_backend_ops.sh`; restore rc 0; kernel `Timedout job` count unchanged at 32).
+
+| Op | Result on SYCL0 (Arc Pro B65) | Not supported (skipped by the harness) |
+|---|---|---|
+| MUL_MAT_ID | 1152 / 1152 passed | 8 |
+| FLASH_ATTN_EXT | 4375 / 4375 passed | 1335 |
+| MUL_MAT | 2427 / 2427 passed | 625 |
+
+Run 1 (`run1-f8-abort/`) aborted in all three ops at `convert.cpp:773: fatal error: unsupport data type=f8_e4m3`: the SYCL backend
+has no f8_e4m3 dequantisation and the test suite does not skip those cases, so test-backend-ops crashes instead of reporting
+"not supported". Before the abort: MUL_MAT_ID 130 OK, MUL_MAT 159 OK, FLASH_ATTN_EXT 4297 OK, 0 failures. Run 2 excludes
+f8_e4m3 cases with `-p '^(?!.*f8_e4m3)'` (`harness/backend_ops_filter.sh`) and completes.
+
+Reading: no numerical mismatch against the CPU reference in any supported MUL_MAT_ID (MoE routing, all quant types incl. q4_K,
+IQ types), MUL_MAT or flash-attention case on the deployed build. Limits: f8_e4m3 is untested (none of our models use it), and an
+unsupported f8 case aborting the process is an upstream test-suite gap worth a one-line mention if reported.

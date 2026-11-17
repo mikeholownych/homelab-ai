@@ -633,7 +633,7 @@ Design: docs/design/07-capability-aware-scheduling.md. Runbook: docs/operations/
 - [ ] (SGLang review) Optional: SGLang XPU engine comparison after vLLM feasibility
 - [x] (llama.cpp review) Add "search upstream issues/PRs first" to the image-bump checklist — PR #33
 - [x] (llama.cpp review) Per-worker env test: GGML_SYCL_ENABLE_XMX_ESIMD=0 for Coder worker only; Qwen3.6 and Flash-Next unaffected check; Ansible + rollback — moot as written: no Coder worker is deployed; both live workers carry ESIMD=0 via llama_worker.env and passed the gate (Qwen3.6 and Flash-Next verified, soak clean)
-- [ ] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention)
+- [x] (llama.cpp review) `test-backend-ops` on a research build with tests enabled (MUL_MAT_ID, flash attention) — MUL_MAT_ID 1152, FLASH_ATTN_EXT 4375, MUL_MAT 2427 cases all pass on the production build in a worker1 window; f8_e4m3 excluded (SYCL aborts on it) (window3 README)
 - [x] (llama.cpp review) F16 NaN gate note / dense-model sanity check (upstream #30892) — done in window 2 (2026-11-16): Qwen3.8-27B Q4_K_M PPL finite and identical, #30892 not reproduced; note added to the bump doc (PR #33)
 - [x] (llama.cpp review) Verify HEAD router and sleep-idle flags before any use — verified from --help: router and sleep-idle are opt-in and absent from the worker units (window3 README)
 - [x] (window 2) Record runtime-stack versions per image; test old vs new stack with the same source on every bump (plan 4ae) — stack versions recorded per image in the window-2 README; step added to the bump doc (PR #33)

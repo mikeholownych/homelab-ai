@@ -1,0 +1,9 @@
+idle confirmed 2026-11-17T06:39:10Z
+== MUL_MAT_ID 2026-11-17T06:39:32Z
+rc=139 lines=218 ok=0 fail=0
+== FLASH_ATTN_EXT 2026-11-17T06:40:45Z
+rc=139 lines=5623 ok=0 fail=0
+== MUL_MAT 2026-11-17T06:47:53Z
+rc=139 lines=242 ok=0 fail=0
+dmesg timedout: 32
+RESTORED rc=0
