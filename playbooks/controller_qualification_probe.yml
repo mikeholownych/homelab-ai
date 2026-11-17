@@ -12,6 +12,7 @@
     probe_concurrency: 1
     probe_repeats: 3
     probe_models: [engineering/lead, engineering/deep]
+    probe_mode: qualification
   tasks:
     - name: Run qualification with bounded exclusive ownership
       ansible.builtin.command:
@@ -28,7 +29,8 @@
           - ansible_python_interpreter=/usr/bin/python3
           - -e
           - "{{ {'probe_label': probe_label, 'probe_concurrency': probe_concurrency,
-                  'probe_repeats': probe_repeats, 'probe_models': probe_models} | to_json }}"
+                  'probe_repeats': probe_repeats, 'probe_models': probe_models,
+                  'probe_mode': probe_mode} | to_json }}"
         chdir: "{{ qualification_source_root }}"
       environment:
         ANSIBLE_CONFIG: "{{ qualification_source_root }}/ansible.cfg"

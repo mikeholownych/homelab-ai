@@ -91,3 +91,14 @@ def test_chat_rows_record_finish_reason_truncation_and_output_rate(monkeypatch):
     row, _ = gateway.chat([{"role": "user", "content": "hi"}])
     assert row["finish_reason"] == "length" and row["truncated"] is True
     assert row["output_tokens_per_second"] > 0
+
+
+def test_gateway_load_summaries_and_bounds():
+    load = module("gateway_load")
+    assert sum(c * load.PER_LEVEL for c in load.LEVELS) + 3 <= load.MAX_REQUESTS
+    rows = [{"status": 200, "ttft_seconds": 0.1 * i, "chunk_gaps_seconds": [0.01, 0.02], "finish_reason": "stop",
+             "seconds": 1.0, "tpot_seconds": 0.02} for i in range(1, 5)]
+    rows.append({"status": 429, "ttft_seconds": None, "chunk_gaps_seconds": [], "finish_reason": None, "seconds": 0.01})
+    s = load.summarize(rows)
+    assert s["statuses"] == {"200": 4, "429": 1} and s["ttft_max"] == 0.4 and s["gap_p99"] == 0.02
+    assert "chunk_gaps_seconds" not in load.strip(rows[0]) and load.strip(rows[0])["chunk_gap_count"] == 2

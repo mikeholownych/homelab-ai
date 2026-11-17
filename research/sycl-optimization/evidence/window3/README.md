@@ -37,3 +37,23 @@ Re-measure exactly with `qualify.py`'s `/v1/tokenize` path if tool count grows p
 or preset is given). `--sleep-idle-seconds` defaults to -1 (disabled). Neither flag is in the production worker units
 (grep count 0 in both), so both features are inert in production. Any use needs its own gate: a sleeping worker would break the
 gateway's health and idle assumptions (the idle check greps for activity, a sleep/wake cycle reloads the 22 GB model, ~97 s).
+
+## Gateway load sweep and long/short interleave (backlog 616, 625, part of 623; 2026-11-17)
+
+Run from the controller through the authenticated TLS gateway only (`evaluations/engx/gateway_load.py`, playbook
+`probe_mode: load`, idle gate passed, qualification client, quota 60 rpm). Deployed image, `-np 1` workers.
+Raw: `gateway/load-1-load-engineering-{lead,deep}.json`. Prompt shape: ~1k tokens, 128 max tokens, streamed; 3 requests per
+concurrency level per client slot.
+
+| Route | Concurrency | statuses | TTFT p50 / p95 (s) | TPOT p50 (ms) | chunk gap p95 (ms) |
+|---|---|---|---|---|---|
+| lead | 1 / 2 / 4 | all 200 | 0.08 / 4.22 (first request cold), 0.28 / 0.36, 0.85 / 0.91 | 17.9 / 17.8 / 18.2 | 16-17 |
+| deep | 1 / 2 / 4 | all 200 | 0.15 / 1.67, 0.72 / 0.82, 2.00 / 2.10 | 56.5 / 56.5 / 56.4 | 54-55 |
+
+- Decode speed (TPOT, chunk gaps) is flat across concurrency: requests are serialised, not slowed. TTFT rises about linearly with
+  concurrency (queue wait behind a single slot). No 429/503/timeouts up to 4 concurrent, so the gateway queue absorbs it; the
+  queue bound itself was not reached (a 503/429 threshold test needs a larger, deliberately saturating run: 623 stays open).
+- Interleave (about 10k-token prompt, long -> short -> long, same prefix): lead long-1 TTFT 6.7 s cold, short 0.23 s, long-2 0.26 s
+  with 10016/10020 prompt tokens served from cache; deep: 14.0 s, 0.43 s, 0.31 s, again 10016 cached. The intervening short
+  request does NOT evict the long prefix on the deployed build with the default `--cache-ram`, so no raised-cache comparison is
+  needed for this shape. Not tested: several different long conversations alternating (capacity, item 632).
