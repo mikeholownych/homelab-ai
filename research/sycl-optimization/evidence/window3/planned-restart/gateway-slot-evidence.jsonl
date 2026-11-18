@@ -1,0 +1,6 @@
+{"event": "worker_slot_save", "worker_id": "b0-live-llama-worker1", "actor": "ansible-admin", "outcome": "saved", "tokens": 11019, "bytes": 423571312}
+{"event": "worker_slot_restore", "worker_id": "b0-live-llama-worker1", "actor": "ansible-admin", "outcome": "restored", "tokens": 11019, "bytes": 423571312}
+{"event": "worker_slot_save", "worker_id": "b0-live-llama-deep-worker2", "actor": "ansible-admin", "outcome": "saved", "tokens": 11019, "bytes": 693195544}
+{"event": "worker_slot_save", "worker_id": "b0-live-llama-worker1", "actor": "ansible-admin", "outcome": "saved", "tokens": 11019, "bytes": 423571312}
+{"event": "worker_slot_restore", "worker_id": "b0-live-llama-deep-worker2", "actor": "ansible-admin", "outcome": "restored", "tokens": 11019, "bytes": 693195544}
+{"event": "worker_slot_save", "worker_id": "b0-live-llama-deep-worker2", "actor": "ansible-admin", "outcome": "saved", "tokens": 11019, "bytes": 693195544}

@@ -1,0 +1,113 @@
+{
+  "started_at": "2026-11-18T00:07:14.522604+00:00",
+  "model": {
+    "id": "engineering/lead",
+    "object": "model",
+    "owned_by": "aihost-orchestrator",
+    "context_length": 65536,
+    "max_model_len": 65536,
+    "max_completion_tokens": 8192,
+    "limits_version": "baf252a4827ca0d4",
+    "reasoning": {
+      "budget": 8192,
+      "mode": "off"
+    },
+    "serving": [
+      {
+        "worker_id": "b0-live-llama-worker1",
+        "pool": "lead",
+        "role": "production",
+        "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+        "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+        "quantization": "Q4_K - Medium",
+        "engine": "llama.cpp",
+        "engine_version": "b0-unknown",
+        "capacity_source": "observed"
+      }
+    ],
+    "capabilities": {
+      "tools": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "parallel_tool_calls": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "structured_output": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "vision": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "reasoning": {
+        "available": true,
+        "provenance": "declared",
+        "evidence": [
+          "engine"
+        ]
+      },
+      "reasoning_controllable": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "reasoning-profile-probe-qwen36-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "streaming": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-tools-qwen36-lead-bounded-8192-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "output_contract_compliance": {
+        "available": true,
+        "provenance": "verified",
+        "evidence": [
+          "qualify-contract-qwen36-reasoning-on-pinned-2026-10-09"
+        ],
+        "verified_at": "2026-10-09"
+      },
+      "fim": {
+        "available": false,
+        "provenance": "unavailable"
+      },
+      "embeddings": {
+        "available": false,
+        "provenance": "unavailable"
+      }
+    }
+  },
+  "sweep": {},
+  "interleave": {},
+  "conv": {
+    "status": 200,
+    "ttft_seconds": 10.569022028008476,
+    "completion_tokens": 2,
+    "prompt_tokens": 11018,
+    "cached_prompt_tokens": 0,
+    "finish_reason": "stop",
+    "failure_class": null,
+    "seconds": 10.638989901985042,
+    "tpot_seconds": 0.0699678739765659,
+    "chunk_gap_count": 0
+  },
+  "finished_at": "2026-11-18T00:07:25.174043+00:00"
+}

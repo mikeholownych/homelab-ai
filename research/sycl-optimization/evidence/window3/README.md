@@ -417,3 +417,17 @@ Deployed: gateway release `636b7fb` (admin route `POST /admin/workers/<id>/slot/
 Restore restored the conversation that was idle at the last save, not the one in flight when the worker wedged, exactly as designed (a wedged worker cannot save; the generation in flight is lost either way).
 Restore, restart and unit-change paths: `restore` on a changed model/image finds no file (fingerprinted name, unit test), planned Ansible restarts save after the drain and restore before the undrain (task order lint-clean; exercised in the deploy
 only as the no-state case because the workers had no flag yet; the first planned restart after this one will exercise the save/restore tasks). Production state afterwards: 2/2 workers, watchdog active, `Timedout job` count unchanged at 32.
+
+### Ansible planned-restart slot save/restore, validated live (2026-11-18)
+The `--cache-ram 8192` pin (main `c091310`, PR #51: the measured default made explicit on both workers) is a real unit change, so the normal reconcile restarted each worker the planned way:
+drain, wait for in-flight 0, **save**, stop, start, healthy, **restore**, undrain (`roles/llama_cpp_container/tasks/start_worker.yml`). Both unit files carry the pin afterwards (workers restarted 00:22:31 and 00:24:28 UTC).
+Evidence: `planned-restart/` (conversation probes and `gateway-slot-evidence.jsonl`, the gateway evidence chain's `worker_slot_*` records, actor `ansible-admin`).
+
+| Route | Before the restart (conversation warm) | Gateway records for the restart | After the restart (same conversation) | Cold reference |
+|---|---|---|---|---|
+| lead (worker1) | 0.18 s, 11,014 of 11,018 tokens cached | `worker_slot_save` 11,019 tokens (423 MB), `worker_slot_restore` restored 11,019 | **0.18 s, 11,014 of 11,018 cached** | 10.6 s |
+| deep (worker2) | 0.23 s, 11,014 cached | `worker_slot_save` 11,019 tokens (693 MB), `worker_slot_restore` restored 11,019 | **0.24 s, 11,014 cached** | 16.8 s |
+
+So a planned restart of both workers kept a long conversation hot (a cold turn would have cost 10-17 s each). Production afterwards: 2/2 workers and the gateway active, `Timedout job` count unchanged at 32.
+Note on the run: the harness `window3_planned_restart_check.sh` first shipped with paths relative to a directory it had left, so its re-pin and logging silently did nothing (and its first warm-up probe lost the controller lock to the hourly reconcile). The steps were then run by hand with the same commands
+and the harness paths were fixed; the evidence above is from the by-hand run.
