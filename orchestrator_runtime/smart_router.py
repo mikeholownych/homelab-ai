@@ -203,6 +203,60 @@ class CostModel:
         return self.weights.get(pool, 1.0)
 
 
+class QualityModel:
+    """Relative quality weights (higher = stronger). Used as a tie-breaker inside a fit band."""
+
+    DEFAULT_POOL_QUALITY = {
+        "lead": 2.0,
+        "deep": 3.0,
+        "rocm": 2.5,
+        "aux": 1.0,
+        "candidate": 1.0,
+    }
+
+    def __init__(self, pool_weights: dict[str, float] | None = None) -> None:
+        self.weights = dict(self.DEFAULT_POOL_QUALITY)
+        if pool_weights:
+            self.weights.update({k: float(v) for k, v in pool_weights.items()})
+
+    def quality_weight(self, pool: str) -> float:
+        return float(self.weights.get(pool, 1.0))
+
+
+def preferred_pool_order(
+    complexity: ComplexityReport | None,
+    *,
+    has_tools: bool,
+) -> list[str]:
+    """Fleet fit order for lead/deep/rocm (spec Section 2). Lower index = better fit."""
+    if complexity is None:
+        return ["lead", "rocm", "deep"]
+    factors = complexity.factors or {}
+    reasoning = float(factors.get("reasoning_score", 0.0) or 0.0)
+    code = float(factors.get("code_score", 0.0) or 0.0)
+    if complexity.tier == "complex" or reasoning >= 0.3:
+        return ["deep", "lead", "rocm"]
+    if has_tools or code >= 0.2:
+        return ["rocm", "lead", "deep"]
+    return ["lead", "rocm", "deep"]
+
+
+def quality_first_rank_key(
+    pool: str,
+    *,
+    order: list[str],
+    quality: QualityModel,
+    latency_tracker: LatencyTracker | None,
+) -> tuple:
+    try:
+        fit = order.index(pool)
+    except ValueError:
+        fit = len(order)
+    # Ascending: better fit first; higher quality weight wins ties; lower latency wins remaining ties.
+    latency = latency_tracker.pool_duration(pool) if latency_tracker is not None else 1.0
+    return (fit, -quality.quality_weight(pool), latency)
+
+
 class EscalationPolicy:
     """Configurable multi-attempt fallback escalation policy with jittered exponential backoff."""
 
