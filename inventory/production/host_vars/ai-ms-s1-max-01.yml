@@ -30,7 +30,7 @@ features:
   monitoring: true
   scheduled_reconciliation: true
   os_tuning: true
-  observability: true
+  observability: false
   model_registry: false
   clustering: false
   cmdb_export: false
@@ -164,6 +164,29 @@ orchestrator_gateway_workers:
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://10.0.8.6:8101
 
+# Phase 3e: monitoring + reconcile, matching the 5820 peer subset (single-host AMD peer, no Intel scrapes).
+# The observability stack itself (Alloy, VictoriaMetrics, Grafana, Loki) lives on the grafana host only. Like
+# ai-5820-01 this host is a scrape target, so features.observability stays false (tests/test_observability_contract.py)
+# and the pin below keeps the role inert even if it is included.
+observability_install_enabled: false
+# Host metrics scraped by the grafana host's Alloy (job=aihost, instance=ai-ms-s1-max-01; see grafana.yml). Published
+# on the LAN address only; ufw below admits the grafana host alone. GPU telemetry rides the textfile collector
+# (aihost-metrics.timer).
+node_exporter_enabled: true
+node_exporter_allow_non_loopback: true
+node_exporter_listen_address: "10.0.8.6:9100"
+# Ubuntu 26.04 / kernel 7 exposes an XFS `xpc` row the packaged node_exporter parser rejects (same as ai-5820-01; the
+# local-ai volume is XFS). thermal_zone works on this host, so it stays enabled. The other collectors that report
+# success=0 (bonding, conntrack, infiniband, ipvs, nfs, rapl, zfs, ...) are absent on this host and cost nothing.
+node_exporter_disabled_collectors: [xfs]
+# Scheduled lifecycle timers are OFF on the host, exactly as on ai-5820-01: reconciliation runs from the controller
+# (roles/reconcile_controller, aihost-reconcile-ai-ms-s1-max-01.timer) because the gateway CA key lives there, and
+# there is no /opt/local-ai snapshot on the appliance for the on-host runner.
+scheduled_ansible_reconcile_enabled: false
+scheduled_ansible_validate_enabled: false
+# The controller reconcile (inference.yml) runs the Intel-only xpu-smi rsyslog filter on GPU hosts; no xpu-smi here.
+xpu_smi_log_filter_enabled: false
+
 # Only the 5820 gateway may reach the HIP worker over the LAN; only the controller may reach this gateway.
 security_firewall_enabled: true
 # SSH is allowed only from the management LAN (the controller and the 5820 gateway host live in 10.0.8.0/24).
@@ -173,6 +196,8 @@ security_inference_api_cidrs: ["10.0.8.5/32"]
 security_inference_api_ports: [8101]
 security_inference_api_port_cidrs:
   - {port: 8443, cidrs: ["10.0.8.95/32"]}
+  # node_exporter: the grafana host (Alloy scraper) only.
+  - {port: 9100, cidrs: ["10.0.8.2/32"]}
 
 storage_lvm:
   enabled: true

@@ -97,4 +97,7 @@ observability_tempo_enabled: true
 observability_scrape_aihost_enabled: true
 observability_scrape_aihost_endpoint: "10.0.8.5:9100"
 observability_aihost_instance: "ai-5820-01"
+# Second production peer: AMD Strix Halo host (node_exporter on its LAN address; ufw admits 10.0.8.2 only).
+observability_scrape_aihost_extra_targets:
+  - {endpoint: "10.0.8.6:9100", instance: "ai-ms-s1-max-01"}
 observability_vllm_scrape_enabled: false

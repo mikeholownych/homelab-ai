@@ -1,10 +1,18 @@
 """Phase 3a contract: ai-ms-s1-max-01 is a production peer, no longer a lab host."""
 from pathlib import Path
 
+import jinja2
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = "ai-ms-s1-max-01"
+
+
+def jinja_env() -> jinja2.Environment:
+    """Ansible's trim_blocks plus its bool filter (templates here are rendered without Ansible)."""
+    env = jinja2.Environment(trim_blocks=True)
+    env.filters["bool"] = bool
+    return env
 
 
 def load(path: str):
@@ -29,9 +37,11 @@ def test_production_host_vars_promotion_contract():
     assert hv["node_metadata"]["environment"] == "production"
     assert hv["capabilities"]["cluster_eligible"] is True
     features = hv["features"]
-    for flag in ("monitoring", "scheduled_reconciliation", "observability", "os_tuning"):
+    for flag in ("monitoring", "scheduled_reconciliation", "os_tuning"):
         assert features[flag] is True, flag
     for flag in (
+        # Scrape target only, like ai-5820-01: the observability stack lives on the grafana host.
+        "observability",
         "model_registry",
         "clustering",
         "cmdb_export",
@@ -88,7 +98,7 @@ def test_ms_s1_gateway_is_rocm_only():
 
 def test_ms_s1_gateway_tls_port_open_to_controller_only():
     hv = load(f"inventory/production/host_vars/{HOST}.yml")
-    assert hv["security_inference_api_port_cidrs"] == [{"port": 8443, "cidrs": ["10.0.8.95/32"]}]
+    assert {"port": 8443, "cidrs": ["10.0.8.95/32"]} in hv["security_inference_api_port_cidrs"]
     assert hv["orchestrator_gateway_remote_client_cidrs"] == ["10.0.8.95/32"]
     # The HIP worker port stays reachable from the 5820 gateway only.
     assert hv["security_inference_api_cidrs"] == ["10.0.8.5/32"]
@@ -147,3 +157,82 @@ def test_5820_advertises_ms_s1_rocm_worker_as_parallel_alias():
                 "hardware_class", "context_limit", "max_concurrency", "capabilities"):
         assert rocm[key] == ms_s1_worker[key], key
 
+
+
+def test_ms_s1_monitoring_matches_the_5820_peer_subset():
+    """Phase 3e: node_exporter on the LAN address for the grafana scraper only; no on-host lifecycle timers."""
+    hv = load(f"inventory/production/host_vars/{HOST}.yml")
+    intel = load("inventory/production/host_vars/ai-5820-01.yml")
+    assert hv["node_exporter_enabled"] is True
+    assert hv["node_exporter_allow_non_loopback"] is True
+    assert hv["node_exporter_listen_address"] == f"{hv['ansible_host']}:9100"
+    # The grafana host is the only scraper; the port is never opened to the wider LAN.
+    assert {"port": 9100, "cidrs": ["10.0.8.2/32"]} in hv["security_inference_api_port_cidrs"]
+    assert 9100 not in hv["security_inference_api_ports"]
+    # The observability stack is not installed here (it lives on grafana); reconciliation runs from the controller.
+    assert hv["observability_install_enabled"] is False
+    for flag in ("scheduled_ansible_reconcile_enabled", "scheduled_ansible_validate_enabled"):
+        assert hv[flag] is False and intel[flag] is False, flag
+    # Intel-only telemetry stays off.
+    assert not hv.get("vllm_top_console_enabled")
+    assert hv["xpu_smi_log_filter_enabled"] is False
+    assert hv["intel_gpu_install_enabled"] is False
+
+
+def test_grafana_scrapes_ms_s1_under_the_aihost_job():
+    grafana = load("inventory/production/host_vars/grafana.yml")
+    ms_s1 = load(f"inventory/production/host_vars/{HOST}.yml")
+    assert grafana["observability_scrape_aihost_endpoint"] == "10.0.8.5:9100"
+    assert grafana["observability_scrape_aihost_extra_targets"] == [
+        {"endpoint": f"{ms_s1['ansible_host']}:9100", "instance": HOST}]
+
+    template = (ROOT / "roles/observability/templates/config.alloy.j2").read_text()
+    env = jinja_env()
+    rendered = env.from_string(template).render(
+        observability_scrape_aihost_enabled=True,
+        observability_scrape_aihost_endpoint=grafana["observability_scrape_aihost_endpoint"],
+        observability_aihost_instance=grafana["observability_aihost_instance"],
+        observability_scrape_aihost_extra_targets=grafana["observability_scrape_aihost_extra_targets"],
+        observability_textfile_metrics_dir="/var/lib/local-ai/metrics", observability_alloy_http_port=12345,
+        observability_vm_http_port=8428, observability_vmalert_http_port=8880, observability_loki_enabled=False,
+        observability_loki_http_port=3100, observability_tempo_enabled=False, observability_vllm_scrape_enabled=False)
+    assert rendered.count('"job"         = "aihost"') == 2
+    assert '"__address__" = "10.0.8.5:9100"' in rendered
+    assert f'"__address__" = "10.0.8.6:9100"' in rendered
+    assert f'"instance"    = "{HOST}"' in rendered
+    # With no extra targets the rendering keeps the single 5820 target.
+    single = env.from_string(template).render(
+        observability_scrape_aihost_enabled=True, observability_textfile_metrics_dir="/m",
+        observability_alloy_http_port=1, observability_vm_http_port=2, observability_vmalert_http_port=3,
+        observability_loki_enabled=False, observability_tempo_enabled=False)
+    assert single.count('"job"         = "aihost"') == 1
+
+
+def test_reconcile_controller_reconciles_ms_s1_with_its_own_units():
+    defaults = load("roles/reconcile_controller/defaults/main.yml")
+    assert defaults["reconcile_controller_target"] == "ai-5820-01"
+    assert defaults["reconcile_controller_extra_targets"] == [HOST]
+    assert defaults["reconcile_controller_extra_schedule"] != "hourly"
+
+    env = jinja_env()
+    base = dict(
+        reconcile_controller_snapshot_ref="a" * 40, reconcile_controller_snapshot_dir="/h/snap",
+        reconcile_controller_candidate_state_dir="/h/cand", reconcile_controller_lock_dir="/h/lock",
+        reconcile_controller_evidence_dir="/h/ev", reconcile_controller_random_delay="300s")
+    service = (ROOT / "roles/reconcile_controller/templates/aihost-reconcile.service.j2").read_text()
+    primary = env.from_string(service).render(
+        **base, reconcile_controller_target="ai-5820-01", reconcile_controller_unit_lock_dir="/h/lock",
+        reconcile_controller_unit_candidate_recovery=True)
+    assert "--target ai-5820-01" in primary and "--lock-root /h/lock " in primary
+    assert "candidate_recovery.py" in primary
+    extra = env.from_string(service).render(
+        **base, reconcile_controller_target=HOST, reconcile_controller_unit_lock_dir=f"/h/lock/{HOST}",
+        reconcile_controller_unit_candidate_recovery=False)
+    assert f"--target {HOST}" in extra and f"--lock-root /h/lock/{HOST} " in extra
+    assert "playbook reconcile.yml" in extra.replace("--playbook ", "playbook ")
+    assert "candidate_recovery.py" not in extra
+    assert "ai-5820-01" not in extra
+
+    tasks = (ROOT / "roles/reconcile_controller/tasks/main.yml").read_text()
+    assert "reconcile_controller_extra_targets" in tasks
+    assert "aihost-reconcile-{{ item }}.timer" in tasks
