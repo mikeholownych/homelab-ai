@@ -328,6 +328,15 @@ curl --cacert evidence/ai-ms-s1-max-01/gateway-ca.crt -H "Authorization: Bearer 
 
 Accepted evidence: `evidence/ai-ms-s1-max-01/20261121T145142Z/promotion/qualify/SUMMARY.md`. Earlier stage evidence: `20261121T140334Z/promotion/gateway-local`, `20261121T142058Z/promotion/gateway-5820`.
 
+### Client routing (engineering/auto)
+
+- Front door: `ai-5820-01` gateway only.
+- `model: "engineering/auto"` (or omit model) → quality-first among lead / deep / rocm.
+- Pins: `engineering/lead`, `engineering/deep`, `engineering/lead-reasoning`, `engineering/interactive-rocm`.
+- Auto ranking: request shape picks a fit band (complex → deep; code/tools → rocm+lead, then deep; otherwise lead, rocm, deep). `orchestrator_gateway_pool_quality_weights` reorders peers only within a band (higher weight first, then lower latency); it never moves a pool across bands. Selecting `deep` applies the deep reasoning policy (on, budget 4096); `lead`/`rocm` keep reasoning off.
+- Expected: Grafana inventory targets MS-S1 `:9100`; vllm-top enabled on both hosts; route decisions show rule `engineering-auto`.
+- Note: Alloy scrape deployment may still await Vault-backed grafana reconcile (see Known gaps).
+
 #### Known gaps
 
 - **Alloy scrape deploy needs Vault.** The grafana-host scrape entry for `10.0.8.6:9100` is in inventory, but deploying the Alloy config requires Vault access and has not been run from this work.

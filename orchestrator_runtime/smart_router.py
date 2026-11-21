@@ -203,6 +203,73 @@ class CostModel:
         return self.weights.get(pool, 1.0)
 
 
+class QualityModel:
+    """Relative quality weights (higher = stronger). Used as a tie-breaker inside a fit band."""
+
+    DEFAULT_POOL_QUALITY = {
+        "lead": 2.0,
+        "deep": 3.0,
+        "rocm": 2.5,
+        "aux": 1.0,
+        "candidate": 1.0,
+    }
+
+    def __init__(self, pool_weights: dict[str, float] | None = None) -> None:
+        self.weights = dict(self.DEFAULT_POOL_QUALITY)
+        if pool_weights:
+            self.weights.update({k: float(v) for k, v in pool_weights.items()})
+
+    def quality_weight(self, pool: str) -> float:
+        return float(self.weights.get(pool, 1.0))
+
+
+def preferred_pool_bands(
+    complexity: ComplexityReport | None,
+    *,
+    has_tools: bool,
+) -> list[list[str]]:
+    """Fleet fit bands for lead/deep/rocm (spec Section 2), best band first.
+
+    Pools in the same band are equally good fits for the request shape; the quality weights (operator
+    retunable) and then latency order them. Fit always dominates: a weight can never move a pool across bands.
+    - complex / reasoning-heavy: deep alone, then the interactive peers (lead, rocm).
+    - code or tools: the interactive peers (rocm, lead) together, then deep.
+    - simple / medium / unknown: lead first (local, cheapest), then rocm, then deep; no weight-driven reorder.
+    """
+    if complexity is None:
+        return [["lead"], ["rocm"], ["deep"]]
+    factors = complexity.factors or {}
+    reasoning = float(factors.get("reasoning_score", 0.0) or 0.0)
+    code = float(factors.get("code_score", 0.0) or 0.0)
+    if complexity.tier == "complex" or reasoning >= 0.3:
+        return [["deep"], ["lead", "rocm"]]
+    if has_tools or code >= 0.2:
+        return [["rocm", "lead"], ["deep"]]
+    return [["lead"], ["rocm"], ["deep"]]
+
+
+def preferred_pool_order(
+    complexity: ComplexityReport | None,
+    *,
+    has_tools: bool,
+) -> list[str]:
+    """Flattened fit bands (lead/deep/rocm), best fit first; ties inside a band keep band order."""
+    return [pool for band in preferred_pool_bands(complexity, has_tools=has_tools) for pool in band]
+
+
+def quality_first_rank_key(
+    pool: str,
+    *,
+    bands: list[list[str]],
+    quality: QualityModel,
+    latency_tracker: LatencyTracker | None,
+) -> tuple:
+    band = next((i for i, members in enumerate(bands) if pool in members), len(bands))
+    # Ascending: better fit band first; inside a band higher quality weight wins; lower latency breaks remaining ties.
+    latency = latency_tracker.pool_duration(pool) if latency_tracker is not None else 1.0
+    return (band, -quality.quality_weight(pool), latency)
+
+
 class EscalationPolicy:
     """Configurable multi-attempt fallback escalation policy with jittered exponential backoff."""
 

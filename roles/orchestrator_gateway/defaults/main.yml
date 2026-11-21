@@ -91,6 +91,8 @@ orchestrator_gateway_obsolete_dropins:
 # The last rule must be an unconditional default. Aliases map explicit pool names to pools.
 orchestrator_gateway_routes: []
 orchestrator_gateway_model_aliases: {}
+# Per-pool quality weights for the quality_first routing strategy; empty keeps the QualityModel defaults.
+orchestrator_gateway_pool_quality_weights: {}
 orchestrator_gateway_engine: sync
 orchestrator_gateway_venv_enabled: false
 orchestrator_gateway_venv_dir: "{{ orchestrator_gateway_release_dir }}/venv"

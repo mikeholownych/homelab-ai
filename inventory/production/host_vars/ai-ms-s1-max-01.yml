@@ -98,8 +98,8 @@ orchestrator_gateway_tls_controller_trust_store_enabled: false
 orchestrator_gateway_remote_client_cidrs: [10.0.8.95/32]
 # Release id names the commit whose gateway code ships here (tests/test_gateway_release_identity.py); the artifact is
 # identical to the one deployed on ai-5820-01.
-orchestrator_gateway_release_id: ms-s1-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/ms-s1-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b
+orchestrator_gateway_release_id: ms-s1-gateway-957a01d4b5ad29df0066c9921416239db3a7fb89
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/ms-s1-gateway-957a01d4b5ad29df0066c9921416239db3a7fb89
 # No second worker, no legacy opencode token and no predecessor evidence chains on this host.
 orchestrator_gateway_client_token_extra_file: ""
 orchestrator_gateway_evidence_predecessors: []
@@ -179,6 +179,8 @@ node_exporter_listen_address: "10.0.8.6:9100"
 # local-ai volume is XFS). thermal_zone works on this host, so it stays enabled. The other collectors that report
 # success=0 (bonding, conntrack, infiniband, ipvs, nfs, rapl, zfs, ...) are absent on this host and cost nothing.
 node_exporter_disabled_collectors: [xfs]
+# TTY1 monitoring console (vllm-top, built from ~/Projects/vllm-top)
+vllm_top_console_enabled: true
 # Scheduled lifecycle timers are OFF on the host, exactly as on ai-5820-01: reconciliation runs from the controller
 # (roles/reconcile_controller, aihost-reconcile-ai-ms-s1-max-01.timer) because the gateway CA key lives there, and
 # there is no /opt/local-ai snapshot on the appliance for the on-host runner.

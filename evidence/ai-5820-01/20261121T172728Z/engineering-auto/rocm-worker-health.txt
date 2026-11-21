@@ -1,0 +1,19 @@
+active
+Nov 21 17:28:01 ai-ms-s1-max-01 podman[128821]: 232.11.333.522 I slot      release: id  0 | task 276 | stop processing: n_tokens = 23, truncated = 0
+Nov 21 17:28:01 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 232.11.333.509 I slot print_timing: id  0 | task 276 |       total time =     310.69 ms /    21 tokens
+Nov 21 17:28:01 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 232.11.333.510 I slot print_timing: id  0 | task 276 |    graphs reused =        251
+Nov 21 17:28:01 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 232.11.333.510 I slot print_timing: id  0 | task 276 |   graph reallocs =          0    /     0        (same size) / (changed size)
+Nov 21 17:28:01 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 232.11.333.522 I slot      release: id  0 | task 276 | stop processing: n_tokens = 23, truncated = 0
+qwen3_coder_30b_q8-health.json
+{
+    "api_key_required": true,
+    "endpoint": "http://10.0.8.6:8101/v1/models",
+    "http_status": 200,
+    "image": "ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+    "model_file": "Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf",
+    "served_models": [
+        "qwen3-coder-30b-a3b-instruct-q8_0"
+    ],
+    "service": "llama-hip-qwen3-coder-30b.service",
+    "worker": "qwen3_coder_30b_q8"
+}

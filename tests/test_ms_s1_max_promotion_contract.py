@@ -133,8 +133,9 @@ def test_5820_advertises_ms_s1_rocm_worker_as_parallel_alias():
     assert routes["default"]["pool"] == "lead"
     # No Intel rule may fall back to the remote pool.
     for route in routes.values():
-        if route["id"] != "interactive-rocm":
-            assert "rocm" not in route.get("fallback", []), route["id"]
+        if route["id"] in ("interactive-rocm", "engineering-auto"):
+            continue
+        assert "rocm" not in route.get("fallback", []), route["id"]
 
     workers = {w["worker_id"]: w for w in hv["orchestrator_gateway_workers"]}
     assert set(workers) == {"b0-live-llama-worker1", "b0-live-llama-deep-worker2", "ms-s1-hip-coder30b"}
@@ -158,6 +159,25 @@ def test_5820_advertises_ms_s1_rocm_worker_as_parallel_alias():
         assert rocm[key] == ms_s1_worker[key], key
 
 
+def test_5820_engineering_auto_quality_first_across_peers():
+    hv = load("inventory/production/host_vars/ai-5820-01.yml")
+    routes = {r["id"]: r for r in hv["orchestrator_gateway_routes"]}
+    auto = routes["engineering-auto"]
+    assert auto["match"] == {"model": ["engineering/auto"]}
+    assert auto["strategy"] == "quality_first"
+    assert auto["pool"] == "lead"
+    assert set(auto["fallback"]) == {"deep", "rocm"}
+    assert auto.get("fallback_on_saturation") is True
+    ids = [r["id"] for r in hv["orchestrator_gateway_routes"]]
+    assert ids.index("engineering-auto") < ids.index("default")
+    aliases = hv["orchestrator_gateway_model_aliases"]
+    assert "engineering/auto" not in aliases
+    for name in ("engineering/lead", "engineering/deep", "engineering/lead-reasoning", "engineering/interactive-rocm"):
+        assert name in aliases
+    assert hv["orchestrator_gateway_pool_quality_weights"] == {
+        "lead": 2.0, "deep": 3.0, "rocm": 2.5,
+    }
+
 
 def test_ms_s1_monitoring_matches_the_5820_peer_subset():
     """Phase 3e: node_exporter on the LAN address for the grafana scraper only; no on-host lifecycle timers."""
@@ -174,7 +194,7 @@ def test_ms_s1_monitoring_matches_the_5820_peer_subset():
     for flag in ("scheduled_ansible_reconcile_enabled", "scheduled_ansible_validate_enabled"):
         assert hv[flag] is False and intel[flag] is False, flag
     # Intel-only telemetry stays off.
-    assert not hv.get("vllm_top_console_enabled")
+    assert hv.get("vllm_top_console_enabled") is True
     assert hv["xpu_smi_log_filter_enabled"] is False
     assert hv["intel_gpu_install_enabled"] is False
 

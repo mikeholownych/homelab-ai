@@ -25,6 +25,7 @@ from orchestrator_runtime import (
     WorkerRecord,
 )
 from orchestrator_runtime.cais import CaisService
+from orchestrator_runtime.smart_router import QualityModel
 
 
 def read_secret(name: str, file_name: str | None = None) -> str:
@@ -116,7 +117,13 @@ def load_router(workers: list[WorkerRecord]) -> Router | None:
     raw_routes = os.environ.get("ORCHESTRATOR_ROUTES")
     if not raw_routes:
         return None
-    router = Router.from_config(json.loads(raw_routes), json.loads(os.environ.get("ORCHESTRATOR_MODEL_ALIASES", "{}")))
+    quality_raw = os.environ.get("ORCHESTRATOR_POOL_QUALITY_WEIGHTS", "{}")
+    quality_model = QualityModel(json.loads(quality_raw) if quality_raw else None)
+    router = Router.from_config(
+        json.loads(raw_routes),
+        json.loads(os.environ.get("ORCHESTRATOR_MODEL_ALIASES", "{}")),
+        quality_model=quality_model,
+    )
     known = {worker.pool for worker in workers}
     missing = router.referenced_pools() - known
     if missing:
