@@ -1,0 +1,186 @@
+---
+- name: Validate llama.cpp HIP inputs
+  ansible.builtin.assert:
+    that:
+      - llama_cpp_hip_digest is match('^sha256:[0-9a-f]{64}$')
+      - llama_cpp_hip_workers | length > 0
+      - llama_cpp_hip_host == '127.0.0.1'
+      - not (llama_cpp_hip_drain_via_gateway | bool)
+    fail_msg: >-
+      llama.cpp HIP workers require an image pinned by sha256 digest, at least one declared worker, a loopback bind
+      and llama_cpp_hip_drain_via_gateway=false (draining is not implemented for this role).
+  when: llama_cpp_hip_enabled | bool
+
+- name: Refuse a second inference engine on the same GPU (one engine process on the APU)
+  ansible.builtin.assert:
+    that:
+      - not (llama_cpp_container_enabled | default(false) | bool)
+      - not (vllm_rocm_enabled | default(false) | bool)
+      - not (sglang_rocm_enabled | default(false) | bool)
+    fail_msg: llama_cpp_hip_enabled is mutually exclusive with the other engine enable flags on a host.
+  when: llama_cpp_hip_enabled | bool
+
+- name: Read the subordinate id ranges
+  ansible.builtin.slurp:
+    src: "{{ item }}"
+  loop: [/etc/subuid, /etc/subgid]
+  register: llama_cpp_hip_subids
+  check_mode: false
+  when: llama_cpp_hip_enabled | bool
+
+- name: Require rootless-podman prerequisites of the runtime account
+  ansible.builtin.assert:
+    that:
+      - (item.content | b64decode) is search('(?m)^' ~ llama_cpp_hip_user ~ ':')
+    fail_msg: >-
+      {{ llama_cpp_hip_user }} has no entry in {{ item.item }}; converge the users role with
+      users_runtime_rootless_enabled=true first (--tags users).
+  loop: "{{ llama_cpp_hip_subids.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: llama_cpp_hip_enabled | bool and not ansible_check_mode
+
+- name: Create the managed model directory
+  ansible.builtin.file:
+    path: "{{ llama_cpp_hip_model_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: llama_cpp_hip_enabled | bool
+
+# A hard link shares its inode with the source, so no owner/mode is set here (it would rewrite the source's).
+- name: Hard-link already-downloaded models into the managed model directory
+  ansible.builtin.file:  # noqa: risky-file-permissions
+    src: "{{ item.value.model_source }}"
+    dest: "{{ llama_cpp_hip_model_dir }}/{{ item.value.model_file }}"
+    state: hard
+  loop: "{{ llama_cpp_hip_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when:
+    - llama_cpp_hip_enabled | bool
+    - item.value.model_source is defined
+
+- name: Verify the declared model files exist
+  ansible.builtin.stat:
+    path: "{{ llama_cpp_hip_model_dir }}/{{ item.value.model_file }}"
+  loop: "{{ llama_cpp_hip_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: llama_cpp_hip_model_stat
+  when: llama_cpp_hip_enabled | bool
+
+- name: Require the model files before starting any worker
+  ansible.builtin.assert:
+    that: item.stat.exists | default(true)
+    fail_msg: >-
+      Model file missing for {{ item.item.key }}: {{ llama_cpp_hip_model_dir }}/{{ item.item.value.model_file }}
+  loop: "{{ llama_cpp_hip_model_stat.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  when: llama_cpp_hip_enabled | bool and not ansible_check_mode
+
+- name: Create the runtime account's container storage directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ llama_cpp_hip_user }}"
+    group: "{{ llama_cpp_hip_user }}"
+    mode: "0700"
+  loop:
+    - "{{ llama_cpp_hip_storage_root }}"
+    - "{{ llama_cpp_hip_storage_root }}/storage"
+    - "{{ llama_cpp_hip_storage_root }}/tmp"
+    - "{{ llama_cpp_hip_home }}/.config"
+    - "{{ llama_cpp_hip_home }}/.config/containers"
+  when: llama_cpp_hip_enabled | bool
+
+- name: Point the runtime account's podman store at the data volume
+  ansible.builtin.copy:
+    dest: "{{ llama_cpp_hip_home }}/.config/containers/storage.conf"
+    owner: "{{ llama_cpp_hip_user }}"
+    group: "{{ llama_cpp_hip_user }}"
+    mode: "0600"
+    content: |
+      [storage]
+      driver = "overlay"
+      graphroot = "{{ llama_cpp_hip_storage_root }}/storage"
+  when: llama_cpp_hip_enabled | bool
+
+- name: Ensure the runtime account's user manager and XDG_RUNTIME_DIR exist (linger only applies at the next boot)
+  ansible.builtin.systemd_service:
+    name: "user@{{ llama_cpp_hip_uid }}.service"
+    state: started
+  when: llama_cpp_hip_enabled | bool and not ansible_check_mode
+
+- name: Check whether the pinned image is already in the runtime account's store
+  ansible.builtin.command:
+    argv: [runuser, -u, "{{ llama_cpp_hip_user }}", --, env,
+           "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_hip_uid }}",
+           "TMPDIR={{ llama_cpp_hip_storage_root }}/tmp",
+           podman, image, exists, "{{ llama_cpp_hip_image }}@{{ llama_cpp_hip_digest }}"]
+  args:
+    chdir: "{{ llama_cpp_hip_home }}"
+  register: llama_cpp_hip_image_present
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: llama_cpp_hip_enabled | bool
+
+- name: Pre-pull the pinned image (large; done here so unit start is not delayed)
+  ansible.builtin.command:
+    argv: [runuser, -u, "{{ llama_cpp_hip_user }}", --, env,
+           "XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_hip_uid }}",
+           "TMPDIR={{ llama_cpp_hip_storage_root }}/tmp",
+           podman, pull, "{{ llama_cpp_hip_image }}@{{ llama_cpp_hip_digest }}"]
+  args:
+    chdir: "{{ llama_cpp_hip_home }}"
+  async: 3600
+  poll: 30
+  changed_when: true
+  when:
+    - llama_cpp_hip_enabled | bool
+    - llama_cpp_hip_image_present.rc | default(0) != 0
+
+- name: Install llama.cpp HIP worker service units
+  ansible.builtin.template:
+    src: llama-hip.service.j2
+    dest: "/etc/systemd/system/{{ item.value.service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  vars:
+    llama_worker: "{{ item.value }}"
+  loop: "{{ llama_cpp_hip_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: llama_cpp_hip_units
+  when: llama_cpp_hip_enabled | bool
+
+- name: Reload systemd after installing unit files
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when:
+    - llama_cpp_hip_enabled | bool
+    - not ansible_check_mode
+    - llama_cpp_hip_units.changed | default(false) | bool
+
+- name: Create the evidence directory
+  ansible.builtin.file:
+    path: "{{ llama_cpp_hip_evidence_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: llama_cpp_hip_enabled | bool
+
+- name: Start llama.cpp HIP workers (restart only when their unit changed)
+  ansible.builtin.include_tasks: start_worker.yml
+  loop: "{{ llama_cpp_hip_workers | dict2items }}"
+  loop_control:
+    loop_var: llama_item
+    label: "{{ llama_item.key }}"
+  when:
+    - llama_cpp_hip_enabled | bool
+    - not ansible_check_mode

@@ -1,0 +1,23 @@
+● llama-hip-qwen3-coder-30b.service - llama.cpp HIP worker llama-hip-qwen3-coder-30b
+     Loaded: loaded (/etc/systemd/system/llama-hip-qwen3-coder-30b.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-11-21 11:59:47 UTC; 2min 30s ago
+ Invocation: 5bde32bfa51e4ee183c88fc9db8726e2
+    Process: 122730 ExecStartPre=/usr/bin/podman rm -f llama-hip-qwen3-coder-30b (code=exited, status=0/SUCCESS)
+   Main PID: 122744 (podman)
+      Tasks: 20 (limit: 134355)
+     Memory: 12.3M (peak: 16.7M)
+        CPU: 719ms
+     CGroup: /system.slice/llama-hip-qwen3-coder-30b.service
+             ├─122744 /usr/bin/podman run --rm --name llama-hip-qwen3-coder-30b --network host --security-opt no-new-privileges --device /dev/kfd --device /dev/dri --group-add keep-groups -v /var/lib/local-ai/models/gguf:/models:ro ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184 -m /models/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf -c 65536 --host
+             └─122767 /usr/bin/conmon --api-version 1 -c ace51774784a60290d23f6d7f0a0619866b2c5eca1e41bbb740768ab6325b764 -u ace51774784a60290d23f6d7f0a0619866b2c5eca1e41bbb740768ab6325b764 -r /usr/bin/crun -b /var/lib/local-ai/podman-aihost-runtime/storage/overlay-containers/ace51774784a60290d23f6d7f0a0619866b2c5eca1e41bbb740768ab6325b764/userdata -p /run/user/999/containers/overlay-container
+
+Nov 21 12:01:06 ai-ms-s1-max-01 podman[122744]: 1.18.850.279 I slot print_timing: id  0 | task 0 |        eval time =      69.04 ms /     4 tokens (   23.01 ms per token,    43.45 tokens per second)
+Nov 21 12:01:06 ai-ms-s1-max-01 podman[122744]: 1.18.850.280 I slot print_timing: id  0 | task 0 |       total time =     177.10 ms /    18 tokens
+Nov 21 12:01:06 ai-ms-s1-max-01 podman[122744]: 1.18.850.285 I slot print_timing: id  0 | task 0 |    graphs reused =          3
+Nov 21 12:01:06 ai-ms-s1-max-01 podman[122744]: 1.18.850.285 I slot print_timing: id  0 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+Nov 21 12:01:06 ai-ms-s1-max-01 podman[122744]: 1.18.850.321 I slot      release: id  0 | task 0 | stop processing: n_tokens = 17, truncated = 0
+Nov 21 12:01:06 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[122767]: 1.18.850.279 I slot print_timing: id  0 | task 0 |        eval time =      69.04 ms /     4 tokens (   23.01 ms per token,    43.45 tokens per second)
+Nov 21 12:01:06 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[122767]: 1.18.850.280 I slot print_timing: id  0 | task 0 |       total time =     177.10 ms /    18 tokens
+Nov 21 12:01:06 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[122767]: 1.18.850.285 I slot print_timing: id  0 | task 0 |    graphs reused =          3
+Nov 21 12:01:06 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[122767]: 1.18.850.285 I slot print_timing: id  0 | task 0 |   graph reallocs =          0    /     0        (same size) / (changed size)
+Nov 21 12:01:06 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[122767]: 1.18.850.321 I slot      release: id  0 | task 0 | stop processing: n_tokens = 17, truncated = 0

@@ -1,0 +1,7 @@
+---
+galaxy_info:
+  author: aihost
+  description: Rootless-podman llama.cpp (ROCm/HIP) inference workers pinned by image digest.
+  license: MIT
+  min_ansible_version: "2.16"
+dependencies: []

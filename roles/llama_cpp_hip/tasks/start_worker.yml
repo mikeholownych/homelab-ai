@@ -1,0 +1,35 @@
+---
+- name: "Ensure the worker is enabled and running: {{ llama_item.value.service_name }}"
+  ansible.builtin.systemd_service:
+    name: "{{ llama_item.value.service_name }}"
+    enabled: true
+    state: >-
+      {{ 'restarted' if (llama_cpp_hip_units.results | selectattr('item.key', 'equalto', llama_item.key)
+                         | map(attribute='changed') | first | default(false)) else 'started' }}
+
+- name: "Wait for /v1/models from {{ llama_item.key }}"
+  ansible.builtin.uri:
+    url: "http://{{ llama_cpp_hip_host }}:{{ llama_item.value.port }}/v1/models"
+    return_content: true
+    timeout: 10
+  register: llama_cpp_hip_models
+  until: llama_cpp_hip_models.status | default(0) == 200
+  retries: "{{ llama_cpp_hip_health_retries }}"
+  delay: "{{ llama_cpp_hip_health_delay }}"
+
+- name: "Record health evidence for {{ llama_item.key }}"
+  ansible.builtin.copy:
+    dest: "{{ llama_cpp_hip_evidence_dir }}/{{ llama_item.key }}-health.json"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ evidence | to_nice_json }}\n"
+  vars:
+    evidence:
+      worker: "{{ llama_item.key }}"
+      service: "{{ llama_item.value.service_name }}"
+      image: "{{ llama_cpp_hip_image }}@{{ llama_cpp_hip_digest }}"
+      model_file: "{{ llama_item.value.model_file }}"
+      endpoint: "http://{{ llama_cpp_hip_host }}:{{ llama_item.value.port }}/v1/models"
+      http_status: "{{ llama_cpp_hip_models.status }}"
+      served_models: "{{ llama_cpp_hip_models.json.data | map(attribute='id') | list }}"

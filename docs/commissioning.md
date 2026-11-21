@@ -248,6 +248,31 @@ scp -r mike@10.0.8.6:/var/lib/local-ai/evidence/ evidence/ai-ms-s1-max-01/$TS/
 
 **Acceptance:** three HSA agents (CPU, `gfx1151`, `aie2p`), NPU device node present, storage mounted, pinned ROCm 7.2.0, idempotent second run — status **platform accepted; engines deferred**.
 
+### MS-S1 Max Phase 2 — engine selection and lab wire
+
+**Scope:** `inventory/lab` only; production inventory, the gateway pool and the ROCm APT pins are untouched. Production promotion is **deferred**.
+
+**Flow:** model shortlist → smoke → deep bake-off → scorecard recommendation → lab wire of the winner only. Artifacts live under `research/rocm-strix-halo/` (`model-shortlist.md`, `harness/`, `evidence/<ts>/{smoke,deep,recommendation.md,wire}`).
+
+**Winner (operator-accepted):** llama.cpp HIP, `Qwen3-Coder-30B-A3B-Instruct` GGUF Q8_0, image `ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d…9f4184`, `-ngl 99 -fa on --jinja -c 65536 -np 4`, loopback `127.0.0.1:8101`.
+
+**Wire:** new role `roles/llama_cpp_hip/` (parallel to `llama_cpp_container`, which is SYCL-only). It is off by default and enabled per host with `llama_cpp_hip_enabled`; exactly one engine flag (`llama_cpp_container_enabled`, `llama_cpp_hip_enabled`, `vllm_rocm_enabled`, `sglang_rocm_enabled`) may be true on this host (`tests/test_ms_s1_max_engine_wire_contract.py`). The role asserts the digest pin, a loopback bind and the absence of the other engine flags.
+
+- The worker runs as rootless podman under `aihost-runtime` (devices `/dev/kfd` + `/dev/dri`, `--group-add keep-groups`, host network; no `HSA_OVERRIDE_GFX_VERSION`, no Intel/oneAPI env). The account needs `/etc/subuid`/`/etc/subgid` ranges disjoint from `mike`'s: host vars set `users_runtime_rootless_enabled: true` and `users_runtime_subuid_first: 165536`, applied by `--tags users`.
+- Its container store is kept on the data volume (`/var/lib/local-ai/podman-aihost-runtime`); the ~23 GB image is pulled by digest on the first converge.
+- The already-downloaded model is hard-linked into the managed `/var/lib/local-ai/models/gguf` (same filesystem, no extra space).
+- No gateway on this host: `llama_cpp_hip_drain_via_gateway: false`, and the API is unauthenticated on loopback only.
+
+```bash
+ansible-playbook -i inventory/lab playbooks/site.yml --limit ai-ms-s1-max-01 --tags users
+ansible-playbook -i inventory/lab playbooks/site.yml --limit ai-ms-s1-max-01 --tags llama_cpp_hip
+ssh mike@10.0.8.6 'curl -fsS http://127.0.0.1:8101/v1/models'
+# second converge must be idle (changed=0)
+ansible-playbook -i inventory/lab playbooks/site.yml --limit ai-ms-s1-max-01 --tags llama_cpp_hip
+```
+
+On-host health evidence is written to `/var/lib/local-ai/evidence/llama-hip/<worker>-health.json`; unit status, journal and `/v1/models` output are archived in `research/rocm-strix-halo/evidence/<ts>/wire/`.
+
 ---
 
 ## Phase-Gated Host Commissioning (`playbooks/commission.yml`)
