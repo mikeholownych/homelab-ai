@@ -10,7 +10,7 @@ hardware_profile: ms_s1_max_strix_halo
 os_tuning_profile: baseline
 
 node_metadata:
-  environment: lab
+  environment: production
   hostname: ai-ms-s1-max-01
   hardware_profile: ms_s1_max_strix_halo
   os_tuning_profile: baseline
@@ -24,13 +24,13 @@ capabilities:
   inference: true
   benchmarking: true
   monitoring: true
-  cluster_eligible: false
+  cluster_eligible: true
 
 features:
-  monitoring: false
-  scheduled_reconciliation: false
+  monitoring: true
+  scheduled_reconciliation: true
   os_tuning: true
-  observability: false
+  observability: true
   model_registry: false
   clustering: false
   cmdb_export: false
@@ -55,6 +55,8 @@ users_runtime_subuid_first: 165536
 llama_cpp_hip_enabled: true
 llama_cpp_hip_digest: "sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184"
 llama_cpp_hip_drain_via_gateway: false
+# Phase 3a: LAN bind for the 5820 gateway (ufw restricts to security_inference_api_cidrs).
+llama_cpp_hip_host: "10.0.8.6"
 llama_cpp_hip_workers:
   qwen3_coder_30b_q8:
     service_name: llama-hip-qwen3-coder-30b.service
@@ -65,6 +67,15 @@ llama_cpp_hip_workers:
     model_file: Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
     model_source: /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
     args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4"]
+
+# Phase 3a: minimal flag; detailed gateway block lands in Task 4.
+orchestrator_gateway_enabled: true
+
+# Only the 5820 gateway may reach the HIP worker over the LAN.
+security_firewall_enabled: true
+security_inference_api_firewall_enabled: true
+security_inference_api_cidrs: ["10.0.8.5/32"]
+security_inference_api_ports: [8101]
 
 storage_lvm:
   enabled: true

@@ -23,7 +23,7 @@ PRODUCTION_GROUP_VARS = PRODUCTION_ROOT / "group_vars"
 INVENTORY_README = REPO_ROOT / "inventory" / "README.md"
 
 PRODUCTION_HOSTS = ("ai-p620-01", "ai-5820-01")
-ACTIVE_PRODUCTION_HOSTS = ("ai-5820-01",)
+ACTIVE_PRODUCTION_HOSTS = ("ai-5820-01", "ai-ms-s1-max-01")
 
 REQUIRED_PATHS = (
     INVENTORY_README,
@@ -195,7 +195,7 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual(["production", "inference", "gpu", "cluster", "monitoring"], inventory["ai_hosts"]["children"])
         for group in ("production", "inference", "gpu", "cluster", "monitoring"):
             self.assertEqual(set(ACTIVE_PRODUCTION_HOSTS), set(inventory[group]["hosts"]))
-            self.assertEqual(1, len(inventory[group]["hosts"]))
+            self.assertEqual(len(ACTIVE_PRODUCTION_HOSTS), len(inventory[group]["hosts"]))
 
         self.assertEqual(["ai-p620-01"], inventory["uncommissioned_hosts"]["hosts"])
         self.assertEqual(["vault-vm"], inventory["vault_servers"]["hosts"])
@@ -242,17 +242,11 @@ class InventoryContractTests(unittest.TestCase):
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
         self.assertEqual("", stderr.strip())
         self.assertIn("ai-5820-test-01", inventory["_meta"]["hostvars"])
-        self.assertIn("ai-ms-s1-max-01", inventory["_meta"]["hostvars"])
-        self.assertEqual(
-            sorted(["ai-5820-test-01", "ai-ms-s1-max-01"]),
-            sorted(inventory["lab"]["hosts"]),
-        )
+        self.assertNotIn("ai-ms-s1-max-01", inventory["_meta"]["hostvars"])
+        self.assertEqual(["ai-5820-test-01"], sorted(inventory["lab"]["hosts"]))
         self.assertIn("ai-5820-test-01", inventory["gpu"]["hosts"])
-        self.assertIn("ai-ms-s1-max-01", inventory["gpu"]["hosts"])
         for group in ("inference", "cluster", "monitoring"):
             self.assertIn("ai-5820-test-01", inventory[group]["hosts"])
-        self.assertNotIn("ai-ms-s1-max-01", inventory["inference"]["hosts"])
-        self.assertNotIn("ai-ms-s1-max-01", inventory["cluster"]["hosts"])
         hostvars = inventory["_meta"]["hostvars"]["ai-5820-test-01"]
         self.assertEqual("lab", hostvars["node_metadata"]["environment"])
         self.assertEqual("d5820_dual_b65", hostvars["hardware_profile"])
