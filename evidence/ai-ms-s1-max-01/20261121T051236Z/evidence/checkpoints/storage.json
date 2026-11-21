@@ -1,0 +1,9 @@
+{
+    "generated_at": "2026-11-21T05:04:02Z",
+    "lvm_enabled": true,
+    "mount_path": "/var/lib/local-ai",
+    "node": "ai-ms-s1-max-01",
+    "phase": "storage",
+    "schema_version": "1.0.0",
+    "status": "pass"
+}

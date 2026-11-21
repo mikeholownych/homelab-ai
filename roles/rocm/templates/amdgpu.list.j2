@@ -1,0 +1,3 @@
+# Managed by Ansible (roles/rocm). Pinned graphics and amdgpu channels.
+deb [arch=amd64,i386 signed-by={{ rocm_keyring_path }}] {{ rocm_repository_urls.graphics }} {{ rocm_apt_suite }} main
+deb [arch=amd64,i386 signed-by={{ rocm_keyring_path }}] {{ rocm_repository_urls.amdgpu }} {{ rocm_apt_suite }} main

@@ -242,9 +242,17 @@ class InventoryContractTests(unittest.TestCase):
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
         self.assertEqual("", stderr.strip())
         self.assertIn("ai-5820-test-01", inventory["_meta"]["hostvars"])
-        self.assertEqual(["ai-5820-test-01"], inventory["lab"]["hosts"])
-        for group in ("inference", "gpu", "cluster", "monitoring"):
+        self.assertIn("ai-ms-s1-max-01", inventory["_meta"]["hostvars"])
+        self.assertEqual(
+            sorted(["ai-5820-test-01", "ai-ms-s1-max-01"]),
+            sorted(inventory["lab"]["hosts"]),
+        )
+        self.assertIn("ai-5820-test-01", inventory["gpu"]["hosts"])
+        self.assertIn("ai-ms-s1-max-01", inventory["gpu"]["hosts"])
+        for group in ("inference", "cluster", "monitoring"):
             self.assertIn("ai-5820-test-01", inventory[group]["hosts"])
+        self.assertNotIn("ai-ms-s1-max-01", inventory["inference"]["hosts"])
+        self.assertNotIn("ai-ms-s1-max-01", inventory["cluster"]["hosts"])
         hostvars = inventory["_meta"]["hostvars"]["ai-5820-test-01"]
         self.assertEqual("lab", hostvars["node_metadata"]["environment"])
         self.assertEqual("d5820_dual_b65", hostvars["hardware_profile"])

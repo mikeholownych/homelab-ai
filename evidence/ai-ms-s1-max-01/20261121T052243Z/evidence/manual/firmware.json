@@ -1,0 +1,901 @@
+{
+  "checks": [
+    {
+      "expected": "informational",
+      "observed": {
+        "confidence": "unknown",
+        "source": "not exposed by Linux sources",
+        "value": null
+      },
+      "rationale": "Above-4G decoding is not required for this unified-memory platform.",
+      "rule": "above_4g_decoding_enabled",
+      "severity": "informational",
+      "status": "not_applicable"
+    },
+    {
+      "expected": "record where discoverable",
+      "observed": [],
+      "rationale": "Workstation PSU telemetry is not always exposed by firmware.",
+      "rule": "psu_inventory",
+      "severity": "informational",
+      "status": "not_tested"
+    }
+  ],
+  "expected": {
+    "above_4g_decoding": {
+      "missing_severity": "informational",
+      "required": false,
+      "undiscoverable_status": "not_applicable"
+    },
+    "resizable_bar": {
+      "missing_severity": "informational",
+      "required": false
+    }
+  },
+  "observed": {
+    "above_4g_decoding": {
+      "confidence": "unknown",
+      "source": "not exposed by Linux sources",
+      "value": null
+    },
+    "bios_version": "1.12",
+    "devices": {
+      "Devices": [
+        {
+          "CompositeId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Created": 1795234898,
+          "DeviceId": "d324166a5e48e27ba0360ac27eeaa89559930203",
+          "Guid": [
+            "91e181a7-c63a-5bb5-8d51-abee4cbdddd3"
+          ],
+          "InstanceIds": [
+            "DRM\\VEN_AUS&DEV_28B1"
+          ],
+          "ParentDeviceId": "1b5e2c979e0fa021c634a7a78f9f31f027d06595",
+          "Plugin": "linux_display",
+          "Serial": "43875",
+          "VendorIds": [
+            "PNP:AUS"
+          ]
+        },
+        {
+          "Created": 1795234899,
+          "DeviceId": "75dbd857f37f0f1aa3d5bf2fea25b876288fb415",
+          "Flags": [
+            "internal",
+            "updatable",
+            "require-ac",
+            "needs-reboot",
+            "usable-during-update",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "0b05efc7-3b84-50dd-98ff-60916c758ff7",
+            "9ca5a6e0-c17a-5a14-aa1b-279ee88229fd",
+            "939fcc4f-37d3-56f0-a4e9-e2aeca4da081"
+          ],
+          "Icons": [
+            "drive-harddisk"
+          ],
+          "InstanceIds": [
+            "NVME\\VEN_C0A9&DEV_560B",
+            "NVME\\VEN_C0A9&DEV_560B&SUBSYS_C0A92B00",
+            "CT2000E100SSD8"
+          ],
+          "Name": "CT2000E100SSD8",
+          "Plugin": "nvme",
+          "Protocols": [
+            "org.nvmexpress"
+          ],
+          "Serial": "2602EAE02705",
+          "Summary": "NVM Express solid state drive",
+          "Vendor": "Micron/Crucial Technology",
+          "VendorIds": [
+            "PCI:0xC0A9"
+          ],
+          "Version": "VDCR4014",
+          "VersionFormat": "plain"
+        },
+        {
+          "Created": 1795234899,
+          "DeviceId": "3ead601f43028c79656941fc3832e6b67412e2b8",
+          "Flags": [
+            "updatable",
+            "can-verify",
+            "can-verify-image",
+            "unsigned-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "e545edf3-691d-5457-a779-4c1ff69656e1",
+            "fa8d993e-3392-519a-9473-550bb51c9399",
+            "d67086b5-af17-5609-af48-6500bb799e5b"
+          ],
+          "InstallDuration": 9,
+          "InstanceIds": [
+            "USB\\VID_05E3&PID_0610&IC_359020&BONDING_70",
+            "USB\\VID_05E3&PID_0610&IC_359020&BONDING_70&RUNMODE_C",
+            "USB\\VID_05E3&PID_0610&VENDOR_GENESYSLOGIC&IC_359020&BONDING_70&PORTNUM_44&VENDORSUP_CDB1ABD6-7C7A-5360-B47F-49A6AFE05EBF"
+          ],
+          "Name": "Hub",
+          "Plugin": "genesys",
+          "Protocols": [
+            "com.genesys.usbhub"
+          ],
+          "Vendor": "Genesys Logic, Inc.",
+          "VendorIds": [
+            "USB:0x05E3"
+          ],
+          "Version": "94.6",
+          "VersionFormat": "bcd",
+          "VersionRaw": 37894
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "b7a1d3d90faa1f6275d9a98da4fb3be7118e61c7",
+          "Flags": [
+            "internal",
+            "updatable",
+            "needs-reboot",
+            "usable-during-update",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "814e950f-1449-566a-a190-42c9d3a3a2df",
+            "cd94ec34-7163-5f27-8549-1bd4b7872ae8"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\VENDOR_Microsoft&NAME_Microsoft-KEK-CA",
+            "UEFI\\CRT_DEC64D7746D983DB3774829A00BF829D9F19E9CF"
+          ],
+          "Name": "KEK CA",
+          "ParentDeviceId": "2a4c23bfb79b5dabe474cb7b1b3e604645d6f9c6",
+          "Plugin": "uefi_kek",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "Vendor": "Microsoft",
+          "VendorIds": [
+            "UEFI:Microsoft"
+          ],
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "b59c53beddfd39aa527de057d9e59e50f4fb78d8",
+          "Flags": [
+            "internal",
+            "needs-reboot",
+            "usable-during-update",
+            "updatable-hidden",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "2c41f760-7680-5d44-8a19-9c64a9656908"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\CRT_4DFA8B65D6D39A1FCBCFD3FEDAD90F0CF4A70104"
+          ],
+          "Name": "MINISFORUM KEK CA",
+          "ParentDeviceId": "2a4c23bfb79b5dabe474cb7b1b3e604645d6f9c6",
+          "Plugin": "uefi_kek",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "UpdateError": "No vendor ID set",
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "fd7fc07d07389448ac1c272f245cf8bac9994edb",
+          "Flags": [
+            "internal",
+            "needs-reboot",
+            "updatable-hidden",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "a097a365-3f11-530e-9f5b-188f1d540f3b"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\CRT_FFCA4A03024137A246897F5F6E061079715574DD"
+          ],
+          "Name": "MINISFORUM OWN CA",
+          "ParentDeviceId": "0352a8acc949c7df21fec16e566ba9a74e797a97",
+          "Plugin": "uefi_db",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "UpdateError": "No vendor ID set",
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "6924110cde4fa051bfdc600a60620dc7aa9d3c6a",
+          "Flags": [
+            "internal"
+          ],
+          "Guid": [
+            "f5b7fa39-86a3-5204-95c3-b37346fdbcbc"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\CRT_0BD4E90B9A887AB8351B477EBCD885548821279C"
+          ],
+          "Name": "MINISFORUM PK",
+          "ParentDeviceId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Plugin": "uefi_pk",
+          "Summary": "UEFI Platform Key",
+          "Vendor": "Unknown",
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "92120fc1a625f725901333cbfec152b8d6e42d43",
+          "Flags": [
+            "internal",
+            "updatable",
+            "needs-reboot",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "ca4668d9-734f-5b2b-aae8-8120b196f659",
+            "965d1919-0e18-5b63-9ebd-e5d122cd11df"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\VENDOR_Microsoft&NAME_Microsoft-Option-ROM-UEFI-CA",
+            "UEFI\\CRT_F45B559FC1C60F31B3071021298D5ED7D77280B0"
+          ],
+          "Name": "Option ROM UEFI CA",
+          "ParentDeviceId": "0352a8acc949c7df21fec16e566ba9a74e797a97",
+          "Plugin": "uefi_db",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "Vendor": "Microsoft",
+          "VendorIds": [
+            "UEFI:Microsoft"
+          ],
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        },
+        {
+          "Created": 1795234898,
+          "DeviceId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Flags": [
+            "internal"
+          ],
+          "Guid": [
+            "e256f116-50e7-58b3-a02c-acbcb3bcc461",
+            "3e633c49-728e-5ef6-a138-b0be606d78f8"
+          ],
+          "Icons": [
+            "computer"
+          ],
+          "InstanceIds": [
+            "CPUID\\PRO_0&FAM_1A&MOD_70",
+            "CPUID\\PRO_0&FAM_1A&MOD_70&STP_0"
+          ],
+          "Name": "RYZEN AI MAX+ 395 w/ Radeon 8060S",
+          "Plugin": "cpu",
+          "Vendor": "AMD",
+          "Version": "0x0b700037",
+          "VersionFormat": "hex",
+          "VersionRaw": 191889463
+        },
+        {
+          "CompositeId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Created": 1795234899,
+          "DeviceId": "1b5e2c979e0fa021c634a7a78f9f31f027d06595",
+          "Flags": [
+            "internal",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "da95b8cc-46e9-5ea4-8b54-2f6e45a5d742"
+          ],
+          "Icons": [
+            "video-display"
+          ],
+          "InstanceIds": [
+            "AMD\\113-STRXLG"
+          ],
+          "Name": "Radeon Graphics",
+          "ParentDeviceId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Plugin": "amd_gpu",
+          "Summary": "AMD STRIX_HALO_GENERIC",
+          "Vendor": "AMD",
+          "VendorIds": [
+            "PCI:0x1002"
+          ],
+          "Version": "1",
+          "VersionFormat": "number",
+          "VersionRaw": 1
+        },
+        {
+          "Created": 1795234898,
+          "DeviceId": "6469856584e2f5873b2f148302e46c9313c7d054",
+          "Flags": [
+            "updatable",
+            "needs-reboot",
+            "signed-payload"
+          ],
+          "Guid": [
+            "9947c120-b97b-52d6-9d83-738a1c342e23"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\OS_ubuntu&VAR_SbatLevelRT"
+          ],
+          "Name": "SBAT",
+          "Plugin": "uefi_sbat",
+          "Protocols": [
+            "com.uefi.sbat"
+          ],
+          "Summary": "Generation number based revocation mechanism",
+          "VendorIds": [
+            "OS:ubuntu"
+          ],
+          "Version": "1.7.4",
+          "VersionFormat": "triplet"
+        },
+        {
+          "CompositeId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Created": 1795234899,
+          "DeviceId": "c54ab0237d7a8db8c717b68e0be78e4374a2a079",
+          "Flags": [
+            "internal",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "92c96a95-c187-5183-ae27-eab2f47e0f63"
+          ],
+          "Icons": [
+            "computer"
+          ],
+          "InstanceIds": [
+            "PCI\\VEN_1022&DEV_17E0"
+          ],
+          "Name": "Secure Processor",
+          "ParentDeviceId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Plugin": "pci_psp",
+          "Summary": "AGESA StrixHaloPI-FP11 1.0.0.2b",
+          "Vendor": "AMD",
+          "VendorIds": [
+            "PCI:0x1022"
+          ],
+          "Version": "00.40.01.65",
+          "VersionBootloader": "65.01.40.00",
+          "VersionFormat": "plain"
+        },
+        {
+          "Checksums": [
+            "7d1073300e74399ed5d275c338aa6f0f2a9932937bc7acc4ba108fa10dd58949"
+          ],
+          "Created": 1795234898,
+          "DeviceId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Flags": [
+            "internal",
+            "updatable",
+            "require-ac",
+            "needs-reboot",
+            "can-verify",
+            "usable-during-update"
+          ],
+          "Guid": [
+            "e65fa87f-4935-4a64-ac85-ebdbd5081f62"
+          ],
+          "Icons": [
+            "computer"
+          ],
+          "Name": "System Firmware",
+          "Plugin": "uefi_capsule",
+          "Protocols": [
+            "org.uefi.capsule"
+          ],
+          "RequestFlags": [
+            "allow-generic-message"
+          ],
+          "Summary": "UEFI System Resource Table device (Updated via capsule-on-disk)",
+          "UpdateState": 2,
+          "Vendor": "Micro Computer (HK) Tech Limited",
+          "VendorIds": [
+            "DMI:American Megatrends International, LLC."
+          ],
+          "Version": "112",
+          "VersionFormat": "number",
+          "VersionLowest": "112",
+          "VersionLowestRaw": 112,
+          "VersionRaw": 112
+        },
+        {
+          "CompositeId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Created": 1795234899,
+          "DeviceId": "db0330716216c629bb2c07256e5d018f499eb6ce",
+          "Flags": [
+            "internal",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "1c4a7901-2399-52c7-9981-d0549022f600"
+          ],
+          "Icons": [
+            "computer"
+          ],
+          "InstanceIds": [
+            "/sys/devices/platform/AMDI000B:00"
+          ],
+          "Name": "System Management Unit (SMU)",
+          "ParentDeviceId": "4bde70ba4e39b28f9eab1628f9dd6e6244c03027",
+          "Plugin": "amd_pmc",
+          "Summary": "Microcontroller used within CPU/APU program 10",
+          "Vendor": "AMD",
+          "Version": "100.9.0",
+          "VersionFormat": "triplet"
+        },
+        {
+          "Created": 1795234898,
+          "DeviceId": "1d8d50a4dbc65618f5c399c2ae827b632b3ccc11",
+          "Flags": [
+            "internal",
+            "require-ac",
+            "needs-reboot",
+            "self-recovery",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "9305de1c-1e12-5665-81c4-37f8e51219b8",
+            "78a291ae-b499-5b0f-8f1d-74e1fefd0b1c",
+            "65a3fced-b423-563f-8098-bf5c329fc063",
+            "5e704f0d-83cb-5364-8384-f46d725a23b8"
+          ],
+          "Icons": [
+            "computer"
+          ],
+          "InstanceIds": [
+            "TPM\\VEN_AMD&DEV_0001",
+            "TPM\\VEN_AMD&MOD_AMD",
+            "TPM\\VEN_AMD&DEV_0001&VER_2.0",
+            "TPM\\VEN_AMD&MOD_AMD&VER_2.0"
+          ],
+          "Name": "TPM",
+          "Plugin": "tpm",
+          "Protocols": [
+            "org.trustedcomputinggroup.tpm2"
+          ],
+          "Vendor": "AMD",
+          "VendorIds": [
+            "TPM:AMD"
+          ],
+          "Version": "6.24.0.7",
+          "VersionFormat": "quad",
+          "VersionRaw": 1688952939479047
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "5bc922b7bd1adb5b6f99592611404036bd9f42d0",
+          "Flags": [
+            "internal",
+            "updatable",
+            "supported",
+            "needs-reboot",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "26f42cba-9bf6-5365-802b-e250eb757e96",
+            "308281c7-d0c5-52e0-8c1a-810540de03df"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\VENDOR_Microsoft&NAME_Microsoft-UEFI-CA",
+            "UEFI\\CRT_7CD7437C555F89E7C2B50E21937E420C4E583E80"
+          ],
+          "Name": "UEFI CA",
+          "ParentDeviceId": "0352a8acc949c7df21fec16e566ba9a74e797a97",
+          "Plugin": "uefi_db",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "Releases": [
+            {
+              "AppstreamId": "com.microsoft.db-uefi-3p.firmware",
+              "Categories": [
+                "X-Configuration",
+                "X-System"
+              ],
+              "Checksum": [
+                "eadea872bb9176564543e172660c832920d02a3f",
+                "43c643208621eebd2342066225555735fa514304172ac3cd258652ab7858e304"
+              ],
+              "Created": 1745884800,
+              "Description": "<p>This updates the 3rd Party UEFI Signature Database (the &quot;db&quot;) to the latest release from Microsoft.It also adds the latest OptionROM UEFI Signature Database update.</p>",
+              "Filename": "DBUpdate-3P2023_OROM2023.cab",
+              "Flags": [
+                "trusted-metadata"
+              ],
+              "Homepage": "https://fwupd.github.io/libfwupdplugin/uefi-db.html",
+              "License": "LicenseRef-proprietary",
+              "Locations": [
+                "https://fwupd.org/downloads/43c643208621eebd2342066225555735fa514304172ac3cd258652ab7858e304-DBUpdate-3P2023_OROM2023.cab"
+              ],
+              "Name": "Secure Boot Signature Database",
+              "Protocol": "org.uefi.dbx2",
+              "ReleaseId": "116503",
+              "RemoteId": "lvfs",
+              "Reports": [
+                {
+                  "DeviceName": "LENOVO ThinkPad P15v Gen 1",
+                  "DistroId": "ubuntu",
+                  "DistroVersion": "25.10",
+                  "Flags": [
+                    "is-upgrade"
+                  ],
+                  "RemoteId": "lvfs",
+                  "RuntimeVersion(org.freedesktop.fwupd)": "2.0.16",
+                  "Vendor": "Lenovo",
+                  "VendorId": 84,
+                  "VersionOld": "2011"
+                },
+                {
+                  "DeviceName": "Framework Laptop 16 (AMD Ryzen 7040 Series)",
+                  "DistroId": "fedora",
+                  "DistroVariant": "workstation",
+                  "DistroVersion": "42",
+                  "Flags": [
+                    "is-upgrade"
+                  ],
+                  "RemoteId": "lvfs",
+                  "RuntimeVersion(org.freedesktop.fwupd)": "2.0.16",
+                  "Vendor": "Framework",
+                  "VendorId": 438,
+                  "VersionOld": "2011"
+                },
+                {
+                  "DeviceName": "Framework Laptop (12th Gen Intel Core)",
+                  "DistroId": "fedora",
+                  "DistroVariant": "workstation",
+                  "DistroVersion": "42",
+                  "Flags": [
+                    "is-upgrade"
+                  ],
+                  "RemoteId": "lvfs",
+                  "RuntimeVersion(org.freedesktop.fwupd)": "2.0.16",
+                  "Vendor": "Framework",
+                  "VendorId": 438,
+                  "VersionOld": "2011"
+                },
+                {
+                  "DeviceName": "Framework Laptop 13 (Intel Core Ultra Series 1)",
+                  "DistroId": "nixos",
+                  "DistroVersion": "25.11",
+                  "Flags": [
+                    "is-upgrade"
+                  ],
+                  "RemoteId": "lvfs",
+                  "RuntimeVersion(org.freedesktop.fwupd)": "2.0.12",
+                  "Vendor": "Framework",
+                  "VendorId": 438,
+                  "VersionOld": "2011"
+                }
+              ],
+              "Size": 10023,
+              "Summary": "UEFI Secure Boot Signature Database",
+              "Tags": [
+                "uefi-secure-boot"
+              ],
+              "Urgency": "high",
+              "Vendor": "Microsoft",
+              "Version": "2023"
+            }
+          ],
+          "Vendor": "Microsoft",
+          "VendorIds": [
+            "UEFI:Microsoft"
+          ],
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "2a4c23bfb79b5dabe474cb7b1b3e604645d6f9c6",
+          "Flags": [
+            "internal"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "Name": "UEFI Key Exchange Key",
+          "ParentDeviceId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Plugin": "uefi_kek"
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "0352a8acc949c7df21fec16e566ba9a74e797a97",
+          "Flags": [
+            "internal"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "Name": "UEFI Signature Database",
+          "ParentDeviceId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Plugin": "uefi_db"
+        },
+        {
+          "Checksums": [
+            "2ea557c44b83c0ad6b71efb7edcc18b6337ad1c1d682155dd9451b051b62ff40"
+          ],
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "362301da643102b9f38477387e2193e57abaa590",
+          "Flags": [
+            "internal",
+            "updatable",
+            "supported",
+            "needs-reboot",
+            "usable-during-update",
+            "only-version-upgrade",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "043fbcc4-4cee-5f4e-9764-e9adda8c2efa",
+            "d07ff664-b0e1-5f4e-a723-d7fbcbfcb94f",
+            "f8ba2887-9411-5c36-9cee-88995bb39731"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstallDuration": 1,
+          "InstanceIds": [
+            "UEFI\\CRT_4990AE1C1412A306D8B604937AE69902BF9CB3A9B2BF3B9B29DD8C4C556CDE15&ARCH_X64",
+            "UEFI\\CRT_3CD3F0309EDAE228767A976DD40D9F4AFFC4FBD5218F2E8CC3C9DD97E8AC6F9D&ARCH_X64",
+            "UEFI\\CRT_A1117F516A32CEFCBA3F2D1ACE10A87972FD6BBE8FE0D0B996E09E65D802A503&ARCH_X64"
+          ],
+          "Name": "UEFI dbx",
+          "ParentDeviceId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Plugin": "uefi_dbx",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "Summary": "UEFI revocation database 2ea557c4",
+          "Vendor": "Microsoft",
+          "VendorIds": [
+            "UEFI:Microsoft"
+          ],
+          "Version": "20260707",
+          "VersionFormat": "number",
+          "VersionLowest": "20260707"
+        },
+        {
+          "Created": 1795234898,
+          "DeviceId": "a098a44cf867e22edd826abf66248e28c50e6b1f",
+          "Flags": [
+            "internal",
+            "updatable",
+            "require-ac",
+            "dual-image",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "56d239fc-3107-5062-983c-00c51c97212b",
+            "7795206b-89b7-5151-9e3e-84f80e0feca1",
+            "fbf5b1ab-719c-5116-a973-a0c88ea90be4"
+          ],
+          "Icons": [
+            "thunderbolt"
+          ],
+          "InstanceIds": [
+            "THUNDERBOLT\\VEN_8087&DEV_5781",
+            "TBT-80875781",
+            "TBT-80875781-controller0-0"
+          ],
+          "Name": "USB4 host controller",
+          "Plugin": "thunderbolt",
+          "Protocols": [
+            "com.intel.thunderbolt"
+          ],
+          "Summary": "Unmatched performance for high-speed I/O",
+          "Vendor": "Intel",
+          "VendorIds": [
+            "THUNDERBOLT:0x8087",
+            "TBT:0x8087"
+          ],
+          "Version": "61.03",
+          "VersionFormat": "pair"
+        },
+        {
+          "Created": 1795234899,
+          "DeviceId": "f3b046e7d41736f54357a0f33ed4ab442bb2c204",
+          "Flags": [
+            "updatable",
+            "supported",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "aa995882-da42-574a-8338-c8dfdca447e3",
+            "279ed287-3607-549e-bacc-f873bb9838c4",
+            "cc4cbfa9-bf9d-540b-b92b-172ce31013c1"
+          ],
+          "Icons": [
+            "usb-receiver"
+          ],
+          "InstallDuration": 18,
+          "InstanceIds": [
+            "UFY\\VID_046D&PID_C52B",
+            "HIDRAW\\VEN_046D&DEV_C52B",
+            "USB\\VID_046D&PID_AAAC"
+          ],
+          "Name": "Unifying Receiver",
+          "Plugin": "logitech_hidpp",
+          "Protocols": [
+            "com.logitech.unifyingsigned"
+          ],
+          "Releases": [
+            {
+              "AppstreamId": "com.logitech.Unifying.RQR24.signed.firmware",
+              "Categories": [
+                "X-UsbReceiver",
+                "X-Mouse"
+              ],
+              "Checksum": [
+                "7a28b6696e1b86dc492f181cde4fc575a30e733d",
+                "6a0134766c26c73cc08f3d30f0bb84d94d035b50f702e39506abdcab9a8f658f"
+              ],
+              "Created": 1563408000,
+              "Description": "<p>This release addresses an unspecified encryption-key extraction vulnerability.</p>",
+              "Filename": "Logitech-Unifying-RQR24.11_B0036.cab",
+              "Flags": [
+                "trusted-metadata"
+              ],
+              "Homepage": "http://support.logitech.com/en-us/software/unifying",
+              "InstallDuration": 18,
+              "License": "LicenseRef-proprietary",
+              "Locations": [
+                "https://fwupd.org/downloads/6a0134766c26c73cc08f3d30f0bb84d94d035b50f702e39506abdcab9a8f658f-Logitech-Unifying-RQR24.11_B0036.cab"
+              ],
+              "Name": "Unifying",
+              "NameVariantSuffix": "Signed RQR24",
+              "Protocol": "com.logitech.unifyingsigned",
+              "ReleaseId": "3584",
+              "RemoteId": "lvfs",
+              "Size": 68352,
+              "Summary": "Firmware for the Logitech Unifying Receiver (RQR24.xx)",
+              "Urgency": "high",
+              "Vendor": "Logitech",
+              "Version": "RQR24.11_B0036"
+            }
+          ],
+          "Summary": "Miniaturised USB wireless receiver",
+          "Vendor": "Logitech",
+          "VendorIds": [
+            "USB:0x046D",
+            "HIDRAW:0x046D"
+          ],
+          "Version": "RQR24.11_B0036",
+          "VersionBootloader": "BOT03.02_B0009",
+          "VersionFormat": "plain"
+        },
+        {
+          "CompositeId": "a18c83c75d973a8c879ab2d31edfd720891b5b3e",
+          "Created": 1795234899,
+          "DeviceId": "d31da5f926c6d962ed810b284fab5a2ef623007b",
+          "Flags": [
+            "internal",
+            "updatable",
+            "supported",
+            "needs-reboot",
+            "signed-payload",
+            "can-emulation-tag"
+          ],
+          "Guid": [
+            "914015a8-9d92-5462-9a9b-f2b361e4faae",
+            "89a825bf-78b5-5f1c-905b-e982b2f02584"
+          ],
+          "Icons": [
+            "application-certificate"
+          ],
+          "InstanceIds": [
+            "UEFI\\VENDOR_Microsoft&NAME_Windows-UEFI-CA",
+            "UEFI\\CRT_A794240D25F0CCB2EC8142DC2F7411890717DEAD"
+          ],
+          "Name": "Windows UEFI CA",
+          "ParentDeviceId": "0352a8acc949c7df21fec16e566ba9a74e797a97",
+          "Plugin": "uefi_db",
+          "Protocols": [
+            "org.uefi.dbx2"
+          ],
+          "Releases": [
+            {
+              "AppstreamId": "com.microsoft.db-windows.firmware",
+              "Categories": [
+                "X-Configuration",
+                "X-System"
+              ],
+              "Checksum": [
+                "4b92441e23e5becae748f7e9c87c59c5723f99a3",
+                "c8ad7603a5b080333cc6755266d29ad0820e18a062737bd4ec77640112074cae"
+              ],
+              "Created": 1745884800,
+              "Description": "<p>This updates the Windows UEFI Signature Database (the &quot;db&quot;) to the latest release from Microsoft.</p><p>It may be required to successfully dual boot Windows and Linux together.</p>",
+              "Filename": "DBUpdate-WIN2023.cab",
+              "Flags": [
+                "trusted-metadata"
+              ],
+              "Homepage": "https://fwupd.github.io/libfwupdplugin/uefi-db.html",
+              "License": "LicenseRef-proprietary",
+              "Locations": [
+                "https://fwupd.org/downloads/c8ad7603a5b080333cc6755266d29ad0820e18a062737bd4ec77640112074cae-DBUpdate-WIN2023.cab"
+              ],
+              "Name": "Secure Boot Signature Database",
+              "NameVariantSuffix": "Windows",
+              "Protocol": "org.uefi.dbx2",
+              "ReleaseId": "143334",
+              "RemoteId": "lvfs",
+              "Size": 5014,
+              "Summary": "UEFI Secure Boot Signature Database",
+              "Urgency": "high",
+              "Vendor": "Microsoft",
+              "Version": "2023"
+            }
+          ],
+          "Vendor": "Microsoft",
+          "VendorIds": [
+            "UEFI:Microsoft"
+          ],
+          "Version": "2023",
+          "VersionFormat": "number",
+          "VersionRaw": 2023
+        }
+      ]
+    }
+  },
+  "rationale": "BIOS, device firmware, decoding state, and discoverable PSU data.",
+  "severity": "informational",
+  "simulated": false,
+  "status": "not_tested"
+}

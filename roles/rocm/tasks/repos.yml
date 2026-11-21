@@ -1,0 +1,114 @@
+---
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: "{{ rocm_keyring_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# The pinned SHA-256 identifies the dearmored keyring (what is installed to
+# rocm_keyring_path), not the ASCII-armored download, so it is checked after dearmor.
+# If the installed keyring already matches the pin, skip download/dearmor/install.
+- name: Checksum installed ROCm keyring
+  ansible.builtin.stat:
+    path: "{{ rocm_keyring_path }}"
+    checksum_algorithm: sha256
+  register: rocm_installed_keyring_stat
+
+- name: Determine whether ROCm keyring needs (re)install
+  ansible.builtin.set_fact:
+    rocm_keyring_needs_install: >-
+      {{ not (rocm_installed_keyring_stat.stat.exists
+              and rocm_installed_keyring_stat.stat.checksum == rocm_signing_key_sha256) }}
+
+- name: Verify and stage ROCm signing key
+  when: rocm_keyring_needs_install | bool
+  block:
+    - name: Create temporary working directory for ROCm signing key
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: rocm-key.
+      register: rocm_key_workdir
+      changed_when: false
+      check_mode: false
+
+    - name: Download ROCm ASCII-armored signing key
+      ansible.builtin.get_url:
+        url: "{{ rocm_signing_key_url }}"
+        dest: "{{ rocm_key_workdir.path }}/rocm.gpg.key"
+        owner: root
+        group: root
+        mode: "0600"
+      check_mode: false
+
+    - name: Dearmor ROCm signing key
+      ansible.builtin.command:
+        cmd: >-
+          gpg --batch --yes --dearmor
+          -o {{ rocm_key_workdir.path }}/rocm.gpg {{ rocm_key_workdir.path }}/rocm.gpg.key
+      changed_when: false
+      check_mode: false
+
+    - name: Checksum dearmored ROCm keyring
+      ansible.builtin.stat:
+        path: "{{ rocm_key_workdir.path }}/rocm.gpg"
+        checksum_algorithm: sha256
+      register: rocm_keyring_stat
+      check_mode: false
+
+    - name: Inspect dearmored key fingerprint
+      ansible.builtin.command:
+        cmd: "gpg --batch --show-keys --with-colons {{ rocm_key_workdir.path }}/rocm.gpg"
+      register: rocm_gpg_inspect
+      changed_when: false
+      check_mode: false
+
+    - name: Validate ROCm signing key checksum and fingerprint
+      ansible.builtin.assert:
+        that:
+          - rocm_keyring_stat.stat.checksum == rocm_signing_key_sha256
+          - ('fpr:::::::::' ~ rocm_signing_key_fingerprint ~ ':') in rocm_gpg_inspect.stdout_lines
+        fail_msg: >-
+          Downloaded ROCm signing key does not match pinned sha256 {{ rocm_signing_key_sha256 }}
+          (got {{ rocm_keyring_stat.stat.checksum }}) or fingerprint {{ rocm_signing_key_fingerprint }}.
+
+    - name: Install ROCm keyring
+      ansible.builtin.copy:
+        src: "{{ rocm_key_workdir.path }}/rocm.gpg"
+        dest: "{{ rocm_keyring_path }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+  always:
+    - name: Remove temporary ROCm key working directory
+      ansible.builtin.file:
+        path: "{{ rocm_key_workdir.path }}"
+        state: absent
+      when: rocm_key_workdir is defined and rocm_key_workdir.path is defined
+      changed_when: false
+      check_mode: false
+
+- name: Configure pinned ROCm APT repository
+  ansible.builtin.template:
+    src: rocm.list.j2
+    dest: "{{ rocm_sources_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: rocm_sources_render
+
+- name: Configure pinned ROCm graphics and amdgpu APT repositories
+  ansible.builtin.template:
+    src: amdgpu.list.j2
+    dest: "{{ rocm_graphics_sources_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: rocm_graphics_sources_render
+
+- name: Refresh APT cache after repository changes
+  ansible.builtin.apt:
+    update_cache: true
+  when: rocm_sources_render.changed or rocm_graphics_sources_render.changed

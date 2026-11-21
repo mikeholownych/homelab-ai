@@ -1,0 +1,20 @@
+{
+    "fs_uuid": "59defe3f-020d-4781-b601-1563ca037cf5",
+    "fstype": "xfs",
+    "lv_name": "local-ai-lv",
+    "lv_size_bytes": "1099511627776",
+    "mount_path": "/var/lib/local-ai",
+    "pvs": [
+        {
+            "pv_attr": "a--",
+            "pv_fmt": "lvm2",
+            "pv_free": "790232039424",
+            "pv_name": "/dev/nvme0n1p3",
+            "pv_size": "1997117849600",
+            "vg_name": "ubuntu-vg"
+        }
+    ],
+    "vg_free_bytes": "790232039424",
+    "vg_name": "ubuntu-vg",
+    "vg_size_bytes": "1997117849600"
+}

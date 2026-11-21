@@ -1,0 +1,9 @@
+{
+    "engines_deferred": true,
+    "generated_at": "2026-11-21T05:04:48Z",
+    "node": "ai-ms-s1-max-01",
+    "phase": "rocm",
+    "rocm_release": "7.2.0",
+    "schema_version": "1.0.0",
+    "status": "pass"
+}

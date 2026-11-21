@@ -1,0 +1,59 @@
+---
+ansible_host: 10.0.8.6
+ansible_user: mike
+ansible_become: true
+
+platform_release: "26.04"
+platform_codename: resolute
+
+hardware_profile: ms_s1_max_strix_halo
+os_tuning_profile: baseline
+
+node_metadata:
+  environment: lab
+  hostname: ai-ms-s1-max-01
+  hardware_profile: ms_s1_max_strix_halo
+  os_tuning_profile: baseline
+
+node_roles:
+  inference: false
+  gpu: true
+
+capabilities:
+  gpu: true
+  inference: false
+  benchmarking: false
+  monitoring: true
+  cluster_eligible: false
+
+features:
+  monitoring: false
+  scheduled_reconciliation: false
+  os_tuning: true
+  observability: false
+  model_registry: false
+  clustering: false
+  cmdb_export: false
+  itsm_integration: false
+  ray_enabled: false
+  distributed_vllm_enabled: false
+
+users_local_ai_manage_device_groups: true
+users_local_ai_device_groups:
+  - render
+  - video
+
+rocm_install_enabled: true
+intel_gpu_install_enabled: false
+intel_gpu_physical_validation_enabled: false
+
+storage_lvm:
+  enabled: true
+  vg: ubuntu-vg
+  lv: local-ai-lv
+  size: 1024g
+  fstype: xfs
+  mount_path: /var/lib/local-ai
+  reserve_gib: 100
+  expected_pvs:
+    - /dev/nvme0n1p3

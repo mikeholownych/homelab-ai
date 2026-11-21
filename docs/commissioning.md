@@ -182,6 +182,74 @@ Profile: `profiles/hardware/d5820_dual_b65.yml`. When the physical Precision 582
 
 ---
 
+## Minisforum MS-S1 Max (`ai-ms-s1-max-01`) — ROCm lab Phase 1
+
+**Inventory:** `inventory/lab` only (`ansible_host: 10.0.8.6`). This host is **not** in the production pool. **Engines deferred** — Phase 1 accepts the OS, storage, pinned ROCm 7.2.0, and Strix Halo + NPU hardware gates only; inference runtimes stay disabled.
+
+**Design / plan:** `docs/superpowers/specs/2026-11-21-ms-s1-max-rocm-commissioning-design.md`, `docs/superpowers/plans/2026-11-21-ms-s1-max-rocm-commissioning.md`.
+
+### Scope
+
+Run **only** these commission tags in order. Do **not** run `--tags pytorch_xpu` or `--tags inference` in Phase 1 (those phases are for the Intel OMIX / XPU path and production inference qualification).
+
+| Step | Tag | Purpose |
+| --- | --- | --- |
+| 1 | `preflight` | Read-only platform, PCI, LVM, ROCm/APT survey |
+| 2 | `bootstrap` | Access, Python, initial identity |
+| 3 | `baseline_idempotency` | Base OS convergence; rerun to `changed=0` |
+| 4 | `storage` | `local-ai-lv` **1024g** on `ubuntu-vg`, XFS mount at `/var/lib/local-ai` |
+| 5 | `rocm` | Pinned ROCm 7.2.0 repos, packages, compute gates |
+| 6 | `gpu_validation` | Hardware profile + AMD classifier (`gfx1151` + NPU `aie2p`) |
+
+All commands use `-i inventory/lab` and `--limit ai-ms-s1-max-01`.
+
+### Storage pre-mount
+
+Host vars set `storage_lvm.size: 1024g` and `reserve_gib: 100`. Before the storage phase mounts the LV at `/var/lib/local-ai`, check whether the path already exists on the **root** filesystem with content (e.g. `metrics/`, observability trees, or other dirs created before the data volume exists). Mounting the LV **on top of** that path shadows those directories.
+
+If root-fs content is present, archive it aside **before** running `--tags storage`, for example:
+
+```bash
+ssh mike@10.0.8.6 'sudo mkdir -p /root/local-ai-pre-mount-$(date -u +%Y%m%dT%H%M%SZ) && \
+  sudo rsync -a /var/lib/local-ai/ /root/local-ai-pre-mount-*/ 2>/dev/null || true'
+```
+
+Then run the storage phase so evidence and checkpoints land on the dedicated volume.
+
+### Ordered phase commands
+
+```bash
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 --tags preflight --diff
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 --tags bootstrap
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 --tags baseline_idempotency
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 --tags storage
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 --tags rocm
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 --tags gpu_validation
+```
+
+If ROCm or kernel activation sets `reboot_required`, run `playbooks/reboot-verify.yml` with the same inventory and limit, then re-run `--tags rocm,gpu_validation`.
+
+### Idempotency and evidence
+
+1. Run the full Phase 1 tag set a **second** time in one invocation; the run must be idle (no material `changed`).
+
+```bash
+ansible-playbook -i inventory/lab playbooks/commission.yml --limit ai-ms-s1-max-01 \
+  --tags preflight,bootstrap,baseline_idempotency,storage,rocm,gpu_validation
+```
+
+2. Fetch on-host evidence to the repo archive:
+
+```bash
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+mkdir -p evidence/ai-ms-s1-max-01/$TS
+scp -r mike@10.0.8.6:/var/lib/local-ai/evidence/ evidence/ai-ms-s1-max-01/$TS/
+```
+
+**Acceptance:** three HSA agents (CPU, `gfx1151`, `aie2p`), NPU device node present, storage mounted, pinned ROCm 7.2.0, idempotent second run — status **platform accepted; engines deferred**.
+
+---
+
 ## Phase-Gated Host Commissioning (`playbooks/commission.yml`)
 
 The primary entrypoint for complete host commissioning is `playbooks/commission.yml`. It targets `ai_hosts`, enforces `any_errors_fatal: true`, and progresses through eight ordered phases with structured evidence checkpoints persisted under `/var/lib/local-ai/evidence/checkpoints/`.

@@ -1,0 +1,44 @@
+---
+- name: Validate Ubuntu release and kernel version for ROCm
+  ansible.builtin.assert:
+    that:
+      - (ansible_facts.distribution | default(ansible_distribution | default(''))) == "Ubuntu"
+      - >-
+        (ansible_facts.distribution_version | default(ansible_distribution_version | default('0')))
+        is version(rocm_minimum_ubuntu, ">=")
+      - >-
+        (ansible_facts.kernel | default(ansible_kernel | default('0.0.0')))
+        is version(rocm_minimum_kernel, ">=")
+    fail_msg: >-
+      ROCm {{ rocm_release }} commissioning requires Ubuntu >= {{ rocm_minimum_ubuntu }}
+      with kernel >= {{ rocm_minimum_kernel }}.
+
+- name: Query PCI devices for ROCm target detection
+  ansible.builtin.command:
+    cmd: lspci -nn
+  register: rocm_preflight_pci
+  changed_when: false
+  check_mode: false
+
+- name: Assert every expected ROCm target PCI ID is present
+  ansible.builtin.assert:
+    that:
+      - item in rocm_preflight_pci.stdout
+    fail_msg: "Expected AMD PCI device {{ item }} was not found in lspci -nn output."
+  loop: "{{ rocm_target_pci_ids }}"
+
+- name: Check APT sources for unpinned ROCm, graphics or amdgpu channels
+  ansible.builtin.command:
+    cmd: grep -rnIE "repo\.radeon\.com/[^[:space:]]*/latest" /etc/apt/
+  register: rocm_latest_source_check
+  failed_when: rocm_latest_source_check.rc > 1
+  changed_when: false
+  check_mode: false
+
+- name: Assert no unpinned latest ROCm channel is configured
+  ansible.builtin.assert:
+    that:
+      - rocm_latest_source_check.rc == 1
+    fail_msg: >-
+      Unpinned repo.radeon.com latest channel detected in APT configuration:
+      {{ rocm_latest_source_check.stdout }}

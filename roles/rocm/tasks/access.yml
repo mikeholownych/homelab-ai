@@ -1,0 +1,35 @@
+---
+- name: Ensure ROCm device groups exist
+  ansible.builtin.group:
+    name: "{{ item }}"
+    state: present
+    system: true
+  loop:
+    - render
+    - video
+
+- name: Add operator and service accounts to ROCm device groups
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: render,video
+    append: true
+  loop: "{{ (rocm_operator_accounts + rocm_service_accounts) | unique }}"
+
+- name: Stat ROCm KFD device
+  ansible.builtin.stat:
+    path: /dev/kfd
+  register: rocm_kfd_stat
+
+- name: Find DRM render nodes
+  ansible.builtin.find:
+    paths: /dev/dri
+    patterns: "renderD*"
+    file_type: any
+  register: rocm_render_nodes
+
+- name: Assert ROCm compute device nodes exist
+  ansible.builtin.assert:
+    that:
+      - rocm_kfd_stat.stat.exists
+      - rocm_render_nodes.matched | int > 0
+    fail_msg: /dev/kfd and at least one /dev/dri/renderD* node are required for ROCm compute.

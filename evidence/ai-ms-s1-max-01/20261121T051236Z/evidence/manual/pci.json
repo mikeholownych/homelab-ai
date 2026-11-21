@@ -1,0 +1,73 @@
+{
+  "checks": [
+    {
+      "expected": "informational",
+      "observed": [
+        false
+      ],
+      "rationale": "Resizable BAR is not required for this unified-memory platform.",
+      "rule": "resizable_bar_enabled",
+      "severity": "informational",
+      "status": "not_applicable"
+    },
+    {
+      "expected": ">=0.0 of each physical slot capability",
+      "observed": [
+        {
+          "current_generation": 4,
+          "current_width": 16,
+          "expected_generation": 0,
+          "gpu": 0,
+          "slot_width": 0
+        }
+      ],
+      "rationale": "Negotiated width is compared with that GPU's actual physical slot capability.",
+      "rule": "pcie_link_health",
+      "severity": "informational",
+      "status": "fail"
+    }
+  ],
+  "expected": {
+    "host_link": {
+      "expected_negotiated_generation": 0,
+      "max_generation": 4
+    },
+    "material_degradation": {
+      "default_severity": "informational",
+      "minimum_negotiated_to_slot_ratio": 0.0
+    },
+    "width_expectations": {
+      "allow_slot_limited_width": true,
+      "desired_when_slot_supports": "x16"
+    }
+  },
+  "observed": [
+    {
+      "aer_counters": {
+        "reason": "no AER sysfs attributes under 0000:bd:00.0",
+        "status": "unavailable"
+      },
+      "bar_sizes_gib": [
+        0.5,
+        0.001953125,
+        0.0009765625
+      ],
+      "bdf": "0000:bd:00.0",
+      "current_generation": 4,
+      "current_width": 16,
+      "device_id": "1586",
+      "device_max_generation": 4,
+      "device_max_width": 16,
+      "drm_card": "/dev/dri/card1",
+      "kernel_driver": "amdgpu",
+      "rebar_enabled": false,
+      "render_node": "/dev/dri/renderD128",
+      "slot_width": null,
+      "vendor_id": "1002"
+    }
+  ],
+  "rationale": "Link health uses each observed physical slot capability.",
+  "severity": "warning",
+  "simulated": false,
+  "status": "fail"
+}

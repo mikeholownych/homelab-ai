@@ -1,0 +1,27 @@
+{
+    "agents": [
+        "AMD",
+        "gfx1151",
+        "amdgcn-amd-amdhsa--gfx1151",
+        "amdgcn-amd-amdhsa--gfx11-generic",
+        "aie2p"
+    ],
+    "npu_device_node": "/dev/accel/accel0",
+    "npu_module": "amdxdna",
+    "package_versions": {
+        "amdgpu-core": "1:7.2.70200-2278374.24.04",
+        "hip-runtime-amd": "7.2.26015.70200-43~24.04",
+        "hsa-rocr": "1.18.0.70200-43~24.04",
+        "rocm": "7.2.0.70200-43~24.04",
+        "rocm-core": "7.2.0.70200-43~24.04",
+        "rocm-hip": "7.2.0.70200-43~24.04",
+        "rocm-smi-lib": "7.8.0.70200-43~24.04",
+        "rocminfo": "1.0.0.70200-43~24.04"
+    },
+    "pci_devices": [
+        "bd:00.0 Display controller [0380]: Advanced Micro Devices, Inc. [AMD/ATI] Strix Halo [Radeon Graphics / Radeon 8050S Graphics / Radeon 8060S Graphics] [1002:1586] (rev c1)"
+    ],
+    "physical_acceptance": true,
+    "rocm_release": "7.2.0",
+    "timestamp": "2026-11-21T05:12:00Z"
+}

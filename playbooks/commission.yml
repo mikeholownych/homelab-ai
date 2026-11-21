@@ -247,16 +247,24 @@
             - omix
       vars:
         intel_gpu_install_enabled: true
-      when: capabilities.gpu | default(false) | bool
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Check whether reboot is required after OMIX driver installation
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: commission_reboot_stat
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Register reboot_required fact
       ansible.builtin.set_fact:
         reboot_required: "{{ commission_reboot_stat.stat.exists | default(false) }}"
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Ensure checkpoints directory exists
       ansible.builtin.file:
@@ -265,6 +273,9 @@
         owner: root
         group: root
         mode: "0750"
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Persist OMIX evidence checkpoint
       ansible.builtin.copy:
@@ -287,6 +298,9 @@
         group: root
         mode: "0640"
         force: false
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Operator checkpoint notice when reboot is required
       ansible.builtin.debug:
@@ -294,7 +308,55 @@
           Reboot is required after OMIX installation. Do not automatically reboot in this workflow.
           Execute playbooks/reboot-verify.yml --limit {{ inventory_hostname }}
           before proceeding to Phase 6 (gpu_validation).
-      when: reboot_required | bool
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
+        - reboot_required | bool
+
+- name: "Phase 5b: Pinned ROCm stack installation"
+  hosts: ai_hosts
+  any_errors_fatal: true
+  gather_facts: true
+  tags:
+    - rocm
+  tasks:
+    - name: Include ROCm role
+      ansible.builtin.include_role:
+        name: rocm
+        apply:
+          tags:
+            - rocm
+      when: rocm_install_enabled | default(false) | bool
+
+    - name: Ensure checkpoints directory exists
+      ansible.builtin.file:
+        path: /var/lib/local-ai/evidence/checkpoints
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      when: rocm_install_enabled | default(false) | bool
+
+    - name: Persist ROCm evidence checkpoint
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'phase': 'rocm',
+              'status': 'pass',
+              'node': inventory_hostname,
+              'rocm_release': rocm_release | default('7.2.0'),
+              'engines_deferred': true,
+              'generated_at': now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/rocm.json
+        owner: root
+        group: root
+        mode: "0640"
+        force: false
+      when: rocm_install_enabled | default(false) | bool
 
 - name: "Phase 6: Dual-BDF GPU compute acceptance validation"
   hosts: ai_hosts
@@ -342,6 +404,25 @@
         group: root
         mode: "0640"
         force: false
+
+    - name: Persist Phase 1 platform acceptance artifact
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'status': 'platform_accepted_engines_deferred',
+              'node': inventory_hostname,
+              'engines_deferred': true,
+              'rocm_release': rocm_release | default('7.2.0')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/phase1_acceptance.json
+        owner: root
+        group: root
+        mode: "0640"
+        force: false
+      when: rocm_install_enabled | default(false) | bool
 
 - name: "Phase 7: Pinned PyTorch XPU environment validation and promotion"
   hosts: ai_hosts

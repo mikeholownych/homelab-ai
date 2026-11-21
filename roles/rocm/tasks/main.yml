@@ -1,0 +1,22 @@
+---
+- name: Include ROCm preflight
+  ansible.builtin.include_tasks: preflight.yml
+  when: rocm_install_enabled | bool
+
+- name: Include ROCm repository management
+  ansible.builtin.include_tasks: repos.yml
+  when: rocm_install_enabled | bool
+
+- name: Include ROCm package pins
+  ansible.builtin.include_tasks: packages.yml
+  when: rocm_install_enabled | bool
+
+- name: Include ROCm device access
+  ansible.builtin.include_tasks: access.yml
+  when: rocm_install_enabled | bool
+
+- name: Include ROCm compute validation
+  ansible.builtin.include_tasks: validate.yml
+  when:
+    - rocm_install_enabled | bool
+    - not ansible_check_mode

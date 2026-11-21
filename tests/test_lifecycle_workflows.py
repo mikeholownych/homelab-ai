@@ -51,13 +51,14 @@ def test_commission_playbook_phases_order_and_tags():
     assert path.exists(), "playbooks/commission.yml must exist"
     plays = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert isinstance(plays, list)
-    assert len(plays) >= 8
+    assert len(plays) >= 9
     expected_phases = [
         "preflight",
         "bootstrap",
         "baseline_idempotency",
         "storage",
         "omix",
+        "rocm",
         "gpu_validation",
         "pytorch_xpu",
         "inference",

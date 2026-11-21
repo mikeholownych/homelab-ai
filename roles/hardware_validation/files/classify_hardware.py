@@ -68,6 +68,9 @@ def classify(profile, observed):
     checks.append(_check("unexpected_gpu_devices", "only approved accelerator PCI IDs", unexpected,
                          not unexpected, "warning",
                          "Anything outside the approved accelerator set must be removed from the certified design."))
+    backend = profile.get("compute_evidence_backend", "level_zero")
+    if backend == "rocm":
+        return _classify_rocm(profile, observed, checks, approved_gpus, approved_pci)
     memory_target = profile["gpu"]["expected_models"][0]["memory_gib"]["approximate"]
     memory_tolerance = profile["gpu"]["expected_models"][0]["memory_gib"]["tolerance_gib"]
     level_zero = observed.get("level_zero_devices", [])
@@ -142,39 +145,56 @@ def classify(profile, observed):
     rebar_ok = len(approved_pci) == expected_gpus and all(value is True for value in rebar_targets)
     checks.append(_check("resizable_bar_enabled", True, rebar_targets,
                          rebar_ok, "blocking", "Large BAR is required for the intended GPU memory mapping."))
+    checks.append(_above_4g_check(profile, observed))
+    checks.append(_pcie_link_check(profile, approved_pci, expected_gpus, "blocking"))
+    checks.extend(_memory_psu_checks(profile, observed))
+    return _finalize(profile, observed, checks)
+
+
+def _above_4g_check(profile, observed):
     above4g = observed.get("firmware", {}).get("above_4g_decoding", {})
     above4g_value = above4g.get("value") if isinstance(above4g, dict) else None
     if above4g_value is None:
-        checks.append({"rule": "above_4g_decoding_enabled", "expected": True, "observed": above4g,
-                       "status": profile["firmware"]["above_4g_decoding"]["undiscoverable_status"],
-                       "severity": "informational",
-                       "rationale": "Linux does not expose an authoritative setting; commissioning must verify BIOS."})
-    else:
-        checks.append(_check("above_4g_decoding_enabled", True, above4g, above4g_value is True,
-                             "blocking", "Only an explicit sourced BIOS observation may satisfy this check."))
+        return {"rule": "above_4g_decoding_enabled", "expected": True, "observed": above4g,
+                "status": profile["firmware"]["above_4g_decoding"]["undiscoverable_status"],
+                "severity": "informational",
+                "rationale": "Linux does not expose an authoritative setting; commissioning must verify BIOS."}
+    return _check("above_4g_decoding_enabled", True, above4g, above4g_value is True,
+                  "blocking", "Only an explicit sourced BIOS observation may satisfy this check.")
+
+
+def _pcie_link_check(profile, approved_pci, expected_gpus, severity):
     ratio_min = profile["pcie"]["material_degradation"]["minimum_negotiated_to_slot_ratio"]
     unhealthy = []
+    expected_generation = profile["pcie"]["host_link"]["expected_negotiated_generation"]
     for index, link in enumerate(approved_pci):
         slot_width = int(link.get("slot_width") or 0)
         current_width = int(link.get("current_width") or 0)
         generation = int(link.get("current_generation") or 0)
-        expected_generation = profile["pcie"]["host_link"]["expected_negotiated_generation"]
         if not slot_width or current_width / slot_width < ratio_min or generation < expected_generation:
             unhealthy.append({"gpu": index, "slot_width": slot_width, "current_width": current_width,
                               "expected_generation": expected_generation, "current_generation": generation})
-    checks.append(_check("pcie_link_health", f">={ratio_min} of each physical slot capability", unhealthy,
-                         len(approved_pci) == expected_gpus and not unhealthy, "blocking",
-                         "Negotiated width is compared with that GPU's actual physical slot capability."))
+    return _check("pcie_link_health", f">={ratio_min} of each physical slot capability", unhealthy,
+                  len(approved_pci) == expected_gpus and not unhealthy, severity,
+                  "Negotiated width is compared with that GPU's actual physical slot capability.")
+
+
+def _memory_psu_checks(profile, observed):
     memory = observed.get("memory", {}).get("total_gib")
     target = profile["memory"]["installed_gib"]["expected"]
     tolerance = profile["memory"]["installed_gib"]["tolerance_gib"]
-    checks.append(_check("memory_capacity", target, memory,
-                         isinstance(memory, (int, float)) and abs(memory - target) <= tolerance,
-                         "warning", "Initial memory capacity is allowed to vary within policy tolerance."))
     psus = observed.get("power_supplies", [])
-    checks.append({"rule": "psu_inventory", "expected": "record where discoverable", "observed": psus,
-                   "status": "pass" if psus else "not_tested", "severity": "informational",
-                   "rationale": "Workstation PSU telemetry is not always exposed by firmware."})
+    return [
+        _check("memory_capacity", target, memory,
+               isinstance(memory, (int, float)) and abs(memory - target) <= tolerance,
+               "warning", "Initial memory capacity is allowed to vary within policy tolerance."),
+        {"rule": "psu_inventory", "expected": "record where discoverable", "observed": psus,
+         "status": "pass" if psus else "not_tested", "severity": "informational",
+         "rationale": "Workstation PSU telemetry is not always exposed by firmware."},
+    ]
+
+
+def _finalize(profile, observed, checks):
     simulated = observed.get("simulated") is True
     blocking = any(item["status"] == "fail" and item["severity"] == "blocking" for item in checks)
     warning = any(item["status"] == "fail" and item["severity"] == "warning" for item in checks)
@@ -188,6 +208,90 @@ def classify(profile, observed):
     physical_acceptance = (not simulated) and status == "pass"
     return {"schema_version": "1.0.0", "simulated": simulated,
             "physical_acceptance": physical_acceptance, "status": status, "checks": checks}
+
+
+def _classify_rocm(profile, observed, checks, approved_gpus, approved_pci):
+    """ROCm/HSA evidence backend (AMD APU profiles); Level Zero checks are not applicable."""
+    expected_gpus = profile["gpu"]["count_expected"]
+    memory_model = profile["gpu"]["expected_models"][0]["memory_gib"]
+    memory_target = memory_model["approximate"]
+    memory_tolerance = memory_model["tolerance_gib"]
+    gpu_hsa_name = profile["gpu"].get("hsa_name", "gfx1151")
+
+    pci_by_bdf = {str(item.get("bdf", "")).lower(): item for item in observed.get("pci", [])
+                  if item.get("bdf")}
+    drivers, render_nodes = [], []
+    for gpu in approved_gpus:
+        pci_dev = pci_by_bdf.get(str(gpu.get("bdf", "")).lower(), {})
+        drivers.append({"bdf": gpu.get("bdf"),
+                        "kernel_driver": gpu.get("kernel_driver") or pci_dev.get("kernel_driver")})
+        render_nodes.append({"bdf": gpu.get("bdf"),
+                             "render_node": gpu.get("render_node") or pci_dev.get("render_node")})
+    checks.append(_check("gpu_kernel_driver", {"count": expected_gpus, "kernel_driver": "amdgpu"}, drivers,
+                         len(drivers) == expected_gpus and all(d["kernel_driver"] == "amdgpu" for d in drivers),
+                         "blocking", "Approved AMD GPUs must be bound to the amdgpu kernel driver."))
+    render_ok = (len(render_nodes) == expected_gpus and
+                 all(str(n["render_node"] or "").startswith("/dev/dri/renderD") for n in render_nodes) and
+                 len({n["render_node"] for n in render_nodes}) == expected_gpus)
+    checks.append(_check("gpu_render_node", {"count": expected_gpus, "render_node": "/dev/dri/renderD*"},
+                         render_nodes, render_ok, "blocking",
+                         "Each approved GPU must expose a distinct DRM render node for compute."))
+
+    agents = observed.get("rocm", {}).get("agents", [])
+    gpu_agents = [a for a in agents if a.get("device_type") == "GPU" and a.get("name") == gpu_hsa_name]
+    checks.append(_check("rocm_gpu_agent", {"count": expected_gpus, "name": gpu_hsa_name}, gpu_agents,
+                         len(gpu_agents) == expected_gpus, "blocking",
+                         "ROCm must enumerate the expected GPU HSA agent."))
+    gpu_memory = [a.get("memory_gib") for a in gpu_agents]
+    checks.append(_check("gpu_memory", f"{memory_target} GiB +/- {memory_tolerance} GiB", gpu_memory,
+                         len(gpu_memory) == expected_gpus and all(
+                             isinstance(v, (int, float)) and abs(v - memory_target) <= memory_tolerance
+                             for v in gpu_memory),
+                         "blocking", "GPU memory must come from the ROCm GPU agent pool, never BAR size."))
+
+    npu = profile.get("npu", {})
+    if npu.get("required") is True:
+        npu_obs = observed.get("npu", {})
+        npu_agents = [a for a in agents if a.get("name") == npu["hsa_name"]]
+        checks.append(_check("rocm_npu_agent", npu["hsa_name"], npu_agents, len(npu_agents) >= 1,
+                             "blocking", "ROCm must enumerate the NPU HSA agent for this profile."))
+        checks.append(_check("npu_kernel_module", npu.get("kernel_module"),
+                             npu_obs.get("kernel_module_loaded"),
+                             npu_obs.get("kernel_module_loaded") is True, "blocking",
+                             "The NPU kernel module must be loaded."))
+        node_ok = (npu_obs.get("device_node") == npu["device_node"]
+                   and npu_obs.get("device_node_exists") is True)
+        checks.append(_check("npu_device_node", npu["device_node"],
+                             {"device_node": npu_obs.get("device_node"),
+                              "exists": npu_obs.get("device_node_exists")},
+                             node_ok, "blocking", "The NPU accel device node must exist."))
+
+    if profile["firmware"]["above_4g_decoding"]["required"] is True:
+        checks.append(_above_4g_check(profile, observed))
+    else:
+        above4g = observed.get("firmware", {}).get("above_4g_decoding", {})
+        value = above4g.get("value") if isinstance(above4g, dict) else None
+        checks.append({"rule": "above_4g_decoding_enabled", "expected": "informational", "observed": above4g,
+                       "status": "pass" if value is True else
+                       profile["firmware"]["above_4g_decoding"]["undiscoverable_status"],
+                       "severity": "informational",
+                       "rationale": "Above-4G decoding is not required for this unified-memory platform."})
+    if profile["firmware"].get("resizable_bar", {}).get("required") is True:
+        rebar = [item.get("rebar_enabled") for item in approved_pci]
+        checks.append(_check("resizable_bar_enabled", True, rebar,
+                             len(approved_pci) == expected_gpus and all(v is True for v in rebar),
+                             "blocking", "Large BAR is required for the intended GPU memory mapping."))
+    else:
+        checks.append({"rule": "resizable_bar_enabled", "expected": "informational",
+                       "observed": [item.get("rebar_enabled") for item in approved_pci],
+                       "status": "not_applicable", "severity": "informational",
+                       "rationale": "Resizable BAR is not required for this unified-memory platform."})
+
+    ratio_min = profile["pcie"]["material_degradation"]["minimum_negotiated_to_slot_ratio"]
+    checks.append(_pcie_link_check(profile, approved_pci, expected_gpus,
+                                   "informational" if ratio_min == 0.0 else "blocking"))
+    checks.extend(_memory_psu_checks(profile, observed))
+    return _finalize(profile, observed, checks)
 
 
 def main():
@@ -216,7 +320,9 @@ def main():
         "hardware.json": evidence(profile, observed,
                                   {"machine_model", "cpu_model", "gpu_count", "gpu_model_match",
                                    "gpu_memory", "level_zero_detected", "unexpected_gpu_devices",
-                                   "dual_bdf_correlation"},
+                                   "dual_bdf_correlation", "gpu_kernel_driver", "gpu_render_node",
+                                   "rocm_gpu_agent", "rocm_npu_agent", "npu_kernel_module",
+                                   "npu_device_node"},
                                   "Platform and accelerator comparison against the selected Git profile."),
         "pci.json": evidence(profile["pcie"], observed.get("pci", []),
                              {"pcie_link_health", "resizable_bar_enabled"},
