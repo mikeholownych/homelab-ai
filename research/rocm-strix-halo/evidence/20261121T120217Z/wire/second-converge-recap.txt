@@ -1,0 +1,33 @@
+included: llama_cpp_hip for ai-ms-s1-max-01
+ok: [ai-ms-s1-max-01] => 
+ok: [ai-ms-s1-max-01] => 
+ok: [ai-ms-s1-max-01] => (item=/etc/subuid)
+ok: [ai-ms-s1-max-01] => (item=/etc/subgid)
+ok: [ai-ms-s1-max-01] => (item=/etc/subuid) => 
+ok: [ai-ms-s1-max-01] => (item=/etc/subgid) => 
+ok: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01] => (item=qwen3_coder_30b_q8)
+ok: [ai-ms-s1-max-01] => (item=qwen3_coder_30b_q8)
+ok: [ai-ms-s1-max-01] => (item=qwen3_coder_30b_q8) => 
+ok: [ai-ms-s1-max-01] => (item=/var/lib/local-ai/podman-aihost-runtime)
+ok: [ai-ms-s1-max-01] => (item=/var/lib/local-ai/podman-aihost-runtime/storage)
+ok: [ai-ms-s1-max-01] => (item=/var/lib/local-ai/podman-aihost-runtime/tmp)
+ok: [ai-ms-s1-max-01] => (item=/var/lib/aihost-runtime/.config)
+ok: [ai-ms-s1-max-01] => (item=/var/lib/aihost-runtime/.config/containers)
+ok: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01]
+skipping: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01] => (item=qwen3_coder_30b_q8)
+skipping: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01]
+included: /home/mike/Projects/aihost/.worktrees/ms-s1-max-rocm-engine-selection/roles/llama_cpp_hip/tasks/start_worker.yml for ai-ms-s1-max-01 => (item=qwen3_coder_30b_q8)
+ok: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01]
+ok: [ai-ms-s1-max-01]
+PLAY RECAP *********************************************************************
+ai-ms-s1-max-01            : ok=19   changed=0    unreachable=0    failed=0    skipped=2    rescued=0    ignored=0   
+# Command: ansible-playbook -i inventory/lab playbooks/site.yml --limit ai-ms-s1-max-01 --tags llama_cpp_hip
+# Run after the first converge (which pulled the image, installed the unit and started the worker): changed=0.
+# Note: `--tags users` reports changed=1 on every run because roles/users' linger stat task carries no tag
+# (pre-existing; the linger marker file exists on the host).
