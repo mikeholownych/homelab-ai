@@ -1,0 +1,15 @@
+{
+  "engine": "vllm",
+  "model_kind": "mid",
+  "model_id": "qwen3-coder-30b-a3b-fp8",
+  "status": "pass",
+  "reason": "chat ok (tools_rc=0)",
+  "image": "docker.io/kyuz0/vllm-therock-gfx1151@sha256:f8a7433d662b37b200ca19996d4013288071341ad514e66de69ea4871cfa3966",
+  "port": 8102,
+  "started_at": "2026-11-21T07:24:03Z",
+  "ready_seconds": 164,
+  "chat_seconds": 1.085442,
+  "chat_content": "ok",
+  "tools_seconds": 4.403944,
+  "tools_supported": true
+}

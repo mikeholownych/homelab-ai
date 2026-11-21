@@ -1,0 +1,15 @@
+{
+  "engine": "sglang",
+  "model_kind": "probe",
+  "model_id": "qwen3-4b-instruct-2507",
+  "status": "fail",
+  "reason": "chat request failed (rc=1)",
+  "image": "docker.io/lmsysorg/sglang@sha256:a3a6eb293187b20012a5abc8f00423e6ab51d0169113a6e58a91da5614200170",
+  "port": 8103,
+  "started_at": "2026-11-21T07:10:58Z",
+  "ready_seconds": 40,
+  "chat_seconds": 21.801171,
+  "chat_content": null,
+  "tools_seconds": 0.000112,
+  "tools_supported": false
+}

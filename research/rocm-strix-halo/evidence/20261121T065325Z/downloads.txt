@@ -1,0 +1,38 @@
+OK /var/lib/local-ai/models/Qwen3-4B-Instruct-2507-GGUF/Qwen3-4B-Instruct-2507-Q8_0.gguf 391c1e410fd9f4cf2de2b510273b56a84c19ce18f4fa3bfb3774031dac4ef068
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/.gitattributes
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/LICENSE
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/README.md
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/config.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/generation_config.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/merges.txt
+OK /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/model-00001-of-00003.safetensors 75311d91bb08cf0b882913da464a1e722a31fb44db35208663487efb7a3d8ed6
+OK /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/model-00002-of-00003.safetensors 0b48adbb1f60e901153d91907ba11ce63bd4b8b584482e730f48808d055dfba1
+OK /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/model-00003-of-00003.safetensors 7dd39ccca5e4de123c74c14af44c9bf2eb75df33b4614382af0134528e060d5d
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/model.safetensors.index.json
+OK /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/tokenizer.json aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/tokenizer_config.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-4B-Instruct-2507/vocab.json
+OK /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf 4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/.gitattributes
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/LICENSE
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/README.md
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/chat_template.jinja
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/config.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/generation_config.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/merges.txt
+OK /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/model-00001-of-00004.safetensors 04665458e2332cc10409cd51298c95627000ed44cf29134663203e3f15c3c053
+OK /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/model-00002-of-00004.safetensors 3d2228cdb569b07b2eb18b342c98ffb4c425264a5324446014046d402c80c1a2
+OK /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/model-00003-of-00004.safetensors 7a6b5fd146a07c319f475589d08dd8d583b1e0919905c73a1e5af745244fc1db
+OK /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/model-00004-of-00004.safetensors 6438b5403255c6fbf02bd20f9c75985e8a98ebc46f9f45899283ea374c25383a
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/model.safetensors.index.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/qwen3coder_tool_parser.py
+OK /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/tokenizer.json aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/tokenizer_config.json
+OK (no lfs sha) /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-FP8/vocab.json
+
+ghcr.io/ggml-org/llama.cpp:server-rocm sha256:7cff8bf82a43ba2901375eab4f78ba04753eded58ccf42b213707cbbbb0835df 23 GB
+docker.io/kyuz0/vllm-therock-gfx1151:latest sha256:f8a7433d662b37b200ca19996d4013288071341ad514e66de69ea4871cfa3966 12.4 GB
+docker.io/lmsysorg/sglang:v0.5.23-rocm720-mi30x sha256:a3a6eb293187b20012a5abc8f00423e6ab51d0169113a6e58a91da5614200170 64.7 GB
+
+391c1e410fd9f4cf2de2b510273b56a84c19ce18f4fa3bfb3774031dac4ef068  /var/lib/local-ai/models/Qwen3-4B-Instruct-2507-GGUF/Qwen3-4B-Instruct-2507-Q8_0.gguf
+4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066  /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf

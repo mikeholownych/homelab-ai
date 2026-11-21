@@ -1,0 +1,15 @@
+{
+  "engine": "llamacpp",
+  "model_kind": "mid",
+  "model_id": "qwen3-coder-30b-a3b-q8_0",
+  "status": "pass",
+  "reason": "chat ok (tools_rc=0)",
+  "image": "ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+  "port": 8101,
+  "started_at": "2026-11-21T07:07:51Z",
+  "ready_seconds": 6,
+  "chat_seconds": 0.143743,
+  "chat_content": "ok",
+  "tools_seconds": 0.699332,
+  "tools_supported": true
+}

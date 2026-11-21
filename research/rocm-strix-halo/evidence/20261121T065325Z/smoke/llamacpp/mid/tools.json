@@ -1,0 +1,57 @@
+{
+  "base_url": "http://127.0.0.1:8101",
+  "model": "qwen3-coder-30b-a3b-q8_0",
+  "prompt": "/home/mike/rocm-bake/research/rocm-strix-halo/harness/../prompts/smoke_tools.json",
+  "http_status": 200,
+  "seconds": 0.699332,
+  "curl_exit": 0,
+  "curl_stderr": "",
+  "ok": true,
+  "body": {
+    "choices": [
+      {
+        "finish_reason": "tool_calls",
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "",
+          "tool_calls": [
+            {
+              "type": "function",
+              "function": {
+                "name": "echo",
+                "arguments": "{\"text\":\"ping\"}"
+              },
+              "id": "uhEJDvZoG7QO6AQtoxKIy9AsSWR9wHSi"
+            }
+          ]
+        }
+      }
+    ],
+    "created": 1795244879,
+    "model": "qwen3-coder-30b-a3b-q8_0",
+    "system_fingerprint": "b12464-d3c3e242c",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 21,
+      "prompt_tokens": 280,
+      "total_tokens": 301,
+      "prompt_tokens_details": {
+        "cached_tokens": 1
+      }
+    },
+    "id": "chatcmpl-XSg0t0H1f5Ro4T1wIiaTUiNztBNgT6ml",
+    "timings": {
+      "cache_n": 1,
+      "prompt_n": 279,
+      "prompt_ms": 291.444,
+      "prompt_per_token_ms": 1.0446021505376344,
+      "prompt_per_second": 957.3022604685633,
+      "predicted_n": 21,
+      "predicted_ms": 402.735,
+      "predicted_per_token_ms": 20.13675,
+      "predicted_per_second": 49.66044669571802
+    }
+  },
+  "tools_supported": true
+}

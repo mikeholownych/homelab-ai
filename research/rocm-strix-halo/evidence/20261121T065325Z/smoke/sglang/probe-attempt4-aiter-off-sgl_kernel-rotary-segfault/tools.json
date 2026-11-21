@@ -1,0 +1,12 @@
+{
+  "base_url": "http://127.0.0.1:8103",
+  "model": "qwen3-4b-instruct-2507",
+  "prompt": "/home/mike/rocm-bake/research/rocm-strix-halo/harness/../prompts/smoke_tools.json",
+  "http_status": 0,
+  "seconds": 299.931568,
+  "curl_exit": 52,
+  "curl_stderr": "curl: (52) Empty reply from server",
+  "ok": false,
+  "body": "",
+  "tools_supported": false
+}

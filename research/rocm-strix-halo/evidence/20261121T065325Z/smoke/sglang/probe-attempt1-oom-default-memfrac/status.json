@@ -1,0 +1,15 @@
+{
+  "engine": "sglang",
+  "model_kind": "probe",
+  "model_id": "qwen3-4b-instruct-2507",
+  "status": "unavailable",
+  "reason": "container exited before ready (exit 0)",
+  "image": "docker.io/lmsysorg/sglang@sha256:a3a6eb293187b20012a5abc8f00423e6ab51d0169113a6e58a91da5614200170",
+  "port": 8103,
+  "started_at": "2026-11-21T07:08:08Z",
+  "ready_seconds": null,
+  "chat_seconds": null,
+  "chat_content": null,
+  "tools_seconds": null,
+  "tools_supported": null
+}
