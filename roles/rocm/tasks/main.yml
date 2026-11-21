@@ -1,0 +1,5 @@
+---
+- name: ROCm role no-op unless explicitly enabled
+  ansible.builtin.debug:
+    msg: "rocm_install_enabled is false; skipping"
+  when: not (rocm_install_enabled | default(false) | bool)

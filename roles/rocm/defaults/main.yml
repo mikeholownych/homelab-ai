@@ -1,0 +1,36 @@
+---
+rocm_install_enabled: false
+rocm_release: "7.2.0"
+rocm_apt_suite: noble
+rocm_keyring_path: /etc/apt/keyrings/rocm.gpg
+rocm_signing_key_url: https://repo.radeon.com/rocm/rocm.gpg.key
+rocm_signing_key_sha256: 3e660bdc559b34781b5498e79b9c117394b46ce55592812db0b84d65986b4df2
+rocm_signing_key_fingerprint: CA8BBB4727A47B4D09B4EE8969386B48A1A693C5C
+rocm_repository_urls:
+  rocm: https://repo.radeon.com/rocm/apt/7.2
+  graphics: https://repo.radeon.com/graphics/7.2/ubuntu
+  amdgpu: https://repo.radeon.com/amdgpu/30.30/ubuntu
+rocm_sources_path: /etc/apt/sources.list.d/rocm.list
+rocm_graphics_sources_path: /etc/apt/sources.list.d/amdgpu.list
+rocm_packages:
+  rocm: "7.2.0.70200-43~24.04"
+  rocm-core: "7.2.0.70200-43~24.04"
+  rocm-hip: "7.2.0.70200-43~24.04"
+  hip-runtime-amd: "7.2.26015.70200-43~24.04"
+  hsa-rocr: "1.18.0.70200-43~24.04"
+  rocminfo: "1.0.0.70200-43~24.04"
+  rocm-smi-lib: "7.8.0.70200-43~24.04"
+  amdgpu-core: "1:7.2.70200-2278374.24.04"
+rocm_target_pci_ids:
+  - "1002:1586"
+rocm_expected_gpu_agent: gfx1151
+rocm_expected_npu_agent: aie2p
+rocm_npu_device_node: /dev/accel/accel0
+rocm_npu_module: amdxdna
+rocm_service_accounts:
+  - "{{ host_runtime_account.name }}"
+rocm_operator_accounts:
+  - mike
+rocm_evidence_path: /var/lib/local-ai/evidence/rocm-runtime.json
+rocm_minimum_ubuntu: "26.04"
+rocm_minimum_kernel: "7.0"
