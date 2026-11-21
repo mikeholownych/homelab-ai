@@ -1,0 +1,60 @@
+{
+  "simulated": true,
+  "dmi": {
+    "manufacturer": "Micro Computer (HK) Tech Limited",
+    "product_name": "MS-S1 MAX",
+    "serial_number": "SIMULATED"
+  },
+  "cpu": {
+    "model": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+    "sockets": 1
+  },
+  "memory": {
+    "total_gib": 122
+  },
+  "gpus": [
+    {
+      "bdf": "0000:bd:00.0",
+      "vendor_id": "1002",
+      "device_id": "1586",
+      "kernel_driver": "amdgpu",
+      "drm_card": "/dev/dri/card1",
+      "render_node": "/dev/dri/renderD128"
+    }
+  ],
+  "pci": [
+    {
+      "bdf": "0000:bd:00.0",
+      "vendor_id": "1002",
+      "device_id": "1586",
+      "slot_width": 16,
+      "current_width": 16,
+      "current_generation": 4,
+      "rebar_enabled": null
+    }
+  ],
+  "rocm": {
+    "agents": [
+      {
+        "name": "AMD RYZEN AI MAX+ 395 w/ Radeon 8060S",
+        "device_type": "CPU"
+      },
+      {
+        "name": "gfx1151",
+        "device_type": "GPU",
+        "memory_gib": 61.3
+      }
+    ]
+  },
+  "npu": {
+    "kernel_module_loaded": false,
+    "device_node": "/dev/accel/accel0",
+    "device_node_exists": false
+  },
+  "firmware": {
+    "above_4g_decoding": {
+      "value": null
+    }
+  },
+  "level_zero_devices": []
+}

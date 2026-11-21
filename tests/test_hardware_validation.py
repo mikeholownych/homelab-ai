@@ -310,3 +310,37 @@ def test_collector_discovers_drm_and_correlates_level_zero(tmp_path, monkeypatch
     assert card == "/dev/dri/card0"
     assert render == "/dev/dri/renderD128"
 
+
+
+def test_ms_s1_max_healthy_passes_rocm_backend():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/ms_s1_max_strix_halo.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/ms_s1_max_healthy.json").read_text())
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "pass"
+    assert result["physical_acceptance"] is False  # simulated
+    assert not any(
+        c["rule"] in ("level_zero_detected", "dual_bdf_correlation") and c["status"] == "fail"
+        for c in result["checks"]
+    )
+
+
+def test_ms_s1_max_missing_npu_blocks():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/ms_s1_max_strix_halo.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/ms_s1_max_npu_missing.json").read_text())
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "blocking"
+    assert any(
+        c["rule"] in ("rocm_npu_agent", "npu_device_node") and c["severity"] == "blocking"
+        for c in result["checks"]
+    )
+
+
+def test_d5820_healthy_still_uses_level_zero_path():
+    classifier = load_classifier()
+    profile = yaml.safe_load((ROOT / "profiles/hardware/d5820_dual_b65.yml").read_text())
+    observed = json.loads((ROOT / "tests/fixtures/hardware/d5820_healthy.json").read_text())
+    result = classifier.classify(profile, observed)
+    assert result["status"] == "pass"
+    assert any(c["rule"] == "level_zero_detected" for c in result["checks"])
