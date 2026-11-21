@@ -63,6 +63,9 @@
     owner: root
     group: root
     mode: "0644"
+    # force: false keeps the first-written evidence stable across re-runs
+    # (the timestamp field would otherwise change the file every run).
+    force: false
     content: "{{ rocm_runtime_evidence | to_nice_json }}\n"
   vars:
     rocm_runtime_evidence:

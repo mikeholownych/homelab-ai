@@ -405,6 +405,25 @@
         mode: "0640"
         force: false
 
+    - name: Persist Phase 1 platform acceptance artifact
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': '1.0.0',
+              'status': 'platform_accepted_engines_deferred',
+              'node': inventory_hostname,
+              'engines_deferred': true,
+              'rocm_release': rocm_release | default('7.2.0')
+            } | to_nice_json
+          }}
+        dest: /var/lib/local-ai/evidence/checkpoints/phase1_acceptance.json
+        owner: root
+        group: root
+        mode: "0640"
+        force: false
+      when: rocm_install_enabled | default(false) | bool
+
 - name: "Phase 7: Pinned PyTorch XPU environment validation and promotion"
   hosts: ai_hosts
   any_errors_fatal: true
