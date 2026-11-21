@@ -328,6 +328,13 @@ curl --cacert evidence/ai-ms-s1-max-01/gateway-ca.crt -H "Authorization: Bearer 
 
 Accepted evidence: `evidence/ai-ms-s1-max-01/20261121T145142Z/promotion/qualify/SUMMARY.md`. Earlier stage evidence: `20261121T140334Z/promotion/gateway-local`, `20261121T142058Z/promotion/gateway-5820`.
 
+### Client routing (engineering/auto)
+
+- Front door: `ai-5820-01` gateway only.
+- `model: "engineering/auto"` (or omit model) → quality-first among lead / deep / rocm.
+- Pins: `engineering/lead`, `engineering/deep`, `engineering/lead-reasoning`, `engineering/interactive-rocm`.
+- Confirm: Grafana scrapes MS-S1 `:9100`; vllm-top console enabled on both hosts; route decisions show rule `engineering-auto`.
+
 #### Known gaps
 
 - **Alloy scrape deploy needs Vault.** The grafana-host scrape entry for `10.0.8.6:9100` is in inventory, but deploying the Alloy config requires Vault access and has not been run from this work.
