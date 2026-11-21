@@ -8,16 +8,19 @@ def load(path: str):
     return yaml.safe_load((ROOT / path).read_text())
 
 
-def test_lab_hosts_registers_ms_s1_max():
-    hosts = load("inventory/lab/hosts.yml")
-    assert "ai-ms-s1-max-01" in hosts["all"]["children"]["lab"]["hosts"]
-    assert "ai-ms-s1-max-01" in hosts["all"]["children"]["gpu"]["hosts"]
-    assert "ai-ms-s1-max-01" not in hosts["all"]["children"].get("inference", {}).get("hosts", {})
-    assert "ai-ms-s1-max-01" not in hosts["all"]["children"].get("cluster", {}).get("hosts", {})
+def test_production_hosts_registers_ms_s1_max():
+    # Phase 3a promoted the host out of lab (see test_ms_s1_max_promotion_contract.py).
+    hosts = load("inventory/production/hosts.yml")
+    children = hosts["all"]["children"]
+    for group in ("production", "gpu", "inference", "cluster", "monitoring"):
+        assert "ai-ms-s1-max-01" in children[group]["hosts"], group
+    lab = load("inventory/lab/hosts.yml")
+    for name, group in lab["all"]["children"].items():
+        assert "ai-ms-s1-max-01" not in (group or {}).get("hosts", {}), name
 
 
 def test_ms_s1_max_host_vars_phase1_contract():
-    hv = load("inventory/lab/host_vars/ai-ms-s1-max-01.yml")
+    hv = load("inventory/production/host_vars/ai-ms-s1-max-01.yml")
     assert hv["ansible_host"] == "10.0.8.6"
     assert hv["hardware_profile"] == "ms_s1_max_strix_halo"
     assert hv["os_tuning_profile"] == "baseline"

@@ -11,6 +11,16 @@ reconcile_controller_lock_dir: "{{ reconcile_controller_root }}/lock"
 reconcile_controller_candidate_state_dir: "{{ reconcile_controller_root }}/candidate"
 reconcile_controller_unit_dir: "{{ ansible_facts.env.HOME }}/.config/systemd/user"
 reconcile_controller_target: ai-5820-01
+# Further production hosts reconciled by their own service and timer (aihost-reconcile-<host>.*), so one host failing
+# or holding its lock never blocks another. Each target takes its own lock directory; the schedule is staggered half
+# an hour from the primary target's.
+reconcile_controller_extra_targets:
+  - ai-ms-s1-max-01
+reconcile_controller_extra_schedule: "*-*-* *:30:00"
+# Per-unit overrides of the templates: the primary unit keeps the shared lock directory and candidate recovery; extra
+# targets set these from the task loop.
+reconcile_controller_unit_lock_dir: "{{ reconcile_controller_lock_dir }}"
+reconcile_controller_unit_candidate_recovery: true
 reconcile_controller_schedule: hourly
 reconcile_controller_random_delay: 300s
 reconcile_controller_timer_enabled: true

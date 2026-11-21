@@ -23,10 +23,16 @@ ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
   -e {{ env_key }}={{ env_value }} \
 {% endfor %}
   -v {{ llama_cpp_hip_model_dir }}:/models:ro \
+{% if llama_cpp_hip_api_key_required | bool %}
+  -v {{ llama_cpp_hip_config_root }}/{{ llama_worker_key }}/worker-api-key:/cfg/api-key:ro \
+{% endif %}
   {{ llama_cpp_hip_image }}@{{ llama_cpp_hip_digest }} \
   -m /models/{{ llama_worker.model_file }} -c {{ llama_worker.context }} \
   --host {{ llama_cpp_hip_host }} --port {{ llama_worker.port }} \
   --alias {{ llama_worker.served_name }} \
+{% if llama_cpp_hip_api_key_required | bool %}
+  --api-key-file /cfg/api-key \
+{% endif %}
   {{ (llama_worker.args | default(llama_cpp_hip_default_args)) | join(' ') }}
 ExecStop=/usr/bin/podman stop -t 20 {{ llama_worker.container_name }}
 Restart=on-failure

@@ -1,0 +1,18 @@
+## ai-5820-01 2026-11-21T14:52:36Z
+active
+NRestarts=0
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: evidence_anchor head=21dd191556446de569781ca41ed1c0c6d530017e67ad5c26dda88574d9fd673f records=68821 at=2026-11-21T14:27:11.066325+00:00
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Started server process [1238096]
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Waiting for application startup.
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Application startup complete.
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Started server process [1238096]
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Waiting for application startup.
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Application startup complete.
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+Nov 21 14:27:11 ai-5820-01 python3[1238096]: INFO:     Uvicorn running on https://10.0.8.5:8443 (Press CTRL+C to quit)
+Nov 21 14:32:13 ai-5820-01 python3[1238096]: evidence_anchor head=da04736b30d57dd66630477c0a3e5f2be051d939c22c6e5e844348f7d99640ef records=94 at=2026-11-21T14:32:13.852576+00:00
+Nov 21 14:35:36 ai-5820-01 python3[1238096]: evidence_anchor head=10b7a416b3728d186042b663da90b5162ddf76194bff82c13c072676b780d645 records=100 at=2026-11-21T14:35:36.420021+00:00
+Nov 21 14:38:33 ai-5820-01 python3[1238096]: evidence_anchor head=c437bc0f2d8123fe1b80be0348f5bb087d06e0cbc47724414d38f5ff6bad022d records=100 at=2026-11-21T14:38:33.107606+00:00
+Nov 21 14:43:33 ai-5820-01 python3[1238096]: evidence_anchor head=c7d1e3ee335f4ad8bcc9b51231a375b444ce6d83662c6251f7b39c401a5b09cf records=87 at=2026-11-21T14:43:33.422515+00:00
+Nov 21 14:46:08 ai-5820-01 python3[1238096]: evidence_anchor head=f3c0b37e2be3e04d7cefd46552df8869506953e5c1b842d8b679ea06d17262a0 records=100 at=2026-11-21T14:46:08.850088+00:00
+Nov 21 14:51:09 ai-5820-01 python3[1238096]: evidence_anchor head=d5b7d7d90db03a8e9fcc659ee0602cf88cdbf59d4bad3697249f4a9c4a51fbfb records=96 at=2026-11-21T14:51:09.055516+00:00

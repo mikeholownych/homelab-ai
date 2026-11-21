@@ -1,7 +1,11 @@
 [Unit]
 Description=T5820 authenticated engineering orchestrator gateway
+{% if inference_policy_enabled | default(false) | bool %}
 After=aihost-inference-policy.service network-online.target
 Requires=aihost-inference-policy.service
+{% else %}
+After=network-online.target
+{% endif %}
 Wants=network-online.target
 StartLimitIntervalSec=300s
 StartLimitBurst=3
@@ -14,7 +18,9 @@ WorkingDirectory={{ orchestrator_gateway_release_dir }}
 EnvironmentFile={{ orchestrator_gateway_env_file }}
 Environment=PYTHONPATH={{ orchestrator_gateway_release_dir }}
 Environment=ORCHESTRATOR_CLIENT_TOKEN_FILE={{ orchestrator_gateway_client_token_file }}
+{% if orchestrator_gateway_client_token_extra_file %}
 Environment=ORCHESTRATOR_CLIENT_TOKEN_EXTRA_FILE=%d/opencode-client-token
+{% endif %}
 Environment=PYTHONDONTWRITEBYTECODE=1
 {% if orchestrator_gateway_remote_host %}
 Environment=ORCHESTRATOR_TLS_KEY=%d/gateway-tls-key
@@ -47,7 +53,9 @@ RestrictRealtime=true
 PrivateTmp=true
 NoNewPrivileges=true
 LoadCredential=client-token:{{ orchestrator_gateway_client_token_file }}
+{% if orchestrator_gateway_client_token_extra_file %}
 LoadCredential=opencode-client-token:{{ orchestrator_gateway_client_token_extra_file }}
+{% endif %}
 {% for worker in orchestrator_gateway_workers %}
 LoadCredential={{ worker.credential_name }}:{{ worker.credential_source }}
 {% endfor %}

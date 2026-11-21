@@ -156,6 +156,8 @@ Reconciliation runs hourly **from the controller**, never on the inference appli
 
 `roles/reconcile_controller` checks out a pinned snapshot commit, bootstraps its hash-pinned tools, builds its own locked tools, and installs a user systemd timer (`aihost-reconcile.timer`, operator account) that executes `scripts/run-ansible-snapshot ... --playbook reconcile.yml`. The timer re-applies exactly that snapshot; it never pulls `main`.
 
+`ai-ms-s1-max-01` is reconciled the same way, by its own pair of units (`aihost-reconcile-ai-ms-s1-max-01.service` / `.timer`) from `reconcile_controller_extra_targets`: half an hour after the primary timer, with its own lock directory and no candidate-recovery pre-step, so one host failing or holding its lock never blocks the other. Its on-host lifecycle timers are disabled for the same reason as on `ai-5820-01`. Moving the snapshot (below) updates both pairs. An unresolved `ai-5820-01` candidate transaction (`active.json` in the shared candidate state) still makes every scheduled run exit 75, which is intentional. Evidence lands in `~/.local/share/aihost/reconcile/evidence/ai-ms-s1-max-01/`.
+
 To inspect the controller reconciliation status:
 ```bash
 systemctl --user status aihost-reconcile.timer

@@ -5,6 +5,9 @@ security_management_cidrs: []
 security_inference_api_firewall_enabled: false
 security_inference_api_cidrs: []
 security_inference_api_ports: []
+# Per-port source allowlists, e.g. [{port: 8443, cidrs: ["10.0.8.95/32"]}], for listeners whose clients differ from
+# security_inference_api_cidrs (it opens every listed port to every listed CIDR).
+security_inference_api_port_cidrs: []
 security_auditd_enabled: true
 security_manage_runtime: "{{ not (baseline_localhost_safe_mode | default(false) | bool) }}"
 security_manage_sysctl: "{{ security_manage_runtime | bool }}"

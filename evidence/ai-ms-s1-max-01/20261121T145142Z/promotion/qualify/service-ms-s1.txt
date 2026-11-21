@@ -1,0 +1,32 @@
+## ai-ms-s1-max-01 2026-11-21T14:52:35Z
+active
+active
+NRestarts=0
+
+NRestarts=0
+8101/tcp                   ALLOW       10.0.8.5                   # Managed inference API access
+8443/tcp                   ALLOW       10.0.8.95                  # Managed inference API access
+9100/tcp                   ALLOW       10.0.8.2                   # Managed inference API access
+Nov 21 14:05:26 ai-ms-s1-max-01 python3[138888]: INFO:     Finished server process [138888]
+Nov 21 14:05:26 ai-ms-s1-max-01 systemd[1]: aihost-orchestrator-gateway.service: Deactivated successfully.
+Nov 21 14:05:26 ai-ms-s1-max-01 systemd[1]: Stopped aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 14:05:26 ai-ms-s1-max-01 systemd[1]: Starting aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway...
+Nov 21 14:05:26 ai-ms-s1-max-01 systemd[1]: Started aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: evidence_anchor head=9262956bea7f6d5f3b28f4c773fcf2e814eb7162816a284db40b0fab4863ff33 records=2 at=2026-11-21T14:05:27.095453+00:00
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Started server process [139012]
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Waiting for application startup.
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Application startup complete.
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Started server process [139012]
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Waiting for application startup.
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Application startup complete.
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+Nov 21 14:05:27 ai-ms-s1-max-01 python3[139012]: INFO:     Uvicorn running on https://10.0.8.6:8443 (Press CTRL+C to quit)
+Nov 21 14:51:43 ai-ms-s1-max-01 python3[139012]: evidence_anchor head=79bd566e441a764c6778fae93b13d98f4a67c88b090c1c1d5a0f5ec191a82914 records=13 at=2026-11-21T14:51:43.663574+00:00
+Nov 21 14:51:46 ai-ms-s1-max-01 podman[128821]: 75.56.401.545 I slot print_timing: id  0 | task 151 |       total time =     178.83 ms /    10 tokens
+Nov 21 14:51:46 ai-ms-s1-max-01 podman[128821]: 75.56.401.545 I slot print_timing: id  0 | task 151 |    graphs reused =        127
+Nov 21 14:51:46 ai-ms-s1-max-01 podman[128821]: 75.56.401.546 I slot print_timing: id  0 | task 151 |   graph reallocs =          0    /     0        (same size) / (changed size)
+Nov 21 14:51:46 ai-ms-s1-max-01 podman[128821]: 75.56.401.553 I slot      release: id  0 | task 151 | stop processing: n_tokens = 20, truncated = 0
+Nov 21 14:51:46 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 75.56.401.545 I slot print_timing: id  0 | task 151 |       total time =     178.83 ms /    10 tokens
+Nov 21 14:51:46 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 75.56.401.545 I slot print_timing: id  0 | task 151 |    graphs reused =        127
+Nov 21 14:51:46 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 75.56.401.546 I slot print_timing: id  0 | task 151 |   graph reallocs =          0    /     0        (same size) / (changed size)
+Nov 21 14:51:46 ai-ms-s1-max-01 llama-hip-qwen3-coder-30b[128845]: 75.56.401.553 I slot      release: id  0 | task 151 | stop processing: n_tokens = 20, truncated = 0

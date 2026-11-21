@@ -1,4 +1,4 @@
-"""Phase 2d contract: the Strix Halo bake-off winner (llama.cpp HIP) is wired on the lab host only."""
+"""Phase 2d contract: the Strix Halo bake-off winner (llama.cpp HIP) is wired on the production host only (promoted in Phase 3a)."""
 from pathlib import Path
 import re
 
@@ -19,10 +19,10 @@ def load(path: str):
 
 
 def host_vars() -> dict:
-    return load(f"inventory/lab/host_vars/{HOST}.yml")
+    return load(f"inventory/production/host_vars/{HOST}.yml")
 
 
-def test_lab_ms_s1_inference_enabled_for_winner_only():
+def test_ms_s1_inference_enabled_for_winner_only():
     hv = host_vars()
     assert hv["node_roles"]["inference"] is True
     assert hv["capabilities"]["inference"] is True
@@ -30,12 +30,11 @@ def test_lab_ms_s1_inference_enabled_for_winner_only():
     assert enabled == ["llama_cpp_hip_enabled"]
 
 
-def test_host_not_in_production_inventory():
-    production = load("inventory/production/hosts.yml")
-    groups = production["all"]["children"]
-    for name, group in groups.items():
+def test_host_not_in_lab_inventory():
+    lab = load("inventory/lab/hosts.yml")
+    for name, group in lab["all"]["children"].items():
         assert HOST not in (group or {}).get("hosts", {}), name
-    assert not (ROOT / f"inventory/production/host_vars/{HOST}.yml").exists()
+    assert not (ROOT / f"inventory/lab/host_vars/{HOST}.yml").exists()
 
 
 def test_gpu_stack_stays_rocm_only():

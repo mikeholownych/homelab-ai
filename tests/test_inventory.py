@@ -23,7 +23,7 @@ PRODUCTION_GROUP_VARS = PRODUCTION_ROOT / "group_vars"
 INVENTORY_README = REPO_ROOT / "inventory" / "README.md"
 
 PRODUCTION_HOSTS = ("ai-p620-01", "ai-5820-01")
-ACTIVE_PRODUCTION_HOSTS = ("ai-5820-01",)
+ACTIVE_PRODUCTION_HOSTS = ("ai-5820-01", "ai-ms-s1-max-01")
 
 REQUIRED_PATHS = (
     INVENTORY_README,
@@ -195,7 +195,7 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual(["production", "inference", "gpu", "cluster", "monitoring"], inventory["ai_hosts"]["children"])
         for group in ("production", "inference", "gpu", "cluster", "monitoring"):
             self.assertEqual(set(ACTIVE_PRODUCTION_HOSTS), set(inventory[group]["hosts"]))
-            self.assertEqual(1, len(inventory[group]["hosts"]))
+            self.assertEqual(len(ACTIVE_PRODUCTION_HOSTS), len(inventory[group]["hosts"]))
 
         self.assertEqual(["ai-p620-01"], inventory["uncommissioned_hosts"]["hosts"])
         self.assertEqual(["vault-vm"], inventory["vault_servers"]["hosts"])
@@ -242,17 +242,11 @@ class InventoryContractTests(unittest.TestCase):
         inventory, stderr = run_ansible_inventory(LAB_INVENTORY)
         self.assertEqual("", stderr.strip())
         self.assertIn("ai-5820-test-01", inventory["_meta"]["hostvars"])
-        self.assertIn("ai-ms-s1-max-01", inventory["_meta"]["hostvars"])
-        self.assertEqual(
-            sorted(["ai-5820-test-01", "ai-ms-s1-max-01"]),
-            sorted(inventory["lab"]["hosts"]),
-        )
+        self.assertNotIn("ai-ms-s1-max-01", inventory["_meta"]["hostvars"])
+        self.assertEqual(["ai-5820-test-01"], sorted(inventory["lab"]["hosts"]))
         self.assertIn("ai-5820-test-01", inventory["gpu"]["hosts"])
-        self.assertIn("ai-ms-s1-max-01", inventory["gpu"]["hosts"])
         for group in ("inference", "cluster", "monitoring"):
             self.assertIn("ai-5820-test-01", inventory[group]["hosts"])
-        self.assertNotIn("ai-ms-s1-max-01", inventory["inference"]["hosts"])
-        self.assertNotIn("ai-ms-s1-max-01", inventory["cluster"]["hosts"])
         hostvars = inventory["_meta"]["hostvars"]["ai-5820-test-01"]
         self.assertEqual("lab", hostvars["node_metadata"]["environment"])
         self.assertEqual("d5820_dual_b65", hostvars["hardware_profile"])
@@ -314,14 +308,22 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual("aihost-gateway", users_defaults["users_gateway_service_account"]["name"])
         self.assertTrue(host_vars["inference_policy_enabled"])
         self.assertNotIn("inference_policy_worker_ports", host_vars)
-        self.assertEqual([8000, 8001], [worker["port"] for worker in host_vars["orchestrator_gateway_workers"]])
+        # Local Intel workers (loopback, covered by the nft owner-match policy) plus the remote MS-S1 HIP worker (8101,
+        # reached over the LAN with its own root-only key copy).
+        local_workers = [w for w in host_vars["orchestrator_gateway_workers"] if w["endpoint"].startswith("http://127.0.0.1:")]
+        remote_workers = [w for w in host_vars["orchestrator_gateway_workers"] if w not in local_workers]
+        self.assertEqual([8000, 8001], [worker["port"] for worker in local_workers])
+        self.assertEqual(["ms-s1-hip-coder30b"], [worker["worker_id"] for worker in remote_workers])
         self.assertEqual(["10.0.8.95/32"], host_vars["inference_policy_gateway_client_cidrs"])
         self.assertEqual("local", host_vars["orchestrator_gateway_local_listener_mode"])
         self.assertEqual("10.0.8.5", host_vars["orchestrator_gateway_remote_host"])
         for worker in host_vars["orchestrator_gateway_workers"]:
             self.assertTrue(worker["token_file"].startswith("worker-"))
-            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/llama/"))
             self.assertNotEqual(worker["token_file"], worker["credential_source"])
+        for worker in local_workers:
+            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/llama/"))
+        for worker in remote_workers:
+            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/orchestrator/"))
         self.assertIn("LoadCredential={{ worker.credential_name }}:{{ worker.credential_source }}", gateway_unit)
         self.assertNotIn("SupplementaryGroups=", gateway_unit)
         self.assertIn("meta skuid != @gateway_uids", policy)

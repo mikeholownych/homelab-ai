@@ -4,15 +4,29 @@
     name: "{{ llama_item.value.service_name }}"
     enabled: true
     state: >-
-      {{ 'restarted' if (llama_cpp_hip_units.results | selectattr('item.key', 'equalto', llama_item.key)
-                         | map(attribute='changed') | first | default(false)) else 'started' }}
+      {{ 'restarted' if ((llama_cpp_hip_units.results | selectattr('item.key', 'equalto', llama_item.key)
+                          | map(attribute='changed') | first | default(false))
+                         or (llama_cpp_hip_key_files.results | default([])
+                             | selectattr('item.key', 'equalto', llama_item.key)
+                             | map(attribute='changed') | first | default(false))) else 'started' }}
+
+- name: "Read the API credential to authenticate the health check of {{ llama_item.key }}"
+  ansible.builtin.slurp:
+    src: "{{ llama_cpp_hip_config_root }}/{{ llama_item.key }}/worker-api-key"
+  register: llama_cpp_hip_health_key
+  no_log: true
+  when: llama_cpp_hip_api_key_required | bool
 
 - name: "Wait for /v1/models from {{ llama_item.key }}"
   ansible.builtin.uri:
     url: "http://{{ llama_cpp_hip_host }}:{{ llama_item.value.port }}/v1/models"
+    headers: >-
+      {{ {'Authorization': 'Bearer ' ~ (llama_cpp_hip_health_key.content | b64decode | trim)}
+         if (llama_cpp_hip_api_key_required | bool) else {} }}
     return_content: true
     timeout: 10
   register: llama_cpp_hip_models
+  no_log: "{{ llama_cpp_hip_api_key_required | bool }}"
   until: llama_cpp_hip_models.status | default(0) == 200
   retries: "{{ llama_cpp_hip_health_retries }}"
   delay: "{{ llama_cpp_hip_health_delay }}"
@@ -31,5 +45,6 @@
       image: "{{ llama_cpp_hip_image }}@{{ llama_cpp_hip_digest }}"
       model_file: "{{ llama_item.value.model_file }}"
       endpoint: "http://{{ llama_cpp_hip_host }}:{{ llama_item.value.port }}/v1/models"
+      api_key_required: "{{ llama_cpp_hip_api_key_required | bool }}"
       http_status: "{{ llama_cpp_hip_models.status }}"
       served_models: "{{ llama_cpp_hip_models.json.data | map(attribute='id') | list }}"

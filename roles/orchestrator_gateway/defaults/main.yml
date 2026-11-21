@@ -78,6 +78,8 @@ orchestrator_gateway_service_path: /etc/systemd/system/aihost-orchestrator-gatew
 orchestrator_gateway_readiness_path: /usr/local/libexec/aihost-gateway-readiness
 orchestrator_gateway_env_file: /etc/local-ai/orchestrator/gateway.env
 orchestrator_gateway_workers: []
+# Production (non-candidate) workers the host must declare; the Intel host runs two TP=1 workers.
+orchestrator_gateway_production_worker_count: 2
 orchestrator_gateway_allow_worker_pinning: true
 orchestrator_gateway_scheduling_mode: CONFIGURATION_B_PLUS
 # Stale manual systemd drop-ins that the role now supersedes; removed if present.

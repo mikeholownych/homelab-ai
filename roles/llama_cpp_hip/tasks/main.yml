@@ -4,11 +4,13 @@
     that:
       - llama_cpp_hip_digest is match('^sha256:[0-9a-f]{64}$')
       - llama_cpp_hip_workers | length > 0
-      - llama_cpp_hip_host == '127.0.0.1'
+      - llama_cpp_hip_api_key_required is boolean
+      - (llama_cpp_hip_api_key_required | bool) or llama_cpp_hip_host == '127.0.0.1'
       - not (llama_cpp_hip_drain_via_gateway | bool)
     fail_msg: >-
       llama.cpp HIP workers require an image pinned by sha256 digest, at least one declared worker, a loopback bind
-      and llama_cpp_hip_drain_via_gateway=false (draining is not implemented for this role).
+      unless llama_cpp_hip_api_key_required=true (an unauthenticated worker must never listen off-loopback) and
+      llama_cpp_hip_drain_via_gateway=false (draining is not implemented for this role).
   when: llama_cpp_hip_enabled | bool
 
 - name: Refuse a second inference engine on the same GPU (one engine process on the APU)
@@ -143,6 +145,64 @@
     - llama_cpp_hip_enabled | bool
     - llama_cpp_hip_image_present.rc | default(0) != 0
 
+- name: Create the per-worker API key directories
+  ansible.builtin.file:
+    path: "{{ llama_cpp_hip_config_root }}{{ item }}"
+    state: directory
+    owner: "{{ llama_cpp_hip_user if item else 'root' }}"
+    group: "{{ llama_cpp_hip_user if item else 'root' }}"
+    mode: "{{ '0750' if item else '0755' }}"
+  loop: "{{ [''] + (llama_cpp_hip_workers.keys() | map('regex_replace', '^', '/') | list) }}"
+  when:
+    - llama_cpp_hip_enabled | bool
+    - llama_cpp_hip_api_key_required | bool
+
+- name: Read existing per-worker API credentials
+  ansible.builtin.slurp:
+    src: "{{ llama_cpp_hip_config_root }}/{{ item.key }}/worker-api-key"
+  loop: "{{ llama_cpp_hip_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  register: llama_cpp_hip_keys_existing
+  failed_when: false
+  check_mode: false
+  no_log: true
+  when:
+    - llama_cpp_hip_enabled | bool
+    - llama_cpp_hip_api_key_required | bool
+
+- name: Set per-worker API credentials (preserve existing, otherwise generate)
+  ansible.builtin.set_fact:
+    llama_cpp_hip_keys: >-
+      {{ (llama_cpp_hip_keys | default({}))
+         | combine({ item.item.key:
+             ((item.content | b64decode | trim)
+              if (item.content is defined and item.content | length > 0)
+              else lookup('ansible.builtin.password', '/dev/null chars=ascii_letters,digits length=43')) }) }}
+  loop: "{{ llama_cpp_hip_keys_existing.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.key }}"
+  no_log: true
+  when:
+    - llama_cpp_hip_enabled | bool
+    - llama_cpp_hip_api_key_required | bool
+
+- name: Install per-worker API credential files
+  ansible.builtin.copy:
+    content: "{{ llama_cpp_hip_keys[item.key] }}\n"
+    dest: "{{ llama_cpp_hip_config_root }}/{{ item.key }}/worker-api-key"
+    owner: "{{ llama_cpp_hip_user }}"
+    group: "{{ llama_cpp_hip_user }}"
+    mode: "0400"
+  loop: "{{ llama_cpp_hip_workers | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+  when:
+    - llama_cpp_hip_enabled | bool
+    - llama_cpp_hip_api_key_required | bool
+  register: llama_cpp_hip_key_files
+
 - name: Install llama.cpp HIP worker service units
   ansible.builtin.template:
     src: llama-hip.service.j2
@@ -152,6 +212,7 @@
     mode: "0644"
   vars:
     llama_worker: "{{ item.value }}"
+    llama_worker_key: "{{ item.key }}"
   loop: "{{ llama_cpp_hip_workers | dict2items }}"
   loop_control:
     label: "{{ item.key }}"

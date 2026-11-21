@@ -80,6 +80,50 @@
     state: "{{ 'started' if reconcile_controller_timer_enabled | bool else 'stopped' }}"
   tags: [reconcile]
 
+- name: Validate the extra reconciliation targets
+  ansible.builtin.assert:
+    that:
+      - reconcile_controller_extra_targets is iterable
+      - reconcile_controller_target not in reconcile_controller_extra_targets
+      - reconcile_controller_extra_targets | select('match', '^[A-Za-z0-9][A-Za-z0-9-]*$') | list | length
+        == reconcile_controller_extra_targets | length
+    fail_msg: >-
+      reconcile_controller_extra_targets must be unique host names (letters, digits, hyphens), distinct from
+      reconcile_controller_target; they become part of the unit names and the lock directory.
+  tags: [reconcile]
+
+# One service and timer per extra target, from the same templates as the primary pair, so a failure or a held lock on
+# one host never blocks another.
+- name: Install the reconciliation units of the extra targets
+  ansible.builtin.template:
+    src: "{{ item.1 }}.j2"
+    dest: >-
+      {{ reconcile_controller_unit_dir }}/{{
+      item.1 | regex_replace('^aihost-reconcile', 'aihost-reconcile-' ~ item.0) }}
+    mode: "0644"
+  vars:
+    reconcile_controller_target: "{{ item.0 }}"
+    reconcile_controller_schedule: "{{ reconcile_controller_extra_schedule }}"
+    reconcile_controller_unit_lock_dir: "{{ reconcile_controller_lock_dir }}/{{ item.0 }}"
+    reconcile_controller_unit_candidate_recovery: false
+  loop: >-
+    {{ reconcile_controller_extra_targets
+       | product(['aihost-reconcile.service', 'aihost-reconcile.timer']) | list }}
+  loop_control:
+    label: "{{ item.0 }}/{{ item.1 }}"
+  register: reconcile_controller_extra_units
+  tags: [reconcile]
+
+- name: Establish the reconciliation timer state of the extra targets
+  ansible.builtin.systemd_service:
+    name: "aihost-reconcile-{{ item }}.timer"
+    scope: user
+    daemon_reload: "{{ reconcile_controller_extra_units.changed }}"
+    enabled: "{{ reconcile_controller_timer_enabled | bool }}"
+    state: "{{ 'started' if reconcile_controller_timer_enabled | bool else 'stopped' }}"
+  loop: "{{ reconcile_controller_extra_targets }}"
+  tags: [reconcile]
+
 - name: Create the private gateway backup directory
   ansible.builtin.file:
     path: "{{ reconcile_controller_gateway_backup_root }}"

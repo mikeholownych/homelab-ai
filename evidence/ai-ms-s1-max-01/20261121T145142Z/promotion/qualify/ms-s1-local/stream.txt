@@ -1,0 +1,24 @@
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"role":"assistant","content":null},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":"1"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":","},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":" "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":"2"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":","},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":" "},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":"3"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{"content":"."},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-b57f2a12345746df96a118b9","object":"chat.completion.chunk","created":1795272704,"model":"engineering/interactive-rocm","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"x_aihost":{"termination":"stop"}}
+
+data: [DONE]
+
