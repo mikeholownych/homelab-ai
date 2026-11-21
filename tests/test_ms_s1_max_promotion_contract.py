@@ -52,3 +52,52 @@ def test_production_host_vars_promotion_contract():
     assert hv["intel_gpu_physical_validation_enabled"] is False
     assert hv["users_runtime_rootless_enabled"] is True
     assert hv["storage_lvm"]["enabled"] is True
+
+
+def test_ms_s1_gateway_is_rocm_only():
+    """Phase 3c: the local gateway serves the ROCm alias from one HIP worker and never the Intel aliases."""
+    hv = load(f"inventory/production/host_vars/{HOST}.yml")
+    assert hv["orchestrator_gateway_engine"] == "asgi"
+    assert hv["orchestrator_gateway_remote_host"] == "10.0.8.6"
+    assert hv["orchestrator_gateway_remote_port"] == 8443
+    assert hv["orchestrator_gateway_tls_sans"] == ["IP:10.0.8.6", "DNS:ai-ms-s1-max-01"]
+
+    aliases = hv["orchestrator_gateway_model_aliases"]
+    assert aliases == {"engineering/interactive-rocm": {
+        "pool": "rocm", "reasoning": {"mode": "off", "answer_allowance": 8192}}}
+    for intel_alias in ("engineering/lead", "engineering/deep", "engineering/lead-reasoning"):
+        assert intel_alias not in aliases, intel_alias
+
+    routes = hv["orchestrator_gateway_routes"]
+    assert [route["id"] for route in routes] == ["interactive-rocm", "default"]
+    assert routes[0]["match"] == {"model": ["engineering/interactive-rocm"]}
+    assert {route["pool"] for route in routes} == {"rocm"}
+    assert all(route["fallback"] == [] for route in routes)
+
+    (worker,) = hv["orchestrator_gateway_workers"]
+    assert worker["worker_id"] == "ms-s1-hip-coder30b"
+    assert worker["pool"] == "rocm"
+    assert worker["endpoint"] == "http://10.0.8.6:8101"
+    assert worker["credential_source"] == "/etc/local-ai/llama-hip/qwen3_coder_30b_q8/worker-api-key"
+    assert worker["runtime_image_digest"] == hv["llama_cpp_hip_digest"]
+    assert worker["model_id"] == hv["llama_cpp_hip_workers"]["qwen3_coder_30b_q8"]["served_name"]
+    assert hv["orchestrator_gateway_production_worker_count"] == 1
+    assert worker["port"] == hv["llama_cpp_hip_workers"]["qwen3_coder_30b_q8"]["port"]
+    assert {w["pool"] for w in hv["orchestrator_gateway_workers"]} == {"rocm"}
+
+
+def test_ms_s1_gateway_tls_port_open_to_controller_only():
+    hv = load(f"inventory/production/host_vars/{HOST}.yml")
+    assert hv["security_inference_api_port_cidrs"] == [{"port": 8443, "cidrs": ["10.0.8.95/32"]}]
+    assert hv["orchestrator_gateway_remote_client_cidrs"] == ["10.0.8.95/32"]
+    # The HIP worker port stays reachable from the 5820 gateway only.
+    assert hv["security_inference_api_cidrs"] == ["10.0.8.5/32"]
+    assert hv["security_inference_api_ports"] == [8101]
+
+
+def test_ms_s1_gateway_does_not_replace_the_5820_controller_trust():
+    hv = load(f"inventory/production/host_vars/{HOST}.yml")
+    assert hv["orchestrator_gateway_tls_controller_trust_store_enabled"] is False
+    assert hv["orchestrator_gateway_tls_pki_dir"].endswith("/pki/ai-ms-s1-max-01")
+    intel = load("inventory/production/host_vars/ai-5820-01.yml")
+    assert hv["orchestrator_gateway_tls_pki_dir"] != intel["orchestrator_gateway_tls_pki_dir"]

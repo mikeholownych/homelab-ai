@@ -18,12 +18,13 @@ def git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True)
 
 
-def test_release_id_names_a_commit_with_the_deployed_gateway_code():
+@pytest.mark.parametrize("host,prefix", [("ai-5820-01", "t5820-gateway"), ("ai-ms-s1-max-01", "ms-s1-gateway")])
+def test_release_id_names_a_commit_with_the_deployed_gateway_code(host, prefix):
     if git("rev-parse", "--is-inside-work-tree").returncode != 0:
         pytest.skip("not a git checkout")
-    host_vars = yaml.safe_load((ROOT / "inventory/production/host_vars/ai-5820-01.yml").read_text())
+    host_vars = yaml.safe_load((ROOT / f"inventory/production/host_vars/{host}.yml").read_text())
     release_id = host_vars["orchestrator_gateway_release_id"]
-    match = re.fullmatch(r"t5820-gateway-([0-9a-f]{7,40})", release_id)
+    match = re.fullmatch(prefix + r"-([0-9a-f]{7,40})", release_id)
     assert match, f"release id {release_id!r} does not name a commit"
     assert host_vars["orchestrator_gateway_release_dir"].endswith("/" + release_id)
     sha = match.group(1)

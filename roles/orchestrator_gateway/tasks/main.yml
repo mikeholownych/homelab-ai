@@ -2,11 +2,12 @@
 - name: Validate T5820 gateway inputs
   ansible.builtin.assert:
     that:
-      # exactly two production workers; candidates (R4) are additional
+      # exactly orchestrator_gateway_production_worker_count production workers (2 unless the host declares
+      # otherwise); candidates (R4) are additional
       - >-
         (orchestrator_gateway_workers | rejectattr('role', 'defined') | list | length)
         + (orchestrator_gateway_workers | selectattr('role', 'defined') | selectattr('role', 'equalto', 'production')
-           | list | length) == 2
+           | list | length) == orchestrator_gateway_production_worker_count | int
       - orchestrator_gateway_port == 8010
       - orchestrator_gateway_local_listener_mode == "local"
       - >-
@@ -25,8 +26,8 @@
       - orchestrator_gateway_release_id is string
       - orchestrator_gateway_release_dir is string
     fail_msg: >-
-      The T5820 gateway requires exactly two declared TP=1 workers and a pinned
-      release directory, isolated listener mode and systemd worker credentials.
+      The gateway requires exactly orchestrator_gateway_production_worker_count declared production workers and a
+      pinned release directory, isolated listener mode and systemd worker credentials.
   when: orchestrator_gateway_enabled | bool
 
 - name: Check for a previously installed activation recovery helper
@@ -499,6 +500,15 @@
     group: root
     mode: "0644"
   when: orchestrator_gateway_enabled | bool
+
+- name: Install the Python venv module for the gateway virtual environment
+  ansible.builtin.apt:
+    name: python3-venv
+    state: present
+    update_cache: false
+  when:
+    - orchestrator_gateway_enabled | bool
+    - orchestrator_gateway_venv_enabled | bool
 
 - name: Create gateway ASGI virtual environment
   ansible.builtin.command:

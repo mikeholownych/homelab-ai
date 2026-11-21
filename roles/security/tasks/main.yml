@@ -33,6 +33,16 @@
       - security_inference_api_cidrs_invalid | length == 0
     fail_msg: security_inference_api_cidrs must contain valid CIDR networks.
 
+- name: Validate per-port inference firewall rules
+  ansible.builtin.assert:
+    that:
+      - security_inference_api_port_cidrs is iterable
+      - (security_inference_api_port_cidrs | map(attribute='port') | list | aihost_invalid_ports) | length == 0
+      - >-
+        (security_inference_api_port_cidrs | map(attribute='cidrs') | flatten | aihost_invalid_cidrs)
+        | length == 0
+    fail_msg: "security_inference_api_port_cidrs must be a list of {port: 1-65535, cidrs: [valid CIDRs]}."
+
 - name: Validate inference firewall ports
   ansible.builtin.assert:
     that:
@@ -110,6 +120,24 @@
         ]
       }}
   loop: "{{ security_inference_api_cidrs | product(security_inference_api_ports) | list }}"
+  when: security_inference_api_firewall_enabled | bool
+
+- name: Build desired managed per-port inference UFW rules
+  ansible.builtin.set_fact:
+    security_ufw_inference_rules: >-
+      {{
+        security_ufw_inference_rules | default([])
+        + [
+          {
+            'scope': 'inference',
+            'src': item.1,
+            'port': item.0.port | string,
+            'proto': 'tcp',
+            'comment': 'Managed inference API access'
+          }
+        ]
+      }}
+  loop: "{{ security_inference_api_port_cidrs | subelements('cidrs') }}"
   when: security_inference_api_firewall_enabled | bool
 
 - name: Record desired managed UFW policy state
