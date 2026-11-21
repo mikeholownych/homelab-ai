@@ -93,8 +93,8 @@ def test_quality_first_prefers_deep_for_complex_reasoning():
     req = {"messages": [{"role": "user", "content": "step-by-step analyze root cause of this architecture deadlock"}]}
     d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=req)
     assert d.pool == "deep"
-    assert d.fallback[0:2] == ("lead", "rocm") or set(d.fallback) == {"lead", "rocm"}
-    assert "quality_first" in d.reason or "quality first" in d.reason.lower()
+    assert d.fallback == ("lead", "rocm")
+    assert "quality_first" in d.reason
 
 
 def test_quality_first_prefers_rocm_for_code_tools():
