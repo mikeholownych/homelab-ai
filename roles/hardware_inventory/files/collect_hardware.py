@@ -200,6 +200,49 @@ def collect_aer(bdf):
     return counters
 
 
+def parse_rocminfo(text):
+    """Parse rocminfo Agent blocks into name/device_type/marketing_name; GPU coarse pool -> memory_gib."""
+    agents = []
+    for block in re.split(r"^\*{3,}\s*\nAgent \d+\s*\n\*{3,}\s*$", text or "", flags=re.M)[1:]:
+        name = re.search(r"^\s*Name:\s*(.+?)\s*$", block, re.M)
+        device_type = re.search(r"^\s*Device Type:\s*(\S+)", block, re.M)
+        if not name or not device_type:
+            continue
+        agent = {"name": name.group(1), "device_type": device_type.group(1).upper()}
+        marketing = re.search(r"^\s*Marketing Name:\s*(.+?)\s*$", block, re.M)
+        if marketing and marketing.group(1) != agent["name"]:
+            agent["marketing_name"] = marketing.group(1)
+        coarse = re.search(r"FLAGS:[^\n]*COARSE GRAINED[^\n]*\n\s*Size:\s*(\d+)(?:\(0x[0-9a-fA-F]+\))?\s*KB",
+                           block)
+        if coarse and agent["device_type"] == "GPU":
+            agent["memory_gib"] = round(int(coarse.group(1)) / 1024 / 1024, 1)
+        agents.append(agent)
+    return agents
+
+
+def collect_npu(run_fn=run, proc_modules=Path("/proc/modules"), device_node="/dev/accel/accel0"):
+    """AMD XDNA NPU evidence: amdxdna kernel module and accel device node."""
+    try:
+        modules = proc_modules.read_text()
+    except OSError:
+        modules = run_fn(["lsmod"], required=False)
+    loaded = any(line.split(maxsplit=1)[0] == "amdxdna" for line in modules.splitlines() if line.strip())
+    return {"kernel_module_loaded": loaded, "device_node": device_node,
+            "device_node_exists": Path(device_node).exists()}
+
+
+def collect_amd_observations(run_fn=run, proc_modules=Path("/proc/modules"), device_node="/dev/accel/accel0"):
+    """ROCm/NPU observations; returns {} when no AMD evidence exists so Intel output is unchanged."""
+    result = {}
+    agents = parse_rocminfo(run_fn(["rocminfo"], required=False))
+    if agents:
+        result["rocm"] = {"agents": agents}
+    npu = collect_npu(run_fn, proc_modules, device_node)
+    if agents or npu["kernel_module_loaded"] or npu["device_node_exists"]:
+        result["npu"] = npu
+    return result
+
+
 def main():
     cpuinfo = Path("/proc/cpuinfo").read_text()
     memory_kib = int(next(line.split()[1] for line in Path("/proc/meminfo").read_text().splitlines()
@@ -302,6 +345,7 @@ def main():
             "level_zero_packages": sorted(line for line in level_zero_packages.splitlines() if line),
         },
     }
+    observed.update(collect_amd_observations())
     print(json.dumps(observed, sort_keys=True))
 
 
