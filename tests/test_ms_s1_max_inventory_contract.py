@@ -13,11 +13,14 @@ def test_lab_hosts_registers_ms_s1_max():
     assert "ai-ms-s1-max-01" in hosts["all"]["children"]["lab"]["hosts"]
     assert "ai-ms-s1-max-01" in hosts["all"]["children"]["gpu"]["hosts"]
     assert "ai-ms-s1-max-01" not in hosts["all"]["children"].get("inference", {}).get("hosts", {})
+    assert "ai-ms-s1-max-01" not in hosts["all"]["children"].get("cluster", {}).get("hosts", {})
 
 
 def test_ms_s1_max_host_vars_phase1_contract():
     hv = load("inventory/lab/host_vars/ai-ms-s1-max-01.yml")
     assert hv["ansible_host"] == "10.0.8.6"
+    assert hv["hardware_profile"] == "ms_s1_max_strix_halo"
+    assert hv["os_tuning_profile"] == "baseline"
     assert hv["node_metadata"]["hostname"] == "ai-ms-s1-max-01"
     assert hv["node_metadata"]["hardware_profile"] == "ms_s1_max_strix_halo"
     assert hv["node_roles"]["inference"] is False

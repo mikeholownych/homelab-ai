@@ -6,6 +6,9 @@ ansible_become: true
 platform_release: "26.04"
 platform_codename: resolute
 
+hardware_profile: ms_s1_max_strix_halo
+os_tuning_profile: baseline
+
 node_metadata:
   environment: lab
   hostname: ai-ms-s1-max-01
