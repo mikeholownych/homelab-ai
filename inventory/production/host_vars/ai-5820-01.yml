@@ -268,8 +268,8 @@ inference_policy_remote_gateway_port: 8443
 inference_policy_gateway_client_cidrs: [10.0.8.95/32]
 inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
-orchestrator_gateway_release_id: t5820-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b
+orchestrator_gateway_release_id: t5820-gateway-35008cba6d412a980637ed342f480c7843eedcbf
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-35008cba6d412a980637ed342f480c7843eedcbf
 # Two local Intel SYCL workers plus the remote MS-S1 HIP worker (Phase 3d); candidates are additional.
 orchestrator_gateway_production_worker_count: 3
 orchestrator_gateway_otlp_endpoint: "http://10.0.8.2:4318/v1/traces"
