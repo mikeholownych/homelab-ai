@@ -1,0 +1,91 @@
+## 5820 gateway status
+● aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway
+     Loaded: loaded (/etc/systemd/system/aihost-orchestrator-gateway.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-11-21 17:26:58 UTC; 31s ago
+ Invocation: d73577420dad44e888accb7f373dec8a
+    Process: 1848025 ExecStartPre=/usr/local/libexec/aihost-gateway-readiness (code=exited, status=0/SUCCESS)
+   Main PID: 1848031 (python3)
+      Tasks: 6 (limit: 256)
+     Memory: 84.6M (max: 1G, available: 939.3M, peak: 86M)
+        CPU: 2.156s
+     CGroup: /system.slice/aihost-orchestrator-gateway.service
+             └─1848031 /var/lib/aihost/releases/t5820-gateway-35008cba6d412a980637ed342f480c7843eedcbf/venv/bin/python3 -m orchestrator_gateway
+
+Nov 21 17:26:58 ai-5820-01 systemd[1]: Started aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 17:26:59 ai-5820-01 python3[1848031]: evidence_anchor head=bfb78be6b0f833b8ba2079041a27b0f611faf593b2680dd936ede4c8d9afde22 records=69539 at=2026-11-21T17:26:59.827676+00:00
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Started server process [1848031]
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Waiting for application startup.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Application startup complete.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Started server process [1848031]
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Waiting for application startup.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Application startup complete.
+
+## 5820 journal
+Nov 21 17:26:58 ai-5820-01 systemd[1]: Stopping aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway...
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: evidence_anchor head=bfb78be6b0f833b8ba2079041a27b0f611faf593b2680dd936ede4c8d9afde22 records=2 at=2026-11-21T17:26:58.041361+00:00
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Shutting down
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Shutting down
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Waiting for application shutdown.
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Application shutdown complete.
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Finished server process [1377969]
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Waiting for application shutdown.
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Application shutdown complete.
+Nov 21 17:26:58 ai-5820-01 python3[1377969]: INFO:     Finished server process [1377969]
+Nov 21 17:26:58 ai-5820-01 systemd[1]: aihost-orchestrator-gateway.service: Deactivated successfully.
+Nov 21 17:26:58 ai-5820-01 systemd[1]: Stopped aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 17:26:58 ai-5820-01 systemd[1]: aihost-orchestrator-gateway.service: Consumed 3min 4.487s CPU time over 2h 20min 19.295s wall clock time, 92.1M memory peak.
+Nov 21 17:26:58 ai-5820-01 systemd[1]: Starting aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway...
+Nov 21 17:26:58 ai-5820-01 systemd[1]: Started aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 17:26:59 ai-5820-01 python3[1848031]: evidence_anchor head=bfb78be6b0f833b8ba2079041a27b0f611faf593b2680dd936ede4c8d9afde22 records=69539 at=2026-11-21T17:26:59.827676+00:00
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Started server process [1848031]
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Waiting for application startup.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Application startup complete.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Started server process [1848031]
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Waiting for application startup.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Application startup complete.
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+Nov 21 17:27:00 ai-5820-01 python3[1848031]: INFO:     Uvicorn running on https://10.0.8.5:8443 (Press CTRL+C to quit)
+
+## MS-S1 vllm-top-console status
+● vllm-top-console.service - vllm-top monitoring console on tty1
+     Loaded: loaded (/etc/systemd/system/vllm-top-console.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-11-21 17:27:14 UTC; 16s ago
+ Invocation: 6af2421b4c2b46eda2cd5f17036907e8
+    Process: 261914 ExecStartPre=/usr/bin/timeout 90 /bin/sh -c until /usr/bin/curl -fsS -m 2 -o /dev/null http://127.0.0.1:8010/health; do sleep 1; done (code=exited, status=0/SUCCESS)
+   Main PID: 261918 (vllm-top)
+      Tasks: 2 (limit: 134355)
+     Memory: 9.8M (peak: 11.7M)
+        CPU: 320ms
+     CGroup: /system.slice/vllm-top-console.service
+             └─261918 /usr/local/bin/vllm-top --ignore-port 8443
+
+Nov 21 17:27:14 ai-ms-s1-max-01 systemd[1]: Starting vllm-top-console.service - vllm-top monitoring console on tty1...
+Nov 21 17:27:14 ai-ms-s1-max-01 systemd[1]: Started vllm-top-console.service - vllm-top monitoring console on tty1.
+## MS-S1 gateway
+● aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway
+     Loaded: loaded (/etc/systemd/system/aihost-orchestrator-gateway.service; enabled; preset: enabled)
+     Active: active (running) since Sat 2026-11-21 17:26:58 UTC; 32s ago
+ Invocation: dc2d87f20da1478c8e2fc04dffab1802
+   Main PID: 260873 (python3)
+      Tasks: 5 (limit: 256)
+     Memory: 28.5M (max: 1G, available: 995.4M, peak: 32.2M)
+        CPU: 583ms
+     CGroup: /system.slice/aihost-orchestrator-gateway.service
+             └─260873 /var/lib/aihost/releases/ms-s1-gateway-35008cba6d412a980637ed342f480c7843eedcbf/venv/bin/python3 -m orchestrator_gateway
+
+Nov 21 17:26:58 ai-ms-s1-max-01 systemd[1]: Started aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[139012]: INFO:     Finished server process [139012]
+Nov 21 17:26:58 ai-ms-s1-max-01 systemd[1]: aihost-orchestrator-gateway.service: Deactivated successfully.
+Nov 21 17:26:58 ai-ms-s1-max-01 systemd[1]: Stopped aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 17:26:58 ai-ms-s1-max-01 systemd[1]: aihost-orchestrator-gateway.service: Consumed 1min 47.167s CPU time over 3h 21min 31.734s wall clock time, 34.3M memory peak.
+Nov 21 17:26:58 ai-ms-s1-max-01 systemd[1]: Starting aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway...
+Nov 21 17:26:58 ai-ms-s1-max-01 systemd[1]: Started aihost-orchestrator-gateway.service - T5820 authenticated engineering orchestrator gateway.
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: evidence_anchor head=ef981fd79b6d2c331b741a14deaf74f43e128e929431dba8a15d6f81bf03252d records=21 at=2026-11-21T17:26:58.833036+00:00
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Started server process [260873]
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Waiting for application startup.
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Application startup complete.
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Started server process [260873]
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Waiting for application startup.
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Application startup complete.
+Nov 21 17:26:58 ai-ms-s1-max-01 python3[260873]: INFO:     Uvicorn running on https://10.0.8.6:8443 (Press CTRL+C to quit)
