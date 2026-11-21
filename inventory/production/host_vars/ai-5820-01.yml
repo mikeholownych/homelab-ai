@@ -380,6 +380,13 @@ orchestrator_gateway_routes:
     pool: rocm
     fallback: []
     reasoning: {mode: "off", answer_allowance: 8192}
+  - id: engineering-auto
+    match: {model: [engineering/auto]}
+    pool: lead
+    fallback: [deep, rocm]
+    strategy: quality_first
+    fallback_on_saturation: true
+    reasoning: {mode: "off", answer_allowance: 8192}
   - id: default
     match: {}
     pool: lead
@@ -392,6 +399,11 @@ orchestrator_gateway_model_aliases:
   # demanding tasks through this alias. The observed gain was 6.7 points at 2-3x time per task.
   engineering/lead-reasoning: {pool: lead, reasoning: {mode: "on", budget: 8192, answer_allowance: 8192}}
   engineering/interactive-rocm: {pool: rocm, reasoning: {mode: "off", answer_allowance: 8192}}
+# Relative pool quality for the quality_first strategy (engineering/auto); matches QualityModel defaults.
+orchestrator_gateway_pool_quality_weights:
+  lead: 2.0
+  deep: 3.0
+  rocm: 2.5
 # R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
 # Every client token below is a Vault record (roles/vault_platform_credentials); rotate through Vault.
 orchestrator_gateway_vault_managed_clients: [nexus, opencode, operator, qualification, ansible-admin]

@@ -179,6 +179,8 @@ node_exporter_listen_address: "10.0.8.6:9100"
 # local-ai volume is XFS). thermal_zone works on this host, so it stays enabled. The other collectors that report
 # success=0 (bonding, conntrack, infiniband, ipvs, nfs, rapl, zfs, ...) are absent on this host and cost nothing.
 node_exporter_disabled_collectors: [xfs]
+# TTY1 monitoring console (vllm-top, built from ~/Projects/vllm-top)
+vllm_top_console_enabled: true
 # Scheduled lifecycle timers are OFF on the host, exactly as on ai-5820-01: reconciliation runs from the controller
 # (roles/reconcile_controller, aihost-reconcile-ai-ms-s1-max-01.timer) because the gateway CA key lives there, and
 # there is no /opt/local-ai snapshot on the appliance for the on-host runner.
