@@ -56,7 +56,7 @@ def test_winner_pins_match_bakeoff_recommendation():
     assert worker["model_file"] == "Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf"
     assert worker["port"] == 8101
     assert worker["context"] == 65536
-    assert worker["args"] == ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4"]
+    assert worker["args"] == ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4", "--metrics"]
 
 def test_hip_role_is_disabled_by_default_and_fail_closed():
     defaults = load("roles/llama_cpp_hip/defaults/main.yml")

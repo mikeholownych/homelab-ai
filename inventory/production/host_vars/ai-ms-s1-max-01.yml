@@ -69,7 +69,8 @@ llama_cpp_hip_workers:
     context: 65536
     model_file: Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
     model_source: /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
-    args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4"]
+    # --metrics: gateway /health.engine_stats for vllm-top (without it llama-server returns 501 on /metrics).
+    args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4", "--metrics"]
 
 # Phase 3c: ROCm-only local gateway (parallel alias engineering/interactive-rocm). The Intel aliases
 # engineering/lead and engineering/deep stay on ai-5820-01 and must never be declared here.

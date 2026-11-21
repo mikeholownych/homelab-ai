@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5
+
+**Added** — AMD GPU telemetry via the kernel `amdgpu` hwmon/sysfs interface when `xpu-smi` is absent
+(power, edge temperature, `gpu_busy_percent`, VRAM used/total). Fixes empty GPU panels on ROCm hosts
+such as Strix Halo (`unavailable (no GPU telemetry tool found)`).
+
 ## 1.0.4
 
 **Fixed** — The `localhost:8000` startup placeholder no longer lingers as a refused instance when the console starts

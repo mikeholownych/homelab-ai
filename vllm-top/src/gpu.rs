@@ -1,22 +1,30 @@
-//! Best-effort local GPU telemetry via Intel's `xpu-smi`, when present.
+//! Best-effort local GPU telemetry.
 //!
-//! This is deliberately vendor-agnostic in spirit: it shells out to
-//! whatever GPU telemetry tool is actually installed rather than assuming
-//! one exists. Today that's `xpu-smi` (Intel); there is no dependency on
-//! any NVIDIA-specific tooling, and none is introduced by design — if
-//! `xpu-smi` isn't present (e.g. on an NVIDIA box), this degrades to an
-//! empty result immediately, cheaply, every time.
+//! Prefer Intel `xpu-smi` when it discovers devices. Otherwise fall back to
+//! the kernel `amdgpu` sysfs/hwmon interface (no privileges, no `rocm-smi`
+//! dependency) so AMD hosts such as Strix Halo still show power/temp/util.
+//! If neither path finds a device, discovery returns empty and the UI shows
+//! "unavailable (no GPU telemetry tool found)".
 //!
 //! `xpu-smi` reports several fields as unavailable (`N/A`) on at least one
 //! real deployment this was built against — utilization, temperature and
 //! memory bandwidth are absent from its own JSON output in that case,
 //! which this treats as a hard "unsupported," never a fabricated zero.
-//! Only fields the tool actually reports are ever populated here.
+//! Only fields a backend actually reports are ever populated here.
 
 use serde::Deserialize;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc;
+use std::sync::{mpsc, OnceLock};
 use std::time::Duration;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TelemetryBackend {
+    Xpu,
+    AmdGpu,
+}
+
+static BACKEND: OnceLock<TelemetryBackend> = OnceLock::new();
 
 /// Static device properties — fetched once at startup, never polled again
 /// (a GPU's name and installed memory don't change during a session, and
@@ -55,12 +63,59 @@ pub struct GpuStats {
 
 /// Fetch each GPU's static identity/capacity once. Call at startup only.
 pub fn discover_static() -> Vec<GpuInfo> {
+    let xpu = discover_xpu_static();
+    if !xpu.is_empty() {
+        let _ = BACKEND.set(TelemetryBackend::Xpu);
+        return xpu;
+    }
+    let amd = discover_amdgpu_static(Path::new("/sys/class/hwmon"));
+    if !amd.is_empty() {
+        let _ = BACKEND.set(TelemetryBackend::AmdGpu);
+    }
+    amd
+}
+
+fn discover_xpu_static() -> Vec<GpuInfo> {
     let indices = discover_indices();
     let handles: Vec<_> = indices
         .into_iter()
         .map(|i| std::thread::spawn(move || static_info_for(i)))
         .collect();
     handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+}
+
+/// Discover AMD GPUs from `hwmon` entries named `amdgpu` (PCI function + VRAM size).
+pub fn discover_amdgpu_static(hwmon_root: &Path) -> Vec<GpuInfo> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(hwmon_root) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if read_trimmed(&dir.join("name")).as_deref() != Some("amdgpu") {
+            continue;
+        }
+        let Ok(device) = std::fs::canonicalize(dir.join("device")) else {
+            continue;
+        };
+        let Some(bdf) = device.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
+            continue;
+        };
+        let index = out.len() as u32;
+        let mem_total_mib = read_u64(&device.join("mem_info_vram_total")).map(|b| b as f64 / (1024.0 * 1024.0));
+        let device_name = read_trimmed(&device.join("product_name"))
+            .filter(|s| !s.is_empty())
+            .or_else(|| Some("AMD Radeon Graphics".to_string()));
+        out.push(GpuInfo {
+            index,
+            device_name,
+            pci_bdf: Some(bdf),
+            mem_total_mib,
+            pcie_generation: None,
+            pcie_max_link_width: None,
+        });
+    }
+    out
 }
 
 fn static_info_for(index: u32) -> Option<GpuInfo> {
@@ -94,17 +149,20 @@ fn static_info_for(index: u32) -> Option<GpuInfo> {
     })
 }
 
-/// Probe every GPU `xpu-smi` reports, each bounded so one slow/hung device
-/// can't stall the others or the caller. Returns an empty vec (cheaply) if
-/// `xpu-smi` isn't installed at all.
+/// Probe every GPU discovered at startup. Returns an empty vec (cheaply) when
+/// no telemetry backend found devices.
 ///
 /// `targets` are the devices found once at startup (`discover_static`). They are deliberately *not*
 /// rediscovered here: `xpu-smi discovery` also queries GPU firmware over the MEI interface (root-only),
 /// which fails for an unprivileged monitor and logged hundreds of syslog lines a minute, and the device
-/// list cannot change while the monitor runs.
+/// list cannot change while the monitor runs. The AMD path likewise reuses the startup BDF list and
+/// only reads live sysfs counters.
 pub fn probe(targets: &[(u32, Option<String>)]) -> Vec<GpuStats> {
     if targets.is_empty() {
         return Vec::new();
+    }
+    if BACKEND.get() == Some(&TelemetryBackend::AmdGpu) {
+        return probe_amdgpu(targets, Path::new("/sys/class/hwmon"));
     }
     let handles: Vec<_> = targets
         .iter()
@@ -122,6 +180,116 @@ pub fn probe(targets: &[(u32, Option<String>)]) -> Vec<GpuStats> {
         })
         .collect();
     handles.into_iter().filter_map(|h| h.join().ok().flatten()).collect()
+}
+
+/// Live AMD counters from `amdgpu` hwmon + PCI sysfs (matched by BDF).
+pub fn probe_amdgpu(targets: &[(u32, Option<String>)], hwmon_root: &Path) -> Vec<GpuStats> {
+    targets
+        .iter()
+        .filter_map(|(index, bdf)| {
+            let bdf = bdf.as_deref()?;
+            amdgpu_stats_for(*index, bdf, hwmon_root)
+        })
+        .collect()
+}
+
+fn amdgpu_stats_for(index: u32, bdf: &str, hwmon_root: &Path) -> Option<GpuStats> {
+    let device = amdgpu_device_for_bdf(hwmon_root, bdf)?;
+    let (temp_c, _) = amdgpu_hwmon_temps(hwmon_root, bdf).unwrap_or((None, None));
+    let power_w = amdgpu_hwmon_power_w(hwmon_root, bdf);
+    let mem_used_mib = read_u64(&device.join("mem_info_vram_used")).map(|b| b as f64 / (1024.0 * 1024.0));
+    let mem_total_mib = read_u64(&device.join("mem_info_vram_total")).map(|b| b as f64 / (1024.0 * 1024.0));
+    let mem_util_percent = match (mem_used_mib, mem_total_mib) {
+        (Some(used), Some(total)) if total > 0.0 => Some((100.0 * used / total).clamp(0.0, 100.0)),
+        _ => None,
+    };
+    let util_percent = read_trimmed(&device.join("gpu_busy_percent")).and_then(|s| s.parse::<f64>().ok());
+    Some(GpuStats {
+        index,
+        temp_c,
+        vram_temp_c: None,
+        power_w,
+        mem_used_mib,
+        mem_util_percent,
+        util_percent,
+    })
+}
+
+fn amdgpu_device_for_bdf(hwmon_root: &Path, bdf: &str) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(hwmon_root).ok()?.flatten() {
+        let dir = entry.path();
+        if read_trimmed(&dir.join("name")).as_deref() != Some("amdgpu") {
+            continue;
+        }
+        let device = std::fs::canonicalize(dir.join("device")).ok()?;
+        if device.file_name().and_then(|n| n.to_str()) == Some(bdf) {
+            return Some(device);
+        }
+    }
+    None
+}
+
+fn amdgpu_hwmon_temps(hwmon_root: &Path, bdf: &str) -> Option<(Option<f64>, Option<f64>)> {
+    for entry in std::fs::read_dir(hwmon_root).ok()?.flatten() {
+        let dir = entry.path();
+        if read_trimmed(&dir.join("name")).as_deref() != Some("amdgpu") {
+            continue;
+        }
+        let device = std::fs::canonicalize(dir.join("device")).ok()?;
+        if device.file_name().and_then(|n| n.to_str()) != Some(bdf) {
+            continue;
+        }
+        let mut edge = None;
+        let mut junction = None;
+        for n in 1..=32 {
+            let Some(label) = read_trimmed(&dir.join(format!("temp{n}_label"))) else {
+                // Some amdgpu builds expose temp1_input without a label — treat as edge.
+                if n == 1 {
+                    if let Some(milli) = read_trimmed(&dir.join("temp1_input")).and_then(|v| v.parse::<f64>().ok()) {
+                        edge = Some(milli / 1000.0);
+                    }
+                }
+                continue;
+            };
+            let Some(milli) = read_trimmed(&dir.join(format!("temp{n}_input"))).and_then(|v| v.parse::<f64>().ok()) else {
+                continue;
+            };
+            match label.as_str() {
+                "edge" => edge = Some(milli / 1000.0),
+                "junction" | "hotspot" => junction = Some(milli / 1000.0),
+                _ => {}
+            }
+        }
+        return Some((edge.or(junction), None));
+    }
+    None
+}
+
+fn amdgpu_hwmon_power_w(hwmon_root: &Path, bdf: &str) -> Option<f64> {
+    for entry in std::fs::read_dir(hwmon_root).ok()?.flatten() {
+        let dir = entry.path();
+        if read_trimmed(&dir.join("name")).as_deref() != Some("amdgpu") {
+            continue;
+        }
+        let device = std::fs::canonicalize(dir.join("device")).ok()?;
+        if device.file_name().and_then(|n| n.to_str()) != Some(bdf) {
+            continue;
+        }
+        // microwatts → watts
+        return read_trimmed(&dir.join("power1_average"))
+            .or_else(|| read_trimmed(&dir.join("power1_input")))
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|uw| uw / 1_000_000.0);
+    }
+    None
+}
+
+fn read_trimmed(path: &Path) -> Option<String> {
+    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+}
+
+fn read_u64(path: &Path) -> Option<u64> {
+    read_trimmed(path)?.parse().ok()
 }
 
 /// Idle residency (ms) of GT0 for the Xe GPU at `bdf`: `<root>/<bdf>/tile0/gt0/gtidle/idle_residency_ms`.
@@ -489,7 +657,7 @@ mod tests {
 
 #[cfg(test)]
 mod hwmon_tests {
-    use super::hwmon_temps;
+    use super::{discover_amdgpu_static, hwmon_temps, probe_amdgpu};
     use std::fs;
     use std::path::Path;
 
@@ -536,6 +704,47 @@ mod hwmon_tests {
         let _ = fs::remove_dir_all(&p);
         fs::create_dir_all(&p).unwrap();
         p
+    }
+
+    fn fake_amdgpu(root: &Path, hw: &str, bdf: &str, edge_milli: &str, power_uw: &str, vram_total: &str, vram_used: &str, busy: &str) {
+        let dev = root.join("pci").join(bdf);
+        fs::create_dir_all(&dev).unwrap();
+        write(&dev.join("mem_info_vram_total"), &format!("{vram_total}\n"));
+        write(&dev.join("mem_info_vram_used"), &format!("{vram_used}\n"));
+        write(&dev.join("gpu_busy_percent"), &format!("{busy}\n"));
+        write(&dev.join("product_name"), "AMD Radeon Graphics\n");
+        let hwdir = root.join("hwmon").join(hw);
+        fs::create_dir_all(&hwdir).unwrap();
+        write(&hwdir.join("name"), "amdgpu\n");
+        std::os::unix::fs::symlink(&dev, hwdir.join("device")).unwrap();
+        write(&hwdir.join("temp1_label"), "edge\n");
+        write(&hwdir.join("temp1_input"), &format!("{edge_milli}\n"));
+        write(&hwdir.join("power1_average"), &format!("{power_uw}\n"));
+    }
+
+    #[test]
+    fn discovers_amdgpu_devices_from_hwmon() {
+        let t = tempfile_dir();
+        fake_amdgpu(&t, "hwmon6", "0000:bd:00.0", "24000", "9013000", "536870912", "202784768", "0");
+        let found = discover_amdgpu_static(&t.join("hwmon"));
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].pci_bdf.as_deref(), Some("0000:bd:00.0"));
+        assert_eq!(found[0].device_name.as_deref(), Some("AMD Radeon Graphics"));
+        assert!((found[0].mem_total_mib.unwrap() - 512.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn probes_amdgpu_power_temp_util_and_vram() {
+        let t = tempfile_dir();
+        fake_amdgpu(&t, "hwmon6", "0000:bd:00.0", "24000", "9013000", "536870912", "202784768", "37");
+        let stats = probe_amdgpu(&[(0, Some("0000:bd:00.0".into()))], &t.join("hwmon"));
+        assert_eq!(stats.len(), 1);
+        let s = &stats[0];
+        assert_eq!(s.temp_c, Some(24.0));
+        assert!((s.power_w.unwrap() - 9.013).abs() < 0.001);
+        assert_eq!(s.util_percent, Some(37.0));
+        assert!((s.mem_used_mib.unwrap() - 193.375).abs() < 0.1);
+        assert!((s.mem_util_percent.unwrap() - 37.79).abs() < 0.1);
     }
 }
 
