@@ -11,7 +11,15 @@ from typing import Any
 
 from .circuit_breaker import CircuitBreakerRegistry
 from .reasoning import RoutePolicy
-from .smart_router import CostModel, LatencyTracker, PromptComplexityAnalyzer, ComplexityReport
+from .smart_router import (
+    CostModel,
+    LatencyTracker,
+    PromptComplexityAnalyzer,
+    ComplexityReport,
+    QualityModel,
+    preferred_pool_order,
+    quality_first_rank_key,
+)
 
 MATCH_KEYS = {
     "model", "task_class", "has_tools", "min_prompt_tokens", "max_prompt_tokens",
@@ -23,7 +31,7 @@ RULE_KEYS = {
 }
 OUTCOMES = ("pass", "fail", "partial")
 COMPLEXITY_TIERS = ("simple", "medium", "complex")
-ROUTING_STRATEGIES = ("first_match", "least_latency", "least_busy", "cost_optimized")
+ROUTING_STRATEGIES = ("first_match", "least_latency", "least_busy", "cost_optimized", "quality_first")
 
 
 class RouteConfigError(ValueError):
@@ -217,6 +225,7 @@ class Router:
         circuit_breakers: CircuitBreakerRegistry | None = None,
         latency_tracker: LatencyTracker | None = None,
         cost_model: CostModel | None = None,
+        quality_model: QualityModel | None = None,
     ) -> None:
         if not rules:
             raise RouteConfigError("route table must contain at least one rule")
@@ -234,6 +243,7 @@ class Router:
         self.circuit_breakers = circuit_breakers
         self.latency_tracker = latency_tracker or LatencyTracker()
         self.cost_model = cost_model or CostModel()
+        self.quality_model = quality_model or QualityModel()
 
     def update_rules(self, rules: list[RouteRule], aliases: dict[str, str] | None = None) -> None:
         """Atomically update rules and aliases while preserving tracker and circuit breaker state."""
@@ -260,6 +270,7 @@ class Router:
         circuit_breakers: CircuitBreakerRegistry | None = None,
         latency_tracker: LatencyTracker | None = None,
         cost_model: CostModel | None = None,
+        quality_model: QualityModel | None = None,
     ) -> "Router":
         if not isinstance(rules_cfg, list):
             raise RouteConfigError("routes must be a list of rules")
@@ -343,7 +354,7 @@ class Router:
                 canary=_split(raw.get("canary"), "canary", rule_id), shadow=_split(raw.get("shadow"), "shadow", rule_id),
                 evidence=tuple(evidence),
             ))
-        return cls(rules, parsed_aliases, circuit_breakers=circuit_breakers, latency_tracker=latency_tracker, cost_model=cost_model)
+        return cls(rules, parsed_aliases, circuit_breakers=circuit_breakers, latency_tracker=latency_tracker, cost_model=cost_model, quality_model=quality_model)
 
     def referenced_pools(self) -> set[str]:
         pools = set(self.aliases.values())
@@ -367,6 +378,10 @@ class Router:
         request: dict[str, Any] | None = None,
         complexity_score: float | None = None,
     ) -> RouteDecision:
+        # An omitted or blank model is the engineering/auto request.
+        if model is None or (isinstance(model, str) and not model.strip()):
+            model = "engineering/auto"
+
         # A model name that is an alias for a pool is an explicit client choice and bypasses the table.
         if model is not None and model in self.alias_specs:
             spec = self.alias_specs[model]
@@ -438,6 +453,28 @@ class Router:
                             fallback_pools = [p for p in all_candidate_pools if p != cheapest_pool]
                             target_pool = cheapest_pool
                             reason += f"; optimized for cost (simple tier task routed to '{cheapest_pool}')"
+
+                elif rule.strategy == "quality_first":
+                    all_candidate_pools = [target_pool, *fallback_pools]
+                    if self.circuit_breakers is not None:
+                        healthy = [p for p in all_candidate_pools if self.circuit_breakers.is_pool_available(p)]
+                        unhealthy = [p for p in all_candidate_pools if p not in healthy]
+                    else:
+                        healthy, unhealthy = list(all_candidate_pools), []
+                    order = preferred_pool_order(complexity, has_tools=has_tools)
+                    healthy.sort(
+                        key=lambda p: quality_first_rank_key(
+                            p,
+                            order=order,
+                            quality=self.quality_model,
+                            latency_tracker=self.latency_tracker,
+                        )
+                    )
+                    ranked = healthy + unhealthy
+                    if ranked:
+                        target_pool = ranked[0]
+                        fallback_pools = ranked[1:]
+                        reason += f"; optimized for quality_first (fit order {order})"
 
                 return RouteDecision(
                     rule_id=rule.rule_id,
