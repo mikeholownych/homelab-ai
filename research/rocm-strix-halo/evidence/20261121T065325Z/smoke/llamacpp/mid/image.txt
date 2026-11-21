@@ -1,0 +1,6 @@
+image_ref=ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184
+image_id=66c5e19811caa9344bf9df5b9e745757fd73c9dab8ad4bae2433072d875e9cec
+digest=sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184
+repo_digests=[ghcr.io/ggml-org/llama.cpp@sha256:7cff8bf82a43ba2901375eab4f78ba04753eded58ccf42b213707cbbbb0835df ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184]
+created=2026-11-17 06:13:55.782763086 +0000 UTC
+size_bytes=22991771869

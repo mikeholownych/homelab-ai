@@ -107,6 +107,17 @@
         - llama_cpp_container_enabled | default(false) | bool
       tags: [site, gpu, runtime, inference, llama_cpp, llama]
 
+    - name: Include llama.cpp HIP role for ROCm containerized inference nodes
+      ansible.builtin.include_role:
+        name: llama_cpp_hip
+        apply:
+          tags: [site, gpu, runtime, inference, llama_cpp_hip]
+      when:
+        - capabilities.gpu | default(false) | bool
+        - capabilities.inference | default(false) | bool
+        - llama_cpp_hip_enabled | default(false) | bool
+      tags: [site, gpu, runtime, inference, llama_cpp_hip]
+
     - name: Include authenticated orchestrator gateway for declared platforms
       ansible.builtin.include_role:
         name: orchestrator_gateway

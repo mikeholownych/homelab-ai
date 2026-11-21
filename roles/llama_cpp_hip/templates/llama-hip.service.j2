@@ -1,0 +1,47 @@
+[Unit]
+Description=llama.cpp HIP worker {{ llama_worker.container_name }}
+After=network-online.target user-runtime-dir@{{ llama_cpp_hip_uid }}.service
+Requires=user-runtime-dir@{{ llama_cpp_hip_uid }}.service
+Wants=network-online.target
+StartLimitIntervalSec=300s
+StartLimitBurst=3
+
+[Service]
+SuccessExitStatus=143
+Type=simple
+User={{ llama_cpp_hip_user }}
+Group={{ llama_cpp_hip_user }}
+SupplementaryGroups=render video
+WorkingDirectory={{ llama_cpp_hip_home }}
+Environment=XDG_RUNTIME_DIR=/run/user/{{ llama_cpp_hip_uid }}
+Environment=TMPDIR={{ llama_cpp_hip_storage_root }}/tmp
+ExecStartPre=-/usr/bin/podman rm -f {{ llama_worker.container_name }}
+ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
+  --network host --security-opt no-new-privileges \
+  --device /dev/kfd --device /dev/dri --group-add keep-groups \
+{% for env_key, env_value in (llama_worker.env | default({})).items() %}
+  -e {{ env_key }}={{ env_value }} \
+{% endfor %}
+  -v {{ llama_cpp_hip_model_dir }}:/models:ro \
+  {{ llama_cpp_hip_image }}@{{ llama_cpp_hip_digest }} \
+  -m /models/{{ llama_worker.model_file }} -c {{ llama_worker.context }} \
+  --host {{ llama_cpp_hip_host }} --port {{ llama_worker.port }} \
+  --alias {{ llama_worker.served_name }} \
+  {{ (llama_worker.args | default(llama_cpp_hip_default_args)) | join(' ') }}
+ExecStop=/usr/bin/podman stop -t 20 {{ llama_worker.container_name }}
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=900s
+TimeoutStopSec=60s
+KillMode=control-group
+LimitNOFILE=65536
+LimitMEMLOCK=infinity
+Delegate=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ llama_cpp_hip_home }} {{ llama_cpp_hip_storage_root }} /run/user/{{ llama_cpp_hip_uid }}
+PrivateTmp=true
+ProtectControlGroups=no
+
+[Install]
+WantedBy=multi-user.target

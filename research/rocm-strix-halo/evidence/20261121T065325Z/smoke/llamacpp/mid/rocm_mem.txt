@@ -1,0 +1,39 @@
+## before-load 2026-11-21T07:07:51Z
+WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status
+
+
+
+============================ ROCm System Management Interface ============================
+================================== Memory Usage (Bytes) ==================================
+GPU[0]		: GTT Total Memory (B): 65868955648
+GPU[0]		: GTT Total Used Memory (B): 18661376
+GPU[0]		: VRAM Total Memory (B): 536870912
+GPU[0]		: VRAM Total Used Memory (B): 188116992
+==========================================================================================
+================================== End of ROCm SMI Log ===================================
+## after-ready 2026-11-21T07:07:57Z
+WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status
+
+
+
+============================ ROCm System Management Interface ============================
+================================== Memory Usage (Bytes) ==================================
+GPU[0]		: GTT Total Memory (B): 65868955648
+GPU[0]		: GTT Total Used Memory (B): 34085707776
+GPU[0]		: VRAM Total Memory (B): 536870912
+GPU[0]		: VRAM Total Used Memory (B): 235941888
+==========================================================================================
+================================== End of ROCm SMI Log ===================================
+## after-requests 2026-11-21T07:07:59Z
+WARNING: AMD GPU device(s) is/are in a low-power state. Check power control/runtime_status
+
+
+
+============================ ROCm System Management Interface ============================
+================================== Memory Usage (Bytes) ==================================
+GPU[0]		: GTT Total Memory (B): 65868955648
+GPU[0]		: GTT Total Used Memory (B): 34174029824
+GPU[0]		: VRAM Total Memory (B): 536870912
+GPU[0]		: VRAM Total Used Memory (B): 236056576
+==========================================================================================
+================================== End of ROCm SMI Log ===================================

@@ -1,0 +1,8 @@
+{
+  "engine": "sglang",
+  "status": "unavailable",
+  "scope": "systemic (probe model, 4 attempts)",
+  "image": "docker.io/lmsysorg/sglang@sha256:a3a6eb293187b20012a5abc8f00423e6ab51d0169113a6e58a91da5614200170",
+  "reason": "image kernels (aiter, sgl_kernel) are gfx942-only; JIT build fails / segfault on gfx1151; see UNAVAILABLE.md",
+  "tok_s": null
+}

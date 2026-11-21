@@ -1,0 +1,2 @@
+[vllm/coder30b] warm
+{"kind": "warm_ttft", "prompt_tokens": 1863, "first_ttft_s": 4.498, "ttft_s": 0.757, "cached_tokens": null, "speedup": 5.94}

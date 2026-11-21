@@ -1,0 +1,16 @@
+{
+  "checklist": {
+    "ready_within_300s": true,
+    "tool_calls_supported": true,
+    "stream_usage_reported": true,
+    "prefix_cache_effective": true,
+    "stable_no_oom_or_crash": true,
+    "gtt_headroom_ge_8GiB": true,
+    "digest_pinned_no_hsa_override": true
+  },
+  "items_pass": 7,
+  "items_total": 7,
+  "ready_seconds": 235,
+  "gtt_used_peak_gib": 48.16,
+  "gtt_total_gib": 61.35
+}

@@ -1,0 +1,20 @@
+{
+  "messages": [
+    {"role": "user", "content": "Call tool echo with text=ping, then stop."}
+  ],
+  "tools": [{
+    "type": "function",
+    "function": {
+      "name": "echo",
+      "description": "Echo text",
+      "parameters": {
+        "type": "object",
+        "properties": {"text": {"type": "string"}},
+        "required": ["text"]
+      }
+    }
+  }],
+  "tool_choice": "auto",
+  "max_tokens": 256,
+  "temperature": 0
+}

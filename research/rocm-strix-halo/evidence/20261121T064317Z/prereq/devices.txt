@@ -1,0 +1,4 @@
+Linux ai-ms-s1-max-01 7.0.0-44-generic #44-Ubuntu SMP PREEMPT_DYNAMIC Fri Nov  6 02:38:04 UTC 2026 x86_64 GNU/Linux
+crw-rw---- 1 root render 261,   0 Nov 21 03:59 /dev/accel/accel0
+crw-rw---- 1 root render 226, 128 Nov 21 03:59 /dev/dri/renderD128
+crw-rw---- 1 root render 511,   0 Nov 21 03:59 /dev/kfd

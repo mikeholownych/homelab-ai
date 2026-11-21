@@ -1,0 +1,11 @@
+{
+  "base_url": "http://127.0.0.1:8103",
+  "model": "qwen3-4b-instruct-2507",
+  "prompt": "/home/mike/rocm-bake/research/rocm-strix-halo/harness/../prompts/smoke_chat.json",
+  "http_status": 500,
+  "seconds": 21.801171,
+  "curl_exit": 0,
+  "curl_stderr": "",
+  "ok": false,
+  "body": "Internal Server Error"
+}

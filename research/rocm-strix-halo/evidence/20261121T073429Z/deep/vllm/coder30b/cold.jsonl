@@ -1,0 +1,3 @@
+[vllm/coder30b] cold
+{"mode": "longctx", "target_tokens": 2048, "prompt_tokens": 2030, "ttft_s": 4.81, "prefill_tok_s": 422.0}
+{"mode": "longctx", "target_tokens": 8192, "prompt_tokens": 8024, "ttft_s": 20.87, "prefill_tok_s": 384.0}

@@ -1,0 +1,15 @@
+{
+  "engine": "llamacpp",
+  "model_kind": "q36_35b",
+  "model_id": "qwen3.6-35b-a3b-ud-q6_k",
+  "status": "pass",
+  "reason": "deep measurements recorded",
+  "image": "ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+  "port": 8101,
+  "started_at": "2026-11-21T07:42:20Z",
+  "ready_seconds": 9,
+  "chat_seconds": null,
+  "chat_content": null,
+  "tools_seconds": null,
+  "tools_supported": null
+}

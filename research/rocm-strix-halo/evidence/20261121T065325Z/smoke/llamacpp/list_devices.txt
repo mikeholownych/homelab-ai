@@ -1,0 +1,2 @@
+Available devices:
+  ROCm0: Radeon 8060S Graphics (62817 MiB, 62813 MiB free)

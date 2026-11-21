@@ -1,0 +1,12 @@
+{
+  "base_url": "http://127.0.0.1:8103",
+  "model": "qwen3-4b-instruct-2507",
+  "prompt": "/home/mike/rocm-bake/research/rocm-strix-halo/harness/../prompts/smoke_tools.json",
+  "http_status": 0,
+  "seconds": 0.000112,
+  "curl_exit": 7,
+  "curl_stderr": "curl: (7) Failed to connect to 127.0.0.1 port 8103 after 0 ms: Could not connect to server",
+  "ok": false,
+  "body": "",
+  "tools_supported": false
+}

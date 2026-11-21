@@ -1,0 +1,62 @@
+{
+  "base_url": "http://127.0.0.1:8102",
+  "model": "qwen3-coder-30b-a3b-fp8",
+  "prompt": "/home/mike/rocm-bake/research/rocm-strix-halo/harness/../prompts/smoke_tools.json",
+  "http_status": 200,
+  "seconds": 4.403944,
+  "curl_exit": 0,
+  "curl_stderr": "",
+  "ok": true,
+  "body": {
+    "id": "chatcmpl-b316edf31710ae4b",
+    "object": "chat.completion",
+    "created": 1795246009,
+    "model": "qwen3-coder-30b-a3b-fp8",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "refusal": null,
+          "annotations": null,
+          "audio": null,
+          "function_call": null,
+          "tool_calls": [
+            {
+              "id": "chatcmpl-tool-9d3d0d1a28b55338",
+              "type": "function",
+              "function": {
+                "name": "echo",
+                "arguments": "{\"text\": \"ping\"}"
+              }
+            }
+          ],
+          "reasoning": null
+        },
+        "logprobs": null,
+        "finish_reason": "tool_calls",
+        "stop_reason": null,
+        "token_ids": null,
+        "routed_experts": null,
+        "weight_versions": null
+      }
+    ],
+    "service_tier": null,
+    "system_fingerprint": "vllm-0.33.0+strix-a26a7b8c",
+    "usage": {
+      "prompt_tokens": 283,
+      "total_tokens": 304,
+      "completion_tokens": 21,
+      "prompt_tokens_details": null,
+      "completion_tokens_details": null
+    },
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "prompt_text": null,
+    "kv_transfer_params": null,
+    "ec_transfer_params": null,
+    "metrics": null
+  },
+  "tools_supported": true
+}

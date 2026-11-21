@@ -23,9 +23,9 @@ def test_ms_s1_max_host_vars_phase1_contract():
     assert hv["os_tuning_profile"] == "baseline"
     assert hv["node_metadata"]["hostname"] == "ai-ms-s1-max-01"
     assert hv["node_metadata"]["hardware_profile"] == "ms_s1_max_strix_halo"
-    assert hv["node_roles"]["inference"] is False
+    # Phase 1 kept inference off; Phase 2d enables it for the winner only
+    # (see test_ms_s1_max_engine_wire_contract.py).
     assert hv["node_roles"]["gpu"] is True
-    assert hv["capabilities"]["inference"] is False
     assert hv["capabilities"]["gpu"] is True
     assert hv["users_local_ai_manage_device_groups"] is True
     assert hv["users_local_ai_device_groups"] == ["render", "video"]

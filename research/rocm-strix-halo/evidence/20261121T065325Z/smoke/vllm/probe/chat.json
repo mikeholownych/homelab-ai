@@ -1,0 +1,51 @@
+{
+  "base_url": "http://127.0.0.1:8102",
+  "model": "qwen3-4b-instruct-2507",
+  "prompt": "/home/mike/rocm-bake/research/rocm-strix-halo/harness/../prompts/smoke_chat.json",
+  "http_status": 200,
+  "seconds": 0.501756,
+  "curl_exit": 0,
+  "curl_stderr": "",
+  "ok": true,
+  "body": {
+    "id": "chatcmpl-904e0a8ae02053cd",
+    "object": "chat.completion",
+    "created": 1795244161,
+    "model": "qwen3-4b-instruct-2507",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "ok",
+          "refusal": null,
+          "annotations": null,
+          "audio": null,
+          "function_call": null,
+          "reasoning": null
+        },
+        "logprobs": null,
+        "finish_reason": "stop",
+        "stop_reason": null,
+        "token_ids": null,
+        "routed_experts": null,
+        "weight_versions": null
+      }
+    ],
+    "service_tier": null,
+    "system_fingerprint": "vllm-0.33.0+strix-b53f55ea",
+    "usage": {
+      "prompt_tokens": 13,
+      "total_tokens": 15,
+      "completion_tokens": 2,
+      "prompt_tokens_details": null,
+      "completion_tokens_details": null
+    },
+    "prompt_logprobs": null,
+    "prompt_token_ids": null,
+    "prompt_text": null,
+    "kv_transfer_params": null,
+    "ec_transfer_params": null,
+    "metrics": null
+  }
+}

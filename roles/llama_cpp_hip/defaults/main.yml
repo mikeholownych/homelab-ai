@@ -1,0 +1,27 @@
+---
+# llama.cpp (ROCm/HIP) server workers for AMD Strix Halo (gfx1151) lab hosts. Parallel to llama_cpp_container,
+# which is SYCL-only (Intel device CDI, oneAPI env, inference-policy unit); nothing of that is shared here.
+# Workers run as rootless-podman systemd services under the runtime account and are declared in
+# llama_cpp_hip_workers. The image is pinned by digest (never a floating tag).
+llama_cpp_hip_enabled: false
+llama_cpp_hip_image: ghcr.io/ggml-org/llama.cpp
+llama_cpp_hip_digest: ""
+llama_cpp_hip_user: "{{ host_runtime_account.name | default('aihost-runtime') }}"
+llama_cpp_hip_home: "{{ host_runtime_account.home | default('/var/lib/aihost-runtime') }}"
+llama_cpp_hip_uid: "{{ host_runtime_uid | default(999) }}"
+# The runtime account's container store lives on the data volume: the image is ~23 GB and the root
+# filesystem of the lab host is small. TMPDIR (image copy staging) follows it.
+llama_cpp_hip_storage_root: /var/lib/local-ai/podman-{{ llama_cpp_hip_user }}
+llama_cpp_hip_model_dir: /var/lib/local-ai/models/gguf
+# Loopback only. The lab host has no gateway; the API is unauthenticated and must not be reachable from the LAN.
+llama_cpp_hip_host: 127.0.0.1
+llama_cpp_hip_default_args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1"]
+# name -> {service_name, container_name, port, context, model_file, [model_source], [args], [env]}
+#   model_source: absolute path of an already-downloaded model; it is hard-linked into llama_cpp_hip_model_dir
+#                 (same filesystem, no extra space, and valid inside the container mount).
+llama_cpp_hip_workers: {}
+# No gateway on lab hosts. Reserved for parity with llama_cpp_container; draining is not implemented here.
+llama_cpp_hip_drain_via_gateway: false
+llama_cpp_hip_health_retries: 90
+llama_cpp_hip_health_delay: 10
+llama_cpp_hip_evidence_dir: /var/lib/local-ai/evidence/llama-hip

@@ -1,0 +1,4 @@
+[llamacpp/coder30b] warmup
+{"mode": "longctx", "target_tokens": 512, "prompt_tokens": 530, "ttft_s": 0.49, "prefill_tok_s": 1079.0}
+{"mode": "longctx", "target_tokens": 2048, "prompt_tokens": 2031, "ttft_s": 1.39, "prefill_tok_s": 1463.0}
+{"mode": "longctx", "target_tokens": 8192, "prompt_tokens": 8025, "ttft_s": 6.53, "prefill_tok_s": 1229.0}

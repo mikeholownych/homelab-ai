@@ -1,0 +1,23 @@
+{
+  "ok": true,
+  "runtime": "podman",
+  "kfd": true,
+  "render_nodes": [
+    "/dev/dri/renderD128"
+  ],
+  "accel0": true,
+  "user": "mike",
+  "groups": [
+    "mike",
+    "adm",
+    "cdrom",
+    "sudo",
+    "dip",
+    "video",
+    "plugdev",
+    "users",
+    "lxd",
+    "render"
+  ],
+  "errors": []
+}

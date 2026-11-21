@@ -1,0 +1,17 @@
+{
+    "endpoint": "http://127.0.0.1:8101/v1/models",
+    "http_status": 200,
+    "image": "ghcr.io/ggml-org/llama.cpp@sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+    "model_file": "Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf",
+    "served_models": [
+        "qwen3-coder-30b-a3b-instruct-q8_0"
+    ],
+    "service": "llama-hip-qwen3-coder-30b.service",
+    "worker": "qwen3_coder_30b_q8"
+}
+
+LISTEN 0      512        127.0.0.1:8101      0.0.0.0:*          
+aihost-runtime:x:999:983:Local AI inference service account:/var/lib/aihost-runtime:/usr/sbin/nologin
+podman version 5.7.0
+GPU[0]		: GTT Total Memory (B): 65868955648
+GPU[0]		: GTT Total Used Memory (B): 38997647360

@@ -1,0 +1,4 @@
+[vllm/q36_35b] batch
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 256, "wall_s": 28.57, "aggregate_tok_s": 9.0, "ttft_p50": 2.659, "ttft_p95": 2.659}
+{"mode": "batch", "level": 2, "requests": 4, "completion_tokens": 512, "wall_s": 46.96, "aggregate_tok_s": 10.9, "ttft_p50": 5.303, "ttft_p95": 5.324}
+{"mode": "batch", "level": 4, "requests": 8, "completion_tokens": 1024, "wall_s": 74.29, "aggregate_tok_s": 13.8, "ttft_p50": 7.951, "ttft_p95": 10.641}
