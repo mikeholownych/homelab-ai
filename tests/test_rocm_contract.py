@@ -114,3 +114,18 @@ def test_commission_has_rocm_phase_5b_with_deferred_engines():
     assert "'engines_deferred': true" in text
     names = [p["name"] for p in plays]
     assert names.index(phase5b["name"]) < next(i for i, n in enumerate(names) if n.startswith("Phase 6:"))
+
+
+def test_commission_omix_checkpoint_tasks_skip_on_rocm_hosts():
+    plays = load("playbooks/commission.yml")
+    phase5 = next(p for p in plays if p["name"].startswith("Phase 5:"))
+    guard = "not (rocm_install_enabled | default(false) | bool)"
+    gated = [
+        t for t in phase5["tasks"]
+        if "ansible.builtin.include_role" not in t
+    ]
+    assert len(gated) == 5
+    for task in gated:
+        assert guard in task["when"], task["name"]
+    persist = next(t for t in gated if t["name"] == "Persist OMIX evidence checkpoint")
+    assert persist["ansible.builtin.copy"]["dest"].endswith("checkpoints/omix.json")

@@ -255,10 +255,16 @@
       ansible.builtin.stat:
         path: /var/run/reboot-required
       register: commission_reboot_stat
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Register reboot_required fact
       ansible.builtin.set_fact:
         reboot_required: "{{ commission_reboot_stat.stat.exists | default(false) }}"
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Ensure checkpoints directory exists
       ansible.builtin.file:
@@ -267,6 +273,9 @@
         owner: root
         group: root
         mode: "0750"
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Persist OMIX evidence checkpoint
       ansible.builtin.copy:
@@ -289,6 +298,9 @@
         group: root
         mode: "0640"
         force: false
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
 
     - name: Operator checkpoint notice when reboot is required
       ansible.builtin.debug:
@@ -296,7 +308,10 @@
           Reboot is required after OMIX installation. Do not automatically reboot in this workflow.
           Execute playbooks/reboot-verify.yml --limit {{ inventory_hostname }}
           before proceeding to Phase 6 (gpu_validation).
-      when: reboot_required | bool
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
+        - reboot_required | bool
 
 - name: "Phase 5b: Pinned ROCm stack installation"
   hosts: ai_hosts
