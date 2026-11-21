@@ -1,0 +1,4 @@
+[vllm/q36_35b] warmup
+{"mode": "longctx", "target_tokens": 512, "prompt_tokens": 532, "ttft_s": 1.96, "prefill_tok_s": 272.0}
+{"mode": "longctx", "target_tokens": 2048, "prompt_tokens": 2032, "ttft_s": 4.94, "prefill_tok_s": 411.0}
+{"mode": "longctx", "target_tokens": 8192, "prompt_tokens": 8028, "ttft_s": 19.03, "prefill_tok_s": 422.0}

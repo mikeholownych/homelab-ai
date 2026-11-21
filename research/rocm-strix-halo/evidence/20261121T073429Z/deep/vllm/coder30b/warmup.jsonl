@@ -1,0 +1,4 @@
+[vllm/coder30b] warmup
+{"mode": "longctx", "target_tokens": 512, "prompt_tokens": 530, "ttft_s": 2.12, "prefill_tok_s": 250.0}
+{"mode": "longctx", "target_tokens": 2048, "prompt_tokens": 2031, "ttft_s": 27.9, "prefill_tok_s": 73.0}
+{"mode": "longctx", "target_tokens": 8192, "prompt_tokens": 8027, "ttft_s": 21.07, "prefill_tok_s": 381.0}

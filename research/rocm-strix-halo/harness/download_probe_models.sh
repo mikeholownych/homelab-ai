@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Download pinned shortlist artifacts (probe + mid-size) to the lab host model dir.
-# Usage: download_probe_models.sh probe|mid|all
+# Usage: download_probe_models.sh probe|mid|q36_35b|all   (q36_35b = Phase 2c deep member; not in 'all')
 # Revisions / sha256 are the pins in ../model-shortlist.md. GGUF files are verified
 # against the pinned sha256; HF safetensors repos are verified against the per-file
 # LFS sha256 reported by the HF tree API at the pinned revision.
@@ -62,4 +62,10 @@ if [[ "$WHAT" == mid || "$WHAT" == all ]]; then
     Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf 4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066 \
     Qwen3-Coder-30B-A3B-Instruct-GGUF
   hf_repo Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 dcaee4d4dfc5ee71ad501f01f530e5652438fde0 Qwen3-Coder-30B-A3B-Instruct-FP8
+fi
+if [[ "$WHAT" == q36_35b ]]; then
+  gguf unsloth/Qwen3.6-35B-A3B-GGUF a483e9e6cbd595906af30beda3187c2663a1118c \
+    Qwen3.6-35B-A3B-UD-Q6_K.gguf 4fe53b148b46f9b88830e2a3055c5b15c3a4d1e3ddc9a1384a108d8b9d59f043 \
+    Qwen3.6-35B-A3B-GGUF
+  hf_repo Qwen/Qwen3.6-35B-A3B-FP8 c653bba46dfa06e9658dcc0b0dc87fe4685f14a2 Qwen3.6-35B-A3B-FP8
 fi

@@ -1,0 +1,2 @@
+[vllm/q36_35b] warm
+{"kind": "warm_ttft", "prompt_tokens": 1865, "first_ttft_s": 4.848, "ttft_s": 2.282, "cached_tokens": null, "speedup": 2.12}

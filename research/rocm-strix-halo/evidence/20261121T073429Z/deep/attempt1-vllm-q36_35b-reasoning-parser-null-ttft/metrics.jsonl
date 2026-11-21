@@ -1,0 +1,11 @@
+{"kind": "cold_ttft", "mode": "longctx", "target_tokens": 2048, "prompt_tokens": 2033, "ttft_s": null, "prefill_tok_s": null}
+{"kind": "cold_ttft", "mode": "longctx", "target_tokens": 8192, "prompt_tokens": 8028, "ttft_s": null, "prefill_tok_s": null}
+{"kind": "batch", "mode": "batch", "level": 1, "requests": 2, "completion_tokens": 256, "wall_s": 28.51, "aggregate_tok_s": 9.0, "ttft_p50": null, "ttft_p95": null}
+{"kind": "batch", "mode": "batch", "level": 2, "requests": 4, "completion_tokens": 512, "wall_s": 46.75, "aggregate_tok_s": 11.0, "ttft_p50": null, "ttft_p95": null}
+{"kind": "batch", "mode": "batch", "level": 4, "requests": 8, "completion_tokens": 1024, "wall_s": 73.96, "aggregate_tok_s": 13.8, "ttft_p50": null, "ttft_p95": null}
+{"kind": "warm_ttft", "prompt_tokens": 1865, "first_ttft_s": null, "ttft_s": null, "cached_tokens": null, "speedup": null}
+{"kind": "quality", "probe": "echo_exact", "pass": true, "tool_calls": 1, "tool": "echo", "arguments": {"text": "ping"}}
+{"kind": "quality", "probe": "typed_args", "pass": true, "tool_calls": 1, "tool": "get_weather", "arguments": {"city": "Paris", "days": 3, "unit": "celsius"}}
+{"kind": "quality", "probe": "select_tool", "pass": true, "tool_calls": 1, "tool": "read_file", "arguments": {"path": "src/main.py"}}
+{"kind": "quality", "probe": "optional_int", "pass": true, "tool_calls": 1, "tool": "grep_repo", "arguments": {"pattern": "TODO", "max_results": 5}}
+{"kind": "ops", "checklist": {"ready_within_300s": false, "tool_calls_supported": true, "stream_usage_reported": true, "prefix_cache_effective": false, "stable_no_oom_or_crash": true, "gtt_headroom_ge_8GiB": true, "digest_pinned_no_hsa_override": true}, "items_pass": 5, "items_total": 7, "ready_seconds": 314, "gtt_used_peak_gib": 48.18, "gtt_total_gib": 61.35}

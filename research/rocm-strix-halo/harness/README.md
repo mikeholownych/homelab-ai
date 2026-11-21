@@ -33,3 +33,14 @@ Engine exit codes: `0` pass, `1` fail, `2` unavailable (SGLang writes `UNAVAILAB
 Images are pinned by digest in each script. `HSA_OVERRIDE_GFX_VERSION` is never set
 (gfx1151 native); vLLM forces `TRITON_ATTN`. Podman graphroot on the host was moved to
 `/var/lib/local-ai/podman-mike/storage` (root fs only has ~50 GiB free).
+
+## Phase 2c deep bake-off
+
+| Script | Purpose |
+| --- | --- |
+| `run_deep_bakeoff.sh ENGINE MODEL` / `all "e:m ..."` | One engine x model pair on the lab host (`llamacpp\|vllm` x `coder30b\|q36_35b`); writes `evidence/<ts>/deep/<engine>/<model>/metrics.jsonl` |
+| `deep_probe.py warm\|quality` | Warm-prefix TTFT and tool-call contract probes (complements `engine_sweep_client.py`) |
+| `scorecard.py <evidence/<ts>/deep>` | Weighted scores -> `scorecard.md` (SGLang has no deep runs: UNAVAILABLE in smoke) |
+| `download_probe_models.sh q36_35b` | Pinned Qwen3.6-35B-A3B GGUF + FP8 downloads |
+
+Run notes and caveats: `evidence/<ts>/deep/NOTES.md`; request shapes: `prompts/deep_batch_note.md`.

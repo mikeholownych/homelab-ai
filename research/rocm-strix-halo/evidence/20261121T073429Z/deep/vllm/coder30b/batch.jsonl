@@ -1,0 +1,4 @@
+[vllm/coder30b] batch
+{"mode": "batch", "level": 1, "requests": 2, "completion_tokens": 206, "wall_s": 30.86, "aggregate_tok_s": 6.7, "ttft_p50": 3.125, "ttft_p95": 3.125}
+{"mode": "batch", "level": 2, "requests": 4, "completion_tokens": 488, "wall_s": 57.59, "aggregate_tok_s": 8.5, "ttft_p50": 4.833, "ttft_p95": 5.401}
+{"mode": "batch", "level": 4, "requests": 8, "completion_tokens": 917, "wall_s": 93.77, "aggregate_tok_s": 9.8, "ttft_p50": 6.329, "ttft_p95": 10.78}

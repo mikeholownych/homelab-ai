@@ -1,0 +1,15 @@
+{
+  "engine": "vllm",
+  "model_kind": "q36_35b",
+  "model_id": "qwen3.6-35b-a3b-fp8",
+  "status": "pass",
+  "reason": "deep measurements recorded",
+  "image": "docker.io/kyuz0/vllm-therock-gfx1151@sha256:f8a7433d662b37b200ca19996d4013288071341ad514e66de69ea4871cfa3966",
+  "port": 8102,
+  "started_at": "2026-11-21T08:03:42Z",
+  "ready_seconds": 235,
+  "chat_seconds": null,
+  "chat_content": null,
+  "tools_seconds": null,
+  "tools_supported": null
+}

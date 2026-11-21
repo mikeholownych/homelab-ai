@@ -1,0 +1,5 @@
+[llamacpp/coder30b] quality
+{"kind": "quality", "probe": "echo_exact", "pass": true, "tool_calls": 1, "tool": "echo", "arguments": {"text": "ping"}}
+{"kind": "quality", "probe": "typed_args", "pass": true, "tool_calls": 1, "tool": "get_weather", "arguments": {"city": "Paris", "days": 3, "unit": "celsius"}}
+{"kind": "quality", "probe": "select_tool", "pass": true, "tool_calls": 1, "tool": "read_file", "arguments": {"path": "src/main.py"}}
+{"kind": "quality", "probe": "optional_int", "pass": true, "tool_calls": 1, "tool": "grep_repo", "arguments": {"pattern": "TODO", "max_results": 5}}

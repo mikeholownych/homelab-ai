@@ -1,0 +1,3 @@
+[vllm/q36_35b] cold
+{"mode": "longctx", "target_tokens": 2048, "prompt_tokens": 2033, "ttft_s": null, "prefill_tok_s": null}
+{"mode": "longctx", "target_tokens": 8192, "prompt_tokens": 8028, "ttft_s": null, "prefill_tok_s": null}
