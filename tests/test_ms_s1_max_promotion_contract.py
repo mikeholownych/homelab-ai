@@ -101,3 +101,49 @@ def test_ms_s1_gateway_does_not_replace_the_5820_controller_trust():
     assert hv["orchestrator_gateway_tls_pki_dir"].endswith("/pki/ai-ms-s1-max-01")
     intel = load("inventory/production/host_vars/ai-5820-01.yml")
     assert hv["orchestrator_gateway_tls_pki_dir"] != intel["orchestrator_gateway_tls_pki_dir"]
+
+
+def test_5820_advertises_ms_s1_rocm_worker_as_parallel_alias():
+    """Phase 3d: the 5820 gateway also serves the remote HIP worker; lead and deep stay Intel SYCL."""
+    hv = load("inventory/production/host_vars/ai-5820-01.yml")
+    aliases = hv["orchestrator_gateway_model_aliases"]
+    assert aliases["engineering/interactive-rocm"] == {
+        "pool": "rocm", "reasoning": {"mode": "off", "answer_allowance": 8192}}
+    assert aliases["engineering/lead"]["pool"] == "lead"
+    assert aliases["engineering/deep"]["pool"] == "deep"
+    assert aliases["engineering/lead-reasoning"]["pool"] == "lead"
+
+    routes = {route["id"]: route for route in hv["orchestrator_gateway_routes"]}
+    assert routes["interactive-rocm"]["match"] == {"model": ["engineering/interactive-rocm"]}
+    assert routes["interactive-rocm"]["pool"] == "rocm"
+    assert routes["interactive-rocm"]["fallback"] == []
+    # The new rule is explicit-model only: it must come before the catch-all and leave the default on the lead pool.
+    ids = [route["id"] for route in hv["orchestrator_gateway_routes"]]
+    assert ids.index("interactive-rocm") < ids.index("default")
+    assert routes["default"]["pool"] == "lead"
+    # No Intel rule may fall back to the remote pool.
+    for route in routes.values():
+        if route["id"] != "interactive-rocm":
+            assert "rocm" not in route.get("fallback", []), route["id"]
+
+    workers = {w["worker_id"]: w for w in hv["orchestrator_gateway_workers"]}
+    assert set(workers) == {"b0-live-llama-worker1", "b0-live-llama-deep-worker2", "ms-s1-hip-coder30b"}
+    assert workers["b0-live-llama-worker1"]["pool"] == "lead"
+    assert workers["b0-live-llama-worker1"]["endpoint"] == "http://127.0.0.1:8000"
+    assert workers["b0-live-llama-deep-worker2"]["pool"] == "deep"
+    assert workers["b0-live-llama-deep-worker2"]["endpoint"] == "http://127.0.0.1:8001"
+    assert hv["orchestrator_gateway_production_worker_count"] == 3
+
+    rocm = workers["ms-s1-hip-coder30b"]
+    ms_s1 = load(f"inventory/production/host_vars/{HOST}.yml")
+    (ms_s1_worker,) = ms_s1["orchestrator_gateway_workers"]
+    assert rocm["pool"] == "rocm"
+    assert rocm["endpoint"] == "http://10.0.8.6:8101"
+    assert rocm["port"] == 8101
+    assert rocm["credential_source"] == "/etc/local-ai/orchestrator/remote-ms-s1-hip-api-key"
+    assert rocm["credential_name"] == "worker-ms-s1-hip-token" == rocm["token_file"]
+    # Identity fields are the MS-S1 worker's own, so the 5820 registry describes the same artifact.
+    for key in ("public_model_id", "model_id", "revision", "artifact_digest", "runtime_image_digest", "topology",
+                "hardware_class", "context_limit", "max_concurrency", "capabilities"):
+        assert rocm[key] == ms_s1_worker[key], key
+

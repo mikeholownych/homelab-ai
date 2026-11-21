@@ -1,0 +1,328 @@
+[WARNING]: Skipping 'capability' as this is not a valid group definition
+[WARNING]: Skipping 'capability_version' as this is not a valid group definition
+[WARNING]: Skipping 'context_envelope' as this is not a valid group definition
+[WARNING]: Skipping key (git_commit) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (host) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (id) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (sha256) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'finished_at' as this is not a valid group definition
+[WARNING]: Skipping 'independence' as this is not a valid group definition
+[WARNING]: Skipping 'independence_basis' as this is not a valid group definition
+[WARNING]: Skipping unexpected key (after) in group (observed_serving), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping key (alias) in group (observed_serving) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping unexpected key (alias_reasoning) in group (observed_serving), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping unexpected key (before) in group (observed_serving), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping key (gateway) in group (observed_serving) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (artifact_digest) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (engine) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (hardware_class) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (model_id) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (reasoning_budget) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (runtime_image_digest) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (topology) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'profile_digest' as this is not a valid group definition
+[WARNING]: Skipping key (answer_allowance) in group (reasoning) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (budget) in group (reasoning) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (mode) in group (reasoning) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'run_id' as this is not a valid group definition
+[WARNING]: Skipping unexpected key (infra_retry_policy) in group (sampling), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping key (note) in group (sampling) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (response_cache) in group (sampling) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (temperature) in group (sampling) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping 'schema' as this is not a valid group definition
+[WARNING]: Skipping 'started_at' as this is not a valid group definition
+[WARNING]: Skipping key (corpus_digest) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (id) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (max_attempts) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (max_tokens) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (tasks) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedList'>
+[WARNING]: Skipping key (temperature) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (version) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'trials' as this is not a valid group definition
+[WARNING]: Skipping 'policy_version' as this is not a valid group definition
+[WARNING]: Skipping 'comment' as this is not a valid group definition
+[WARNING]: Skipping unexpected key (coding.routine) in group (capabilities), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping unexpected key (coding.complex) in group (capabilities), only "vars", "children" and "hosts" are valid
+[WARNING]: Failed to parse inventory with 'ini' plugin: Failed to parse inventory: host range must be begin:end or begin:end:step
+
+Failed to parse inventory with 'ini' plugin.
+
+<<< caused by >>>
+
+Failed to parse inventory: host range must be begin:end or begin:end:step
+Origin: /home/mike/Projects/aihost/.worktrees/ms-s1-max-promotion/inventory/production/cais/ledger.jsonl
+
+[WARNING]: Unable to parse /home/mike/Projects/aihost/.worktrees/ms-s1-max-promotion/inventory/production/cais/ledger.jsonl as an inventory source
+
+PLAY [Converge inference serving stack] ****************************************
+
+TASK [Read service states] *****************************************************
+ok: [ai-5820-01]
+
+TASK [Refuse to change serving while a candidate holds a GPU] ******************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Validate T5820 gateway inputs] ********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Check for a previously installed activation recovery helper] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Recover any earlier interrupted gateway activation before deploying] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Validate the model route table with the gateway's own router (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Validate gateway declarative routes and clients against JSON schemas (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Create gateway directories] ***********************
+ok: [ai-5820-01] => (item=/var/lib/aihost/releases/t5820-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b)
+ok: [ai-5820-01] => (item=/etc/local-ai/orchestrator)
+
+TASK [orchestrator_gateway : Check for a CAIS authoritative directory in the inventory] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Require a CAIS authoritative directory before enforcement can be enabled] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Verify the CAIS ledger, catalog and evidence with the gateway's own loader (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Inspect the parent of the CAIS directory] *********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Require a root-owned, non-group/other-writable parent for the CAIS directory] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Create the read-only CAIS directory] **************
+ok: [ai-5820-01] => (item=/var/lib/aihost/cais)
+ok: [ai-5820-01] => (item=/var/lib/aihost/cais/bundles)
+
+TASK [orchestrator_gateway : Deliver the CAIS authoritative ledger, catalog and evidence bundles] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create remote gateway certificate directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create controller gateway PKI directory] **********
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Generate or validate private gateway CA and server leaf on controller] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install gateway TLS private key] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install CA-signed gateway TLS server leaf] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Ensure controller CA trust artifact directory exists] ***
+changed: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Ensure controller server certificate evidence directory exists] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Publish public gateway CA certificate for client trust] ***
+changed: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Publish public gateway server leaf as deployment evidence] ***
+changed: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install gateway CA in controller OS trust store] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Install public gateway CA at configured controller client trust paths] ***
+ok: [ai-5820-01 -> localhost] => (item=/home/mike/.config/nexus/t5820-gateway-ca.crt)
+ok: [ai-5820-01 -> localhost] => (item=/home/mike/.config/opencode/t5820-gateway-ca.crt)
+
+TASK [orchestrator_gateway : Read existing gateway client credential] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Set gateway client credential from protected file or generate one] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway client credential] ****************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Remove obsolete manual gateway drop-ins] **********
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/10-t5820-opencode-client.conf)
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/15-release.conf)
+
+TASK [orchestrator_gateway : Read prior gateway activation files for rollback] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Require complete previous activation for rollback] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Build expected gateway content manifest on controller] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Read any existing immutable release manifest] *****
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Check whether this release already contains application code] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Require a verified manifest for an existing release] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Refuse to replace different code under an existing release identity] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Install gateway source release] *******************
+changed: [ai-5820-01] => (item=orchestrator_gateway)
+changed: [ai-5820-01] => (item=orchestrator_runtime)
+changed: [ai-5820-01] => (item=orchestrator_contract)
+
+TASK [orchestrator_gateway : Record gateway release identity] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install the Python venv module for the gateway virtual environment] ***
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create gateway ASGI virtual environment] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Set permissions on gateway virtual environment directory] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install the gateway dependency lock] **************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway ASGI dependencies into virtual environment] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create private gateway evidence directory] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create gateway evidence chain owned by the service account] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Refuse to rotate a Vault-managed client token outside Vault] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Create the root-only client token directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Read existing client tokens] **********************
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Keep existing client tokens and generate missing ones] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Install root-only client token files for delivery to clients] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Render the client registry (token digests only)] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install the root-owned artifact verification helper] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Write the expected staged artifact manifest] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Verify staged source and dependency lock before activation] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create the private activation journal directory] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install durable gateway activation recovery] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install activation recovery units] ****************
+ok: [ai-5820-01] => (item={'src': 'gateway-activation-recovery.service.j2', 'dest': 'aihost-gateway-activation-recovery.service'})
+ok: [ai-5820-01] => (item={'src': 'gateway-activation-recovery.timer.j2', 'dest': 'aihost-gateway-activation-recovery.timer'})
+
+TASK [orchestrator_gateway : Establish the activation recovery timer] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Determine whether activation files need to change] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Journal the previous gateway before changing activation files] ***
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Record whether this deployment owns an activation journal] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Render gateway non-secret environment] ************
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway readiness probe] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway systemd unit] *********************
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Arm recovery before requesting gateway activation] ***
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Establish persistent gateway state] ***************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Activate pending gateway changes before acceptance] ***
+
+RUNNING HANDLER [orchestrator_gateway : Restart gateway service] ***************
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Verify the activated gateway identity and readiness] ***
+FAILED - RETRYING: [ai-5820-01]: orchestrator_gateway : Verify the activated gateway identity and readiness (11 retries left).
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Reload CAIS state in the verified gateway when the delivered ledger changed] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Seal the verified gateway source manifest] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Commit the strictly verified activation journal] ***
+changed: [ai-5820-01]
+
+TASK [Flush handlers to ensure service transitions complete] *******************
+
+TASK [Verify orchestrator gateway service is active] ***************************
+ok: [ai-5820-01]
+
+TASK [Read admin token for gateway health verification] ************************
+ok: [ai-5820-01]
+
+TASK [Verify gateway responds to authenticated health check] *******************
+ok: [ai-5820-01]
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=74   changed=11   unreachable=0    failed=0    skipped=1    rescued=0    ignored=0   
+

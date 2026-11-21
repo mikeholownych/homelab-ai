@@ -1,0 +1,388 @@
+[WARNING]: Skipping 'capability' as this is not a valid group definition
+[WARNING]: Skipping 'capability_version' as this is not a valid group definition
+[WARNING]: Skipping 'context_envelope' as this is not a valid group definition
+[WARNING]: Skipping key (git_commit) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (host) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (id) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (sha256) in group (executor) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'finished_at' as this is not a valid group definition
+[WARNING]: Skipping 'independence' as this is not a valid group definition
+[WARNING]: Skipping 'independence_basis' as this is not a valid group definition
+[WARNING]: Skipping unexpected key (after) in group (observed_serving), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping key (alias) in group (observed_serving) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping unexpected key (alias_reasoning) in group (observed_serving), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping unexpected key (before) in group (observed_serving), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping key (gateway) in group (observed_serving) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (artifact_digest) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (engine) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (hardware_class) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (model_id) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (reasoning_budget) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (runtime_image_digest) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (topology) in group (profile) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'profile_digest' as this is not a valid group definition
+[WARNING]: Skipping key (answer_allowance) in group (reasoning) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (budget) in group (reasoning) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (mode) in group (reasoning) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'run_id' as this is not a valid group definition
+[WARNING]: Skipping unexpected key (infra_retry_policy) in group (sampling), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping key (note) in group (sampling) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (response_cache) in group (sampling) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (temperature) in group (sampling) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping 'schema' as this is not a valid group definition
+[WARNING]: Skipping 'started_at' as this is not a valid group definition
+[WARNING]: Skipping key (corpus_digest) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (id) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping key (max_attempts) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (max_tokens) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (tasks) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedList'>
+[WARNING]: Skipping key (temperature) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedInt'>
+[WARNING]: Skipping key (version) in group (suite) as it is not a mapping, it is a <class 'ansible.module_utils._internal._datatag._AnsibleTaggedStr'>
+[WARNING]: Skipping 'trials' as this is not a valid group definition
+[WARNING]: Skipping 'policy_version' as this is not a valid group definition
+[WARNING]: Skipping 'comment' as this is not a valid group definition
+[WARNING]: Skipping unexpected key (coding.routine) in group (capabilities), only "vars", "children" and "hosts" are valid
+[WARNING]: Skipping unexpected key (coding.complex) in group (capabilities), only "vars", "children" and "hosts" are valid
+[WARNING]: Failed to parse inventory with 'ini' plugin: Failed to parse inventory: host range must be begin:end or begin:end:step
+
+Failed to parse inventory with 'ini' plugin.
+
+<<< caused by >>>
+
+Failed to parse inventory: host range must be begin:end or begin:end:step
+Origin: /home/mike/Projects/aihost/.worktrees/ms-s1-max-promotion/inventory/production/cais/ledger.jsonl
+
+[WARNING]: Unable to parse /home/mike/Projects/aihost/.worktrees/ms-s1-max-promotion/inventory/production/cais/ledger.jsonl as an inventory source
+
+PLAY [Converge inference serving stack] ****************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [ai-5820-01]
+
+TASK [Read service states] *****************************************************
+ok: [ai-5820-01]
+
+TASK [Refuse to change serving while a candidate holds a GPU] ******************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Validate T5820 gateway inputs] ********************
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Check for a previously installed activation recovery helper] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Recover any earlier interrupted gateway activation before deploying] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Validate the model route table with the gateway's own router (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Validate gateway declarative routes and clients against JSON schemas (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Create gateway directories] ***********************
+ok: [ai-5820-01] => (item=/var/lib/aihost/releases/t5820-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b)
+ok: [ai-5820-01] => (item=/etc/local-ai/orchestrator)
+
+TASK [orchestrator_gateway : Check for a CAIS authoritative directory in the inventory] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Require a CAIS authoritative directory before enforcement can be enabled] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Verify the CAIS ledger, catalog and evidence with the gateway's own loader (fail before deploying)] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Inspect the parent of the CAIS directory] *********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Require a root-owned, non-group/other-writable parent for the CAIS directory] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Create the read-only CAIS directory] **************
+ok: [ai-5820-01] => (item=/var/lib/aihost/cais)
+ok: [ai-5820-01] => (item=/var/lib/aihost/cais/bundles)
+
+TASK [orchestrator_gateway : Deliver the CAIS authoritative ledger, catalog and evidence bundles] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create remote gateway certificate directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create controller gateway PKI directory] **********
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Generate or validate private gateway CA and server leaf on controller] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway TLS private key] ******************
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install CA-signed gateway TLS server leaf] ********
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Ensure controller CA trust artifact directory exists] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Ensure controller server certificate evidence directory exists] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Publish public gateway CA certificate for client trust] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Publish public gateway server leaf as deployment evidence] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway CA in controller OS trust store] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install public gateway CA at configured controller client trust paths] ***
+skipping: [ai-5820-01] => (item=/home/mike/.config/nexus/t5820-gateway-ca.crt) 
+skipping: [ai-5820-01] => (item=/home/mike/.config/opencode/t5820-gateway-ca.crt) 
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Read existing gateway client credential] **********
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Set gateway client credential from protected file or generate one] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway client credential] ****************
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Remove obsolete manual gateway drop-ins] **********
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/10-t5820-opencode-client.conf)
+ok: [ai-5820-01] => (item=/etc/systemd/system/aihost-orchestrator-gateway.service.d/15-release.conf)
+
+TASK [orchestrator_gateway : Read prior gateway activation files for rollback] ***
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Require complete previous activation for rollback] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Build expected gateway content manifest on controller] ***
+ok: [ai-5820-01 -> localhost]
+
+TASK [orchestrator_gateway : Read any existing immutable release manifest] *****
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Check whether this release already contains application code] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Require a verified manifest for an existing release] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Refuse to replace different code under an existing release identity] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway source release] *******************
+changed: [ai-5820-01] => (item=orchestrator_gateway)
+changed: [ai-5820-01] => (item=orchestrator_runtime)
+changed: [ai-5820-01] => (item=orchestrator_contract)
+
+TASK [orchestrator_gateway : Record gateway release identity] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install the Python venv module for the gateway virtual environment] ***
+Solving dependencies...
+The following packages were automatically installed and are no longer required:
+  intel-oneapi-compiler-dpcpp-cpp-runtime-2026.0
+  intel-oneapi-compiler-shared-runtime-2026.0 intel-oneapi-dal-2026.1
+  intel-oneapi-dal-devel-2026.1 intel-oneapi-dnnl-2026.0
+  intel-oneapi-dnnl-devel-2026.0 intel-oneapi-ipp-2026.0
+  intel-oneapi-ipp-devel-2026.0 intel-oneapi-ippcp-2026.0
+  intel-oneapi-ippcp-devel-2026.0 intel-oneapi-mkl-classic-devel-2026.0
+  intel-oneapi-mkl-classic-include-2026.0 intel-oneapi-mkl-cluster-2026.0
+  intel-oneapi-mkl-cluster-devel-2026.0 intel-oneapi-mkl-core-2026.0
+  intel-oneapi-mkl-core-devel-2026.0 intel-oneapi-mkl-devel-2026.0
+  intel-oneapi-mkl-sycl-2026.0 intel-oneapi-mkl-sycl-blas-2026.0
+  intel-oneapi-mkl-sycl-data-fitting-2026.0 intel-oneapi-mkl-sycl-devel-2026.0
+  intel-oneapi-mkl-sycl-dft-2026.0 intel-oneapi-mkl-sycl-include-2026.0
+  intel-oneapi-mkl-sycl-lapack-2026.0 intel-oneapi-mkl-sycl-rng-2026.0
+  intel-oneapi-mkl-sycl-sparse-2026.0 intel-oneapi-mkl-sycl-stats-2026.0
+  intel-oneapi-mkl-sycl-vm-2026.0 intel-oneapi-openmp-2026.0
+  intel-oneapi-openmp-common-2026.0 intel-oneapi-tbb-2023.0
+  intel-oneapi-tbb-devel-2023.0 intel-pti-1.0 intel-pti-dev-1.0
+  linux-headers-7.0.0-31 linux-headers-7.0.0-34 linux-headers-7.0.0-34-generic
+  linux-image-7.0.0-34-generic linux-main-modules-zfs-7.0.0-34-generic
+  linux-modules-7.0.0-34-generic linux-tools-7.0.0-31 linux-tools-7.0.0-34
+  linux-tools-7.0.0-34-generic networkd-dispatcher
+Use 'sudo apt autoremove' to remove them.
+The following NEW packages will be installed:
+  python3-venv
+0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create gateway ASGI virtual environment] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Set permissions on gateway virtual environment directory] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install the gateway dependency lock] **************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway ASGI dependencies into virtual environment] ***
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create private gateway evidence directory] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create gateway evidence chain owned by the service account] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Refuse to rotate a Vault-managed client token outside Vault] ***
+ok: [ai-5820-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [orchestrator_gateway : Create the root-only client token directory] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Read existing client tokens] **********************
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Keep existing client tokens and generate missing ones] ***
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+ok: [ai-5820-01] => (item=(censored due to no_log))
+
+TASK [orchestrator_gateway : Install root-only client token files for delivery to clients] ***
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01] => (item=(censored due to no_log)) 
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Render the client registry (token digests only)] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install the root-owned artifact verification helper] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Write the expected staged artifact manifest] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Verify staged source and dependency lock before activation] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Create the private activation journal directory] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install durable gateway activation recovery] ******
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install activation recovery units] ****************
+ok: [ai-5820-01] => (item={'src': 'gateway-activation-recovery.service.j2', 'dest': 'aihost-gateway-activation-recovery.service'})
+ok: [ai-5820-01] => (item={'src': 'gateway-activation-recovery.timer.j2', 'dest': 'aihost-gateway-activation-recovery.timer'})
+
+TASK [orchestrator_gateway : Establish the activation recovery timer] **********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Determine whether activation files need to change] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Journal the previous gateway before changing activation files] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Record whether this deployment owns an activation journal] ***
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Render gateway non-secret environment] ************
+--- before: /etc/local-ai/orchestrator/gateway.env
++++ after: /home/mike/.ansible/tmp/ansible-local-655314jmkoyhiz/tmpzkp_vvrn/gateway.env.j2
+@@ -1,6 +1,6 @@
+-ORCHESTRATOR_GATEWAY_WORKER_PORTS="8000 8001 "
++ORCHESTRATOR_GATEWAY_WORKER_PORTS="8000 8001 8101 "
+ ORCHESTRATOR_GATEWAY_DEPENDENCY_TIMEOUT_SECONDS=1200
+-ORCHESTRATOR_WORKER_SPECS=[{"worker_id":"b0-live-llama-worker1","credential_name":"worker-lead-token","credential_source":"/etc/local-ai/llama/worker1/worker-api-key","token_file":"worker-lead-token","pool":"lead","engine":"llama.cpp","reasoning_budget":8192,"port":8000,"public_model_id":"engineering/b0","model_id":"Qwen3.6-35B-A3B-UD-Q4_K_M","revision":"gguf-ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61","artifact_digest":"sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61","runtime_image_digest":"sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9","topology":"llama-cpp-sycl","hardware_class":"intel-arc-pro-b65-32g","gpu_assignment":["0"],"capabilities":["navigation","coding","structured_output","tool_call_proposal"],"context_limit":65536,"max_concurrency":1,"resource_envelope":{"memory_reserve_gib":8,"memory_available_floor_gib":8},"evidence_ids":["qbudget-qwen36-stageb-2026-10-09","qualification-qwen36-2026-10-09"],"registry_version":1,"measured_at":"2026-10-09T06:07:12+00:00","valid_until":"2026-12-31T00:00:00+00:00","endpoint":"http://127.0.0.1:8000"},{"worker_id":"b0-live-llama-deep-worker2","credential_name":"worker-deep-token","credential_source":"/etc/local-ai/llama/worker2/worker-api-key","token_file":"worker-deep-token","reasoning_budget":4096,"pool":"deep","engine":"llama.cpp","port":8001,"public_model_id":"engineering/deep","model_id":"Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M","revision":"gguf-935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2","artifact_digest":"sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2","runtime_image_digest":"sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9","topology":"llama-cpp-sycl","hardware_class":"intel-arc-pro-b65-32g","gpu_assignment":["1"],"capabilities":["navigation","coding","structured_output","tool_call_proposal","review"],"context_limit":65536,"max_concurrency":1,"resource_envelope":{"memory_reserve_gib":8,"memory_available_floor_gib":8},"evidence_ids":["qbudget-flashnext-2026-10-08","qualification-flashnext-2026-10-08"],"registry_version":1,"measured_at":"2026-10-08T19:03:31+00:00","valid_until":"2026-12-31T00:00:00+00:00","endpoint":"http://127.0.0.1:8001"}]
++ORCHESTRATOR_WORKER_SPECS=[{"worker_id":"b0-live-llama-worker1","credential_name":"worker-lead-token","credential_source":"/etc/local-ai/llama/worker1/worker-api-key","token_file":"worker-lead-token","pool":"lead","engine":"llama.cpp","reasoning_budget":8192,"port":8000,"public_model_id":"engineering/b0","model_id":"Qwen3.6-35B-A3B-UD-Q4_K_M","revision":"gguf-ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61","artifact_digest":"sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61","runtime_image_digest":"sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9","topology":"llama-cpp-sycl","hardware_class":"intel-arc-pro-b65-32g","gpu_assignment":["0"],"capabilities":["navigation","coding","structured_output","tool_call_proposal"],"context_limit":65536,"max_concurrency":1,"resource_envelope":{"memory_reserve_gib":8,"memory_available_floor_gib":8},"evidence_ids":["qbudget-qwen36-stageb-2026-10-09","qualification-qwen36-2026-10-09"],"registry_version":1,"measured_at":"2026-10-09T06:07:12+00:00","valid_until":"2026-12-31T00:00:00+00:00","endpoint":"http://127.0.0.1:8000"},{"worker_id":"b0-live-llama-deep-worker2","credential_name":"worker-deep-token","credential_source":"/etc/local-ai/llama/worker2/worker-api-key","token_file":"worker-deep-token","reasoning_budget":4096,"pool":"deep","engine":"llama.cpp","port":8001,"public_model_id":"engineering/deep","model_id":"Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M","revision":"gguf-935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2","artifact_digest":"sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2","runtime_image_digest":"sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9","topology":"llama-cpp-sycl","hardware_class":"intel-arc-pro-b65-32g","gpu_assignment":["1"],"capabilities":["navigation","coding","structured_output","tool_call_proposal","review"],"context_limit":65536,"max_concurrency":1,"resource_envelope":{"memory_reserve_gib":8,"memory_available_floor_gib":8},"evidence_ids":["qbudget-flashnext-2026-10-08","qualification-flashnext-2026-10-08"],"registry_version":1,"measured_at":"2026-10-08T19:03:31+00:00","valid_until":"2026-12-31T00:00:00+00:00","endpoint":"http://127.0.0.1:8001"},{"worker_id":"ms-s1-hip-coder30b","credential_name":"worker-ms-s1-hip-token","credential_source":"/etc/local-ai/orchestrator/remote-ms-s1-hip-api-key","token_file":"worker-ms-s1-hip-token","pool":"rocm","engine":"llama.cpp","port":8101,"public_model_id":"engineering/interactive-rocm","model_id":"qwen3-coder-30b-a3b-instruct-q8_0","revision":"gguf-4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066","artifact_digest":"sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066","runtime_image_digest":"sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184","topology":"llama-cpp-hip","hardware_class":"amd-strix-halo-gfx1151","gpu_assignment":["0"],"capabilities":["navigation","coding","structured_output","tool_call_proposal"],"context_limit":16384,"max_concurrency":4,"resource_envelope":{"memory_reserve_gib":8,"memory_available_floor_gib":8},"evidence_ids":["rocm-strix-halo-bakeoff-20261121T073429Z"],"registry_version":1,"measured_at":"2026-11-21T07:34:29+00:00","valid_until":"2026-12-31T00:00:00+00:00","endpoint":"http://10.0.8.6:8101"}]
+ ORCHESTRATOR_PUBLIC_MODEL_ID=engineering/b0
+ ORCHESTRATOR_EVIDENCE_PATH=/var/lib/aihost-gateway/evidence-chain.jsonl
+ ORCHESTRATOR_HOST=127.0.0.1
+@@ -8,8 +8,8 @@
+ ORCHESTRATOR_LOCAL_LISTENER_MODE=local
+ ORCHESTRATOR_ALLOW_WORKER_PINNING=true
+ ORCHESTRATOR_SCHEDULING_MODE=CONFIGURATION_B_PLUS
+-ORCHESTRATOR_ROUTES=[{"id":"interactive-model","match":{"model":["engineering/interactive"]},"pool":"lead","fallback":["deep"],"fallback_on_saturation":true,"max_queue_wait_ms":100,"reasoning":{"mode":"off","answer_allowance":1024}},{"id":"interactive-fast","match":{"task_class":["interactive-fast"]},"pool":"lead","fallback":["deep"],"fallback_on_saturation":true,"max_queue_wait_ms":100,"reasoning":{"mode":"off","answer_allowance":1024}},{"id":"escalate-retry","match":{"attempt_gte":2},"pool":"deep","fallback":["lead"],"reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},{"id":"escalate-after-failure","match":{"previous_outcome":["fail"]},"pool":"deep","fallback":["lead"],"reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},{"id":"deep-tasks","match":{"task_class":["review","escalate","architecture","debug-hard"]},"pool":"deep","fallback":["lead"],"reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},{"id":"default","match":{},"pool":"lead","fallback":["deep"],"reasoning":{"mode":"off","answer_allowance":8192}}]
+-ORCHESTRATOR_MODEL_ALIASES={"engineering/lead":{"pool":"lead","reasoning":{"mode":"off","answer_allowance":8192}},"engineering/deep":{"pool":"deep","reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},"engineering/lead-reasoning":{"pool":"lead","reasoning":{"mode":"on","budget":8192,"answer_allowance":8192}}}
++ORCHESTRATOR_ROUTES=[{"id":"interactive-model","match":{"model":["engineering/interactive"]},"pool":"lead","fallback":["deep"],"fallback_on_saturation":true,"max_queue_wait_ms":100,"reasoning":{"mode":"off","answer_allowance":1024}},{"id":"interactive-fast","match":{"task_class":["interactive-fast"]},"pool":"lead","fallback":["deep"],"fallback_on_saturation":true,"max_queue_wait_ms":100,"reasoning":{"mode":"off","answer_allowance":1024}},{"id":"escalate-retry","match":{"attempt_gte":2},"pool":"deep","fallback":["lead"],"reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},{"id":"escalate-after-failure","match":{"previous_outcome":["fail"]},"pool":"deep","fallback":["lead"],"reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},{"id":"deep-tasks","match":{"task_class":["review","escalate","architecture","debug-hard"]},"pool":"deep","fallback":["lead"],"reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},{"id":"interactive-rocm","match":{"model":["engineering/interactive-rocm"]},"pool":"rocm","fallback":[],"reasoning":{"mode":"off","answer_allowance":8192}},{"id":"default","match":{},"pool":"lead","fallback":["deep"],"reasoning":{"mode":"off","answer_allowance":8192}}]
++ORCHESTRATOR_MODEL_ALIASES={"engineering/lead":{"pool":"lead","reasoning":{"mode":"off","answer_allowance":8192}},"engineering/deep":{"pool":"deep","reasoning":{"mode":"on","budget":4096,"answer_allowance":8192}},"engineering/lead-reasoning":{"pool":"lead","reasoning":{"mode":"on","budget":8192,"answer_allowance":8192}},"engineering/interactive-rocm":{"pool":"rocm","reasoning":{"mode":"off","answer_allowance":8192}}}
+ ORCHESTRATOR_REMOTE_HOST=10.0.8.5
+ ORCHESTRATOR_REMOTE_PORT=8443
+ ORCHESTRATOR_TLS_REQUIRE_CLIENT_CERT=false
+
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway readiness probe] ******************
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Install gateway systemd unit] *********************
+--- before: /etc/systemd/system/aihost-orchestrator-gateway.service
++++ after: /home/mike/.ansible/tmp/ansible-local-655314jmkoyhiz/tmpl5bmqyb3/orchestrator-gateway.service.j2
+@@ -48,6 +48,7 @@
+ LoadCredential=opencode-client-token:/etc/local-ai/orchestrator/opencode-client-token
+ LoadCredential=worker-lead-token:/etc/local-ai/llama/worker1/worker-api-key
+ LoadCredential=worker-deep-token:/etc/local-ai/llama/worker2/worker-api-key
++LoadCredential=worker-ms-s1-hip-token:/etc/local-ai/orchestrator/remote-ms-s1-hip-api-key
+ LoadCredential=gateway-tls-key:/etc/local-ai/orchestrator/tls/gateway.key
+ LoadCredential=gateway-tls-cert:/etc/local-ai/orchestrator/tls/gateway.crt
+ 
+
+changed: [ai-5820-01]
+
+TASK [orchestrator_gateway : Arm recovery before requesting gateway activation] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Establish persistent gateway state] ***************
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Activate pending gateway changes before acceptance] ***
+
+RUNNING HANDLER [orchestrator_gateway : Restart gateway service] ***************
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Verify the activated gateway identity and readiness] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Reload CAIS state in the verified gateway when the delivered ledger changed] ***
+skipping: [ai-5820-01]
+
+TASK [orchestrator_gateway : Seal the verified gateway source manifest] ********
+ok: [ai-5820-01]
+
+TASK [orchestrator_gateway : Commit the strictly verified activation journal] ***
+skipping: [ai-5820-01]
+
+TASK [Flush handlers to ensure service transitions complete] *******************
+
+TASK [Verify orchestrator gateway service is active] ***************************
+skipping: [ai-5820-01]
+
+TASK [Read admin token for gateway health verification] ************************
+skipping: [ai-5820-01]
+
+TASK [Verify gateway responds to authenticated health check] *******************
+skipping: [ai-5820-01]
+
+PLAY RECAP *********************************************************************
+ai-5820-01                 : ok=43   changed=5    unreachable=0    failed=0    skipped=33   rescued=0    ignored=0   
+

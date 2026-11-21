@@ -270,6 +270,8 @@ inference_policy_enabled: true
 inference_origin_retire_onhost_tools: true
 orchestrator_gateway_release_id: t5820-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b
 orchestrator_gateway_release_dir: /var/lib/aihost/releases/t5820-gateway-636b7fb44258bc3ad0cf660dd3aabf289cc51e3b
+# Two local Intel SYCL workers plus the remote MS-S1 HIP worker (Phase 3d); candidates are additional.
+orchestrator_gateway_production_worker_count: 3
 orchestrator_gateway_otlp_endpoint: "http://10.0.8.2:4318/v1/traces"
 orchestrator_gateway_otlp_service_name: "aihost-gateway"
 orchestrator_gateway_evidence_path: /var/lib/aihost-gateway/evidence-chain.jsonl
@@ -371,6 +373,13 @@ orchestrator_gateway_routes:
     pool: deep
     fallback: [lead]
     reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}
+  # Phase 3d: explicit opt-in to the remote ROCm worker on ai-ms-s1-max-01. Matches only this model name; no Intel
+  # rule falls back to it and it has no fallback, so lead/deep traffic never depends on the remote host.
+  - id: interactive-rocm
+    match: {model: [engineering/interactive-rocm]}
+    pool: rocm
+    fallback: []
+    reasoning: {mode: "off", answer_allowance: 8192}
   - id: default
     match: {}
     pool: lead
@@ -382,6 +391,7 @@ orchestrator_gateway_model_aliases:
   # Operator decision 2026-10-11 (V5): lead reasoning stays off by default; 8192 (the Q-BUDGET choice) is opt-in for
   # demanding tasks through this alias. The observed gain was 6.7 points at 2-3x time per task.
   engineering/lead-reasoning: {pool: lead, reasoning: {mode: "on", budget: 8192, answer_allowance: 8192}}
+  engineering/interactive-rocm: {pool: rocm, reasoning: {mode: "off", answer_allowance: 8192}}
 # R6 per-client identity. Existing tokens are kept (legacy_token_file) so current clients keep working.
 # Every client token below is a Vault record (roles/vault_platform_credentials); rotate through Vault.
 orchestrator_gateway_vault_managed_clients: [nexus, opencode, operator, qualification, ansible-admin]
@@ -455,6 +465,32 @@ orchestrator_gateway_workers:
     measured_at: "2026-10-08T19:03:31+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://127.0.0.1:8001
+  # Remote worker on ai-ms-s1-max-01 (AMD Strix Halo, llama.cpp HIP). Identity fields mirror that host's own gateway
+  # worker record. The key is a root-only copy of its worker-api-key (the host's ufw admits only this host on 8101).
+  - worker_id: ms-s1-hip-coder30b
+    credential_name: worker-ms-s1-hip-token
+    credential_source: /etc/local-ai/orchestrator/remote-ms-s1-hip-api-key
+    token_file: worker-ms-s1-hip-token
+    pool: rocm
+    engine: llama.cpp
+    port: 8101
+    public_model_id: engineering/interactive-rocm
+    model_id: qwen3-coder-30b-a3b-instruct-q8_0
+    revision: gguf-4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
+    artifact_digest: sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
+    runtime_image_digest: sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184
+    topology: llama-cpp-hip
+    hardware_class: amd-strix-halo-gfx1151
+    gpu_assignment: ["0"]
+    capabilities: [navigation, coding, structured_output, tool_call_proposal]
+    context_limit: 16384
+    max_concurrency: 4
+    resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
+    evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z]
+    registry_version: 1
+    measured_at: "2026-11-21T07:34:29+00:00"
+    valid_until: "2026-12-31T00:00:00+00:00"
+    endpoint: http://10.0.8.6:8101
 
 # R4 qualification profiles. Revisions below are content-addressed from the host-verified GGUF SHA-256
 # (Flash-Next's manifest covers both shards). Candidate runs borrow one GPU and are reachable only through a

@@ -308,14 +308,22 @@ class InventoryContractTests(unittest.TestCase):
         self.assertEqual("aihost-gateway", users_defaults["users_gateway_service_account"]["name"])
         self.assertTrue(host_vars["inference_policy_enabled"])
         self.assertNotIn("inference_policy_worker_ports", host_vars)
-        self.assertEqual([8000, 8001], [worker["port"] for worker in host_vars["orchestrator_gateway_workers"]])
+        # Local Intel workers (loopback, covered by the nft owner-match policy) plus the remote MS-S1 HIP worker (8101,
+        # reached over the LAN with its own root-only key copy).
+        local_workers = [w for w in host_vars["orchestrator_gateway_workers"] if w["endpoint"].startswith("http://127.0.0.1:")]
+        remote_workers = [w for w in host_vars["orchestrator_gateway_workers"] if w not in local_workers]
+        self.assertEqual([8000, 8001], [worker["port"] for worker in local_workers])
+        self.assertEqual(["ms-s1-hip-coder30b"], [worker["worker_id"] for worker in remote_workers])
         self.assertEqual(["10.0.8.95/32"], host_vars["inference_policy_gateway_client_cidrs"])
         self.assertEqual("local", host_vars["orchestrator_gateway_local_listener_mode"])
         self.assertEqual("10.0.8.5", host_vars["orchestrator_gateway_remote_host"])
         for worker in host_vars["orchestrator_gateway_workers"]:
             self.assertTrue(worker["token_file"].startswith("worker-"))
-            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/llama/"))
             self.assertNotEqual(worker["token_file"], worker["credential_source"])
+        for worker in local_workers:
+            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/llama/"))
+        for worker in remote_workers:
+            self.assertTrue(worker["credential_source"].startswith("/etc/local-ai/orchestrator/"))
         self.assertIn("LoadCredential={{ worker.credential_name }}:{{ worker.credential_source }}", gateway_unit)
         self.assertNotIn("SupplementaryGroups=", gateway_unit)
         self.assertIn("meta skuid != @gateway_uids", policy)
