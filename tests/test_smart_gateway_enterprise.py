@@ -333,3 +333,94 @@ def test_asgi_server_wrapper_ssl_config():
     assert wrapper.config.ssl_certfile == "/path/to/cert.pem"
     assert wrapper.config.ssl_cert_reqs == ssl.CERT_NONE
 
+
+# =====================================================================
+# quality_first auto routing (engineering/auto)
+# =====================================================================
+
+AUTO_RULES = [
+    {
+        "id": "engineering-auto",
+        "match": {"model": ["engineering/auto"]},
+        "pool": "lead",
+        "fallback": ["deep", "rocm"],
+        "strategy": "quality_first",
+        "fallback_on_saturation": True,
+        "reasoning": {"mode": "off", "answer_allowance": 8192},
+    },
+    {"id": "default", "match": {}, "pool": "lead", "fallback": ["deep"]},
+]
+AUTO_ALIASES = {
+    "engineering/lead": {"pool": "lead", "reasoning": {"mode": "off", "answer_allowance": 8192}},
+    "engineering/deep": {"pool": "deep", "reasoning": {"mode": "on", "budget": 4096, "answer_allowance": 8192}},
+    "engineering/interactive-rocm": {"pool": "rocm", "reasoning": {"mode": "off", "answer_allowance": 8192}},
+}
+
+
+def test_quality_first_strategy_is_accepted():
+    Router.from_config(AUTO_RULES, AUTO_ALIASES)
+
+
+def test_omitted_model_normalizes_to_engineering_auto():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    d = router.decide(model=None, task_class=None, has_tools=False, prompt_tokens=20,
+                      request={"messages": [{"role": "user", "content": "hi"}]})
+    assert d.rule_id == "engineering-auto"
+
+
+def test_quality_first_prefers_deep_for_complex_reasoning():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    req = {"messages": [{"role": "user", "content": "step-by-step analyze root cause of this architecture deadlock"}]}
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=req)
+    assert d.pool == "deep"
+    assert d.fallback == ("lead", "rocm")
+    assert "quality_first" in d.reason
+
+
+def test_quality_first_prefers_rocm_for_code_tools():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    req = {
+        "messages": [{"role": "user", "content": "```python\ndef foo():\n    pass\n``` fix this function"}],
+        "tools": [{"type": "function", "function": {"name": "read_file", "parameters": {}}}],
+    }
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=True, prompt_tokens=400, request=req)
+    assert d.pool == "rocm"
+    assert "lead" in d.fallback and "deep" in d.fallback
+
+
+def test_quality_first_prefers_lead_for_simple():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    req = {"messages": [{"role": "user", "content": "hi"}]}
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=5, request=req)
+    assert d.pool == "lead"
+
+
+def test_quality_first_skips_open_circuit_breaker_then_failover_order():
+    cbs = CircuitBreakerRegistry(worker_failure_threshold=2, pool_failure_threshold=2)
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES, circuit_breakers=cbs)
+    cbs.record_failure("deep1", pool_name="deep", error="500")
+    cbs.record_failure("deep1", pool_name="deep", error="500")
+    assert not cbs.is_pool_available("deep")
+    req = {"messages": [{"role": "user", "content": "step-by-step analyze root cause architecture"}]}
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=req)
+    assert d.pool != "deep"
+    assert d.pool in ("lead", "rocm")
+    assert "deep" in d.fallback
+
+
+def test_pin_aliases_still_bypass_quality_first():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    d = router.decide(model="engineering/interactive-rocm", task_class=None, has_tools=False, prompt_tokens=5)
+    assert d.rule_id == "alias:engineering/interactive-rocm"
+    assert d.pool == "rocm"
+    assert d.fallback == ()
+
+
+def test_unknown_model_does_not_use_engineering_auto_rule():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    d = router.decide(model="engineering/other", task_class=None, has_tools=False, prompt_tokens=5,
+                      request={"messages": [{"role": "user", "content": "hi"}]})
+    assert d.rule_id == "default"
+    assert d.pool == "lead"
+    assert "rocm" not in d.fallback
+

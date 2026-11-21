@@ -127,7 +127,7 @@
         },
         "strategy": {
           "type": "string",
-          "enum": ["first_match", "least_latency", "least_busy", "cost_optimized"]
+          "enum": ["first_match", "least_latency", "least_busy", "cost_optimized", "quality_first"]
         },
         "cost_weight": {
           "type": "number",
