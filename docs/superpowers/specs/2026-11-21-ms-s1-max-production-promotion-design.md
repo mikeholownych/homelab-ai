@@ -2,7 +2,7 @@
 
 **Date:** 2026-11-21
 
-**Status:** Awaiting implementation plan — Phase 2 lab wire complete
+**Status:** Implementation in progress — see docs/superpowers/plans/2026-11-21-ms-s1-max-production-promotion.md — Phase 2 lab wire complete
 (PR #57 / `ee8c969`; llama.cpp HIP + Qwen3-Coder-30B-A3B Q8_0)
 
 **Host:** `ai-ms-s1-max-01` at `10.0.8.6` (Minisforum MS-S1 Max)

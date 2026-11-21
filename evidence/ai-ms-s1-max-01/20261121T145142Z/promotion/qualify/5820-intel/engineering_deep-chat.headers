@@ -1,0 +1,18 @@
+HTTP/1.1 200 OK
+date: Sat, 21 Nov 2026 14:52:11 GMT
+server: uvicorn
+x-request-id: bfba5e2a-3fd5-4b7c-9f28-b1b8d514c254
+traceparent: 00-818f092ac86953463e957b488675b461-9aa0043c47293a8d-01
+x-aihost-route: rule=alias:engineering/deep;pool=deep;worker=b0-live-llama-deep-worker2;fallback=false
+x-aihost-context-limit: 65536
+x-aihost-prompt-tokens: 59
+x-aihost-prompt-tokens-source: exact
+x-aihost-context-remaining: 65477
+x-aihost-max-completion: 64
+x-aihost-limits-version: 8ee67ff7354bf2e5
+x-aihost-served-model: Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M
+x-aihost-termination: stop
+x-aihost-cache: MISS
+content-length: 747
+content-type: application/json
+

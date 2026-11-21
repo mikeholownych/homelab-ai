@@ -273,6 +273,67 @@ ansible-playbook -i inventory/lab playbooks/site.yml --limit ai-ms-s1-max-01 --t
 
 On-host health evidence is written to `/var/lib/local-ai/evidence/llama-hip/<worker>-health.json`; unit status, journal and `/v1/models` output are archived in `research/rocm-strix-halo/evidence/<ts>/wire/`.
 
+### MS-S1 Max Phase 3 — production promotion (dual front door)
+
+**Scope:** `ai-ms-s1-max-01` is a **production peer** of `ai-5820-01`, adding parallel ROCm capacity. The Intel SYCL aliases (`engineering/lead`, `engineering/deep`) stay exclusively on `ai-5820-01`. The parallel alias is `engineering/interactive-rocm` (pool `rocm`, worker `ms-s1-hip-coder30b`, llama.cpp HIP, Qwen3-Coder-30B-A3B Q8_0).
+
+**Design / plan:** `docs/superpowers/specs/2026-11-21-ms-s1-max-production-promotion-design.md`, `docs/superpowers/plans/2026-11-21-ms-s1-max-production-promotion.md`.
+
+```
+Clients ─► MS-S1 gateway   https://10.0.8.6:8443 ─► HIP worker 127.0.0.1/10.0.8.6:8101 (rocm)
+Clients ─► 5820 gateway    https://10.0.8.5:8443 ─┬► SYCL lead/deep workers (unchanged)
+                                                  └► remote HIP worker http://10.0.8.6:8101 (rocm)
+```
+
+#### Inventory cutover (3a)
+
+- The host lives in `inventory/production` (`production`, `inference`, `gpu`, `monitoring`, `cluster`) with `inventory/production/host_vars/ai-ms-s1-max-01.yml`. It is **not** in `inventory/lab` any more; there must never be host_vars for it in both inventories.
+- All commands use `-i inventory/production --limit ai-ms-s1-max-01`. Phase 1/2 lab commands above are historical.
+
+#### Harden (3b)
+
+- The HIP worker binds `10.0.8.6:8101` and requires an API key (`/etc/local-ai/llama-hip/qwen3_coder_30b_q8/worker-api-key`, generated on first converge).
+- ufw (`security_inference_api_*`): 8101 from `10.0.8.5` only; 8443 from the controller `10.0.8.95` only; 9100 from the grafana host `10.0.8.2` only. The controller cannot reach 8101 directly (by design).
+
+#### Dual gateway (3c, 3d)
+
+- **MS-S1 gateway:** ASGI + TLS on `10.0.8.6:8443` (SANs `IP:10.0.8.6`, `DNS:ai-ms-s1-max-01`). It declares only the `rocm` pool; any other model name falls to the `default` rule on `rocm` and no Intel model is served. CA: `evidence/ai-ms-s1-max-01/gateway-ca.crt` (the controller OS trust store only holds the 5820 CA). Client tokens are root-only files in `/etc/local-ai/orchestrator/clients/`.
+- **5820 gateway:** remote worker `ms-s1-hip-coder30b` (`http://10.0.8.6:8101`) plus route/alias `engineering/interactive-rocm`, placed before `default`. The key is installed at `/etc/local-ai/orchestrator/remote-ms-s1-hip-api-key` and reaches the gateway only through systemd `LoadCredential`.
+- Both gateways ship the same artifact; any gateway code change needs both `orchestrator_gateway_release_id` values bumped (`tests/test_gateway_release_identity.py`).
+- Any change to the 5820 gateway needs pre/post checks that `engineering/lead` and `engineering/deep` still route to SYCL workers.
+
+```bash
+ansible-playbook -i inventory/production playbooks/inference.yml --limit ai-ms-s1-max-01 --tags orchestrator
+ansible-playbook -i inventory/production playbooks/inference.yml --limit ai-5820-01 --tags orchestrator
+```
+
+#### Monitoring and reconcile (3e)
+
+- `node_exporter` on `10.0.8.6:9100` is scraped by the grafana host's Alloy (`job=aihost`, `instance=ai-ms-s1-max-01`); GPU telemetry rides the textfile collector.
+- Reconcile runs from the controller (`aihost-reconcile-ai-ms-s1-max-01.timer`), as for 5820; on-host scheduled lifecycle timers stay off.
+
+#### Qualify (3f)
+
+Run each probe with the operator token against both front doors (token read over ssh; never written to the repo). Archive under `evidence/ai-ms-s1-max-01/<UTC>/promotion/qualify/`.
+
+```bash
+TOK=$(ssh mike@10.0.8.6 'sudo cat /etc/local-ai/orchestrator/clients/operator.token')
+# MS-S1 local gateway (use the 5820 host/CA and token for https://10.0.8.5:8443)
+curl --cacert evidence/ai-ms-s1-max-01/gateway-ca.crt -H "Authorization: Bearer $TOK" https://10.0.8.6:8443/v1/models
+curl --cacert evidence/ai-ms-s1-max-01/gateway-ca.crt -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
+  https://10.0.8.6:8443/v1/chat/completions \
+  -d '{"model":"engineering/interactive-rocm","messages":[{"role":"user","content":"ready?"}],"max_tokens":64}'
+# expect x-aihost-route: rule=alias:engineering/interactive-rocm;pool=rocm;worker=ms-s1-hip-coder30b
+```
+
+Accepted evidence: `evidence/ai-ms-s1-max-01/20261121T145142Z/promotion/qualify/SUMMARY.md`. Earlier stage evidence: `20261121T140334Z/promotion/gateway-local`, `20261121T142058Z/promotion/gateway-5820`.
+
+#### Known gaps
+
+- **Alloy scrape deploy needs Vault.** The grafana-host scrape entry for `10.0.8.6:9100` is in inventory, but deploying the Alloy config requires Vault access and has not been run from this work.
+- **Host Resources dashboard is still hard-coded to 5820.** Fleet panels do not yet select `ai-ms-s1-max-01`.
+- **5820 gateway start couples to remote MS-S1 readiness.** `aihost-gateway-readiness` (ExecStartPre) requires every non-stopped worker, including the remote `ms-s1-hip-coder30b`, to answer `/v1/models`; it waits up to `ORCHESTRATOR_GATEWAY_DEPENDENCY_TIMEOUT_SECONDS` (default 1200 s) and then fails the start. An MS-S1 outage or HIP worker restart can therefore delay or block a 5820 gateway (re)start, and the Intel aliases are not served during that window. Plan MS-S1 maintenance around 5820 gateway restarts.
+
 ---
 
 ## Phase-Gated Host Commissioning (`playbooks/commission.yml`)
