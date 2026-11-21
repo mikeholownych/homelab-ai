@@ -27,6 +27,8 @@ def test_ms_s1_max_host_vars_phase1_contract():
     assert hv["node_roles"]["gpu"] is True
     assert hv["capabilities"]["inference"] is False
     assert hv["capabilities"]["gpu"] is True
+    assert hv["users_local_ai_manage_device_groups"] is True
+    assert hv["users_local_ai_device_groups"] == ["render", "video"]
     assert hv["rocm_install_enabled"] is True
     assert hv["intel_gpu_install_enabled"] is False
     assert hv["intel_gpu_physical_validation_enabled"] is False

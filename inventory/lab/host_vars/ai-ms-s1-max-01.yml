@@ -38,6 +38,11 @@ features:
   ray_enabled: false
   distributed_vllm_enabled: false
 
+users_local_ai_manage_device_groups: true
+users_local_ai_device_groups:
+  - render
+  - video
+
 rocm_install_enabled: true
 intel_gpu_install_enabled: false
 intel_gpu_physical_validation_enabled: false
