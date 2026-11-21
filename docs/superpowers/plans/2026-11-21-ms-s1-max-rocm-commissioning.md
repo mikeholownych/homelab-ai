@@ -515,7 +515,7 @@ def test_rocm_defaults_are_fail_closed_and_pinned():
     assert d["rocm_signing_key_sha256"] == (
         "3e660bdc559b34781b5498e79b9c117394b46ce55592812db0b84d65986b4df2"
     )
-    assert d["rocm_signing_key_fingerprint"] == "CA8BBB4727A47B4D09B4EE8969386B48A1A693C5C"
+    assert d["rocm_signing_key_fingerprint"] == "CA8BB4727A47B4D09B4EE8969386B48A1A693C5C"
     assert d["rocm_packages"]["rocm-core"] == "7.2.0.70200-43~24.04"
     assert d["rocm_packages"]["rocminfo"] == "1.0.0.70200-43~24.04"
     assert d["rocm_expected_gpu_agent"] == "gfx1151"
@@ -549,7 +549,7 @@ rocm_apt_suite: noble
 rocm_keyring_path: /etc/apt/keyrings/rocm.gpg
 rocm_signing_key_url: https://repo.radeon.com/rocm/rocm.gpg.key
 rocm_signing_key_sha256: 3e660bdc559b34781b5498e79b9c117394b46ce55592812db0b84d65986b4df2
-rocm_signing_key_fingerprint: CA8BBB4727A47B4D09B4EE8969386B48A1A693C5C
+rocm_signing_key_fingerprint: CA8BB4727A47B4D09B4EE8969386B48A1A693C5C
 rocm_repository_urls:
   rocm: https://repo.radeon.com/rocm/apt/7.2
   graphics: https://repo.radeon.com/graphics/7.2/ubuntu

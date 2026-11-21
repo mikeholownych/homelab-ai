@@ -2,7 +2,8 @@
 
 **Date:** 2026-11-21
 
-**Status:** Approved (design review); awaiting implementation plan
+**Status:** Implementation in progress — see
+`docs/superpowers/plans/2026-11-21-ms-s1-max-rocm-commissioning.md`
 
 **Host:** `ai-ms-s1-max-01` at `10.0.8.6` (Minisforum MS-S1 Max)
 
@@ -34,7 +35,7 @@ pool.
 | ROCm ownership | Ansible fully manages and pins ROCm 7.2.0 |
 | NPU | Hard acceptance gate alongside GPU (`aie2p`) |
 | Inventory | `inventory/lab/` only until promotion |
-| Storage size | LV/mount pattern fixed; size chosen at plan time |
+| Storage size | `local-ai-lv` **1024g**; `reserve_gib: 100` (plan-locked 2026-11-21) |
 | Architecture | Parallel AMD stack (new profile + `roles/rocm/`) |
 
 ## Current Host State
@@ -54,7 +55,7 @@ Captured 2026-11-21 over SSH as `mike@10.0.8.6` (passwordless sudo; Secure Boot
 | NPU | HSA `aie2p` / RyzenAI-npu5; kernel `amdxdna`; `/dev/accel/accel0` |
 | ROCm | 7.2.0 (`/opt/rocm` → `rocm-7.2.0`); `rocminfo` reports 3 agents |
 | APT | Vendor Noble suites: `rocm/apt/7.2`, `graphics/7.2`, `amdgpu/30.30` |
-| Keyring | `/etc/apt/keyrings/rocm.gpg` SHA-256 `3e660bdc559b34781b5498e79b9c117394b46ce55592812db0b84d65986b4df2`; fingerprint `CA8B BB47 27A4 7B4D 09B4 E896 9386 B48A 1A69 3C5C` (AMD MLSE DevOps) |
+| Keyring | `/etc/apt/keyrings/rocm.gpg` SHA-256 `3e660bdc559b34781b5498e79b9c117394b46ce55592812db0b84d65986b4df2`; fingerprint `CA8B B472 7A47 B4D0 9B4E E896 9386 B48A 1A69 3C5C` (`CA8BB4727A47B4D09B4EE8969386B48A1A693C5C`; AMD MLSE DevOps) |
 | Storage | `ubuntu-vg` on `/dev/nvme0n1p3` (~1.82 TiB); root LV 100 GiB; **~1.72 TiB free** |
 | Runtimes | No llama-server / vLLM / podman / docker present; `hipcc` present |
 
@@ -147,11 +148,9 @@ adapted for this host’s single-PV VG.
 | Mount | `/var/lib/local-ai` by filesystem UUID |
 | Evidence | `/var/lib/local-ai/evidence/storage-layout.json` (+ mirrored off-host) |
 
-**Size policy:** `storage_lvm.size` is required in host_vars and is filled in the
-**implementation plan** after measuring the intended model/artifact set for later
-engine bake-off. The plan must also set `reserve_gib` so VG free space never
-drops below a recovery floor (default proposal ≥ 50 GiB unless plan evidence
-says otherwise).
+**Size policy (locked):** `storage_lvm.size: 1024g`, `reserve_gib: 100` in
+`inventory/lab/host_vars/ai-ms-s1-max-01.yml` (see implementation plan). VG
+free space must stay above the reserve floor after LV creation.
 
 **Pre-mutation asserts:** expected PV membership; enough free extents for
 `size`; no conflicting filesystem/mount on the target path; format only on a new
