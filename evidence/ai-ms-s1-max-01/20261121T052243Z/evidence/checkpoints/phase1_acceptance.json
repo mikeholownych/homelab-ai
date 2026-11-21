@@ -1,0 +1,7 @@
+{
+    "engines_deferred": true,
+    "node": "ai-ms-s1-max-01",
+    "rocm_release": "7.2.0",
+    "schema_version": "1.0.0",
+    "status": "platform_accepted_engines_deferred"
+}

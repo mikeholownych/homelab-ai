@@ -1,0 +1,285 @@
+
+PLAY [Phase 1: Preflight assertions and read-only discovery] *******************
+
+PLAY [Phase 2: Bootstrap raw access and Python foundation] *********************
+
+PLAY [Phase 3: Baseline convergence and idempotency verification] **************
+
+PLAY [Phase 4: Guarded LVM storage management] *********************************
+
+PLAY [Phase 5: Pinned Intel GPU OMIX stack installation] ***********************
+
+PLAY [Phase 5b: Pinned ROCm stack installation] ********************************
+
+TASK [Include ROCm role] *******************************************************
+included: rocm for ai-ms-s1-max-01
+
+TASK [rocm : Include ROCm preflight] *******************************************
+included: /home/mike/Projects/aihost/.worktrees/ms-s1-max-rocm-phase1/roles/rocm/tasks/preflight.yml for ai-ms-s1-max-01
+
+TASK [rocm : Validate Ubuntu release and kernel version for ROCm] **************
+ok: [ai-ms-s1-max-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [rocm : Query PCI devices for ROCm target detection] **********************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Assert every expected ROCm target PCI ID is present] **************
+ok: [ai-ms-s1-max-01] => (item=1002:1586) => 
+    ansible_loop_var: item
+    changed: false
+    item: 1002:1586
+    msg: All assertions passed
+
+TASK [rocm : Check APT sources for unpinned ROCm, graphics or amdgpu channels] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Assert no unpinned latest ROCm channel is configured] *************
+ok: [ai-ms-s1-max-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [rocm : Include ROCm repository management] *******************************
+included: /home/mike/Projects/aihost/.worktrees/ms-s1-max-rocm-phase1/roles/rocm/tasks/repos.yml for ai-ms-s1-max-01
+
+TASK [rocm : Ensure APT keyrings directory exists] *****************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Checksum installed ROCm keyring] **********************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Determine whether ROCm keyring needs (re)install] *****************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Create temporary working directory for ROCm signing key] **********
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Download ROCm ASCII-armored signing key] **************************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Dearmor ROCm signing key] *****************************************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Checksum dearmored ROCm keyring] **********************************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Inspect dearmored key fingerprint] ********************************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Validate ROCm signing key checksum and fingerprint] ***************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Install ROCm keyring] *********************************************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Remove temporary ROCm key working directory] **********************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Configure pinned ROCm APT repository] *****************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Configure pinned ROCm graphics and amdgpu APT repositories] *******
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Refresh APT cache after repository changes] ***********************
+skipping: [ai-ms-s1-max-01]
+
+TASK [rocm : Include ROCm package pins] ****************************************
+included: /home/mike/Projects/aihost/.worktrees/ms-s1-max-rocm-phase1/roles/rocm/tasks/packages.yml for ai-ms-s1-max-01
+
+TASK [rocm : Install pinned ROCm packages] *************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Gather package facts after ROCm installation] *********************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Assert installed ROCm package versions match pins] ****************
+ok: [ai-ms-s1-max-01] => (item=rocm) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: rocm
+      value: 7.2.0.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=rocm-core) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: rocm-core
+      value: 7.2.0.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=rocm-hip) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: rocm-hip
+      value: 7.2.0.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=hip-runtime-amd) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: hip-runtime-amd
+      value: 7.2.26015.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=hsa-rocr) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: hsa-rocr
+      value: 1.18.0.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=rocminfo) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: rocminfo
+      value: 1.0.0.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=rocm-smi-lib) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: rocm-smi-lib
+      value: 7.8.0.70200-43~24.04
+    msg: All assertions passed
+ok: [ai-ms-s1-max-01] => (item=amdgpu-core) => 
+    ansible_loop_var: item
+    changed: false
+    item:
+      key: amdgpu-core
+      value: 1:7.2.70200-2278374.24.04
+    msg: All assertions passed
+
+TASK [rocm : Include ROCm device access] ***************************************
+included: /home/mike/Projects/aihost/.worktrees/ms-s1-max-rocm-phase1/roles/rocm/tasks/access.yml for ai-ms-s1-max-01
+
+TASK [rocm : Ensure ROCm device groups exist] **********************************
+ok: [ai-ms-s1-max-01] => (item=render)
+ok: [ai-ms-s1-max-01] => (item=video)
+
+TASK [rocm : Add operator and service accounts to ROCm device groups] **********
+ok: [ai-ms-s1-max-01] => (item=mike)
+ok: [ai-ms-s1-max-01] => (item=aihost-runtime)
+
+TASK [rocm : Stat ROCm KFD device] *********************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Find DRM render nodes] ********************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Assert ROCm compute device nodes exist] ***************************
+ok: [ai-ms-s1-max-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [rocm : Include ROCm compute validation] **********************************
+included: /home/mike/Projects/aihost/.worktrees/ms-s1-max-rocm-phase1/roles/rocm/tasks/validate.yml for ai-ms-s1-max-01
+
+TASK [rocm : Run rocminfo] *****************************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Require GPU and NPU agents in rocminfo] ***************************
+ok: [ai-ms-s1-max-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [rocm : Run rocm-smi] *****************************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : List loaded kernel modules] ***************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Assert NPU kernel module is loaded] *******************************
+ok: [ai-ms-s1-max-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [rocm : Stat NPU device node] *********************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Assert NPU device node exists] ************************************
+ok: [ai-ms-s1-max-01] => 
+    changed: false
+    msg: All assertions passed
+
+TASK [rocm : Ensure ROCm evidence directory exists] ****************************
+ok: [ai-ms-s1-max-01]
+
+TASK [rocm : Record installed ROCm package versions] ***************************
+ok: [ai-ms-s1-max-01] => (item=rocm)
+ok: [ai-ms-s1-max-01] => (item=rocm-core)
+ok: [ai-ms-s1-max-01] => (item=rocm-hip)
+ok: [ai-ms-s1-max-01] => (item=hip-runtime-amd)
+ok: [ai-ms-s1-max-01] => (item=hsa-rocr)
+ok: [ai-ms-s1-max-01] => (item=rocminfo)
+ok: [ai-ms-s1-max-01] => (item=rocm-smi-lib)
+ok: [ai-ms-s1-max-01] => (item=amdgpu-core)
+
+TASK [rocm : Write ROCm runtime evidence] **************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [Ensure checkpoints directory exists] *************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [Persist ROCm evidence checkpoint] ****************************************
+ok: [ai-ms-s1-max-01]
+
+PLAY [Phase 6: Dual-BDF GPU compute acceptance validation] *********************
+
+TASK [Collect live hardware inventory] *****************************************
+included: hardware_inventory for ai-ms-s1-max-01
+
+TASK [hardware_inventory : Ensure hardware inventory working directory exists] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_inventory : Ensure hardware collector install directory exists] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_inventory : Install read-only hardware collector] ***************
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_inventory : Collect required hardware sources without mutation] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_inventory : Persist observed hardware snapshot] *****************
+ok: [ai-ms-s1-max-01]
+
+TASK [Classify hardware against version-controlled profile] ********************
+included: hardware_validation for ai-ms-s1-max-01
+
+TASK [hardware_validation : Load version-controlled expected hardware profile] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_validation : Ensure hardware classifier install directory exists] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_validation : Install pure hardware classifier] ******************
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_validation : Ensure hardware evidence directory exists] *********
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_validation : Materialize expected profile for pure comparison] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [hardware_validation : Classify observed hardware and write structured evidence] ***
+ok: [ai-ms-s1-max-01]
+
+TASK [Ensure checkpoints directory exists] *************************************
+ok: [ai-ms-s1-max-01]
+
+TASK [Persist GPU validation evidence checkpoint] ******************************
+ok: [ai-ms-s1-max-01]
+
+TASK [Persist Phase 1 platform acceptance artifact] ****************************
+changed: [ai-ms-s1-max-01]
+
+PLAY [Phase 7: Pinned PyTorch XPU environment validation and promotion] ********
+
+PLAY [Phase 8: Verified inference runtime qualification] ***********************
+
+PLAY RECAP *********************************************************************
+ai-ms-s1-max-01            : ok=52   changed=1    unreachable=0    failed=0    skipped=9    rescued=0    ignored=0   
+

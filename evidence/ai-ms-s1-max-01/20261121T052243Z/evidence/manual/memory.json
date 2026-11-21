@@ -1,0 +1,61 @@
+{
+  "checks": [
+    {
+      "expected": 122,
+      "observed": 122.69,
+      "rationale": "Initial memory capacity is allowed to vary within policy tolerance.",
+      "rule": "memory_capacity",
+      "severity": "informational",
+      "status": "pass"
+    }
+  ],
+  "expected": {
+    "installed_gib": {
+      "classification": "initial_commissioning",
+      "expected": 122,
+      "out_of_tolerance_severity": "warning",
+      "tolerance_gib": 4
+    }
+  },
+  "observed": {
+    "dimms": [
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      },
+      {
+        "locator": "DIMM 0",
+        "size": "16 GB"
+      }
+    ],
+    "total_gib": 122.69
+  },
+  "rationale": "Capacity and DIMM topology are recorded independently.",
+  "severity": "informational",
+  "simulated": false,
+  "status": "pass"
+}

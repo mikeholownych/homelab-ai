@@ -1,0 +1,88 @@
+{
+  "checks": [],
+  "expected": "discovered",
+  "observed": [
+    {
+      "children": [
+        {
+          "fstype": "vfat",
+          "model": null,
+          "mountpoints": [
+            "/boot/efi"
+          ],
+          "name": "nvme0n1p1",
+          "rev": null,
+          "serial": null,
+          "size": 1127219200,
+          "type": "part",
+          "wwn": "eui.000000000000000000a07501eae02705"
+        },
+        {
+          "fstype": "ext4",
+          "model": null,
+          "mountpoints": [
+            "/boot"
+          ],
+          "name": "nvme0n1p2",
+          "rev": null,
+          "serial": null,
+          "size": 2147483648,
+          "type": "part",
+          "wwn": "eui.000000000000000000a07501eae02705"
+        },
+        {
+          "children": [
+            {
+              "fstype": "ext4",
+              "model": null,
+              "mountpoints": [
+                "/"
+              ],
+              "name": "ubuntu--vg-ubuntu--lv",
+              "rev": null,
+              "serial": null,
+              "size": 107374182400,
+              "type": "lvm",
+              "wwn": null
+            },
+            {
+              "fstype": "xfs",
+              "model": null,
+              "mountpoints": [
+                "/var/lib/local-ai"
+              ],
+              "name": "ubuntu--vg-local--ai--lv",
+              "rev": null,
+              "serial": null,
+              "size": 1099511627776,
+              "type": "lvm",
+              "wwn": null
+            }
+          ],
+          "fstype": "LVM2_member",
+          "model": null,
+          "mountpoints": [],
+          "name": "nvme0n1p3",
+          "rev": null,
+          "serial": null,
+          "size": 1997122043904,
+          "type": "part",
+          "wwn": "eui.000000000000000000a07501eae02705"
+        }
+      ],
+      "fstype": null,
+      "model": "CT2000E100SSD8",
+      "mountpoints": [],
+      "name": "nvme0n1",
+      "rev": "VDCR4014",
+      "serial": "2602EAE02705",
+      "size": 2000398934016,
+      "type": "disk",
+      "wwn": "eui.000000000000000000a07501eae02705"
+    }
+  ],
+  "rationale": "NVMe identity, size, and firmware are discovery data.",
+  "severity": "informational",
+  "simulated": false,
+  "status": "pass"
+}
