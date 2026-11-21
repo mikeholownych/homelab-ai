@@ -22,3 +22,8 @@ Lab-only campaign on ROCm 7.2.0 / gfx1151. Spec:
 - Containers preferred; native only with archived container blocker.
 - Reuse `../sycl-optimization/harness/engine_sweep_client.py` against `127.0.0.1:<port>`.
 - Do not touch `inventory/production`.
+
+## Latest recommendation
+- [`evidence/20261121T073429Z/recommendation.md`](evidence/20261121T073429Z/recommendation.md):
+  llama.cpp HIP + Qwen3-Coder-30B-A3B Q8_0 (runner-up Qwen3.6-35B-A3B UD-Q6_K); SGLang unavailable.
+  Lab wire next after operator acceptance; production promotion deferred.
