@@ -98,8 +98,8 @@ orchestrator_gateway_tls_controller_trust_store_enabled: false
 orchestrator_gateway_remote_client_cidrs: [10.0.8.95/32]
 # Release id names the commit whose gateway code ships here (tests/test_gateway_release_identity.py); the artifact is
 # identical to the one deployed on ai-5820-01.
-orchestrator_gateway_release_id: ms-s1-gateway-35008cba6d412a980637ed342f480c7843eedcbf
-orchestrator_gateway_release_dir: /var/lib/aihost/releases/ms-s1-gateway-35008cba6d412a980637ed342f480c7843eedcbf
+orchestrator_gateway_release_id: ms-s1-gateway-957a01d4b5ad29df0066c9921416239db3a7fb89
+orchestrator_gateway_release_dir: /var/lib/aihost/releases/ms-s1-gateway-957a01d4b5ad29df0066c9921416239db3a7fb89
 # No second worker, no legacy opencode token and no predecessor evidence chains on this host.
 orchestrator_gateway_client_token_extra_file: ""
 orchestrator_gateway_evidence_predecessors: []
