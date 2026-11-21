@@ -13,8 +13,15 @@ llama_cpp_hip_uid: "{{ host_runtime_uid | default(999) }}"
 # filesystem of the lab host is small. TMPDIR (image copy staging) follows it.
 llama_cpp_hip_storage_root: /var/lib/local-ai/podman-{{ llama_cpp_hip_user }}
 llama_cpp_hip_model_dir: /var/lib/local-ai/models/gguf
-# Loopback only. The lab host has no gateway; the API is unauthenticated and must not be reachable from the LAN.
+# Loopback only by default. The lab host has no gateway; without an API key the API is unauthenticated and must not
+# be reachable from the LAN. A non-loopback bind (production LAN, firewalled by the security role) is only allowed
+# when llama_cpp_hip_api_key_required is true: every worker then gets a per-worker key file and llama-server
+# enforces it (--api-key-file), and the health check authenticates with it.
 llama_cpp_hip_host: 127.0.0.1
+llama_cpp_hip_api_key_required: false
+# Per-worker key file: <config_root>/<worker_key>/worker-api-key (owned by the runtime account, mode 0400, generated
+# on first converge and preserved afterwards; the same pattern as llama_cpp_container's worker-api-key).
+llama_cpp_hip_config_root: /etc/local-ai/llama-hip
 llama_cpp_hip_default_args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1"]
 # name -> {service_name, container_name, port, context, model_file, [model_source], [args], [env]}
 #   model_source: absolute path of an already-downloaded model; it is hard-linked into llama_cpp_hip_model_dir
