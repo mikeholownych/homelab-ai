@@ -1,0 +1,76 @@
+---
+- name: Run rocminfo
+  ansible.builtin.command:
+    cmd: rocminfo
+  register: rocm_rocminfo
+  changed_when: false
+
+- name: Require GPU and NPU agents in rocminfo
+  ansible.builtin.assert:
+    that:
+      - rocm_expected_gpu_agent in rocm_rocminfo.stdout
+      - rocm_expected_npu_agent in rocm_rocminfo.stdout
+    fail_msg: >-
+      rocminfo must report {{ rocm_expected_gpu_agent }} and {{ rocm_expected_npu_agent }} agents.
+
+- name: Run rocm-smi
+  ansible.builtin.command:
+    cmd: rocm-smi
+  register: rocm_smi
+  changed_when: false
+
+- name: List loaded kernel modules
+  ansible.builtin.command:
+    cmd: lsmod
+  register: rocm_lsmod
+  changed_when: false
+
+- name: Assert NPU kernel module is loaded
+  ansible.builtin.assert:
+    that:
+      - rocm_lsmod.stdout_lines | select('match', '^' ~ rocm_npu_module ~ '\\s') | list | length > 0
+    fail_msg: Kernel module {{ rocm_npu_module }} is not loaded.
+
+- name: Stat NPU device node
+  ansible.builtin.stat:
+    path: "{{ rocm_npu_device_node }}"
+  register: rocm_npu_node_stat
+
+- name: Assert NPU device node exists
+  ansible.builtin.assert:
+    that:
+      - rocm_npu_node_stat.stat.exists
+    fail_msg: NPU device node {{ rocm_npu_device_node }} does not exist.
+
+- name: Ensure ROCm evidence directory exists
+  ansible.builtin.file:
+    path: "{{ rocm_evidence_path | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Record installed ROCm package versions
+  ansible.builtin.set_fact:
+    rocm_installed_versions: >-
+      {{ rocm_installed_versions | default({})
+         | combine({item: ansible_facts.packages[item][0].version}) }}
+  loop: "{{ rocm_packages.keys() | list }}"
+
+- name: Write ROCm runtime evidence
+  ansible.builtin.copy:
+    dest: "{{ rocm_evidence_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ rocm_runtime_evidence | to_nice_json }}\n"
+  vars:
+    rocm_runtime_evidence:
+      rocm_release: "{{ rocm_release }}"
+      timestamp: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+      package_versions: "{{ rocm_installed_versions }}"
+      agents: "{{ rocm_rocminfo.stdout | regex_findall('(?m)^\\s*Name:\\s+(\\S+)') | unique }}"
+      pci_devices: "{{ rocm_preflight_pci.stdout_lines | select('search', rocm_target_pci_ids | join('|')) | list }}"
+      npu_module: "{{ rocm_npu_module }}"
+      npu_device_node: "{{ rocm_npu_device_node }}"
+      physical_acceptance: true

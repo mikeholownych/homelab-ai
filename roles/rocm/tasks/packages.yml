@@ -1,0 +1,24 @@
+---
+- name: Install pinned ROCm packages
+  ansible.builtin.apt:
+    name: >-
+      {{ rocm_packages | dict2items | map(attribute='key')
+         | zip(rocm_packages.values() | list) | map('join', '=') | list }}
+    state: present
+    allow_downgrade: true
+
+- name: Gather package facts after ROCm installation
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Assert installed ROCm package versions match pins
+  ansible.builtin.assert:
+    that:
+      - item.key in ansible_facts.packages
+      - ansible_facts.packages[item.key] | map(attribute='version') | list == [item.value]
+    fail_msg: >-
+      Package {{ item.key }} is not installed at pinned version {{ item.value }}.
+  loop: "{{ rocm_packages | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: not ansible_check_mode
