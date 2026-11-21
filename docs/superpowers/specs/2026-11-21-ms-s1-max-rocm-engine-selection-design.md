@@ -2,8 +2,9 @@
 
 **Date:** 2026-11-21
 
-**Status:** Awaiting implementation plan — Phase 1 platform accepted
-(`platform_accepted_engines_deferred`, PR #56 / `4bbb907`)
+**Status:** Implementation in progress — see
+`docs/superpowers/plans/2026-11-21-ms-s1-max-rocm-engine-selection.md`
+(Phase 1 platform accepted: `platform_accepted_engines_deferred`, PR #56 / `4bbb907`)
 
 **Host:** `ai-ms-s1-max-01` at `10.0.8.6` (Minisforum MS-S1 Max, lab only)
 
