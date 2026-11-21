@@ -17,7 +17,7 @@ from .smart_router import (
     PromptComplexityAnalyzer,
     ComplexityReport,
     QualityModel,
-    preferred_pool_order,
+    preferred_pool_bands,
     quality_first_rank_key,
 )
 
@@ -32,6 +32,15 @@ RULE_KEYS = {
 OUTCOMES = ("pass", "fail", "partial")
 COMPLEXITY_TIERS = ("simple", "medium", "complex")
 ROUTING_STRATEGIES = ("first_match", "least_latency", "least_busy", "cost_optimized", "quality_first")
+
+
+# quality_first picks the pool at request time, so the reasoning policy follows the selected pool and matches the
+# pinned alias of that pool (engineering/deep, engineering/lead, engineering/interactive-rocm).
+QUALITY_FIRST_POOL_POLICIES: dict[str, RoutePolicy] = {
+    "deep": RoutePolicy("on", 4096, 8192),
+    "lead": RoutePolicy("off", 0, 8192),
+    "rocm": RoutePolicy("off", 0, 8192),
+}
 
 
 class RouteConfigError(ValueError):
@@ -412,6 +421,7 @@ class Router:
                 target_pool = rule.pool
                 fallback_pools = list(rule.fallback)
                 reason = f"matched rule '{rule.rule_id}'"
+                policy = rule.policy
 
                 # 2. Circuit Breaker Fast-Failover: if target pool is OPEN, immediately promote first healthy fallback
                 if self.circuit_breakers is not None and not self.circuit_breakers.is_pool_available(target_pool):
@@ -461,11 +471,12 @@ class Router:
                         unhealthy = [p for p in all_candidate_pools if p not in healthy]
                     else:
                         healthy, unhealthy = list(all_candidate_pools), []
-                    order = preferred_pool_order(complexity, has_tools=has_tools)
+                    bands = preferred_pool_bands(complexity, has_tools=has_tools)
+                    order = [p for band in bands for p in band]
                     healthy.sort(
                         key=lambda p: quality_first_rank_key(
                             p,
-                            order=order,
+                            bands=bands,
                             quality=self.quality_model,
                             latency_tracker=self.latency_tracker,
                         )
@@ -474,6 +485,7 @@ class Router:
                     if ranked:
                         target_pool = ranked[0]
                         fallback_pools = ranked[1:]
+                        policy = QUALITY_FIRST_POOL_POLICIES.get(target_pool, rule.policy)
                         reason += f"; optimized for quality_first (fit order {order})"
 
                 return RouteDecision(
@@ -481,7 +493,7 @@ class Router:
                     pool=target_pool,
                     fallback=tuple(fallback_pools),
                     reason=reason,
-                    policy=rule.policy,
+                    policy=policy,
                     fallback_on_saturation=rule.fallback_on_saturation,
                     max_queue_wait_ms=rule.max_queue_wait_ms,
                     canary=rule.canary,

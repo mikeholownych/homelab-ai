@@ -30,6 +30,7 @@ from orchestrator_runtime import (
     Router,
     RouteRule,
 )
+from orchestrator_runtime.smart_router import ComplexityReport, QualityModel, preferred_pool_bands
 from tests.test_orchestrator_runtime import worker
 
 
@@ -373,8 +374,96 @@ def test_quality_first_prefers_deep_for_complex_reasoning():
     req = {"messages": [{"role": "user", "content": "step-by-step analyze root cause of this architecture deadlock"}]}
     d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=req)
     assert d.pool == "deep"
-    assert d.fallback == ("lead", "rocm")
+    # deep is alone in the top band; the remaining peers follow in quality order (rocm 2.5 > lead 2.0)
+    assert d.fallback == ("rocm", "lead")
     assert "quality_first" in d.reason
+
+
+COMPLEX_REQ = {"messages": [{"role": "user", "content": "step-by-step analyze root cause of this architecture deadlock"}]}
+CODE_TOOLS_REQ = {
+    "messages": [{"role": "user", "content": "```python\ndef foo():\n    pass\n``` fix this function"}],
+    "tools": [{"type": "function", "function": {"name": "read_file", "parameters": {}}}],
+}
+
+
+def test_quality_first_deep_selection_uses_deep_reasoning_policy():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=COMPLEX_REQ)
+    assert d.pool == "deep"
+    assert d.policy.mode == "on"
+    assert d.policy.budget == 4096
+    assert d.policy.answer_allowance == 8192
+    assert d.policy == router.alias_specs["engineering/deep"].policy
+
+
+def test_quality_first_lead_and_rocm_selection_keep_reasoning_off():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    rocm = router.decide(model="engineering/auto", task_class=None, has_tools=True, prompt_tokens=400, request=CODE_TOOLS_REQ)
+    assert rocm.pool == "rocm"
+    assert rocm.policy.mode == "off" and rocm.policy.answer_allowance == 8192
+    lead = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=5,
+                         request={"messages": [{"role": "user", "content": "hi"}]})
+    assert lead.pool == "lead"
+    assert lead.policy.mode == "off" and lead.policy.answer_allowance == 8192
+
+
+def test_quality_first_failover_off_deep_drops_deep_reasoning_policy():
+    cbs = CircuitBreakerRegistry(worker_failure_threshold=2, pool_failure_threshold=2)
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES, circuit_breakers=cbs)
+    cbs.record_failure("deep1", pool_name="deep", error="500")
+    cbs.record_failure("deep1", pool_name="deep", error="500")
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=COMPLEX_REQ)
+    assert d.pool in ("lead", "rocm")
+    assert d.policy.mode == "off"
+
+
+def test_pool_bands_encode_fit_classes():
+    complex_report = ComplexityReport(score=0.9, tier="complex")
+    assert preferred_pool_bands(complex_report, has_tools=False) == [["deep"], ["lead", "rocm"]]
+    assert preferred_pool_bands(complex_report, has_tools=True) == [["deep"], ["lead", "rocm"]]
+    assert preferred_pool_bands(ComplexityReport(score=0.5, tier="medium"), has_tools=True) == [["rocm", "lead"], ["deep"]]
+    assert preferred_pool_bands(ComplexityReport(score=0.1, tier="simple"), has_tools=False) == [["lead"], ["rocm"], ["deep"]]
+    assert preferred_pool_bands(None, has_tools=False) == [["lead"], ["rocm"], ["deep"]]
+
+
+def test_quality_weights_reorder_peers_within_a_band():
+    # Default weights: rocm 2.5 > lead 2.0 so code+tools prefers rocm; an operator retune flips it.
+    retuned = Router.from_config(AUTO_RULES, AUTO_ALIASES, quality_model=QualityModel({"rocm": 1.0}))
+    d = retuned.decide(model="engineering/auto", task_class=None, has_tools=True, prompt_tokens=400, request=CODE_TOOLS_REQ)
+    assert d.pool == "lead"
+    assert d.fallback == ("rocm", "deep")
+    default = Router.from_config(AUTO_RULES, AUTO_ALIASES)
+    d = default.decide(model="engineering/auto", task_class=None, has_tools=True, prompt_tokens=400, request=CODE_TOOLS_REQ)
+    assert d.pool == "rocm"
+    assert d.fallback == ("lead", "deep")
+
+
+def test_quality_weights_reorder_fallbacks_of_complex_requests():
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES, quality_model=QualityModel({"lead": 9.0}))
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=COMPLEX_REQ)
+    assert d.pool == "deep"
+    assert d.fallback == ("lead", "rocm")
+
+
+def test_quality_weights_never_override_fit_band():
+    # Even an extreme weight on deep cannot pull it ahead of the code/tools band, nor a tiny one demote it for complex.
+    boosted = Router.from_config(AUTO_RULES, AUTO_ALIASES, quality_model=QualityModel({"deep": 100.0}))
+    d = boosted.decide(model="engineering/auto", task_class=None, has_tools=True, prompt_tokens=400, request=CODE_TOOLS_REQ)
+    assert d.pool == "rocm"
+    assert d.fallback[-1] == "deep"
+    demoted = Router.from_config(AUTO_RULES, AUTO_ALIASES, quality_model=QualityModel({"deep": 0.1}))
+    d = demoted.decide(model="engineering/auto", task_class=None, has_tools=False, prompt_tokens=800, request=COMPLEX_REQ)
+    assert d.pool == "deep"
+
+
+def test_quality_first_latency_breaks_equal_quality_ties_within_band():
+    tracker = LatencyTracker()
+    tracker.record("w-lead", "lead", 0.5)
+    tracker.record("w-rocm", "rocm", 2.0)
+    router = Router.from_config(AUTO_RULES, AUTO_ALIASES, latency_tracker=tracker,
+                                quality_model=QualityModel({"rocm": 2.0}))
+    d = router.decide(model="engineering/auto", task_class=None, has_tools=True, prompt_tokens=400, request=CODE_TOOLS_REQ)
+    assert d.pool == "lead"
 
 
 def test_quality_first_prefers_rocm_for_code_tools():
