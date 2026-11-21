@@ -23,8 +23,16 @@
     - name: Include Intel GPU role for GPU-capable nodes
       ansible.builtin.include_role:
         name: intel_gpu
-      when: capabilities.gpu | default(false) | bool
+      when:
+        - capabilities.gpu | default(false) | bool
+        - not (rocm_install_enabled | default(false) | bool)
       tags: [site, gpu, hardware, runtime]
+
+    - name: Include ROCm role for AMD GPU lab/production nodes
+      ansible.builtin.include_role:
+        name: rocm
+      when: rocm_install_enabled | default(false) | bool
+      tags: [site, gpu, hardware, runtime, rocm]
 
     - name: Include optional container runtime for GPU-capable nodes
       ansible.builtin.include_role:

@@ -84,3 +84,33 @@ def test_rocm_templates_render_live_working_lines():
         f"deb [arch=amd64,i386 signed-by={k}] https://repo.radeon.com/graphics/7.2/ubuntu noble main",
         f"deb [arch=amd64,i386 signed-by={k}] https://repo.radeon.com/amdgpu/30.30/ubuntu noble main",
     ]
+
+
+def test_site_includes_rocm_role_gated_and_excludes_intel_when_rocm_enabled():
+    tasks = [t for play in load("playbooks/site.yml") for t in play.get("tasks", [])]
+    rocm = next(t for t in tasks if t.get("ansible.builtin.include_role", {}).get("name") == "rocm")
+    assert rocm["when"] == "rocm_install_enabled | default(false) | bool"
+    assert "rocm" in rocm["tags"]
+    intel = next(t for t in tasks if t.get("ansible.builtin.include_role", {}).get("name") == "intel_gpu")
+    assert "not (rocm_install_enabled | default(false) | bool)" in intel["when"]
+
+
+def test_commission_does_not_force_omix_when_rocm_enabled():
+    plays = load("playbooks/commission.yml")
+    phase5 = next(p for p in plays if p["name"].startswith("Phase 5:"))
+    intel = next(t for t in phase5["tasks"] if t.get("ansible.builtin.include_role", {}).get("name") == "intel_gpu")
+    assert intel["vars"] == {"intel_gpu_install_enabled": True}
+    assert "not (rocm_install_enabled | default(false) | bool)" in intel["when"]
+
+
+def test_commission_has_rocm_phase_5b_with_deferred_engines():
+    plays = load("playbooks/commission.yml")
+    phase5b = next(p for p in plays if p["name"].startswith("Phase 5b:"))
+    assert phase5b["tags"] == ["rocm"]
+    include = next(t for t in phase5b["tasks"] if t.get("ansible.builtin.include_role", {}).get("name") == "rocm")
+    assert include["when"] == "rocm_install_enabled | default(false) | bool"
+    text = (ROOT / "playbooks/commission.yml").read_text()
+    assert "checkpoints/rocm.json" in text
+    assert "'engines_deferred': true" in text
+    names = [p["name"] for p in plays]
+    assert names.index(phase5b["name"]) < next(i for i, n in enumerate(names) if n.startswith("Phase 6:"))
