@@ -73,7 +73,9 @@ the client auto front door.
 ## Section 1 — Client contract
 
 - Front door: `ai-5820-01` gateway OpenAI routes (`/v1/chat/completions`, etc.).
-- `model: "engineering/auto"` or omitted → intelligent choice among lead / deep / rocm.
+- `model: "engineering/auto"` or omitted (when the gateway treats missing model as
+  auto) → intelligent choice among lead / deep / rocm. Unknown non-alias model
+  names are not auto.
 - Pins bypass routing and bind to a pool:
   - `engineering/lead`
   - `engineering/deep`
