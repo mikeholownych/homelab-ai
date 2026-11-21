@@ -1,0 +1,95 @@
+---
+schema_version: 1.0.0
+profile_name: ms_s1_max_strix_halo
+compute_evidence_backend: rocm
+
+platform:
+  manufacturer: Micro Computer (HK) Tech Limited
+  product_family: MS-S1 MAX
+  machine_type_model: "MS-S1 MAX"
+  product_name_patterns:
+    - MS-S1 MAX
+    - MS-S1
+
+cpu:
+  vendor: AMD
+  model_patterns:
+    - RYZEN AI MAX+ 395
+    - Ryzen AI Max+ 395
+    - AMD RYZEN AI MAX+ 395
+  sockets_expected: 1
+
+gpu:
+  count_expected: 1
+  architecture: Strix Halo
+  approved_pci_devices:
+    - vendor_id: "1002"
+      device_id: "1586"
+      model: Radeon 8060S
+      source: Live rocminfo gfx1151 / PCI 1002:1586 on ai-ms-s1-max-01
+      source_url: https://www.amd.com/en/products/processors/laptop/ryzen-ai-max-series.html
+  expected_models:
+    - vendor: AMD
+      model: Radeon 8060S
+      memory_gib:
+        approximate: 61
+        tolerance_gib: 4
+        source: rocminfo_coarse_pool
+
+pcie:
+  host_link:
+    max_generation: 4
+    expected_negotiated_generation: 0
+  width_expectations:
+    desired_when_slot_supports: x16
+    allow_slot_limited_width: true
+  material_degradation:
+    default_severity: informational
+    minimum_negotiated_to_slot_ratio: 0.0
+
+firmware:
+  above_4g_decoding:
+    required: false
+    missing_severity: informational
+    undiscoverable_status: not_applicable
+  resizable_bar:
+    required: false
+    missing_severity: informational
+
+memory:
+  installed_gib:
+    expected: 122
+    tolerance_gib: 4
+    out_of_tolerance_severity: warning
+    classification: initial_commissioning
+
+npu:
+  required: true
+  hsa_name: aie2p
+  marketing_name: RyzenAI-npu5
+  kernel_module: amdxdna
+  device_node: /dev/accel/accel0
+
+discovery_fields:
+  record:
+    - dimm_topology
+    - nvme_devices
+    - nic_inventory
+    - bios_version
+    - firmware_inventory
+  asset_identifiers:
+    - serial_number
+
+severity_rules:
+  information:
+    - dimm_topology_observed
+    - firmware_inventory_observed
+  warning:
+    - memory_capacity
+    - unexpected_gpu_devices
+  blocking:
+    - gpu_count
+    - gpu_model_match
+    - rocm_gpu_agent
+    - rocm_npu_agent
+    - npu_device_node
