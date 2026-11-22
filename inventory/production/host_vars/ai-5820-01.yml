@@ -191,11 +191,14 @@ llama_cpp_container_workers:
     # research/sycl-optimization/integration-recommendations.md. Rollback = remove image_ref and env.
     image_ref: localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
     env: {GGML_SYCL_ENABLE_XMX_ESIMD: 0}
-    model_file: qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf
-    served_name: Qwen3.6-35B-A3B-UD-Q4_K_M
+    # Track L cutover (docs/superpowers/plans/2026-11-22-lead-rocm-capability-mix.md Task 5): Qwen3.8-27B won the
+    # lead bake-off and holds CAIS grant q-coding.routine-412a2b3ad304-85f81041 (reasoning on, budget 4096).
+    # Rollback = Qwen3.6-35B-A3B qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf (sha256:ac0e2c11...), budget 8192.
+    model_file: qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf
+    served_name: Qwen3.8-27B-UD-Q4_K_M
     context: 65536
-    # Q-BUDGET selected 8192 under the authorized quality-over-speed policy.
-    reasoning_budget: 8192
+    # Matches the granted profile's reasoning budget (evaluations/cais/profiles/lead-qwen38.json).
+    reasoning_budget: 4096
     cpuset_cpus: "0,1,4,5"
   worker2:
     worker_id: b0-live-llama-deep-worker2
@@ -337,8 +340,8 @@ orchestrator_gateway_capability_evidence:
       result: pass
       evidence_id: qualify-contract-qwen36-reasoning-on-pinned-2026-10-09
       date: "2026-10-09"
-# Model routing. Pools: lead = Qwen3.6-35B-A3B, deep = Flash-Next (best validated accuracy in the bounded
-# engineering benchmark at the selected budgets). Aliases bypass the rules.
+# Model routing. Pools: lead = Qwen3.8-27B (Track L cutover; was Qwen3.6-35B-A3B), deep = Flash-Next (best validated
+# accuracy in the bounded engineering benchmark at the selected budgets). Aliases bypass the rules.
 # Every route carries a finite output policy (Design 02 L2/L3): requests without max_tokens are bounded by it.
 # R3: a client's retry (X-AIHost-Attempt >= 2) or a request after a reported failure escalates to deep.
 orchestrator_gateway_routes:
@@ -393,10 +396,15 @@ orchestrator_gateway_routes:
     fallback: [deep]
     reasoning: {mode: "off", answer_allowance: 8192}
 orchestrator_gateway_model_aliases:
-  engineering/lead: {pool: lead, reasoning: {mode: "off", answer_allowance: 8192}}
+  # Track L cutover: must equal the reasoning policy the CAIS grant q-coding.routine-412a2b3ad304-85f81041 was earned
+  # under (mode on, budget 4096, answer_allowance 8192; evaluations/cais/profiles/lead-qwen38.json), or the grant will
+  # not match the live profile identity. Rollback to Qwen3.6 lead: mode off, answer_allowance 8192.
+  engineering/lead: {pool: lead, reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}}
   engineering/deep: {pool: deep, reasoning: {mode: "on", budget: 4096, answer_allowance: 8192}}
   # Operator decision 2026-10-11 (V5): lead reasoning stays off by default; 8192 (the Q-BUDGET choice) is opt-in for
   # demanding tasks through this alias. The observed gain was 6.7 points at 2-3x time per task.
+  # Track L cutover: the Qwen3.8 lead worker is capped at reasoning_budget 4096, so a request for 8192 here is clamped
+  # to 4096 by the worker cap (reasoning.py); engineering/lead now already reasons at the granted 4096.
   engineering/lead-reasoning: {pool: lead, reasoning: {mode: "on", budget: 8192, answer_allowance: 8192}}
   engineering/interactive-rocm: {pool: rocm, reasoning: {mode: "off", answer_allowance: 8192}}
 # Relative pool quality for the quality_first strategy (engineering/auto); matches QualityModel defaults.
@@ -433,12 +441,12 @@ orchestrator_gateway_workers:
     token_file: worker-lead-token
     pool: lead
     engine: llama.cpp
-    reasoning_budget: 8192
+    reasoning_budget: 4096
     port: 8000
     public_model_id: engineering/b0
-    model_id: Qwen3.6-35B-A3B-UD-Q4_K_M
-    revision: gguf-ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
-    artifact_digest: sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61
+    model_id: Qwen3.8-27B-UD-Q4_K_M
+    revision: gguf-322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+    artifact_digest: sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
     runtime_image_digest: sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
     topology: llama-cpp-sycl
     hardware_class: intel-arc-pro-b65-32g
@@ -447,9 +455,9 @@ orchestrator_gateway_workers:
     context_limit: 65536
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-    evidence_ids: [qbudget-qwen36-stageb-2026-10-09, qualification-qwen36-2026-10-09]
+    evidence_ids: [eng-hard-b-q38-27b-q4km, q-coding.routine-412a2b3ad304-85f81041]
     registry_version: 1
-    measured_at: "2026-10-09T06:07:12+00:00"
+    measured_at: "2026-11-22T20:49:03+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://127.0.0.1:8000
   - worker_id: b0-live-llama-deep-worker2
