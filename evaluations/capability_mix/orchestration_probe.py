@@ -9,9 +9,16 @@ from __future__ import annotations
 import argparse
 import json
 import ssl
+import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+def _require_https_base(base: str) -> None:
+    if not base.startswith("https://"):
+        raise ValueError("An authenticated TLS gateway is required")
 
 
 def _post(base: str, headers: dict, ca: str, body: dict, timeout: int = 120) -> dict:
@@ -60,6 +67,30 @@ def score_route(scenario: dict, resp: dict) -> tuple[int, str]:
     return 2, "pass"
 
 
+def _write_evidence(out_dir: Path, model: str, base: str, results: list) -> Path:
+    total = sum(r.get("score", 0) for r in results)
+    finished_at = datetime.now(timezone.utc).isoformat()
+    out = {
+        "schema": "capability-mix-orchestration-probe/v1",
+        "model": model,
+        "gateway": base,
+        "finished_at": finished_at,
+        "total": total,
+        "max_total": 4,
+        "scenarios": results,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"orch-{model.replace('/', '_')}-{finished_at[:19].replace(':', '')}.json"
+    path.write_text(json.dumps(out, indent=2) + "\n")
+    return path
+
+
+def _scenario_request_error(exc: BaseException) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        return f"HTTP {exc.code}: {exc.reason}"
+    return str(exc)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="capability-mix orchestration probe")
     p.add_argument("--base", required=True)
@@ -69,6 +100,11 @@ def main() -> int:
     p.add_argument("--prompts-dir", required=True)
     p.add_argument("--out", required=True)
     args = p.parse_args()
+    try:
+        _require_https_base(args.base)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     token = Path(args.token_file).read_text().strip()
     headers = {
         "Content-Type": "application/json",
@@ -80,59 +116,59 @@ def main() -> int:
     results = []
     # orch_tools: first turn with tools, second turn with tool result
     tools_sc = json.loads((prompts / "orch_tools.json").read_text())
-    first = _post(args.base, headers, args.ca, {
-        "model": args.model,
-        "messages": tools_sc["messages"],
-        "tools": tools_sc["tools"],
-        "temperature": 0,
-        "max_tokens": 512,
-    })
-    choice = (first.get("choices") or [{}])[0].get("message") or {}
-    second = None
-    if choice.get("tool_calls"):
-        tc = choice["tool_calls"][0]
-        messages = list(tools_sc["messages"]) + [
-            choice,
-            {
-                "role": "tool",
-                "tool_call_id": tc.get("id") or "call_1",
-                "content": json.dumps(tools_sc["tool_result"]),
-            },
-        ]
-        second = _post(args.base, headers, args.ca, {
+    try:
+        first = _post(args.base, headers, args.ca, {
             "model": args.model,
-            "messages": messages,
+            "messages": tools_sc["messages"],
+            "tools": tools_sc["tools"],
             "temperature": 0,
-            "max_tokens": 128,
+            "max_tokens": 512,
         })
-    s_tools, note_tools = score_tools(tools_sc, first, second)
-    results.append({"id": "orch_tools", "score": s_tools, "note": note_tools})
+        choice = (first.get("choices") or [{}])[0].get("message") or {}
+        second = None
+        if choice.get("tool_calls"):
+            tc = choice["tool_calls"][0]
+            messages = list(tools_sc["messages"]) + [
+                choice,
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.get("id") or "call_1",
+                    "content": json.dumps(tools_sc["tool_result"]),
+                },
+            ]
+            second = _post(args.base, headers, args.ca, {
+                "model": args.model,
+                "messages": messages,
+                "temperature": 0,
+                "max_tokens": 128,
+            })
+        s_tools, note_tools = score_tools(tools_sc, first, second)
+        results.append({"id": "orch_tools", "score": s_tools, "note": note_tools})
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        err = _scenario_request_error(exc)
+        print(f"error: orch_tools request failed: {err}", file=sys.stderr)
+        results.append({"id": "orch_tools", "score": 0, "note": "request_failed", "error": err})
 
     route_sc = json.loads((prompts / "orch_route.json").read_text())
-    route_resp = _post(args.base, headers, args.ca, {
-        "model": args.model,
-        "messages": route_sc["messages"],
-        "temperature": 0,
-        "max_tokens": 256,
-    })
-    s_route, note_route = score_route(route_sc, route_resp)
-    results.append({"id": "orch_route", "score": s_route, "note": note_route})
+    try:
+        route_resp = _post(args.base, headers, args.ca, {
+            "model": args.model,
+            "messages": route_sc["messages"],
+            "temperature": 0,
+            "max_tokens": 256,
+        })
+        s_route, note_route = score_route(route_sc, route_resp)
+        results.append({"id": "orch_route", "score": s_route, "note": note_route})
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        err = _scenario_request_error(exc)
+        print(f"error: orch_route request failed: {err}", file=sys.stderr)
+        results.append({"id": "orch_route", "score": 0, "note": "request_failed", "error": err})
 
-    total = sum(r["score"] for r in results)
-    out = {
-        "schema": "capability-mix-orchestration-probe/v1",
-        "model": args.model,
-        "gateway": args.base,
-        "finished_at": datetime.now(timezone.utc).isoformat(),
-        "total": total,
-        "max_total": 4,
-        "scenarios": results,
-    }
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"orch-{args.model.replace('/', '_')}-{out['finished_at'][:19].replace(':', '')}.json"
-    path.write_text(json.dumps(out, indent=2) + "\n")
+    path = _write_evidence(Path(args.out), args.model, args.base, results)
+    total = sum(r.get("score", 0) for r in results)
     print(json.dumps({"path": str(path), "total": total, "scenarios": results}, indent=2))
+    if any("error" in r for r in results):
+        return 2
     return 0 if all(r["score"] > 0 for r in results) else 1
 
 

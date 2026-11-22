@@ -1,7 +1,8 @@
-from pathlib import Path
+import importlib.util
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "research" / "capability-mix"
@@ -32,3 +33,20 @@ def test_orchestration_probe_module_help():
     proc = subprocess.run([sys.executable, str(script), "--help"], capture_output=True, text=True)
     assert proc.returncode == 0
     assert "orchestration" in (proc.stdout + proc.stderr).lower() or "--base" in proc.stdout
+
+
+def _orchestration_probe_module():
+    path = ROOT / "evaluations" / "capability_mix" / "orchestration_probe.py"
+    spec = importlib.util.spec_from_file_location("orchestration_probe", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_orchestration_probe_rejects_non_https_base():
+    probe = _orchestration_probe_module()
+    try:
+        probe._require_https_base("http://gateway.example")
+        raise AssertionError("expected ValueError")
+    except ValueError as exc:
+        assert "TLS" in str(exc)
