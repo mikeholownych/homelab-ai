@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "research" / "capability-mix"
@@ -22,3 +24,11 @@ def test_orch_prompts_are_objects_with_id():
     for name in ("orch_tools.json", "orch_route.json"):
         data = json.loads((RES / "prompts" / name).read_text())
         assert "id" in data and "messages" in data
+
+
+def test_orchestration_probe_module_help():
+    script = ROOT / "evaluations" / "capability_mix" / "orchestration_probe.py"
+    assert script.is_file()
+    proc = subprocess.run([sys.executable, str(script), "--help"], capture_output=True, text=True)
+    assert proc.returncode == 0
+    assert "orchestration" in (proc.stdout + proc.stderr).lower() or "--base" in proc.stdout
