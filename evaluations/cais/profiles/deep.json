@@ -1,0 +1,10 @@
+{
+  "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+  "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+  "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+  "engine": "llama.cpp",
+  "topology": "llama-cpp-sycl",
+  "hardware_class": "intel-arc-pro-b65-32g",
+  "reasoning_budget": 4096,
+  "reasoning": {"mode": "on", "budget": 4096, "answer_allowance": 8192}
+}
