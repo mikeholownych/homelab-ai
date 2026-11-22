@@ -313,7 +313,7 @@ class InventoryContractTests(unittest.TestCase):
         local_workers = [w for w in host_vars["orchestrator_gateway_workers"] if w["endpoint"].startswith("http://127.0.0.1:")]
         remote_workers = [w for w in host_vars["orchestrator_gateway_workers"] if w not in local_workers]
         self.assertEqual([8000, 8001], [worker["port"] for worker in local_workers])
-        self.assertEqual(["ms-s1-hip-coder30b"], [worker["worker_id"] for worker in remote_workers])
+        self.assertEqual(["ms-s1-hip-qwen38-27b"], [worker["worker_id"] for worker in remote_workers])
         self.assertEqual(["10.0.8.95/32"], host_vars["inference_policy_gateway_client_cidrs"])
         self.assertEqual("local", host_vars["orchestrator_gateway_local_listener_mode"])
         self.assertEqual("10.0.8.5", host_vars["orchestrator_gateway_remote_host"])

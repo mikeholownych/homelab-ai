@@ -85,14 +85,14 @@ def test_ms_s1_gateway_is_rocm_only():
     assert all(route["fallback"] == [] for route in routes)
 
     (worker,) = hv["orchestrator_gateway_workers"]
-    assert worker["worker_id"] == "ms-s1-hip-coder30b"
+    assert worker["worker_id"] == "ms-s1-hip-qwen38-27b"
     assert worker["pool"] == "rocm"
     assert worker["endpoint"] == "http://10.0.8.6:8101"
-    assert worker["credential_source"] == "/etc/local-ai/llama-hip/qwen3_coder_30b_q8/worker-api-key"
+    assert worker["credential_source"] == "/etc/local-ai/llama-hip/qwen3_8_27b_q4km/worker-api-key"
     assert worker["runtime_image_digest"] == hv["llama_cpp_hip_digest"]
-    assert worker["model_id"] == hv["llama_cpp_hip_workers"]["qwen3_coder_30b_q8"]["served_name"]
+    assert worker["model_id"] == hv["llama_cpp_hip_workers"]["qwen3_8_27b_q4km"]["served_name"]
     assert hv["orchestrator_gateway_production_worker_count"] == 1
-    assert worker["port"] == hv["llama_cpp_hip_workers"]["qwen3_coder_30b_q8"]["port"]
+    assert worker["port"] == hv["llama_cpp_hip_workers"]["qwen3_8_27b_q4km"]["port"]
     assert {w["pool"] for w in hv["orchestrator_gateway_workers"]} == {"rocm"}
 
 
@@ -138,14 +138,14 @@ def test_5820_advertises_ms_s1_rocm_worker_as_parallel_alias():
         assert "rocm" not in route.get("fallback", []), route["id"]
 
     workers = {w["worker_id"]: w for w in hv["orchestrator_gateway_workers"]}
-    assert set(workers) == {"b0-live-llama-worker1", "b0-live-llama-deep-worker2", "ms-s1-hip-coder30b"}
+    assert set(workers) == {"b0-live-llama-worker1", "b0-live-llama-deep-worker2", "ms-s1-hip-qwen38-27b"}
     assert workers["b0-live-llama-worker1"]["pool"] == "lead"
     assert workers["b0-live-llama-worker1"]["endpoint"] == "http://127.0.0.1:8000"
     assert workers["b0-live-llama-deep-worker2"]["pool"] == "deep"
     assert workers["b0-live-llama-deep-worker2"]["endpoint"] == "http://127.0.0.1:8001"
     assert hv["orchestrator_gateway_production_worker_count"] == 3
 
-    rocm = workers["ms-s1-hip-coder30b"]
+    rocm = workers["ms-s1-hip-qwen38-27b"]
     ms_s1 = load(f"inventory/production/host_vars/{HOST}.yml")
     (ms_s1_worker,) = ms_s1["orchestrator_gateway_workers"]
     assert rocm["pool"] == "rocm"

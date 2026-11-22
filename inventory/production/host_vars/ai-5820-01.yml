@@ -487,7 +487,7 @@ orchestrator_gateway_workers:
     endpoint: http://127.0.0.1:8001
   # Remote worker on ai-ms-s1-max-01 (AMD Strix Halo, llama.cpp HIP). Identity fields mirror that host's own gateway
   # worker record. The key is a root-only copy of its worker-api-key (the host's ufw admits only this host on 8101).
-  - worker_id: ms-s1-hip-coder30b
+  - worker_id: ms-s1-hip-qwen38-27b
     credential_name: worker-ms-s1-hip-token
     credential_source: /etc/local-ai/orchestrator/remote-ms-s1-hip-api-key
     token_file: worker-ms-s1-hip-token
@@ -495,9 +495,10 @@ orchestrator_gateway_workers:
     engine: llama.cpp
     port: 8101
     public_model_id: engineering/interactive-rocm
-    model_id: qwen3-coder-30b-a3b-instruct-q8_0
-    revision: gguf-4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
-    artifact_digest: sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
+    # Capability-mix cutover (plan Task 9): the ROCm primary now serves the same Qwen3.8-27B file as the lead.
+    model_id: Qwen3.8-27B-UD-Q4_K_M
+    revision: gguf-322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+    artifact_digest: sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
     runtime_image_digest: sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184
     topology: llama-cpp-hip
     hardware_class: amd-strix-halo-gfx1151
@@ -507,9 +508,9 @@ orchestrator_gateway_workers:
     context_limit: 65536
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-    evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z]
+    evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z, capability-mix-r-text-20261122T212239Z]
     registry_version: 1
-    measured_at: "2026-11-21T07:34:29+00:00"
+    measured_at: "2026-11-22T21:22:39+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://10.0.8.6:8101
 

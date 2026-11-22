@@ -60,18 +60,30 @@ llama_cpp_hip_host: "10.0.8.6"
 # Phase 3b: a non-loopback bind requires the per-worker key
 # (/etc/local-ai/llama-hip/<worker_key>/worker-api-key, generated on first converge).
 llama_cpp_hip_api_key_required: true
+# Capability-mix cutover (docs/superpowers/plans/2026-11-22-lead-rocm-capability-mix.md Task 9): the R-text winner
+# Qwen3.8-27B-UD-Q4_K_M (Task 6 smoke: research/capability-mix/evidence/20261122T212239Z/r-text-qwen38-27b.md) replaces
+# Qwen3-Coder-30B Q8 as the primary ROCm worker, same file and digest as the ai-5820-01 lead. The Coder GGUF stays on
+# disk (models/Qwen3-Coder-30B-A3B-Instruct-GGUF/, models/gguf/) as the rollback artifact; no secondary coding alias.
+# Rollback = restore the previous worker block (key qwen3_coder_30b_q8, service llama-hip-qwen3-coder-30b.service,
+# model_file Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf, sha256:4ff1cff6...) and the matching gateway worker records.
 llama_cpp_hip_workers:
-  qwen3_coder_30b_q8:
-    service_name: llama-hip-qwen3-coder-30b.service
-    container_name: llama-hip-qwen3-coder-30b
-    served_name: qwen3-coder-30b-a3b-instruct-q8_0
+  qwen3_8_27b_q4km:
+    service_name: llama-hip-qwen3-8-27b.service
+    container_name: llama-hip-qwen3-8-27b
+    served_name: Qwen3.8-27B-UD-Q4_K_M
     port: 8101
     context: 65536
-    model_file: Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
-    model_source: /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
+    # Already under the managed model dir (models/gguf/qwen3.8-27b/), so no model_source hard link is needed.
+    model_file: qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf
     # Single slot: full -c 65536 for agent sessions ( -np 4 would advertise only 16384/slot ).
     # --metrics: gateway /health.engine_stats for vllm-top (without it llama-server returns 501 on /metrics).
     args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1", "--metrics"]
+
+# capability-mix bolt-ons (not yet enabled; no unit, worker record, alias or firewall rule exists for them):
+# r-ocr: GLM-OCR llama.cpp multimodal, on demand, 127.0.0.1:8021 (research/capability-mix/r-ocr-lab.md)
+# r-img: ComfyUI + SDXL-Turbo, on demand, 127.0.0.1:8188 (research/capability-mix/r-img-feasibility.md)
+# Both stay loopback-only and are started beside the primary only while GTT headroom allows (about 20 GB free).
+# Enabling either needs its own worker entry with API key, a gateway alias and a follow-up wire task.
 
 # Phase 3c: ROCm-only local gateway (parallel alias engineering/interactive-rocm). The Intel aliases
 # engineering/lead and engineering/deep stay on ai-5820-01 and must never be declared here.
@@ -138,19 +150,19 @@ orchestrator_gateway_clients:
     quota: {requests_per_minute: 60}
   - {client_id: ansible-admin, scopes: [admin, monitoring]}
 orchestrator_gateway_workers:
-  - worker_id: ms-s1-hip-coder30b
+  - worker_id: ms-s1-hip-qwen38-27b
     credential_name: worker-hip-token
-    credential_source: /etc/local-ai/llama-hip/qwen3_coder_30b_q8/worker-api-key
+    credential_source: /etc/local-ai/llama-hip/qwen3_8_27b_q4km/worker-api-key
     token_file: worker-hip-token
     pool: rocm
     engine: llama.cpp
     port: 8101
     public_model_id: engineering/interactive-rocm
-    # Served name of llama_cpp_hip_workers.qwen3_coder_30b_q8; GGUF sha256 and image digest are the Phase 2d bake-off
-    # pins (research/rocm-strix-halo/evidence/20261121T073429Z/recommendation.md).
-    model_id: qwen3-coder-30b-a3b-instruct-q8_0
-    revision: gguf-4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
-    artifact_digest: sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066
+    # Served name of llama_cpp_hip_workers.qwen3_8_27b_q4km; GGUF sha256 is the one verified on this host and on the
+    # ai-5820-01 lead worker, the image digest is the Phase 2d bake-off pin.
+    model_id: Qwen3.8-27B-UD-Q4_K_M
+    revision: gguf-322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+    artifact_digest: sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
     runtime_image_digest: sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184
     topology: llama-cpp-hip
     hardware_class: amd-strix-halo-gfx1151
@@ -160,9 +172,9 @@ orchestrator_gateway_workers:
     context_limit: 65536
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-    evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z]
+    evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z, capability-mix-r-text-20261122T212239Z]
     registry_version: 1
-    measured_at: "2026-11-21T07:34:29+00:00"
+    measured_at: "2026-11-22T21:22:39+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
     endpoint: http://10.0.8.6:8101
 
