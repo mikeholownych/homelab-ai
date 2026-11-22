@@ -69,8 +69,9 @@ llama_cpp_hip_workers:
     context: 65536
     model_file: Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
     model_source: /var/lib/local-ai/models/Qwen3-Coder-30B-A3B-Instruct-GGUF/Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf
+    # Single slot: full -c 65536 for agent sessions ( -np 4 would advertise only 16384/slot ).
     # --metrics: gateway /health.engine_stats for vllm-top (without it llama-server returns 501 on /metrics).
-    args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4", "--metrics"]
+    args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1", "--metrics"]
 
 # Phase 3c: ROCm-only local gateway (parallel alias engineering/interactive-rocm). The Intel aliases
 # engineering/lead and engineering/deep stay on ai-5820-01 and must never be declared here.
@@ -155,9 +156,9 @@ orchestrator_gateway_workers:
     hardware_class: amd-strix-halo-gfx1151
     gpu_assignment: ["0"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal]
-    # -c 65536 -np 4: llama.cpp reports 16384 tokens per slot (/props), which the gateway compares to this value.
-    context_limit: 16384
-    max_concurrency: 4
+    # Matches llama -c 65536 with -np 1 (one slot = full window). Gateway compares /props to this value.
+    context_limit: 65536
+    max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
     evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z]
     registry_version: 1
@@ -192,8 +193,11 @@ xpu_smi_log_filter_enabled: false
 
 # Only the 5820 gateway may reach the HIP worker over the LAN; only the controller may reach this gateway.
 security_firewall_enabled: true
-# SSH is allowed only from the management LAN (the controller and the 5820 gateway host live in 10.0.8.0/24).
-security_management_cidrs: ["10.0.8.0/24"]
+# SSH from any RFC1918 private network (controller, peer hosts, VPN/lab overlays).
+security_management_cidrs:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
 security_inference_api_firewall_enabled: true
 security_inference_api_cidrs: ["10.0.8.5/32"]
 security_inference_api_ports: [8101]

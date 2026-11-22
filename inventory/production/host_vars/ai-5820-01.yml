@@ -503,8 +503,9 @@ orchestrator_gateway_workers:
     hardware_class: amd-strix-halo-gfx1151
     gpu_assignment: ["0"]
     capabilities: [navigation, coding, structured_output, tool_call_proposal]
-    context_limit: 16384
-    max_concurrency: 4
+    # Mirrors ai-ms-s1-max-01: -c 65536 -np 1 so agent sessions get the full window (not 16384/slot).
+    context_limit: 65536
+    max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
     evidence_ids: [rocm-strix-halo-bakeoff-20261121T073429Z]
     registry_version: 1
@@ -767,6 +768,14 @@ cluster:
     coordinator: null
     peer_hosts: []
     quorum_size: null
+
+# SSH from any RFC1918 private network. Broader port allows already present on-box stay unmanaged;
+# this pins port 22 as managed policy so reconcile cannot regress private-LAN SSH.
+security_firewall_enabled: true
+security_management_cidrs:
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
 
 # Regenerate vendor XFS units without systemd 258+ no-op CPUAccounting declarations.
 systemd_compat_enabled: true
