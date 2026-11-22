@@ -1,0 +1,25 @@
+{
+  "prompt": "red ceramic mug on wood table",
+  "seed": 13,
+  "wall_s": 1.17,
+  "status": "success",
+  "outputs": {
+    "7": {
+      "images": [
+        {
+          "filename": "r-img-mug_00003_.png",
+          "subfolder": "",
+          "type": "output",
+          "metadata": {
+            "kind": "image",
+            "width": 512,
+            "height": 512
+          }
+        }
+      ]
+    }
+  },
+  "gtt_before_gb": 47.05,
+  "gtt_peak_gb": 49.14,
+  "gtt_after_gb": 48.87
+}

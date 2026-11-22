@@ -1,0 +1,62 @@
+[INFO] Setting output directory to: /lab/output
+[INFO] Checkpoint files will always be loaded safely.
+[INFO] Total VRAM 62818 MB, total RAM 125635 MB
+[INFO] pytorch version: 2.11.0+rocm10.0.0
+[INFO] Set: torch.backends.cudnn.enabled = False for better AMD performance.
+[INFO] AMD arch: gfx1151
+[INFO] ROCm version: (7, 15)
+[INFO] Set vram state to: NORMAL_VRAM
+[INFO] Device: cuda:0 AMD Radeon 8060S Graphics : native
+[aiter] [pid=1 pname=MainProcess] start build [module_aiter_core] under /opt/venv/lib/python3.12/site-packages/aiter/jit/build/module_aiter_core
+[aiter] Current hipcc not support: -mllvm -amdgpu-coerce-illegal-types=1, skip it.
+[aiter] [pid=1 pname=MainProcess] finish build [module_aiter_core], cost 13.6s 
+[aiter] import [module_aiter_core] under /opt/venv/lib/python3.12/site-packages/aiter/jit/module_aiter_core.so
+[INFO] Using split optimization for attention
+[INFO] Python version: 3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]
+[INFO] ComfyUI version: 0.46.0
+[INFO] comfy-aimdo version: 0.6.0
+[INFO] comfy-kitchen version: 0.2.42
+[WARNING] Dynamic vram disabled with argument. If you have any issues with dynamic vram enabled please give us a detailed reports as this argument will be removed soon. If you use gguf we recommend keeping dynamic vram enabled and using native ComfyUI model formats instead. ComfyUI native formats like fp8, int8 and w4a8 will be faster even if they are larger than your memory.
+[INFO] comfyui-frontend-package version: 1.59.11
+[INFO] comfyui-workflow-templates version: 0.11.114
+[INFO] comfyui-embedded-docs version: 0.5.17
+[INFO] comfy-aimdo version: 0.6.0
+[INFO] comfy-kitchen version: 0.2.42
+[INFO] [Prompt Server] web root: /opt/venv/lib/python3.12/site-packages/comfyui_frontend_package/static
+[INFO] Asset seeder disabled
+[INFO] No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+[INFO] 
+Import times for custom nodes:
+[INFO]    0.0 seconds: /lab/ComfyUI/custom_nodes/websocket_image_save.py
+[INFO] 
+[INFO] Using RAM pressure cache.
+[INFO] ComfyUI is developed by Comfy Org. We also offer commercial products to deploy ComfyUI as scalable cloud endpoints. Visit platform.comfy.org/ascii for more information.
+[INFO] Starting server
+[INFO] To see the GUI go to: http://127.0.0.1:8188
+[INFO] got prompt
+[INFO] model weight dtype torch.float16, manual cast: None
+[INFO] model_type EPS
+[INFO] Model storage policy: fast_disk=True paths=['/lab/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors']
+[INFO] Model storage policy: fast_disk=True paths=['/lab/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors']
+[INFO] Using split attention in VAE
+[INFO] Using split attention in VAE
+[INFO] VAE load device: cuda:0, offload device: cpu, dtype: torch.bfloat16
+[INFO] Model storage policy: fast_disk=True paths=['/lab/ComfyUI/models/checkpoints/sd_xl_turbo_1.0_fp16.safetensors']
+[INFO] CLIP/text encoder model load device: cuda:0, offload device: cpu, current: cpu, dtype: torch.float16
+[INFO] Requested to load SDXLClipModel
+[INFO] loaded completely; 24145.96 MB usable, 1560.80 MB loaded, full load: True
+[INFO] Requested to load SDXL
+[INFO] loaded completely; 22291.93 MB usable, 4897.05 MB loaded, full load: True
+  0%|          | 0/4 [00:00<?, ?it/s] 25%|██▌       | 1/4 [00:00<00:00,  3.28it/s] 75%|███████▌  | 3/4 [00:00<00:00,  6.59it/s]100%|██████████| 4/4 [00:00<00:00,  6.67it/s]
+[INFO] Requested to load AutoencoderKL
+[INFO] loaded completely; 15102.63 MB usable, 159.56 MB loaded, full load: True
+[INFO] Prompt executed in 3.70 seconds
+[INFO] ComfyUI is developed by Comfy Org. We also offer commercial products to deploy ComfyUI as scalable cloud endpoints. Visit platform.comfy.org/ascii-job for more information.
+[INFO] got prompt
+[INFO] Prompt executed in 0.00 seconds
+[INFO] got prompt
+  0%|          | 0/4 [00:00<?, ?it/s] 50%|█████     | 2/4 [00:00<00:00, 10.11it/s]100%|██████████| 4/4 [00:00<00:00, 10.06it/s]100%|██████████| 4/4 [00:00<00:00, 10.06it/s]
+[INFO] Prompt executed in 0.68 seconds
+[INFO] got prompt
+  0%|          | 0/4 [00:00<?, ?it/s] 50%|█████     | 2/4 [00:00<00:00, 10.17it/s]100%|██████████| 4/4 [00:00<00:00, 10.09it/s]100%|██████████| 4/4 [00:00<00:00, 10.10it/s]
+[INFO] Prompt executed in 0.69 seconds

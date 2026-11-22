@@ -1,0 +1,5 @@
+FROM docker.io/kyuz0/vllm-therock-gfx1151:latest
+COPY req-notorch.txt /tmp/req-notorch.txt
+RUN pip install --no-cache-dir -r /tmp/req-notorch.txt torchsde && python3 -c "import torch;print(torch.__version__)"
+WORKDIR /lab/ComfyUI
+ENTRYPOINT ["python3","main.py"]
