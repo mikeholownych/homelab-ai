@@ -1,0 +1,20 @@
+{
+  "schema": "capability-mix-orchestration-probe/v1",
+  "model": "engineering/lead",
+  "gateway": "https://10.0.8.5:8443",
+  "finished_at": "2026-11-22T18:49:31.081555+00:00",
+  "total": 2,
+  "max_total": 4,
+  "scenarios": [
+    {
+      "id": "orch_tools",
+      "score": 0,
+      "note": "no_tool_call"
+    },
+    {
+      "id": "orch_route",
+      "score": 2,
+      "note": "pass"
+    }
+  ]
+}

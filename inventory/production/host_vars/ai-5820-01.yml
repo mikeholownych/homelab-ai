@@ -683,6 +683,53 @@ llama_cpp_container_candidate_profiles:
       valid_until: "2026-12-31T00:00:00+00:00"
       endpoint: http://127.0.0.1:8003
 
+  # Lead-replacement candidate (docs/superpowers/plans/2026-11-22-lead-rocm-capability-mix.md Task 3): same Qwen3.8-27B
+  # artifact as qwen38-deep, on GPU0/8002 so deep (GPU1) stays up. Uses the live production SYCL research image
+  # (image_ref pinned, same as worker1/worker2) so runtime_image_digest reflects what actually runs.
+  qwen38-lead:
+    replaces: worker1
+    replaces_gateway_worker_id: b0-live-llama-worker1
+    reasoning_budget: 4096
+    worker:
+      worker_id: candidate-qwen38-lead
+      service_name: aihost-llama-candidate-qwen38-lead.service
+      container_name: llama-candidate-qwen38-lead
+      gpu: 0
+      port: 8002
+      config_dir: /etc/local-ai/llama/candidate/qwen38-lead
+      model_file: qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf
+      image_ref: localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+      env: {GGML_SYCL_ENABLE_XMX_ESIMD: 0}
+      served_name: Qwen3.8-27B-UD-Q4_K_M
+      context: 65536
+      cpuset_cpus: "0,1,4,5"
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+             "--lazy-mode", "on"]
+    gateway_worker:
+      worker_id: candidate-qwen38-lead
+      credential_name: candidate-qwen38-lead-token
+      credential_source: /etc/local-ai/llama/candidate/qwen38-lead/worker-api-key
+      token_file: candidate-qwen38-lead-token
+      pool: candidate-qwen38
+      engine: llama.cpp
+      port: 8002
+      public_model_id: candidate/qwen38-lead
+      model_id: Qwen3.8-27B-UD-Q4_K_M
+      revision: gguf-322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+      artifact_digest: sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482
+      runtime_image_digest: sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+      topology: llama-cpp-sycl
+      gpu_assignment: ["0"]
+      capabilities: [navigation, coding, structured_output, tool_call_proposal, review]
+      context_limit: 65536
+      max_concurrency: 1
+      resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
+      evidence_ids: [eng-hard-b-q38-27b-q4km]
+      registry_version: 1
+      measured_at: "2026-10-07T12:21:00+00:00"
+      valid_until: "2026-12-31T00:00:00+00:00"
+      endpoint: http://127.0.0.1:8002
+
 cluster:
   enabled: false
   name: null
