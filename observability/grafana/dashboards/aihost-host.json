@@ -625,7 +625,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram|pcie|mctrl\"}",
+          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram|pcie|mctrl|edge\"}",
           "legendFormat": "{{sensor}} gpu{{gpu}}",
           "range": true,
           "refId": "A"
@@ -636,7 +636,7 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "editorMode": "code",
-          "expr": "aihost_gpu_temperature_limit_celsius{sensor=~\"pkg|vram\"}",
+          "expr": "aihost_gpu_temperature_limit_celsius{sensor=~\"pkg|vram|edge\"}",
           "legendFormat": "limit {{sensor}} gpu{{gpu}}",
           "range": true,
           "refId": "B"

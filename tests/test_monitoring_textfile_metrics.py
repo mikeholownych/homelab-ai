@@ -175,6 +175,68 @@ def test_llama_workers_report_faults_residency_and_page_cache_of_mapped_weights(
     assert 'aihost_llama_worker_resident_file_bytes{port="8001"}' not in text
 
 
+def test_amdgpu_apu_exports_gtt_power_busy_and_edge_temp(tmp_path):
+    """Strix Halo / amdgpu: GTT is the usable pool; power and busy come from hwmon/sysfs."""
+    hw, pci = tmp_path / "hwmon", tmp_path / "pci"
+    bdf = "0000:bd:00.0"
+    dev = pci / bdf
+    dev.mkdir(parents=True)
+    (dev / "mem_info_vram_total").write_text("536870912\n")
+    (dev / "mem_info_vram_used").write_text("191553536\n")
+    (dev / "mem_info_gtt_total").write_text("65868955648\n")
+    (dev / "mem_info_gtt_used").write_text("20311793664\n")
+    (dev / "gpu_busy_percent").write_text("12\n")
+    h = hw / "hwmon6"
+    h.mkdir(parents=True)
+    (h / "name").write_text("amdgpu\n")
+    (h / "device").symlink_to(dev)
+    (h / "temp1_label").write_text("edge\n")
+    (h / "temp1_input").write_text("22000\n")
+    (h / "power1_average").write_text("8415000\n")
+    (h / "freq1_input").write_text("600000000\n")
+
+    proc = tmp_path / "proc"
+    _worker(proc, 1001, "llama-server", "8101", 1, 1000, b"\0" * 4096)
+    fd = proc / "1001/fdinfo"
+    fd.mkdir()
+    (fd / "7").write_text(
+        "pos:\t0\ndrm-driver:\tamdgpu\ndrm-pdev:\t0000:bd:00.0\n"
+        "drm-resident-vram:\t3356 KiB\ndrm-resident-gtt:\t19819536 KiB\n"
+    )
+
+    out = tmp_path / "out"
+    env_file = tmp_path / "monitoring.env"
+    env_file.write_text(
+        f"MONITORING_METRICS_TEXTFILE_DIR={out}\nMONITORING_LOG_DIR={tmp_path}/log\n"
+        f"MONITORING_ALERT_LOG_DIR={tmp_path}/a\nMONITORING_GPU_TEMP_STATE_DIR={tmp_path}/state\n"
+    )
+    subprocess.run(
+        ["sh", str(SCRIPT)],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "AIHOST_MONITORING_ENV": str(env_file),
+            "AIHOST_HWMON_ROOT": str(hw),
+            "AIHOST_PCI_ROOT": str(pci),
+            "AIHOST_PROC_ROOT": str(proc),
+        },
+    )
+    text = (out / "gpu.prom").read_text()
+    types = validate_exposition(text)
+    assert types["aihost_gpu_power_watts"] == "gauge"
+    assert types["aihost_gpu_busy_percent"] == "gauge"
+    assert 'aihost_gpu_info{gpu="0",bdf="0000:bd:00.0",driver="amdgpu"} 1' in text
+    assert 'aihost_gpu_temperature_celsius{gpu="0",bdf="0000:bd:00.0",sensor="edge"} 22' in text
+    assert 'aihost_gpu_power_watts{gpu="0",bdf="0000:bd:00.0"} 8.415' in text
+    assert 'aihost_gpu_busy_percent{gpu="0",bdf="0000:bd:00.0"} 12' in text
+    assert 'aihost_gpu_vram_total_bytes{gpu="0",bdf="0000:bd:00.0"} 65868955648' in text
+    assert 'aihost_gpu_vram_used_bytes{gpu="0",bdf="0000:bd:00.0"} 20311793664' in text
+    # 19819536 KiB → bytes
+    assert 'aihost_llama_worker_vram_resident_bytes{port="8101",bdf="0000:bd:00.0"} 20295204864' in text
+
+
 def test_gpu_vram_total_and_worker_resident_metrics(tmp_path):
     proc = tmp_path / "proc"
     hw, pci = tmp_path / "hwmon", tmp_path / "pci"

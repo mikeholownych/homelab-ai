@@ -102,7 +102,7 @@ pub fn discover_amdgpu_static(hwmon_root: &Path) -> Vec<GpuInfo> {
             continue;
         };
         let index = out.len() as u32;
-        let mem_total_mib = read_u64(&device.join("mem_info_vram_total")).map(|b| b as f64 / (1024.0 * 1024.0));
+        let (_, mem_total_mib) = amdgpu_mem_mib(&device);
         let device_name = read_trimmed(&device.join("product_name"))
             .filter(|s| !s.is_empty())
             .or_else(|| Some("AMD Radeon Graphics".to_string()));
@@ -116,6 +116,24 @@ pub fn discover_amdgpu_static(hwmon_root: &Path) -> Vec<GpuInfo> {
         });
     }
     out
+}
+
+/// Prefer GTT when it is the usable pool (APU / unified memory: gtt_total >> vram_total).
+fn amdgpu_mem_mib(device: &Path) -> (Option<f64>, Option<f64>) {
+    let vram_total = read_u64(&device.join("mem_info_vram_total"));
+    let vram_used = read_u64(&device.join("mem_info_vram_used"));
+    let gtt_total = read_u64(&device.join("mem_info_gtt_total"));
+    let gtt_used = read_u64(&device.join("mem_info_gtt_used"));
+    match (vram_total, gtt_total) {
+        (Some(vt), Some(gt)) if gt > vt => (
+            gtt_used.map(|b| b as f64 / (1024.0 * 1024.0)),
+            Some(gt as f64 / (1024.0 * 1024.0)),
+        ),
+        _ => (
+            vram_used.map(|b| b as f64 / (1024.0 * 1024.0)),
+            vram_total.map(|b| b as f64 / (1024.0 * 1024.0)),
+        ),
+    }
 }
 
 fn static_info_for(index: u32) -> Option<GpuInfo> {
@@ -197,8 +215,7 @@ fn amdgpu_stats_for(index: u32, bdf: &str, hwmon_root: &Path) -> Option<GpuStats
     let device = amdgpu_device_for_bdf(hwmon_root, bdf)?;
     let (temp_c, _) = amdgpu_hwmon_temps(hwmon_root, bdf).unwrap_or((None, None));
     let power_w = amdgpu_hwmon_power_w(hwmon_root, bdf);
-    let mem_used_mib = read_u64(&device.join("mem_info_vram_used")).map(|b| b as f64 / (1024.0 * 1024.0));
-    let mem_total_mib = read_u64(&device.join("mem_info_vram_total")).map(|b| b as f64 / (1024.0 * 1024.0));
+    let (mem_used_mib, mem_total_mib) = amdgpu_mem_mib(&device);
     let mem_util_percent = match (mem_used_mib, mem_total_mib) {
         (Some(used), Some(total)) if total > 0.0 => Some((100.0 * used / total).clamp(0.0, 100.0)),
         _ => None,
@@ -706,11 +723,28 @@ mod hwmon_tests {
         p
     }
 
-    fn fake_amdgpu(root: &Path, hw: &str, bdf: &str, edge_milli: &str, power_uw: &str, vram_total: &str, vram_used: &str, busy: &str) {
+    fn fake_amdgpu(
+        root: &Path,
+        hw: &str,
+        bdf: &str,
+        edge_milli: &str,
+        power_uw: &str,
+        vram_total: &str,
+        vram_used: &str,
+        busy: &str,
+        gtt_total: Option<&str>,
+        gtt_used: Option<&str>,
+    ) {
         let dev = root.join("pci").join(bdf);
         fs::create_dir_all(&dev).unwrap();
         write(&dev.join("mem_info_vram_total"), &format!("{vram_total}\n"));
         write(&dev.join("mem_info_vram_used"), &format!("{vram_used}\n"));
+        if let Some(gt) = gtt_total {
+            write(&dev.join("mem_info_gtt_total"), &format!("{gt}\n"));
+        }
+        if let Some(gu) = gtt_used {
+            write(&dev.join("mem_info_gtt_used"), &format!("{gu}\n"));
+        }
         write(&dev.join("gpu_busy_percent"), &format!("{busy}\n"));
         write(&dev.join("product_name"), "AMD Radeon Graphics\n");
         let hwdir = root.join("hwmon").join(hw);
@@ -725,7 +759,7 @@ mod hwmon_tests {
     #[test]
     fn discovers_amdgpu_devices_from_hwmon() {
         let t = tempfile_dir();
-        fake_amdgpu(&t, "hwmon6", "0000:bd:00.0", "24000", "9013000", "536870912", "202784768", "0");
+        fake_amdgpu(&t, "hwmon6", "0000:bd:00.0", "24000", "9013000", "536870912", "202784768", "0", None, None);
         let found = discover_amdgpu_static(&t.join("hwmon"));
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].pci_bdf.as_deref(), Some("0000:bd:00.0"));
@@ -736,7 +770,7 @@ mod hwmon_tests {
     #[test]
     fn probes_amdgpu_power_temp_util_and_vram() {
         let t = tempfile_dir();
-        fake_amdgpu(&t, "hwmon6", "0000:bd:00.0", "24000", "9013000", "536870912", "202784768", "37");
+        fake_amdgpu(&t, "hwmon6", "0000:bd:00.0", "24000", "9013000", "536870912", "202784768", "37", None, None);
         let stats = probe_amdgpu(&[(0, Some("0000:bd:00.0".into()))], &t.join("hwmon"));
         assert_eq!(stats.len(), 1);
         let s = &stats[0];
@@ -745,6 +779,32 @@ mod hwmon_tests {
         assert_eq!(s.util_percent, Some(37.0));
         assert!((s.mem_used_mib.unwrap() - 193.375).abs() < 0.1);
         assert!((s.mem_util_percent.unwrap() - 37.79).abs() < 0.1);
+    }
+
+    #[test]
+    fn prefers_gtt_memory_pool_on_apu_when_larger_than_vram() {
+        let t = tempfile_dir();
+        // Strix Halo-shaped: 512 MiB dedicated VRAM carveout, ~61 GiB GTT with ~19 GiB used.
+        fake_amdgpu(
+            &t,
+            "hwmon6",
+            "0000:bd:00.0",
+            "22000",
+            "8415000",
+            "536870912",
+            "191553536",
+            "0",
+            Some("65868955648"),
+            Some("20311793664"),
+        );
+        let found = discover_amdgpu_static(&t.join("hwmon"));
+        let total_mib = 65868955648.0 / (1024.0 * 1024.0);
+        let used_mib = 20311793664.0 / (1024.0 * 1024.0);
+        assert!((found[0].mem_total_mib.unwrap() - total_mib).abs() < 0.1, "expected GTT total");
+        let stats = probe_amdgpu(&[(0, Some("0000:bd:00.0".into()))], &t.join("hwmon"));
+        let s = &stats[0];
+        assert!((s.mem_used_mib.unwrap() - used_mib).abs() < 0.1, "expected GTT used");
+        assert!((s.mem_util_percent.unwrap() - (100.0 * used_mib / total_mib)).abs() < 0.1);
     }
 }
 

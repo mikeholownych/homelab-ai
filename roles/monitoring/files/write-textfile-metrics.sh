@@ -47,6 +47,8 @@ temp_lines=""
 gpu_max_lines=""
 info_lines=""
 energy_lines=""
+power_instant_lines=""
+busy_lines=""
 cap_lines=""
 fan_lines=""
 idle_lines=""
@@ -71,7 +73,7 @@ model_cached_lines=""
 # llama.cpp workers memory-map their GGUF weights (Flash-Next maps far more than it keeps resident), so a page-cache
 # eviction turns into major faults and stalls on the next request. Observed per worker, identified by its --port:
 # faults and file-backed residency of the process, how much of each mapped model file the page cache holds,
-# and resident GPU VRAM allocation from Linux DRM fdinfo.
+# and resident GPU memory from Linux DRM fdinfo (xe: drm-resident-vram0; amdgpu: prefer drm-resident-gtt on APUs).
 PROC_ROOT="${AIHOST_PROC_ROOT:-/proc}"
 for p in "$PROC_ROOT"/[0-9]*; do
     [ "$(cat "$p/comm" 2>/dev/null)" = "llama-server" ] || continue
@@ -87,19 +89,25 @@ aihost_llama_worker_resident_file_bytes{port=\"$port\"} $rss_file"
     if [ -d "$p/fdinfo" ]; then
         worker_vram_info="$(awk '
             FNR == 1 {
-                if (pdev && vram > 0) {
-                    if (vram > max_vram[pdev]) max_vram[pdev] = vram
+                if (pdev && mem > 0) {
+                    if (mem > max_mem[pdev]) max_mem[pdev] = mem
                 }
-                pdev = ""; vram = 0
+                pdev = ""; vram = 0; gtt = 0; mem = 0
             }
             /^drm-pdev:/ { pdev = $2 }
             /^drm-resident-vram0:/ { vram = $2 * 1024 }
+            /^drm-resident-vram:/ { vram = $2 * 1024 }
+            /^drm-resident-gtt:/ { gtt = $2 * 1024 }
+            {
+                # APU / unified-memory hosts keep weights in GTT; discrete cards use VRAM.
+                mem = (gtt > vram) ? gtt : vram
+            }
             END {
-                if (pdev && vram > 0) {
-                    if (vram > max_vram[pdev]) max_vram[pdev] = vram
+                if (pdev && mem > 0) {
+                    if (mem > max_mem[pdev]) max_mem[pdev] = mem
                 }
-                for (d in max_vram) {
-                    printf "%s %.0f\n", d, max_vram[d]
+                for (d in max_mem) {
+                    printf "%s %.0f\n", d, max_mem[d]
                 }
             }
         ' "$p"/fdinfo/* 2>/dev/null || true)"
@@ -130,10 +138,11 @@ $(awk '$6 ~ /[.]gguf$/ {print $6}' "$p/maps" 2>/dev/null | sort -u)
 EOF_MAPS
 done
 
-# One entry per xe GPU, ordered by PCI address so the `gpu` ordinal is stable across reboots (hwmonN is not).
+# One entry per GPU (Intel xe/i915 or AMD amdgpu), ordered by PCI address so the `gpu` ordinal is stable
+# across reboots (hwmonN is not).
 gpus="$(for d in "$HWMON_ROOT"/hwmon*; do
     [ -f "$d/name" ] || continue
-    case "$(cat "$d/name")" in xe|i915)
+    case "$(cat "$d/name")" in xe|i915|amdgpu)
         bdf="$(basename "$(readlink -f "$d/device" 2>/dev/null)" 2>/dev/null || true)"
         [ -n "$bdf" ] && printf '%s %s\n' "$bdf" "$d"
     ;; esac
@@ -149,8 +158,14 @@ aihost_gpu_info{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",driver=\"$drv\"} 1"
     for t in "$d"/temp*_input; do
         [ -f "$t" ] || continue
         base="${t%_input}"
+        # amdgpu often exposes a single unlabeled (or "edge") die temp; map bare temp1 → edge
+        # so dashboards that already know "edge"/"pkg" keep working.
         sensor="temp$(basename "$base" | sed 's/^temp//')"
-        [ -f "${base}_label" ] && sensor="$(cat "${base}_label")"
+        if [ -f "${base}_label" ]; then
+            sensor="$(cat "${base}_label")"
+        elif [ "$drv" = "amdgpu" ] && [ "$(basename "$base")" = "temp1" ]; then
+            sensor="edge"
+        fi
         c="$(awk "BEGIN{print $(cat "$t")/1000}")"
         temp_lines="$temp_lines
 aihost_gpu_temperature_celsius{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",sensor=\"$(lbl "$sensor")\"} $c"
@@ -185,6 +200,27 @@ aihost_gpu_energy_joules_total{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",domain=\"$(lbl
     if [ -f "$d/power1_cap" ]; then
         cap_lines="$cap_lines
 aihost_gpu_power_cap_watts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(awk "BEGIN{print $(cat "$d/power1_cap")/1000000}")"
+    fi
+    # amdgpu publishes instantaneous package power (microwatts); Intel xe uses energy*_input + rate().
+    if [ "$drv" = "amdgpu" ]; then
+        pw=""
+        if [ -f "$d/power1_average" ]; then
+            pw="$(cat "$d/power1_average")"
+        elif [ -f "$d/power1_input" ]; then
+            pw="$(cat "$d/power1_input")"
+        fi
+        if [ -n "$pw" ]; then
+            power_instant_lines="$power_instant_lines
+aihost_gpu_power_watts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(awk "BEGIN{print $pw/1000000}")"
+        fi
+        if [ -f "$d/freq1_input" ]; then
+            freq_lines="$freq_lines
+aihost_gpu_actual_frequency_hertz{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\",gt=\"sclk\"} $(cat "$d/freq1_input")"
+        fi
+        if [ -f "$PCI_ROOT/$bdf/gpu_busy_percent" ]; then
+            busy_lines="$busy_lines
+aihost_gpu_busy_percent{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$PCI_ROOT/$bdf/gpu_busy_percent")"
+        fi
     fi
     if [ -f "$d/fan1_input" ]; then
         fan_lines="$fan_lines
@@ -246,8 +282,22 @@ aihost_gpu_slot_pcie_max_link_width{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $(cat "$
 aihost_gpu_slot_pcie_link_speed_gts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $slot_speed"
         fi
     fi
-    # Total on-card physical VRAM (BAR2 aperture size from PCI resource, e.g. 32 GiB on B65):
-    if [ -f "$PCI_ROOT/$bdf/resource" ]; then
+    # Device memory pool: discrete cards use PCI BAR2 VRAM; amdgpu APUs keep weights in GTT
+    # (mem_info_gtt_* >> mem_info_vram_*), so export GTT under the existing vram_* series names.
+    vram_total=""
+    vram_used=""
+    if [ "$drv" = "amdgpu" ] && [ -f "$PCI_ROOT/$bdf/mem_info_gtt_total" ]; then
+        gtt_total="$(cat "$PCI_ROOT/$bdf/mem_info_gtt_total")"
+        vram_sys="$(cat "$PCI_ROOT/$bdf/mem_info_vram_total" 2>/dev/null || echo 0)"
+        if [ -n "$gtt_total" ] && [ "$gtt_total" -gt "${vram_sys:-0}" ] 2>/dev/null; then
+            vram_total="$gtt_total"
+            vram_used="$(cat "$PCI_ROOT/$bdf/mem_info_gtt_used" 2>/dev/null || echo 0)"
+        elif [ -f "$PCI_ROOT/$bdf/mem_info_vram_total" ]; then
+            vram_total="$(cat "$PCI_ROOT/$bdf/mem_info_vram_total")"
+            vram_used="$(cat "$PCI_ROOT/$bdf/mem_info_vram_used" 2>/dev/null || echo 0)"
+        fi
+    elif [ -f "$PCI_ROOT/$bdf/resource" ]; then
+        # Total on-card physical VRAM (BAR2 aperture size from PCI resource, e.g. 32 GiB on B65):
         vram_total="$(awk '
             {
                 start = strtonum($1); end = strtonum($2)
@@ -259,8 +309,6 @@ aihost_gpu_slot_pcie_link_speed_gts{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $slot_sp
             END { if (max_size > 0) printf "%.0f", max_size }
         ' "$PCI_ROOT/$bdf/resource" 2>/dev/null || true)"
         if [ -n "$vram_total" ] && [ "$vram_total" -gt 0 ] 2>/dev/null; then
-            vram_total_lines="$vram_total_lines
-aihost_gpu_vram_total_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $vram_total"
             # Aggregate resident VRAM across workers for this GPU:
             vram_used="$(printf '%s\n' "$worker_vram_lines" | awk -v target="$(lbl "$bdf")" '
                 index($0, "bdf=\"" target "\"") {
@@ -269,9 +317,13 @@ aihost_gpu_vram_total_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $vram_total"
                 }
                 END { printf "%.0f", total }
             ')"
-            vram_used_lines="$vram_used_lines
-aihost_gpu_vram_used_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} ${vram_used:-0}"
         fi
+    fi
+    if [ -n "$vram_total" ] && [ "$vram_total" -gt 0 ] 2>/dev/null; then
+        vram_total_lines="$vram_total_lines
+aihost_gpu_vram_total_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} $vram_total"
+        vram_used_lines="$vram_used_lines
+aihost_gpu_vram_used_bytes{gpu=\"$ord\",bdf=\"$(lbl "$bdf")\"} ${vram_used:-0}"
     fi
     ord=$((ord + 1))
 done <<EOF_GPUS
@@ -323,7 +375,9 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
     family aihost_gpu_temperature_limit_celsius gauge "Kernel-reported critical limit of one GPU sensor in celsius; limit minus temperature is the headroom." "$limit_lines"
     family aihost_gpu_temperature_max_celsius gauge "Hottest sensor on each GPU in celsius; the thermal alert thresholds apply to this." "$gpu_max_lines"
     family aihost_gpu_energy_joules_total counter "Cumulative energy drawn by a GPU power domain in joules; rate() gives watts." "$energy_lines"
+    family aihost_gpu_power_watts gauge "Instantaneous GPU package power in watts (amdgpu hwmon); prefer rate(energy) when both exist." "$power_instant_lines"
     family aihost_gpu_power_cap_watts gauge "Configured GPU power cap in watts." "$cap_lines"
+    family aihost_gpu_busy_percent gauge "GPU busy percent from amdgpu gpu_busy_percent sysfs (0-100)." "$busy_lines"
     family aihost_gpu_fan_speed_rpm gauge "GPU fan speed in revolutions per minute." "$fan_lines"
     family aihost_gpu_gt_idle_residency_seconds_total counter "Cumulative seconds a GPU graphics tile spent in RC6 idle; 1 - rate() is utilisation." "$idle_lines"
     family aihost_gpu_actual_frequency_hertz gauge "Actual graphics tile frequency in hertz." "$freq_lines"
@@ -340,9 +394,9 @@ family() { # family <name> <type> <help> <lines>: a family is emitted only when 
     family aihost_llama_worker_resident_file_bytes gauge "File-backed resident memory of one llama.cpp worker process (mapped model weights in use) in bytes." "$rss_file_lines"
     family aihost_llama_model_file_size_bytes gauge "Size of one model file memory-mapped by a llama.cpp worker in bytes." "$model_size_lines"
     family aihost_llama_model_file_cached_bytes gauge "Bytes of one mapped model file held in the host page cache; cached / size is its residency." "$model_cached_lines"
-    family aihost_gpu_vram_total_bytes gauge "Total physical GPU VRAM in bytes (BAR2 prefetchable aperture)." "$vram_total_lines"
-    family aihost_gpu_vram_used_bytes gauge "Current resident GPU VRAM allocated across workers in bytes." "$vram_used_lines"
-    family aihost_llama_worker_vram_resident_bytes gauge "Current resident GPU VRAM allocated by a llama.cpp worker in bytes (from kernel xe DRM fdinfo)." "$worker_vram_lines"
+    family aihost_gpu_vram_total_bytes gauge "Total GPU memory pool in bytes (discrete: BAR2 VRAM; amdgpu APU: GTT when larger than dedicated VRAM)." "$vram_total_lines"
+    family aihost_gpu_vram_used_bytes gauge "Current resident GPU memory in bytes (discrete: worker DRM VRAM; amdgpu APU: mem_info_gtt_used)." "$vram_used_lines"
+    family aihost_llama_worker_vram_resident_bytes gauge "Current resident GPU memory allocated by a llama.cpp worker in bytes (DRM fdinfo: vram or gtt)." "$worker_vram_lines"
 
     echo "# HELP aihost_gpu_thermal_severity Cross-device peak severity (0=ok, 1=warning, 2=critical) vs monitoring thresholds."
     echo "# TYPE aihost_gpu_thermal_severity gauge"

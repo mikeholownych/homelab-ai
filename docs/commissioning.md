@@ -339,7 +339,7 @@ Accepted evidence: `evidence/ai-ms-s1-max-01/20261121T145142Z/promotion/qualify/
 
 #### Known gaps
 
-- **Alloy scrape deploy needs Vault.** The grafana-host scrape entry for `10.0.8.6:9100` is in inventory, but deploying the Alloy config requires Vault access and has not been run from this work.
+- **Alloy scrape for MS-S1 is live.** Inventory `observability_scrape_aihost_extra_targets` includes `10.0.8.6:9100` / `ai-ms-s1-max-01`; the grafana Alloy config scrapes it under `job="aihost"`. Re-converge with Vault when rewriting Alloy from templates.
 - **Host Resources dashboard is still hard-coded to 5820.** Fleet panels do not yet select `ai-ms-s1-max-01`.
 - **5820 gateway start couples to remote MS-S1 readiness.** `aihost-gateway-readiness` (ExecStartPre) requires every non-stopped worker, including the remote `ms-s1-hip-coder30b`, to answer `/v1/models`; it waits up to `ORCHESTRATOR_GATEWAY_DEPENDENCY_TIMEOUT_SECONDS` (default 1200 s) and then fails the start. An MS-S1 outage or HIP worker restart can therefore delay or block a 5820 gateway (re)start, and the Intel aliases are not served during that window. Plan MS-S1 maintenance around 5820 gateway restarts.
 

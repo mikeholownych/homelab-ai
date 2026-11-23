@@ -128,24 +128,24 @@ tests:
   - name: energy per generated token joins the card energy to the worker through its GPU
     interval: 1m
     input_series:
-      - series: 'aihost_gpu_energy_joules_total{gpu="0",bdf="0000:51:00.0",domain="card"}'
+      - series: 'aihost_gpu_energy_joules_total{instance="ai-5820-01",gpu="0",bdf="0000:51:00.0",domain="card"}'
         values: '0+3000x40'         # 50 W
-      - series: 'aihost_gpu_energy_joules_total{gpu="0",bdf="0000:51:00.0",domain="pkg"}'
+      - series: 'aihost_gpu_energy_joules_total{instance="ai-5820-01",gpu="0",bdf="0000:51:00.0",domain="pkg"}'
         values: '0+600x40'          # a sub-domain of the card: must not be added again
-      - series: 'aihost_worker_info{worker_id="w1",pool="lead",engine="llama.cpp",model="m",gpu="0"}'
+      - series: 'aihost_worker_info{instance="ai-5820-01",worker_id="w1",pool="lead",engine="llama.cpp",model="m",gpu="0"}'
         values: '1x40'
-      - series: 'aihost_engine_generation_tokens_total{worker_id="w1",pool="lead",engine="llama.cpp"}'
+      - series: 'aihost_engine_generation_tokens_total{instance="ai-5820-01",worker_id="w1",pool="lead",engine="llama.cpp"}'
         values: '0+600x40'          # 10 tokens per second
     promql_expr_test:
       - expr: aihost:joules_per_generated_token_incl_idle:rate15m
         eval_time: 25m
         exp_samples:
-          - labels: 'aihost:joules_per_generated_token_incl_idle:rate15m{worker_id="w1"}'
+          - labels: 'aihost:joules_per_generated_token_incl_idle:rate15m{instance="ai-5820-01",worker_id="w1"}'
             value: 5                # 50 W / 10 tokens per second
       - expr: aihost:gpu_power_watts:rate5m
         eval_time: 25m
         exp_samples:
-          - labels: 'aihost:gpu_power_watts:rate5m{gpu="0"}'
+          - labels: 'aihost:gpu_power_watts:rate5m{gpu="0",instance="ai-5820-01"}'
             value: 50
 
   - name: temperature headroom is the smallest gap to any sensor's kernel limit
@@ -243,15 +243,15 @@ tests:
   - name: gpu vram usage ratio computes used divided by total per gpu
     interval: 1m
     input_series:
-      - series: 'aihost_gpu_vram_used_bytes{gpu="0",bdf="0000:51:00.0"}'
+      - series: 'aihost_gpu_vram_used_bytes{instance="ai-5820-01",gpu="0",bdf="0000:51:00.0"}'
         values: '16000000000x10'
-      - series: 'aihost_gpu_vram_total_bytes{gpu="0",bdf="0000:51:00.0"}'
+      - series: 'aihost_gpu_vram_total_bytes{instance="ai-5820-01",gpu="0",bdf="0000:51:00.0"}'
         values: '32000000000x10'
     promql_expr_test:
       - expr: aihost:gpu_vram_usage_ratio:ratio
         eval_time: 5m
         exp_samples:
-          - labels: 'aihost:gpu_vram_usage_ratio:ratio{gpu="0",bdf="0000:51:00.0"}'
+          - labels: 'aihost:gpu_vram_usage_ratio:ratio{gpu="0",bdf="0000:51:00.0",instance="ai-5820-01"}'
             value: 0.5
 
   - name: circuit breaker alert fires when circuit breaker state is 1 for 1 minute

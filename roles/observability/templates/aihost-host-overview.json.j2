@@ -460,7 +460,7 @@
       "datasource": { "type": "prometheus", "uid": "victoriametrics" },
       "targets": [
         {
-          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram|pcie|mctrl\"}",
+          "expr": "aihost_gpu_temperature_celsius{sensor=~\"pkg|vram|pcie|mctrl|edge\"}",
           "legendFormat": "GPU {{gpu}} - {{sensor}}",
           "refId": "A"
         }

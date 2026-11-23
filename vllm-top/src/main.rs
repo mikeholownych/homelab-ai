@@ -157,6 +157,49 @@ fn once(defs: Vec<config::InstanceDef>) -> Result<()> {
         }
     }
 
+    // GPU telemetry (same path the TUI uses) so operators can verify amdgpu/GTT without a TTY.
+    let infos = gpu::discover_static();
+    if infos.is_empty() {
+        println!("gpu: (none discovered)");
+    } else {
+        let targets: Vec<_> = infos.iter().map(|i| (i.index, i.pci_bdf.clone())).collect();
+        let stats = gpu::probe(&targets);
+        for info in &infos {
+            let live = stats.iter().find(|s| s.index == info.index);
+            let name = info.device_name.as_deref().unwrap_or("GPU");
+            let bdf = info.pci_bdf.as_deref().unwrap_or("-");
+            let mem = match (
+                live.and_then(|s| s.mem_used_mib),
+                live.and_then(|s| s.mem_util_percent),
+                info.mem_total_mib,
+            ) {
+                (Some(used), Some(pct), Some(total)) => {
+                    format!("{used:.0}/{total:.0} MiB ({pct:.1}%)")
+                }
+                (Some(used), _, Some(total)) => format!("{used:.0}/{total:.0} MiB"),
+                (Some(used), Some(pct), None) => format!("{used:.0} MiB ({pct:.1}%)"),
+                (None, _, Some(total)) => format!("total {total:.0} MiB"),
+                _ => "n/a".into(),
+            };
+            let power = live
+                .and_then(|s| s.power_w)
+                .map(|w| format!("{w:.1} W"))
+                .unwrap_or_else(|| "n/a".into());
+            let util = live
+                .and_then(|s| s.util_percent)
+                .map(|u| format!("{u:.0}%"))
+                .unwrap_or_else(|| "n/a".into());
+            let temp = live
+                .and_then(|s| s.temp_c)
+                .map(|t| format!("{t:.0}°C"))
+                .unwrap_or_else(|| "n/a".into());
+            println!(
+                "gpu{index} {name} ({bdf})  mem {mem}  power {power}  util {util}  temp {temp}",
+                index = info.index,
+            );
+        }
+    }
+
     if failures > 0 {
         anyhow::bail!("{failures} instance(s) failed");
     }
