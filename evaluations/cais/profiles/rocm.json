@@ -1,6 +1,6 @@
 {
-  "model_id": "qwen3-coder-30b-a3b-instruct-q8_0",
-  "artifact_digest": "sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066",
+  "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+  "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
   "runtime_image_digest": "sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
   "engine": "llama.cpp",
   "topology": "llama-cpp-hip",
