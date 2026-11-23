@@ -138,5 +138,9 @@ def test_production_host_requires_key_and_firewall_ssh_scope():
     assert hv["llama_cpp_hip_host"] == "10.0.8.6"
     assert hv["llama_cpp_hip_api_key_required"] is True
     # ufw default-deny needs an explicit SSH scope or the security role refuses to run.
-    assert hv["security_management_cidrs"]
+    assert set(hv["security_management_cidrs"]) >= {
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+    }
     assert "10.0.8.5/32" in hv["security_inference_api_cidrs"]

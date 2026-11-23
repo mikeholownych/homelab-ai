@@ -1,0 +1,10 @@
+{
+  "model_id": "Qwen3.6-35B-A3B-UD-Q4_K_M",
+  "artifact_digest": "sha256:ac0e2c1189e055faa36eff361580e79c5bd6f8e76bffb4ce547f167d53e31a61",
+  "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+  "engine": "llama.cpp",
+  "topology": "llama-cpp-sycl",
+  "hardware_class": "intel-arc-pro-b65-32g",
+  "reasoning_budget": 8192,
+  "reasoning": {"mode": "off", "answer_allowance": 8192}
+}

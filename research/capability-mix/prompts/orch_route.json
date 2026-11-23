@@ -1,0 +1,14 @@
+{
+  "id": "orch_route",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You route work. Peers: deep (reasoning+coding grants), rocm-text (general/long-ctx), ocr (documents/images to text), image-gen (create images). Reply as JSON only: {\"hop\":\"...\",\"reason\":\"...\",\"stop_when\":\"...\"}."
+    },
+    {
+      "role": "user",
+      "content": "Extract the invoice total from this scanned PDF page image and put it in a spreadsheet later. First hop only."
+    }
+  ],
+  "expect_hop": "ocr"
+}

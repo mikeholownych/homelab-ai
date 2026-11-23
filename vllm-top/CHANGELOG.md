@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.6
+
+**Fixed** — On AMD APU / unified-memory hosts (Strix Halo and similar), the GPU memory panel now uses the
+GTT pool when `mem_info_gtt_total` exceeds dedicated `mem_info_vram_total`. Previously the panel showed
+only the small VRAM carveout (~512 MiB) while llama.cpp weights lived in GTT (~tens of GiB).
+
+**Added** — `--once` prints a GPU summary line (mem/power/util/temp) so console telemetry can be verified
+without attaching to tty1.
+
+## 1.0.5
+
+**Added** — AMD GPU telemetry via the kernel `amdgpu` hwmon/sysfs interface when `xpu-smi` is absent
+(power, edge temperature, `gpu_busy_percent`, VRAM used/total). Fixes empty GPU panels on ROCm hosts
+such as Strix Halo (`unavailable (no GPU telemetry tool found)`).
+
 ## 1.0.4
 
 **Fixed** — The `localhost:8000` startup placeholder no longer lingers as a refused instance when the console starts

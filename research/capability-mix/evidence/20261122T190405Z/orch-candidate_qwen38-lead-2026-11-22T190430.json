@@ -1,0 +1,20 @@
+{
+  "schema": "capability-mix-orchestration-probe/v1",
+  "model": "candidate/qwen38-lead",
+  "gateway": "https://10.0.8.5:8443",
+  "finished_at": "2026-11-22T19:04:30.317932+00:00",
+  "total": 4,
+  "max_total": 4,
+  "scenarios": [
+    {
+      "id": "orch_tools",
+      "score": 2,
+      "note": "pass"
+    },
+    {
+      "id": "orch_route",
+      "score": 2,
+      "note": "pass"
+    }
+  ]
+}

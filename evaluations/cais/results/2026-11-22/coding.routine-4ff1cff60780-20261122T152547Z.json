@@ -1,0 +1,557 @@
+{
+ "capability": "coding.routine",
+ "capability_version": 1,
+ "context_envelope": 4374,
+ "executor": {
+  "git_commit": "cac780ea1eedaddb23d79f62146d12a7883dab09",
+  "host": "mike-dev",
+  "id": "evaluations/cais/run_qualification.py",
+  "sha256": "071049684afd524786bfc04680c066896829f7e78be632986be705649ad02e67"
+ },
+ "finished_at": "2026-11-22T15:34:28.345132+00:00",
+ "independence": "internal",
+ "independence_basis": "in-repo engx corpus with hidden pytest oracles; graded under bubblewrap; re-scorable",
+ "observed_serving": {
+  "after": {
+   "artifact_digest": "sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066",
+   "capacity_source": "observed",
+   "engine": "llama.cpp",
+   "engine_version": "b12464-d3c3e242c",
+   "model_id": "qwen3-coder-30b-a3b-instruct-q8_0",
+   "pool": "rocm",
+   "quantization": "Q8_0",
+   "role": "production",
+   "worker_id": "ms-s1-hip-coder30b"
+  },
+  "alias": "engineering/interactive-rocm",
+  "alias_reasoning": {
+   "budget": 0,
+   "mode": "off"
+  },
+  "before": {
+   "artifact_digest": "sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066",
+   "capacity_source": "observed",
+   "engine": "llama.cpp",
+   "engine_version": "b12464-d3c3e242c",
+   "model_id": "qwen3-coder-30b-a3b-instruct-q8_0",
+   "pool": "rocm",
+   "quantization": "Q8_0",
+   "role": "production",
+   "worker_id": "ms-s1-hip-coder30b"
+  },
+  "gateway": "https://10.0.8.5:8443"
+ },
+ "profile": {
+  "artifact_digest": "sha256:4ff1cff607804037bf6d2168249c570baa4e1621292b159c0e06591e0d7c3066",
+  "engine": "llama.cpp",
+  "hardware_class": "amd-strix-halo-gfx1151",
+  "model_id": "qwen3-coder-30b-a3b-instruct-q8_0",
+  "reasoning_budget": 0,
+  "runtime_image_digest": "sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+  "topology": "llama-cpp-hip"
+ },
+ "profile_digest": "sha256:f424f0cd9236dbe3e6deebbea730c0783e467646c6821d69d395c8a310139318",
+ "reasoning": {
+  "answer_allowance": 8192,
+  "mode": "off"
+ },
+ "run_id": "coding.routine-4ff1cff60780-20261122T152547Z",
+ "sampling": {
+  "infra_retry_policy": {
+   "pause_seconds": 65,
+   "retries": 2
+  },
+  "note": "temperature 0; repeats are correlated, the task is the unit",
+  "response_cache": "bypass",
+  "seed": null,
+  "temperature": 0
+ },
+ "schema": "cais-evidence-bundle/v1",
+ "started_at": "2026-11-22T15:25:47.319199+00:00",
+ "suite": {
+  "corpus_digest": "c7e0a4a73e55612b",
+  "id": "engx-base",
+  "max_attempts": 3,
+  "max_tokens": 8192,
+  "tasks": [
+   "T01-pagination",
+   "T02-money",
+   "T03-cache-collision",
+   "T04-dry-run",
+   "T05-iterative-tree",
+   "T06-api-rename",
+   "T07-parse-duration",
+   "T08-safe-join",
+   "T09-token-bucket",
+   "T10-sqlite-migration",
+   "T11-test-generation",
+   "T12-nested-config"
+  ],
+  "temperature": 0,
+  "version": "c7e0a4a73e55612b-a3-t8192"
+ },
+ "trials": [
+  {
+   "attempts": 1,
+   "final_files": {
+    "api.py": "from paginator import paginate, page_count\n\n\ndef list_users(users, page=1, per_page=10):\n    if page < 1 or per_page < 1:\n        raise ValueError(\"page and per_page must be >= 1\")\n    return {\"items\": paginate(users, page, per_page), \"pages\": page_count(len(users), per_page), \"page\": page}\n",
+    "paginator.py": "def paginate(items, page, per_page):\n    \"\"\"Return the items on 1-based `page`. Pages past the end return [].\"\"\"\n    if page < 1 or per_page < 1:\n        raise ValueError(\"page and per_page must be >= 1\")\n    start = (page - 1) * per_page\n    return items[start:start + per_page]\n\n\ndef page_count(total, per_page):\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    if total <= 0:\n        return 0\n    return (total + per_page - 1) // per_page\n"
+   },
+   "final_files_sha256": "152fde2bc45958d6068580bf77051c515e5f0a31c0e389d90bbb5dc1b6eaaae4",
+   "infra_retries": 0,
+   "latency_ms": 7301.0,
+   "max_context_tokens": 729,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T01-pagination",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 729,
+   "ttft_ms": 424.1
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "invoice.py": "from money import Money\n\n\ndef invoice_total(lines):\n    \"\"\"lines: list of (unit_price_str, quantity).\"\"\"\n    total = Money(\"0\")\n    for price, qty in lines:\n        total = total + Money(price) * qty\n    return total\n\n\ndef apply_tax(total, rate):\n    \"\"\"rate is a string like \"0.0825\"; the tax is rounded half up to the cent.\"\"\"\n    return Money((total.amount * (1 + float(rate))).quantize(Decimal('0.01')))\n",
+    "money.py": "from decimal import Decimal\n\nclass Money:\n    def __init__(self, amount):\n        self.amount = Decimal(str(amount))\n\n    def __add__(self, other):\n        return Money(self.amount + other.amount)\n\n    def __mul__(self, qty):\n        return Money(self.amount * qty)\n\n    def __eq__(self, other):\n        return self.amount == other.amount\n\n    def __repr__(self):\n        return f\"Money({self.amount:.2f})\"\n\n    def cents(self):\n        return int(self.amount * 100)\n"
+   },
+   "final_files_sha256": "ab4898692daa583751cba70ec6b12cc41a197ed15ca42e8a349acc5a317bd7af",
+   "infra_retries": 0,
+   "latency_ms": 22830.9,
+   "max_context_tokens": 1586,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T02-money",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 3563,
+   "ttft_ms": 409.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "cache.py": "class Cache:\n    def __init__(self):\n        self._d = {}\n\n    def key(self, *parts):\n        return \":\".join(str(p) for p in parts)\n\n    def get_or_compute(self, parts, fn):\n        k = self.key(*parts)\n        if k not in self._d:\n            self._d[k] = fn()\n        return self._d[k]\n",
+    "report.py": "from cache import Cache\n\n_cache = Cache()\n\n\ndef item_views(views, user_id, item_id):\n    \"\"\"views: list of dicts with user_id, item_id.\"\"\"\n    return _cache.get_or_compute(\n        (user_id, item_id),\n        lambda: sum(1 for v in views if v[\"user_id\"] == user_id and v[\"item_id\"] == item_id),\n    )\n"
+   },
+   "final_files_sha256": "88a5786f368596acd3e9e78e6df958f52b5e9a12f42b5d3afceb47057faa9ff2",
+   "infra_retries": 0,
+   "latency_ms": 10642.8,
+   "max_context_tokens": 1055,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T03-cache-collision",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1055,
+   "ttft_ms": 590.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "deploy.py": "def plan(services, current, prune=True):\n    \"\"\"Return the actions that bring `current` (name -> version) to `services` (name -> version).\"\"\"\n    actions = []\n    for name, version in sorted(services.items()):\n        if name not in current:\n            actions.append((\"create\", name, version))\n        elif current[name] != version:\n            actions.append((\"update\", name, version))\n    for name in sorted(current):\n        if name not in services:\n            if prune:\n                actions.append((\"delete\", name, current[name]))\n    return actions\n\n\ndef apply(actions, state, log, dry_run=False):\n    for kind, name, version in actions:\n        if not dry_run:\n            if kind == \"delete\":\n                state.pop(name, None)\n            else:\n                state[name] = version\n        log.append(f\"{'[dry-run] ' if dry_run else ''}{kind} {name} {version}\")\n    return state\n"
+   },
+   "final_files_sha256": "6f34e8b1a3957cae0670dca44e0a85a971dd21e40403f2536432a1b339a44e49",
+   "infra_retries": 0,
+   "latency_ms": 9888.2,
+   "max_context_tokens": 983,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T04-dry-run",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 983,
+   "ttft_ms": 475.6
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tree.py": "class Node:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\n\ndef flatten(node):\n    result = []\n    stack = [node]\n    \n    while stack:\n        current = stack.pop()\n        result.append(current.value)\n        # Add children in reverse order so leftmost is processed first\n        for child in reversed(current.children):\n            stack.append(child)\n    \n    return result\n\n\ndef depth(node):\n    if not node.children:\n        return 1\n    \n    stack = [(node, 1)]\n    max_depth = 1\n    \n    while stack:\n        current_node, current_depth = stack.pop()\n        max_depth = max(max_depth, current_depth)\n        \n        for child in current_node.children:\n            stack.append((child, current_depth + 1))\n    \n    return max_depth\n"
+   },
+   "final_files_sha256": "fa7a4b06b0b99d823cbbab45e11a88f85acec24be9627cdf9a620c08699980f4",
+   "infra_retries": 0,
+   "latency_ms": 7461.3,
+   "max_context_tokens": 919,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T05-iterative-tree",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 919,
+   "ttft_ms": 600.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "health.py": "from http_client import fetch\n\n\ndef ping():\n    return fetch(\"/health\", timeout_s=5)\n",
+    "http_client.py": "def fetch(url, *, timeout_s=5):\n    return {\"url\": url, \"timeout\": timeout_s, \"status\": 200}\n",
+    "orders.py": "from http_client import fetch\n\n\ndef load_order(oid):\n    return fetch(f\"/orders/{oid}\", timeout_s=10)\n",
+    "users.py": "from http_client import fetch\n\n\ndef load_user(uid):\n    return fetch(f\"/users/{uid}\", timeout_s=3)\n"
+   },
+   "final_files_sha256": "08a22d98180ce6f937c29a62c0082ed9ec7d62e64645846ce6264c23455e348c",
+   "infra_retries": 0,
+   "latency_ms": 5841.6,
+   "max_context_tokens": 582,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T06-api-rename",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 582,
+   "ttft_ms": 310.1
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "durations.py": "def parse_duration(text):\n    \"\"\"Parse a human-readable duration into whole seconds (int).\n\n    Grammar: one or more <integer><unit> groups, units d, h, m, s (case-insensitive), groups optionally\n    separated by exactly one space. Examples: \"1h30m\" -> 5400, \"2d\" -> 172800, \"45s\" -> 45, \"1H 30M\" -> 5400.\n    Leading and trailing whitespace is ignored. Leading zeros are fine (\"01h\" -> 3600) and \"0s\" -> 0.\n    Units must appear at most once and in descending order (d, h, m, s).\n    A bare integer with no unit, an empty or whitespace-only string, an unknown unit, a negative or decimal\n    number, two or more spaces between groups, or a space between a number and its unit all raise ValueError.\n    \"\"\"\n    text = text.strip()\n    if not text:\n        raise ValueError(\"Empty or whitespace-only string\")\n    \n    # Define unit multipliers\n    units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1}\n    unit_order = ['d', 'h', 'm', 's']\n    \n    # Parse the text\n    i = 0\n    result = 0\n    parsed_units = set()\n    last_unit = None\n    \n    while i < len(text):\n        # Skip spaces\n        if text[i] == ' ':\n            # Check if we have two spaces in a row\n            if i + 1 < len(text) and text[i + 1] == ' ':\n                raise ValueError(\"Two or more spaces between groups\")\n            i += 1\n            continue\n            \n        # Parse number\n        start = i\n        while i < len(text) and text[i].isdigit():\n            i += 1\n            \n        if i == start:\n            raise ValueError(\"Bare integer with no unit or invalid number\")\n            \n        number_str = text[start:i]\n        # Check for negative or decimal\n        if number_str.startswith('-') or '.' in number_str:\n            raise ValueError(\"Negative or decimal number not allowed\")\n            \n        number = int(number_str)\n        \n        # Parse unit\n        if i >= len(text) or not text[i].isalpha():\n            raise ValueError(\"Space between number and unit required\")\n            \n        unit = text[i].lower()\n        i += 1\n        \n        # Check if unit is valid\n        if unit not in units:\n            raise ValueError(\"Unknown unit\")\n            \n        # Check if unit already used\n        if unit in parsed_units:\n            raise ValueError(\"Unit appears more than once\")\n            \n        # Check order (descending)\n        if last_unit and unit_order.index(unit) > unit_order.index(last_unit):\n            raise ValueError(\"Units must be in descending order\")\n            \n        parsed_units.add(unit)\n        last_unit = unit\n        result += number * units[unit]\n        \n        # Check for space after unit\n        if i < len(text) and text[i] == ' ':\n            # This is fine, continue\n            pass\n        elif i < len(text) and text[i].isalpha():\n            raise ValueError(\"Space between number and unit required\")\n    \n    # Check if we have a valid number of groups\n    if not parsed_units:\n        raise ValueError(\"No valid units found\")\n        \n    return result\n"
+   },
+   "final_files_sha256": "da1343c4d0b039cf017c47f3be67356da3713c242da09def3ceef19f113216cc",
+   "infra_retries": 0,
+   "latency_ms": 51106.3,
+   "max_context_tokens": 3030,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T07-parse-duration",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 6420,
+   "ttft_ms": 368.7
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "storage.py": "import os\nimport urllib.parse\n\n\ndef safe_join(base, user_path):\n    # Percent-decode the user_path once\n    decoded_path = urllib.parse.unquote(user_path)\n    \n    # Normalize the base path to remove trailing slashes and resolve . and ..\n    base = os.path.normpath(base)\n    \n    # Handle absolute paths\n    if os.path.isabs(decoded_path):\n        raise ValueError(\"Absolute paths are not allowed\")\n    \n    # Split the decoded path into components\n    path_components = []\n    # Split by both / and \\ to handle Windows-style paths\n    for component in decoded_path.replace('\\\\', '/').split('/'):\n        if component == '' or component == '.':\n            continue\n        elif component == '..':\n            if not path_components:\n                raise ValueError(\"Path traversal escapes base\")\n            path_components.pop()\n        else:\n            path_components.append(component)\n    \n    # Join the components to form the final path\n    final_path = os.path.join(*path_components) if path_components else '.'\n    \n    # Join with base and normalize\n    joined_path = os.path.normpath(os.path.join(base, final_path))\n    \n    # Check if the joined path is inside the base\n    base_with_sep = base + os.sep\n    if not joined_path.startswith(base_with_sep) and joined_path != base:\n        raise ValueError(\"Path traversal escapes base\")\n    \n    # Check for NUL bytes\n    if '\\x00' in decoded_path:\n        raise ValueError(\"NUL bytes are not allowed\")\n    \n    # Check if the resolved path (following symlinks) is inside base\n    resolved_path = os.path.realpath(joined_path)\n    resolved_base_with_sep = os.path.realpath(base) + os.sep\n    if not resolved_path.startswith(resolved_base_with_sep) and resolved_path != os.path.realpath(base):\n        raise ValueError(\"Resolved path escapes base\")\n    \n    return joined_path\n"
+   },
+   "final_files_sha256": "44075696a51481583f3bb534a465f5ab1538231b576776ea36b487c2121abc4c",
+   "infra_retries": 0,
+   "latency_ms": 74737.1,
+   "max_context_tokens": 3879,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T08-safe-join",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 7687,
+   "ttft_ms": 348.7
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "ratelimit.py": "class TokenBucket:\n    def __init__(self, rate, capacity, clock):\n        self.rate = rate\n        self.capacity = capacity\n        self.clock = clock\n        self.tokens = capacity\n        self.last = clock()\n\n    def allow(self, cost=1):\n        if cost > self.capacity:\n            return False\n            \n        now = self.clock()\n        self.tokens += (now - self.last) * self.rate\n        self.tokens = min(self.tokens, self.capacity)\n        self.last = now\n        if self.tokens >= cost:\n            self.tokens -= cost\n            return True\n        return False\n"
+   },
+   "final_files_sha256": "b3699a207a3c4323ac6e3d579fd61625e491e01683ee01e3132375b7c9577425",
+   "infra_retries": 0,
+   "latency_ms": 5013.2,
+   "max_context_tokens": 653,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T09-token-bucket",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 653,
+   "ttft_ms": 382.1
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "db.py": "import sqlite3\n\n\ndef init_v1(conn):\n    conn.execute(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\n    conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n    conn.execute(\"INSERT INTO schema_version VALUES (1)\")\n    conn.commit()\n\n\ndef version(conn):\n    return conn.execute(\"SELECT version FROM schema_version\").fetchone()[0]\n\n\ndef migrate(conn):\n    # Check if we're already at version 2\n    if version(conn) == 2:\n        return\n    \n    # Add the new nullable TEXT column email_domain to users table\n    conn.execute(\"ALTER TABLE users ADD COLUMN email_domain TEXT\")\n    \n    # Backfill the email_domain column with the lower-cased part after the last '@'\n    # NULL when email is NULL or contains no '@'\n    conn.execute(\"\"\"\n        UPDATE users \n        SET email_domain = CASE \n            WHEN email IS NULL OR email NOT LIKE '%@%' THEN NULL\n            ELSE LOWER(SUBSTR(email, INSTR(email, '@') + 1))\n        END\n    \"\"\")\n    \n    # Update the schema version to 2\n    conn.execute(\"UPDATE schema_version SET version = 2\")\n    conn.commit()\n"
+   },
+   "final_files_sha256": "fe570e27ae4c793b2bf95451c0dfe3521f925ff014b2f15f3da3bbd147fd081d",
+   "infra_retries": 0,
+   "latency_ms": 25978.0,
+   "max_context_tokens": 1761,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T10-sqlite-migration",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 3700,
+   "ttft_ms": 357.5
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tests/test_lru.py": "from lru import LRUCache\n\ndef test_basic_get_and_put():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"b\") == 2\n\ndef test_get_miss_returns_none():\n    cache = LRUCache(2)\n    assert cache.get(\"nonexistent\") is None\n\ndef test_update_existing_key():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    assert cache.get(\"a\") == 2\n\ndef test_eviction_when_capacity_exceeded():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n\ndef test_lru_ordering():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.get(\"a\")  # Make \"a\" most recent\n    cache.put(\"d\", 4)  # Should evict \"b\" (least recent)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\ndef test_get_marks_as_most_recent():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.get(\"a\")  # \"a\" becomes most recent\n    cache.put(\"c\", 3)  # Should evict \"b\"\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n\ndef test_put_marks_as_most_recent():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"a\", 10)  # Update \"a\" and make it most recent\n    cache.put(\"c\", 3)  # Should evict \"b\"\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 10\n    assert cache.get(\"c\") == 3\n\ndef test_capacity_must_be_positive():\n    try:\n        LRUCache(0)\n        assert False, \"Should have raised ValueError\"\n    except ValueError:\n        pass\n\n    try:\n        LRUCache(-1)\n        assert False, \"Should have raised ValueError\"\n    except ValueError:\n        pass\n\ndef test_len_returns_number_of_stored_keys():\n    cache = LRUCache(3)\n    assert len(cache) == 0\n    cache.put(\"a\", 1)\n    assert len(cache) == 1\n    cache.put(\"b\", 2)\n    assert len(cache) == 2\n    cache.put(\"c\", 3)\n    assert len(cache) == 3\n    cache.put(\"d\", 4)\n    assert len(cache) == 3  # Should have evicted \"a\"\n    assert cache.get(\"a\") is None\n    assert len(cache) == 3\n\ndef test_get_on_empty_cache():\n    cache = LRUCache(2)\n    assert cache.get(\"anything\") is None\n\ndef test_put_on_empty_cache():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert cache.get(\"a\") == 1\n    assert len(cache) == 1\n\ndef test_eviction_with_update():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)  # Evicts \"a\"\n    cache.put(\"b\", 20)  # Update \"b\" and make it most recent\n    cache.put(\"d\", 4)  # Should evict \"c\"\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 20\n    assert cache.get(\"c\") is None\n    assert cache.get(\"d\") == 4\n\ndef test_large_capacity():\n    cache = LRUCache(1000)\n    for i in range(1000):\n        cache.put(f\"key{i}\", i)\n    assert len(cache) == 1000\n    for i in range(1000):\n        assert cache.get(f\"key{i}\") == i\n\ndef test_single_capacity():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    assert cache.get(\"a\") == 1\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert len(cache) == 1\n\ndef test_repeated_gets():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"a\") == 1\n    cache.put(\"d\", 4)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n"
+   },
+   "final_files_sha256": "0a4c76a9582570391dedd2c8f339849bc1638314072d284baf3de0f4660ccedd",
+   "infra_retries": 0,
+   "latency_ms": 29831.4,
+   "max_context_tokens": 1663,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T11-test-generation",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1663,
+   "ttft_ms": 350.2
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "config.py": "def get_path(cfg, path, default=None):\n    \"\"\"Fetch a nested value by dotted path, e.g. get_path(cfg, \"db.pool.size\").\n\n    Numeric parts index into lists (\"servers.0.host\"). Return `default` when any part is missing, a list index\n    is out of range, or an intermediate value is not a dict/list. A value that exists and is None is returned\n    as None (not `default`). An empty path returns `cfg` itself. Never raises for missing data.\n    \"\"\"\n    cur = cfg\n    for part in path.split(\".\"):\n        try:\n            # Try to convert part to int for list indexing\n            try:\n                part = int(part)\n            except ValueError:\n                pass\n            cur = cur[part]\n        except (KeyError, TypeError, IndexError):\n            return default\n    return cur\n"
+   },
+   "final_files_sha256": "0bd3c6d720479779f48736f14682000c8e982bbde4399cc15033a2d400b69c57",
+   "infra_retries": 0,
+   "latency_ms": 20566.9,
+   "max_context_tokens": 1467,
+   "outcome": "fail",
+   "repeat": 0,
+   "task_id": "T12-nested-config",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 3320,
+   "ttft_ms": 417.9
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "api.py": "from paginator import paginate, page_count\n\n\ndef list_users(users, page=1, per_page=10):\n    if page < 1 or per_page < 1:\n        raise ValueError(\"page and per_page must be >= 1\")\n    return {\"items\": paginate(users, page, per_page), \"pages\": page_count(len(users), per_page), \"page\": page}\n",
+    "paginator.py": "def paginate(items, page, per_page):\n    \"\"\"Return the items on 1-based `page`. Pages past the end return [].\"\"\"\n    if page < 1 or per_page < 1:\n        raise ValueError(\"page and per_page must be >= 1\")\n    start = (page - 1) * per_page\n    return items[start:start + per_page]\n\n\ndef page_count(total, per_page):\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    return (total + per_page - 1) // per_page\n"
+   },
+   "final_files_sha256": "086d959c300e132925b66ee0a2169f83d376ed18bb69373c555b09c846319545",
+   "infra_retries": 0,
+   "latency_ms": 6408.8,
+   "max_context_tokens": 717,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T01-pagination",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 717,
+   "ttft_ms": 41.5
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "invoice.py": "from money import Money\n\n\ndef invoice_total(lines):\n    \"\"\"lines: list of (unit_price_str, quantity).\"\"\"\n    total = Money(\"0\")\n    for price, qty in lines:\n        total = total + Money(price) * qty\n    return total\n\n\ndef apply_tax(total, rate):\n    \"\"\"rate is a string like \"0.0825\"; the tax is rounded half up to the cent.\"\"\"\n    tax_amount = total.amount * (1 + float(rate))\n    # Round to nearest cent using half-up rounding\n    return Money(round(tax_amount, 2))\n",
+    "money.py": "class Money:\n    def __init__(self, amount):\n        self.amount = float(amount)\n\n    def __add__(self, other):\n        return Money(self.amount + other.amount)\n\n    def __mul__(self, qty):\n        return Money(self.amount * qty)\n\n    def __eq__(self, other):\n        # Compare with small epsilon to handle floating point precision\n        return abs(self.amount - other.amount) < 1e-9\n\n    def __repr__(self):\n        return f\"Money({self.amount:.2f})\"\n\n    def cents(self):\n        # Use round to handle floating point precision properly\n        return round(self.amount * 100)\n"
+   },
+   "final_files_sha256": "3fdb6bc510b1884b0cfa07768524195c4d70d351fdb5d6a57039337db4d2f2d4",
+   "infra_retries": 0,
+   "latency_ms": 23835.8,
+   "max_context_tokens": 1665,
+   "outcome": "fail",
+   "repeat": 1,
+   "task_id": "T02-money",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 3683,
+   "ttft_ms": 42.0
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "cache.py": "class Cache:\n    def __init__(self):\n        self._d = {}\n\n    def key(self, *parts):\n        return \":\".join(str(p) for p in parts)\n\n    def get_or_compute(self, parts, fn):\n        k = self.key(*parts)\n        if k not in self._d:\n            self._d[k] = fn()\n        return self._d[k]\n",
+    "report.py": "from cache import Cache\n\n_cache = Cache()\n\n\ndef item_views(views, user_id, item_id):\n    \"\"\"views: list of dicts with user_id, item_id.\"\"\"\n    return _cache.get_or_compute(\n        (user_id, item_id),\n        lambda: sum(1 for v in views if v[\"user_id\"] == user_id and v[\"item_id\"] == item_id),\n    )\n"
+   },
+   "final_files_sha256": "88a5786f368596acd3e9e78e6df958f52b5e9a12f42b5d3afceb47057faa9ff2",
+   "infra_retries": 0,
+   "latency_ms": 10591.4,
+   "max_context_tokens": 1112,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T03-cache-collision",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1112,
+   "ttft_ms": 228.6
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "deploy.py": "def plan(services, current, prune=True):\n    \"\"\"Return the actions that bring `current` (name -> version) to `services` (name -> version).\"\"\"\n    actions = []\n    for name, version in sorted(services.items()):\n        if name not in current:\n            actions.append((\"create\", name, version))\n        elif current[name] != version:\n            actions.append((\"update\", name, version))\n    for name in sorted(current):\n        if name not in services:\n            if prune:\n                actions.append((\"delete\", name, current[name]))\n    return actions\n\n\ndef apply(actions, state, log, dry_run=False):\n    for kind, name, version in actions:\n        if not dry_run:\n            if kind == \"delete\":\n                state.pop(name, None)\n            else:\n                state[name] = version\n        log.append(f\"{'[dry-run] ' if dry_run else ''}{kind} {name} {version}\")\n    return state\n"
+   },
+   "final_files_sha256": "6f34e8b1a3957cae0670dca44e0a85a971dd21e40403f2536432a1b339a44e49",
+   "infra_retries": 0,
+   "latency_ms": 9426.3,
+   "max_context_tokens": 983,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T04-dry-run",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 983,
+   "ttft_ms": 41.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tree.py": "class Node:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\n\ndef flatten(node):\n    result = []\n    stack = [node]\n    \n    while stack:\n        current = stack.pop()\n        result.append(current.value)\n        # Add children in reverse order to maintain left-to-right traversal\n        for child in reversed(current.children):\n            stack.append(child)\n    \n    return result\n\n\ndef depth(node):\n    if not node.children:\n        return 1\n    \n    stack = [(node, 1)]\n    max_depth = 1\n    \n    while stack:\n        current_node, current_depth = stack.pop()\n        max_depth = max(max_depth, current_depth)\n        \n        for child in current_node.children:\n            stack.append((child, current_depth + 1))\n    \n    return max_depth\n"
+   },
+   "final_files_sha256": "e9c43b0cdb695448e3d93a8deb87da0806dd7f23645692ba6e3ac1b39bacaed4",
+   "infra_retries": 0,
+   "latency_ms": 6987.6,
+   "max_context_tokens": 919,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T05-iterative-tree",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 919,
+   "ttft_ms": 85.8
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "health.py": "from http_client import fetch\n\n\ndef ping():\n    return fetch(\"/health\", timeout_s=5)\n",
+    "http_client.py": "def fetch(url, *, timeout_s=5):\n    return {\"url\": url, \"timeout\": timeout_s, \"status\": 200}\n",
+    "orders.py": "from http_client import fetch\n\n\ndef load_order(oid):\n    return fetch(f\"/orders/{oid}\", timeout_s=10)\n",
+    "users.py": "from http_client import fetch\n\n\ndef load_user(uid):\n    return fetch(f\"/users/{uid}\", timeout_s=3)\n"
+   },
+   "final_files_sha256": "08a22d98180ce6f937c29a62c0082ed9ec7d62e64645846ce6264c23455e348c",
+   "infra_retries": 0,
+   "latency_ms": 5713.1,
+   "max_context_tokens": 582,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T06-api-rename",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 582,
+   "ttft_ms": 41.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "durations.py": "def parse_duration(text):\n    \"\"\"Parse a human-readable duration into whole seconds (int).\n\n    Grammar: one or more <integer><unit> groups, units d, h, m, s (case-insensitive), groups optionally\n    separated by exactly one space. Examples: \"1h30m\" -> 5400, \"2d\" -> 172800, \"45s\" -> 45, \"1H 30M\" -> 5400.\n    Leading and trailing whitespace is ignored. Leading zeros are fine (\"01h\" -> 3600) and \"0s\" -> 0.\n    Units must appear at most once and in descending order (d, h, m, s).\n    A bare integer with no unit, an empty or whitespace-only string, an unknown unit, a negative or decimal\n    number, two or more spaces between groups, or a space between a number and its unit all raise ValueError.\n    \"\"\"\n    text = text.strip()\n    if not text:\n        raise ValueError(\"Empty or whitespace-only string\")\n    \n    # Define unit multipliers\n    units = {'d': 86400, 'h': 3600, 'm': 60, 's': 1}\n    \n    # Parse the text\n    i = 0\n    result = 0\n    prev_unit = None\n    seen_units = set()\n    \n    while i < len(text):\n        # Skip spaces\n        if text[i] == ' ':\n            # Check if we have two spaces in a row\n            if i + 1 < len(text) and text[i + 1] == ' ':\n                raise ValueError(\"Two or more spaces between groups\")\n            i += 1\n            continue\n            \n        # Parse number\n        start = i\n        while i < len(text) and text[i].isdigit():\n            i += 1\n            \n        if i == start:\n            raise ValueError(\"Bare integer with no unit or invalid format\")\n            \n        num_str = text[start:i]\n        # Check for negative or decimal\n        if num_str.startswith('-') or '.' in num_str:\n            raise ValueError(\"Negative or decimal number not allowed\")\n            \n        num = int(num_str)\n        \n        # Parse unit\n        if i >= len(text) or not text[i].isalpha():\n            raise ValueError(\"Missing unit after number\")\n            \n        unit = text[i].lower()\n        i += 1\n        \n        # Check if unit is valid\n        if unit not in units:\n            raise ValueError(\"Unknown unit\")\n            \n        # Check if unit already seen\n        if unit in seen_units:\n            raise ValueError(\"Unit appears more than once\")\n            \n        # Check descending order\n        if prev_unit is not None:\n            if units[unit] >= units[prev_unit]:\n                raise ValueError(\"Units must be in descending order\")\n                \n        prev_unit = unit\n        seen_units.add(unit)\n        \n        # Add to result\n        result += num * units[unit]\n        \n        # Check for space between number and unit\n        if i < len(text) and text[i] == ' ':\n            # This is fine, continue\n            pass\n        elif i < len(text) and text[i].isalpha():\n            # There's another unit without space - this is invalid\n            raise ValueError(\"Space between number and unit required\")\n    \n    # Check if we have a valid unit\n    if not seen_units:\n        raise ValueError(\"No valid units found\")\n        \n    return result\n"
+   },
+   "final_files_sha256": "4088005ca272292b32f6b6be24a60ac11bee9d856cd1dc96a8cbc11a8dad315a",
+   "infra_retries": 0,
+   "latency_ms": 17622.1,
+   "max_context_tokens": 1254,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T07-parse-duration",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1254,
+   "ttft_ms": 367.3
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "storage.py": "import os\nimport urllib.parse\n\n\ndef safe_join(base, user_path):\n    # Percent-decode the user_path once\n    decoded_path = urllib.parse.unquote(user_path)\n    \n    # Normalize the base path to remove trailing slashes and resolve . and ..\n    base = os.path.normpath(base)\n    \n    # Handle absolute paths\n    if os.path.isabs(decoded_path):\n        raise ValueError(\"Absolute paths are not allowed\")\n    \n    # Split the decoded path into components, handling both / and \\ as separators\n    path_components = []\n    for component in decoded_path.replace('\\\\', '/').split('/'):\n        if component == '' or component == '.':\n            continue\n        elif component == '..':\n            if not path_components:\n                raise ValueError(\"Path traversal escapes base\")\n            path_components.pop()\n        else:\n            path_components.append(component)\n    \n    # Join the components to form the final path\n    final_path = os.path.join(*path_components) if path_components else '.'\n    \n    # Join with base and normalize\n    joined_path = os.path.normpath(os.path.join(base, final_path))\n    \n    # Check if the joined path is inside the base\n    # We need to check both with and without trailing separator\n    base_with_sep = base + os.sep\n    if not (joined_path.startswith(base_with_sep) or joined_path == base):\n        raise ValueError(\"Path traversal escapes base\")\n    \n    # Check for NUL bytes\n    if '\\x00' in decoded_path:\n        raise ValueError(\"NUL bytes are not allowed\")\n    \n    # Check if the resolved path (following symlinks) is inside base\n    resolved_path = os.path.realpath(joined_path)\n    resolved_base = os.path.realpath(base)\n    \n    # Check if resolved path is inside resolved base\n    resolved_base_with_sep = resolved_base + os.sep\n    if not (resolved_path.startswith(resolved_base_with_sep) or resolved_path == resolved_base):\n        raise ValueError(\"Resolved path escapes base\")\n    \n    return joined_path\n"
+   },
+   "final_files_sha256": "cdda122a3e5be332abab9d0ebc59aa8a488b17c1750e765c07294c492d74df11",
+   "infra_retries": 0,
+   "latency_ms": 84496.2,
+   "max_context_tokens": 4374,
+   "outcome": "fail",
+   "repeat": 1,
+   "task_id": "T08-safe-join",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 8639,
+   "ttft_ms": 348.9
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "ratelimit.py": "class TokenBucket:\n    def __init__(self, rate, capacity, clock):\n        self.rate = rate\n        self.capacity = capacity\n        self.clock = clock\n        self.tokens = capacity\n        self.last = clock()\n\n    def allow(self, cost=1):\n        if cost > self.capacity:\n            return False\n            \n        now = self.clock()\n        self.tokens += (now - self.last) * self.rate\n        self.tokens = min(self.tokens, self.capacity)\n        self.last = now\n        if self.tokens >= cost:\n            self.tokens -= cost\n            return True\n        return False\n"
+   },
+   "final_files_sha256": "b3699a207a3c4323ac6e3d579fd61625e491e01683ee01e3132375b7c9577425",
+   "infra_retries": 0,
+   "latency_ms": 4627.8,
+   "max_context_tokens": 653,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T09-token-bucket",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 653,
+   "ttft_ms": 41.4
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "db.py": "import sqlite3\n\n\ndef init_v1(conn):\n    conn.execute(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\n    conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n    conn.execute(\"INSERT INTO schema_version VALUES (1)\")\n    conn.commit()\n\n\ndef version(conn):\n    return conn.execute(\"SELECT version FROM schema_version\").fetchone()[0]\n\n\ndef migrate(conn):\n    # Check if we're already at version 2\n    if version(conn) == 2:\n        return\n    \n    # Add the new nullable TEXT column email_domain to users table\n    conn.execute(\"ALTER TABLE users ADD COLUMN email_domain TEXT\")\n    \n    # Backfill the email_domain column with the lower-cased part after the last '@'\n    # NULL when email is NULL or contains no '@'\n    conn.execute(\"\"\"\n        UPDATE users \n        SET email_domain = CASE \n            WHEN email IS NULL OR email NOT LIKE '%@%' THEN NULL\n            ELSE LOWER(SUBSTR(email, INSTR(email, '@') + 1))\n        END\n    \"\"\")\n    \n    # Update the schema version to 2\n    conn.execute(\"UPDATE schema_version SET version = 2\")\n    conn.commit()\n"
+   },
+   "final_files_sha256": "fe570e27ae4c793b2bf95451c0dfe3521f925ff014b2f15f3da3bbd147fd081d",
+   "infra_retries": 0,
+   "latency_ms": 23731.1,
+   "max_context_tokens": 1643,
+   "outcome": "fail",
+   "repeat": 1,
+   "task_id": "T10-sqlite-migration",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 3539,
+   "ttft_ms": 81.6
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tests/test_lru.py": "from lru import LRUCache\n\ndef test_init_with_invalid_capacity():\n    try:\n        LRUCache(0)\n        assert False, \"Should have raised ValueError\"\n    except ValueError:\n        pass\n    \n    try:\n        LRUCache(-1)\n        assert False, \"Should have raised ValueError\"\n    except ValueError:\n        pass\n\ndef test_init_with_valid_capacity():\n    cache = LRUCache(1)\n    assert cache.capacity == 1\n    \n    cache = LRUCache(5)\n    assert cache.capacity == 5\n\ndef test_get_on_empty_cache():\n    cache = LRUCache(2)\n    assert cache.get(\"nonexistent\") is None\n\ndef test_get_hit():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"b\") == 2\n\ndef test_get_miss():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert cache.get(\"b\") is None\n\ndef test_put_new_key():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert cache.get(\"a\") == 1\n    assert len(cache) == 1\n\ndef test_put_existing_key():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    assert cache.get(\"a\") == 2\n    assert len(cache) == 1\n\ndef test_eviction():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n    assert len(cache) == 2\n\ndef test_access_order_update():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.get(\"a\")  # Access \"a\" to make it most recent\n    cache.put(\"d\", 4)  # This should evict \"b\" (least recent)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\ndef test_capacity_one():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert len(cache) == 1\n\ndef test_put_over_capacity():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.put(\"d\", 4)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") is None\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\ndef test_len():\n    cache = LRUCache(3)\n    assert len(cache) == 0\n    cache.put(\"a\", 1)\n    assert len(cache) == 1\n    cache.put(\"b\", 2)\n    assert len(cache) == 2\n    cache.put(\"c\", 3)\n    assert len(cache) == 3\n    cache.put(\"d\", 4)\n    assert len(cache) == 3  # Should be capped at capacity\n\ndef test_get_updates_order():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.get(\"a\")  # Make \"a\" most recent\n    cache.put(\"d\", 4)  # Should evict \"b\"\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\ndef test_put_updates_order():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.put(\"a\", 10)  # Update \"a\" - should make it most recent\n    cache.put(\"d\", 4)  # Should evict \"b\"\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 10\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\ndef test_multiple_evictions():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.put(\"d\", 4)\n    cache.put(\"e\", 5)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") is None\n    assert cache.get(\"c\") is None\n    assert cache.get(\"d\") == 4\n    assert cache.get(\"e\") == 5\n    assert len(cache) == 2\n\ndef test_get_none_value():\n    cache = LRUCache(2)\n    cache.put(\"a\", None)\n    assert cache.get(\"a\") is None\n    assert len(cache) == 1\n\ndef test_put_none_value():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", None)\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"b\") is None\n    assert len(cache) == 2\n\ndef test_same_key_different_values():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    cache.put(\"a\", 3)\n    assert cache.get(\"a\") == 3\n    assert len(cache) == 1\n\ndef test_large_capacity():\n    cache = LRUCache(1000)\n    for i in range(1000):\n        cache.put(f\"key{i}\", i)\n    assert len(cache) == 1000\n    for i in range(1000):\n        assert cache.get(f\"key{i}\") == i\n\ndef test_ordering_with_get_and_put():\n    cache = LRUCache(4)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.put(\"d\", 4)\n    cache.get(\"a\")  # Make \"a\" most recent\n    cache.put(\"e\", 5)  # Should evict \"b\"\n    cache.put(\"f\", 6)  # Should evict \"c\"\n    assert cache.get(\"b\") is None\n    assert cache.get(\"c\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"d\") == 4\n    assert cache.get(\"e\") == 5\n    assert cache.get(\"f\") == 6\n"
+   },
+   "final_files_sha256": "85f2c6a9e1f9b69f84fe6760966348d59e91cdf564bdef68f4c42ec13a3cc8de",
+   "infra_retries": 0,
+   "latency_ms": 36380.9,
+   "max_context_tokens": 2012,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T11-test-generation",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 2012,
+   "ttft_ms": 42.7
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "config.py": "def get_path(cfg, path, default=None):\n    \"\"\"Fetch a nested value by dotted path, e.g. get_path(cfg, \"db.pool.size\").\n\n    Numeric parts index into lists (\"servers.0.host\"). Return `default` when any part is missing, a list index\n    is out of range, or an intermediate value is not a dict/list. A value that exists and is None is returned\n    as None (not `default`). An empty path returns `cfg` itself. Never raises for missing data.\n    \"\"\"\n    cur = cfg\n    for part in path.split(\".\"):\n        try:\n            # Try to convert part to int for list indexing\n            try:\n                part = int(part)\n            except ValueError:\n                pass\n            cur = cur[part]\n        except (KeyError, TypeError, IndexError):\n            return default\n    return cur\n"
+   },
+   "final_files_sha256": "0bd3c6d720479779f48736f14682000c8e982bbde4399cc15033a2d400b69c57",
+   "infra_retries": 0,
+   "latency_ms": 19984.9,
+   "max_context_tokens": 1466,
+   "outcome": "fail",
+   "repeat": 1,
+   "task_id": "T12-nested-config",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 3319,
+   "ttft_ms": 41.8
+  }
+ ]
+}

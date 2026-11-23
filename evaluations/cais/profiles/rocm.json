@@ -1,0 +1,10 @@
+{
+  "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+  "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+  "runtime_image_digest": "sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+  "engine": "llama.cpp",
+  "topology": "llama-cpp-hip",
+  "hardware_class": "amd-strix-halo-gfx1151",
+  "reasoning_budget": 0,
+  "reasoning": {"mode": "off", "answer_allowance": 8192}
+}

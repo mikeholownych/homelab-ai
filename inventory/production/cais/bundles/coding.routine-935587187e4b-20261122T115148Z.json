@@ -1,0 +1,540 @@
+{
+ "capability": "coding.routine",
+ "capability_version": 1,
+ "context_envelope": 6674,
+ "executor": {
+  "git_commit": "cac780ea1eedaddb23d79f62146d12a7883dab09",
+  "host": "mike-dev",
+  "id": "evaluations/cais/run_qualification.py",
+  "sha256": "071049684afd524786bfc04680c066896829f7e78be632986be705649ad02e67"
+ },
+ "finished_at": "2026-11-22T13:19:27.493658+00:00",
+ "independence": "internal",
+ "independence_basis": "in-repo engx corpus with hidden pytest oracles; graded under bubblewrap; re-scorable",
+ "observed_serving": {
+  "after": {
+   "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+   "capacity_source": "observed",
+   "engine": "llama.cpp",
+   "engine_version": "b0-unknown",
+   "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+   "pool": "deep",
+   "quantization": "IQ1_M - 1.75 bpw",
+   "role": "production",
+   "worker_id": "b0-live-llama-deep-worker2"
+  },
+  "alias": "engineering/deep",
+  "alias_reasoning": {
+   "budget": 4096,
+   "mode": "on"
+  },
+  "before": {
+   "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+   "capacity_source": "observed",
+   "engine": "llama.cpp",
+   "engine_version": "b0-unknown",
+   "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+   "pool": "deep",
+   "quantization": "IQ1_M - 1.75 bpw",
+   "role": "production",
+   "worker_id": "b0-live-llama-deep-worker2"
+  },
+  "gateway": "https://10.0.8.5:8443"
+ },
+ "profile": {
+  "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+  "engine": "llama.cpp",
+  "hardware_class": "intel-arc-pro-b65-32g",
+  "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+  "reasoning_budget": 4096,
+  "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+  "topology": "llama-cpp-sycl"
+ },
+ "profile_digest": "sha256:e5896a92279b766392aed12ff0dc2c9dbff93e18b29d89ecb591cd2aeaf00522",
+ "reasoning": {
+  "answer_allowance": 8192,
+  "budget": 4096,
+  "mode": "on"
+ },
+ "run_id": "coding.routine-935587187e4b-20261122T115148Z",
+ "sampling": {
+  "infra_retry_policy": {
+   "pause_seconds": 65,
+   "retries": 2
+  },
+  "note": "temperature 0; repeats are correlated, the task is the unit",
+  "response_cache": "bypass",
+  "seed": null,
+  "temperature": 0
+ },
+ "schema": "cais-evidence-bundle/v1",
+ "started_at": "2026-11-22T11:51:48.403084+00:00",
+ "suite": {
+  "corpus_digest": "c7e0a4a73e55612b",
+  "id": "engx-base",
+  "max_attempts": 3,
+  "max_tokens": 8192,
+  "tasks": [
+   "T01-pagination",
+   "T02-money",
+   "T03-cache-collision",
+   "T04-dry-run",
+   "T05-iterative-tree",
+   "T06-api-rename",
+   "T07-parse-duration",
+   "T08-safe-join",
+   "T09-token-bucket",
+   "T10-sqlite-migration",
+   "T11-test-generation",
+   "T12-nested-config"
+  ],
+  "temperature": 0,
+  "version": "c7e0a4a73e55612b-a3-t8192"
+ },
+ "trials": [
+  {
+   "attempts": 1,
+   "final_files": {
+    "api.py": "from paginator import paginate, page_count\n\n\ndef list_users(users, page=1, per_page=10):\n    if page < 1:\n        raise ValueError(\"page must be >= 1\")\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n\n    return {\n        \"items\": paginate(users, page, per_page),\n        \"pages\": page_count(len(users), per_page),\n        \"page\": page,\n    }\n",
+    "paginator.py": "def paginate(items, page, per_page):\n    \"\"\"Return the items on 1-based `page`. Pages past the end return [].\"\"\"\n    if page < 1:\n        raise ValueError(\"page must be >= 1\")\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n\n    start = (page - 1) * per_page\n    return items[start:start + per_page]\n\n\ndef page_count(total, per_page):\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n    return (total + per_page - 1) // per_page\n"
+   },
+   "final_files_sha256": "81f5d0a2a5ab6f220c96635187087515d05d0a7b71c9e3c075cf58f12a8479c8",
+   "infra_retries": 0,
+   "latency_ms": 117873.8,
+   "max_context_tokens": 2780,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T01-pagination",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 2780,
+   "ttft_ms": 1501.8
+  },
+  {
+   "attempts": 3,
+   "final_files": {
+    "invoice.py": "from money import Money\nfrom decimal import Decimal, ROUND_HALF_UP\n\n\ndef invoice_total(lines):\n    \"\"\"lines: list of (unit_price_str, quantity).\"\"\"\n    total = Money(\"0\")\n    for price, qty in lines:\n        total = total + Money(price) * qty\n    return total\n\n\ndef apply_tax(total, rate):\n    \"\"\"rate is a string like \"0.0825\"; the tax is rounded half up to the cent.\"\"\"\n    tax_cents = int(\n        (Decimal(total.cents()) * Decimal(str(rate))).quantize(\n            Decimal(\"1\"),\n            rounding=ROUND_HALF_UP,\n        )\n    )\n    return Money.from_cents(total.cents() + tax_cents)\n",
+    "money.py": "from decimal import Decimal, ROUND_HALF_UP\n\n\nclass Money:\n    def __init__(self, amount):\n        if isinstance(amount, Money):\n            self._cents = amount._cents\n        elif isinstance(amount, int):\n            self._cents = amount\n        else:\n            value = Decimal(str(amount))\n            self._cents = int((value * 100).quantize(Decimal(\"1\"), rounding=ROUND_HALF_UP))\n\n    @classmethod\n    def from_cents(cls, cents):\n        money = cls(0)\n        money._cents = int(cents)\n        return money\n\n    def __add__(self, other):\n        return Money.from_cents(self._cents + other._cents)\n\n    def __mul__(self, qty):\n        if isinstance(qty, int):\n            return Money.from_cents(self._cents * qty)\n\n        value = Decimal(str(qty))\n        cents = (Decimal(self._cents) * value).quantize(Decimal(\"1\"), rounding=ROUND_HALF_UP)\n        return Money.from_cents(int(cents))\n\n    def __eq__(self, other):\n        if isinstance(other, Money):\n            return self._cents == other._cents\n        return False\n\n    def __repr__(self):\n        sign = \"-\" if self._cents < 0 else \"\"\n        abs_cents = abs(self._cents)\n        return f\"Money({sign}{abs_cents // 100}.{abs_cents % 100:02d})\"\n\n    def cents(self):\n        return self._cents\n"
+   },
+   "final_files_sha256": "0c70ede04847a48b9b52e968189135665044f4510cf726591f786546eedba065",
+   "infra_retries": 0,
+   "latency_ms": 742299.9,
+   "max_context_tokens": 6674,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T02-money",
+   "terminations": [
+    "stop",
+    "stop",
+    "stop"
+   ],
+   "tokens": 18039,
+   "ttft_ms": 1142.5
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "cache.py": "class Cache:\n    def __init__(self):\n        self._d = {}\n\n    def key(self, *parts):\n        return tuple(parts)\n\n    def get_or_compute(self, parts, fn):\n        k = self.key(*parts)\n        if k not in self._d:\n            self._d[k] = fn()\n        return self._d[k]\n"
+   },
+   "final_files_sha256": "9f9045bd9121eb853adc54773b11708da38aabbae9dd6d18766afac8993e987b",
+   "infra_retries": 0,
+   "latency_ms": 29768.9,
+   "max_context_tokens": 1268,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T03-cache-collision",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1268,
+   "ttft_ms": 1308.8
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "deploy.py": "def plan(services, current, prune=True):\n    \"\"\"Return the actions that bring `current` (name -> version) to `services` (name -> version).\"\"\"\n    actions = []\n    for name, version in sorted(services.items()):\n        if name not in current:\n            actions.append((\"create\", name, version))\n        elif current[name] != version:\n            actions.append((\"update\", name, version))\n    for name in sorted(current):\n        if name not in services and prune:\n            actions.append((\"delete\", name, current[name]))\n    return actions\n\n\ndef apply(actions, state, log, dry_run=False):\n    for kind, name, version in actions:\n        if not dry_run:\n            if kind == \"delete\":\n                state.pop(name, None)\n            else:\n                state[name] = version\n\n        if dry_run:\n            log.append(f\"[dry-run] {kind} {name} {version}\")\n        else:\n            log.append(f\"{kind} {name} {version}\")\n\n    return state\n"
+   },
+   "final_files_sha256": "4a790e15a8d6bef08103a576f99492186e55bb7b3767dcdba9516345622876f4",
+   "infra_retries": 0,
+   "latency_ms": 48848.7,
+   "max_context_tokens": 1575,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T04-dry-run",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1575,
+   "ttft_ms": 1221.1
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tree.py": "class Node:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\n\ndef flatten(node):\n    out = []\n    stack = [node]\n\n    while stack:\n        current = stack.pop()\n        out.append(current.value)\n\n        for child in reversed(current.children):\n            stack.append(child)\n\n    return out\n\n\ndef depth(node):\n    max_depth = 0\n    stack = [(node, 1)]\n\n    while stack:\n        current, current_depth = stack.pop()\n        if current_depth > max_depth:\n            max_depth = current_depth\n\n        for child in current.children:\n            stack.append((child, current_depth + 1))\n\n    return max_depth\n"
+   },
+   "final_files_sha256": "3b267215e136208ac5c5e6d948eb2cc48438b562dac6026c1f8569ba177aefe2",
+   "infra_retries": 0,
+   "latency_ms": 228482.3,
+   "max_context_tokens": 5102,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T05-iterative-tree",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 5102,
+   "ttft_ms": 1388.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "http_client.py": "def fetch(url, *, timeout_s=5):\n    return {\"url\": url, \"timeout\": timeout_s, \"status\": 200}\n",
+    "orders.py": "from http_client import fetch\n\n\ndef load_order(oid):\n    return fetch(f\"/orders/{oid}\", timeout_s=10)\n",
+    "users.py": "from http_client import fetch\n\n\ndef load_user(uid):\n    return fetch(f\"/users/{uid}\", timeout_s=3)\n"
+   },
+   "final_files_sha256": "ecb61bbe3f02e7897f3d3706d09e93dba1f35085d04499625d3995574edf518f",
+   "infra_retries": 0,
+   "latency_ms": 31243.1,
+   "max_context_tokens": 1007,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T06-api-rename",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1007,
+   "ttft_ms": 937.5
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "durations.py": "import re\n\n\ndef parse_duration(text):\n    \"\"\"Parse a human-readable duration into whole seconds (int).\n\n    Grammar: one or more `<integer><unit>` groups, units d, h, m, s (case-insensitive), groups optionally\n    separated by exactly one space. Examples: \"1h30m\" -> 5400, \"2d\" -> 172800, \"45s\" -> 45, \"1H 30M\" -> 5400.\n    Leading and trailing whitespace is ignored. Leading zeros are fine (\"01h\" -> 3600) and \"0s\" -> 0.\n    Units must appear at most once and in descending order (d, h, m, s).\n    A bare integer with no unit, an empty or whitespace-only string, an unknown unit, a negative or decimal\n    number, two or more spaces between groups, or a space between a number and its unit all raise ValueError.\n    \"\"\"\n    if not isinstance(text, str):\n        raise ValueError\n\n    stripped = text.strip()\n    if not stripped:\n        raise ValueError\n\n    pattern = r\"[0-9]+[dDhHmMsS](?: ?[0-9]+[dDhHmMsS])*\"\n    if not re.fullmatch(pattern, stripped):\n        raise ValueError\n\n    unit_order = {\"d\": 0, \"h\": 1, \"m\": 2, \"s\": 3}\n    multipliers = {\"d\": 86400, \"h\": 3600, \"m\": 60, \"s\": 1}\n\n    total = 0\n    last_order = -1\n    seen_units = set()\n\n    for number, unit in re.findall(r\"([0-9]+)([dDhHmMsS])\", stripped):\n        unit = unit.lower()\n\n        if unit in seen_units:\n            raise ValueError\n\n        order = unit_order[unit]\n        if order <= last_order:\n            raise ValueError\n\n        seen_units.add(unit)\n        last_order = order\n        total += int(number) * multipliers[unit]\n\n    return total\n"
+   },
+   "final_files_sha256": "e4efe1a02682474582c9328d10785eb7ba8baf3f1412e3d4bb7ed4984d5363d3",
+   "infra_retries": 0,
+   "latency_ms": 485425.4,
+   "max_context_tokens": 5792,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T07-parse-duration",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 10955,
+   "ttft_ms": 1062.8
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "storage.py": "import os\nfrom urllib.parse import unquote\n\n\ndef safe_join(base, user_path):\n    if \"\\x00\" in base:\n        raise ValueError(\"NUL byte in base path\")\n\n    decoded = unquote(user_path)\n\n    if \"\\x00\" in decoded:\n        raise ValueError(\"NUL byte in user path\")\n\n    normalized = decoded.replace(\"\\\\\", \"/\")\n\n    if normalized.startswith(\"/\") or (len(normalized) >= 2 and normalized[1] == \":\"):\n        raise ValueError(\"absolute path not allowed\")\n\n    base_real = os.path.realpath(base)\n    candidate = os.path.join(base_real, normalized)\n    candidate_real = os.path.realpath(candidate)\n\n    try:\n        if os.path.commonpath([base_real, candidate_real]) != base_real:\n            raise ValueError(\"path escapes base\")\n    except ValueError:\n        raise ValueError(\"path escapes base\")\n\n    return candidate_real\n"
+   },
+   "final_files_sha256": "2830e557e4bddcd714c0f2b528140c5611ab7ba901eaafaa14b088cc80803e27",
+   "infra_retries": 0,
+   "latency_ms": 227403.4,
+   "max_context_tokens": 4837,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T08-safe-join",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 4837,
+   "ttft_ms": 1004.1
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "ratelimit.py": "class TokenBucket:\n    def __init__(self, rate, capacity, clock):\n        self.rate = rate\n        self.capacity = capacity\n        self.clock = clock\n        self.tokens = capacity\n        self.last = clock()\n\n    def allow(self, cost=1):\n        now = self.clock()\n        elapsed = max(0.0, now - self.last)\n        self.last = now\n        self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)\n\n        if cost < 0 or cost > self.capacity:\n            return False\n\n        if self.tokens >= cost:\n            self.tokens -= cost\n            return True\n\n        return False\n"
+   },
+   "final_files_sha256": "a9286ed2d53bda31298484746b3a3f50e9f4a93e067173407b856b6407c71e22",
+   "infra_retries": 0,
+   "latency_ms": 214236.4,
+   "max_context_tokens": 4648,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T09-token-bucket",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 4648,
+   "ttft_ms": 1095.9
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "db.py": "import sqlite3\n\n\ndef init_v1(conn):\n    conn.execute(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\n    conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n    conn.execute(\"INSERT INTO schema_version VALUES (1)\")\n    conn.commit()\n\n\ndef version(conn):\n    return conn.execute(\"SELECT version FROM schema_version\").fetchone()[0]\n\n\ndef migrate(conn):\n    try:\n        schema_rows = conn.execute(\"SELECT version FROM schema_version\").fetchall()\n    except sqlite3.OperationalError:\n        conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n        conn.execute(\"INSERT INTO schema_version VALUES (2)\")\n        schema_rows = [(2,)]\n\n    current_version = schema_rows[0][0] if schema_rows else None\n\n    try:\n        user_columns = [desc[0] for desc in conn.execute(\"SELECT * FROM users\").description]\n    except sqlite3.OperationalError:\n        user_columns = []\n\n    has_email_domain = \"email_domain\" in user_columns\n\n    if current_version != 2 or not has_email_domain:\n        if not has_email_domain:\n            try:\n                conn.execute(\"ALTER TABLE users ADD COLUMN email_domain TEXT\")\n            except sqlite3.OperationalError:\n                pass\n\n        try:\n            users = conn.execute(\"SELECT id, email FROM users\").fetchall()\n        except sqlite3.OperationalError:\n            users = []\n\n        for user_id, email in users:\n            if email is None or \"@\" not in email:\n                continue\n            domain = email.rsplit(\"@\", 1)[1].lower()\n            conn.execute(\n                \"UPDATE users SET email_domain = ? WHERE id = ? AND email_domain IS NULL\",\n                (domain, user_id),\n            )\n\n    if not schema_rows:\n        conn.execute(\"INSERT INTO schema_version VALUES (2)\")\n    elif len(schema_rows) == 1:\n        if schema_rows[0][0] != 2:\n            conn.execute(\"UPDATE schema_version SET version = 2\")\n    else:\n        conn.execute(\"DELETE FROM schema_version\")\n        conn.execute(\"INSERT INTO schema_version VALUES (2)\")\n\n    conn.commit()\n"
+   },
+   "final_files_sha256": "ae601ad9bc1bca1a01def4838ae1ad5cf703a785deeea0225990e5c33adf49f8",
+   "infra_retries": 0,
+   "latency_ms": 242802.6,
+   "max_context_tokens": 5164,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T10-sqlite-migration",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 5164,
+   "ttft_ms": 1064.1
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tests/test_lru.py": "from lru import LRUCache\n\n\ndef test_init_accepts_positive_capacity():\n    cache = LRUCache(1)\n    assert len(cache) == 0\n\n    cache = LRUCache(5)\n    assert len(cache) == 0\n\n\ndef test_init_rejects_zero_capacity():\n    try:\n        LRUCache(0)\n    except ValueError:\n        pass\n    else:\n        assert False\n\n\ndef test_init_rejects_negative_capacity():\n    try:\n        LRUCache(-1)\n    except ValueError:\n        pass\n    else:\n        assert False\n\n\ndef test_get_miss_returns_none():\n    cache = LRUCache(2)\n    assert cache.get(\"missing\") is None\n\n\ndef test_get_miss_does_not_store_key():\n    cache = LRUCache(2)\n    cache.get(\"missing\")\n    assert len(cache) == 0\n    assert cache.get(\"missing\") is None\n\n\ndef test_get_hit_returns_value():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert cache.get(\"a\") == 1\n\n\ndef test_get_hit_marks_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n\n    assert cache.get(\"a\") == 1\n\n    cache.put(\"c\", 3)\n    assert len(cache) == 2\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n\n\ndef test_get_hit_with_none_value_marks_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(\"a\", None)\n    cache.put(\"b\", 1)\n\n    assert cache.get(\"a\") is None\n\n    cache.put(\"c\", None)\n    assert len(cache) == 2\n    assert cache.get(\"b\") is None\n    assert cache.get(\"c\") is None\n\n\ndef test_put_inserts_new_key():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert len(cache) == 1\n    assert cache.get(\"a\") == 1\n\n\ndef test_put_updates_existing_key_value():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    assert len(cache) == 1\n    assert cache.get(\"a\") == 2\n\n\ndef test_put_existing_key_marks_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"a\", 3)\n\n    cache.put(\"c\", 4)\n    assert len(cache) == 2\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 3\n    assert cache.get(\"c\") == 4\n\n\ndef test_put_below_capacity_does_not_evict():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    assert len(cache) == 2\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"b\") == 2\n\n\ndef test_put_evicts_least_recently_used_when_capacity_exceeded():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n\n    assert len(cache) == 2\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n\n\ndef test_capacity_one_evicts_previous_key():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n\n    assert len(cache) == 1\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n\n\ndef test_capacity_one_update_does_not_evict():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n\n    assert len(cache) == 1\n    assert cache.get(\"a\") == 2\n\n\ndef test_multiple_evictions_follow_lru_order():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n\n    assert cache.get(\"a\") == 1\n    cache.put(\"d\", 4)\n\n    assert len(cache) == 3\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\n    cache.put(\"e\", 5)\n    assert len(cache) == 3\n    assert cache.get(\"a\") is None\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n    assert cache.get(\"e\") == 5\n\n\ndef test_get_miss_does_not_change_order():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n\n    cache.get(\"missing\")\n\n    cache.put(\"c\", 3)\n    assert len(cache) == 2\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n\n\ndef test_len_counts_stored_keys():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    assert len(cache) == 1\n\n    cache.put(\"b\", 2)\n    assert len(cache) == 2\n\n    cache.put(\"c\", 3)\n    assert len(cache) == 2\n\n\ndef test_len_never_exceeds_capacity():\n    cache = LRUCache(2)\n    for i in range(5):\n        cache.put(i, i)\n    assert len(cache) == 2\n\n\ndef test_stored_none_value_is_present():\n    cache = LRUCache(2)\n    cache.put(\"a\", None)\n    assert len(cache) == 1\n    assert cache.get(\"a\") is None\n\n    cache.put(\"b\", None)\n    assert len(cache) == 2\n\n    cache.put(\"c\", None)\n    assert len(cache) == 2\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") is None\n    assert cache.get(\"c\") is None\n"
+   },
+   "final_files_sha256": "0741e494f9c5db41e83f89e586492d9c947069dc3ba6be14f9d11a54e29ef3e3",
+   "infra_retries": 0,
+   "latency_ms": 298087.8,
+   "max_context_tokens": 6115,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T11-test-generation",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 6115,
+   "ttft_ms": 986.4
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "config.py": "def get_path(cfg, path, default=None):\n    \"\"\"Fetch a nested value by dotted path, e.g. get_path(cfg, \"db.pool.size\").\n\n    Numeric parts index into lists (\"servers.0.host\"). Return `default` when any part is missing, a list index\n    is out of range, or an intermediate value is not a dict/list. A value that exists and is None is returned\n    as None (not `default`). An empty path returns `cfg` itself. Never raises for missing data.\n    \"\"\"\n    if path == \"\":\n        return cfg\n\n    cur = cfg\n    for part in path.split(\".\"):\n        if isinstance(cur, dict):\n            if part not in cur:\n                return default\n            cur = cur[part]\n        elif isinstance(cur, list):\n            try:\n                idx = int(part)\n            except ValueError:\n                return default\n            try:\n                cur = cur[idx]\n            except IndexError:\n                return default\n        else:\n            return default\n\n    return cur\n"
+   },
+   "final_files_sha256": "e237c84782141f32bfd1091813e489026e5a442ea0ad325de8afd6bb3cd03265",
+   "infra_retries": 0,
+   "latency_ms": 228864.2,
+   "max_context_tokens": 4985,
+   "outcome": "pass",
+   "repeat": 0,
+   "task_id": "T12-nested-config",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 4985,
+   "ttft_ms": 1169.1
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "paginator.py": "def paginate(items, page, per_page):\n    \"\"\"Return the items on 1-based `page`. Pages past the end return [].\"\"\"\n    if page < 1:\n        raise ValueError(\"page must be >= 1\")\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n\n    start = (page - 1) * per_page\n    return items[start:start + per_page]\n\n\ndef page_count(total, per_page):\n    if per_page < 1:\n        raise ValueError(\"per_page must be >= 1\")\n\n    if total <= 0:\n        return 0\n\n    return (total + per_page - 1) // per_page\n"
+   },
+   "final_files_sha256": "91e1bda01092556b450fc860416ff50567a03aa250c34b1192c1a769e41084ad",
+   "infra_retries": 0,
+   "latency_ms": 225042.7,
+   "max_context_tokens": 4836,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T01-pagination",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 4836,
+   "ttft_ms": 1061.5
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "invoice.py": "from money import Money\nfrom decimal import Decimal, ROUND_HALF_UP\n\n\ndef invoice_total(lines):\n    \"\"\"lines: list of (unit_price_str, quantity).\"\"\"\n    total = Money(\"0\")\n    for price, qty in lines:\n        total = total + Money(price) * qty\n    return total\n\n\ndef apply_tax(total, rate):\n    \"\"\"rate is a string like \"0.0825\"; the tax is rounded half up to the cent.\"\"\"\n    total_cents = Decimal(total.cents())\n    multiplier = Decimal(1) + Decimal(rate)\n    result_cents = (total_cents * multiplier).quantize(Decimal(\"1\"), rounding=ROUND_HALF_UP)\n    return Money.from_cents(int(result_cents))\n",
+    "money.py": "class Money:\n    def __init__(self, amount):\n        self._cents = self._to_cents(amount)\n\n    def _to_cents(self, amount):\n        if isinstance(amount, Money):\n            return amount.cents()\n\n        if isinstance(amount, int):\n            return amount * 100\n\n        if isinstance(amount, float):\n            amount = str(amount)\n\n        text = str(amount).strip()\n        sign = 1\n        if text.startswith(\"-\"):\n            sign = -1\n            text = text[1:]\n        elif text.startswith(\"+\"):\n            text = text[1:]\n\n        if \".\" in text:\n            whole, frac = text.split(\".\", 1)\n        else:\n            whole, frac = text, \"\"\n\n        whole = int(whole) if whole else 0\n        frac = (frac + \"00\")[:2]\n        return sign * (whole * 100 + int(frac))\n\n    def __add__(self, other):\n        return Money.from_cents(self.cents() + other.cents())\n\n    def __mul__(self, qty):\n        return Money.from_cents(self.cents() * int(qty))\n\n    def __eq__(self, other):\n        return self.cents() == other.cents()\n\n    def __repr__(self):\n        value = self.cents()\n        sign = \"-\" if value < 0 else \"\"\n        value = abs(value)\n        return f\"Money({sign}{value // 100}.{value % 100:02d})\"\n\n    def cents(self):\n        return self._cents\n\n    @classmethod\n    def from_cents(cls, cents):\n        money = cls(0)\n        money._cents = int(cents)\n        return money\n"
+   },
+   "final_files_sha256": "5d505e405cb111181bd4d21f3fc6802a765f5aa7a2798dd5ae1046008c8dab9d",
+   "infra_retries": 0,
+   "latency_ms": 326086.0,
+   "max_context_tokens": 5319,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T02-money",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 8124,
+   "ttft_ms": 1138.5
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "cache.py": "class Cache:\n    def __init__(self):\n        self._d = {}\n\n    def key(self, *parts):\n        return tuple(parts)\n\n    def get_or_compute(self, parts, fn):\n        k = self.key(*parts)\n        if k not in self._d:\n            self._d[k] = fn()\n        return self._d[k]\n"
+   },
+   "final_files_sha256": "9f9045bd9121eb853adc54773b11708da38aabbae9dd6d18766afac8993e987b",
+   "infra_retries": 0,
+   "latency_ms": 39142.3,
+   "max_context_tokens": 1450,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T03-cache-collision",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1450,
+   "ttft_ms": 1296.7
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "deploy.py": "def plan(services, current, prune=True):\n    \"\"\"Return the actions that bring `current` (name -> version) to `services` (name -> version).\"\"\"\n    actions = []\n    for name, version in sorted(services.items()):\n        if name not in current:\n            actions.append((\"create\", name, version))\n        elif current[name] != version:\n            actions.append((\"update\", name, version))\n\n    if prune:\n        for name in sorted(current):\n            if name not in services:\n                actions.append((\"delete\", name, current[name]))\n\n    return actions\n\n\ndef apply(actions, state, log, dry_run=False):\n    for kind, name, version in actions:\n        if not dry_run:\n            if kind == \"delete\":\n                state.pop(name, None)\n            else:\n                state[name] = version\n\n        if dry_run:\n            log.append(f\"[dry-run] {kind} {name} {version}\")\n        else:\n            log.append(f\"{kind} {name} {version}\")\n\n    return state\n"
+   },
+   "final_files_sha256": "3474956816f011c6938eb5bd2b821566ac8f874716c58c9ad773d2d6cf7d67b3",
+   "infra_retries": 0,
+   "latency_ms": 51273.4,
+   "max_context_tokens": 1622,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T04-dry-run",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1622,
+   "ttft_ms": 1213.4
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tree.py": "class Node:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\n\ndef flatten(node):\n    out = []\n    stack = [node]\n\n    while stack:\n        current = stack.pop()\n        out.append(current.value)\n        stack.extend(reversed(current.children))\n\n    return out\n\n\ndef depth(node):\n    max_depth = 0\n    stack = [(node, 1)]\n\n    while stack:\n        current, current_depth = stack.pop()\n        if current_depth > max_depth:\n            max_depth = current_depth\n\n        for child in current.children:\n            stack.append((child, current_depth + 1))\n\n    return max_depth\n"
+   },
+   "final_files_sha256": "a3dc3d1a23709e9a4b5256818dbfce26835f67dcc42be5519ba0877b2c04b7f4",
+   "infra_retries": 0,
+   "latency_ms": 52426.0,
+   "max_context_tokens": 1707,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T05-iterative-tree",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1707,
+   "ttft_ms": 1378.4
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "http_client.py": "def fetch(url, *, timeout_s=5):\n    return {\"url\": url, \"timeout\": timeout_s, \"status\": 200}\n",
+    "orders.py": "from http_client import fetch\n\n\ndef load_order(oid):\n    return fetch(f\"/orders/{oid}\", timeout_s=10)\n",
+    "users.py": "from http_client import fetch\n\n\ndef load_user(uid):\n    return fetch(f\"/users/{uid}\", timeout_s=3)\n"
+   },
+   "final_files_sha256": "ecb61bbe3f02e7897f3d3706d09e93dba1f35085d04499625d3995574edf518f",
+   "infra_retries": 0,
+   "latency_ms": 30599.1,
+   "max_context_tokens": 1007,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T06-api-rename",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 1007,
+   "ttft_ms": 170.2
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "durations.py": "import re\n\n\ndef parse_duration(text):\n    \"\"\"Parse a human-readable duration into whole seconds (int).\n\n    Grammar: one or more `<integer><unit>` groups, units d, h, m, s (case-insensitive), groups optionally\n    separated by exactly one space. Examples: \"1h30m\" -> 5400, \"2d\" -> 172800, \"45s\" -> 45, \"1H 30M\" -> 5400.\n    Leading and trailing whitespace is ignored. Leading zeros are fine (\"01h\" -> 3600) and \"0s\" -> 0.\n    Units must appear at most once and in descending order (d, h, m, s).\n    A bare integer with no unit, an empty or whitespace-only string, an unknown unit, a negative or decimal\n    number, two or more spaces between groups, or a space between a number and its unit all raise ValueError.\n    \"\"\"\n    if not isinstance(text, str):\n        raise ValueError(\"duration must be a string\")\n\n    stripped = text.strip()\n    if not stripped:\n        raise ValueError(\"empty duration\")\n\n    pattern = re.compile(r\"\\d+[dhms](?: ?\\d+[dhms])*\", re.IGNORECASE)\n    if not pattern.fullmatch(stripped):\n        raise ValueError(\"invalid duration format\")\n\n    seconds_per_unit = {\n        \"d\": 86400,\n        \"h\": 3600,\n        \"m\": 60,\n        \"s\": 1,\n    }\n    order = {\"d\": 0, \"h\": 1, \"m\": 2, \"s\": 3}\n\n    total = 0\n    last_order = -1\n\n    for match in re.finditer(r\"\\d+([dhms])\", stripped, re.IGNORECASE):\n        number = int(match.group(0)[:-1])\n        unit = match.group(1).lower()\n        current_order = order[unit]\n\n        if current_order <= last_order:\n            raise ValueError(\"units must appear at most once and in descending order\")\n\n        last_order = current_order\n        total += number * seconds_per_unit[unit]\n\n    return total\n"
+   },
+   "final_files_sha256": "6b80f4d0f38ad20609640b399ecca5adb8bc7bc1e366c1c0c09171238d5b5518",
+   "infra_retries": 0,
+   "latency_ms": 243213.2,
+   "max_context_tokens": 5182,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T07-parse-duration",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 5182,
+   "ttft_ms": 1046.9
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "storage.py": "import os\nimport urllib.parse\n\n\ndef safe_join(base, user_path):\n    decoded = urllib.parse.unquote(user_path)\n\n    if \"\\x00\" in decoded:\n        raise ValueError(\"NUL byte in path\")\n\n    if decoded.startswith((\"/\", \"\\\\\")) or os.path.isabs(decoded):\n        raise ValueError(\"absolute path\")\n\n    normalized = decoded.replace(\"\\\\\", \"/\")\n\n    base_real = os.path.realpath(base)\n    joined = os.path.join(base_real, normalized)\n    normalized_path = os.path.normpath(joined)\n\n    if not _is_inside(base_real, normalized_path):\n        raise ValueError(\"path escapes base\")\n\n    resolved = os.path.realpath(normalized_path)\n\n    if not _is_inside(base_real, resolved):\n        raise ValueError(\"resolved path escapes base\")\n\n    return resolved\n\n\ndef _is_inside(base, path):\n    try:\n        return os.path.commonpath([base, path]) == base\n    except ValueError:\n        return False\n"
+   },
+   "final_files_sha256": "8b932764c49ea3965b957798189ed405e15770203399057c76341d9d740c5e3b",
+   "infra_retries": 0,
+   "latency_ms": 227942.7,
+   "max_context_tokens": 4850,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T08-safe-join",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 4850,
+   "ttft_ms": 993.3
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "ratelimit.py": "class TokenBucket:\n    def __init__(self, rate, capacity, clock):\n        self.rate = rate\n        self.capacity = capacity\n        self.clock = clock\n        self.tokens = capacity\n        self.last = clock()\n\n    def allow(self, cost=1):\n        now = self.clock()\n        elapsed = max(0.0, now - self.last)\n        self.last = now\n        self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)\n\n        if cost > self.capacity:\n            return False\n\n        if cost <= 0:\n            return True\n\n        if self.tokens >= cost:\n            self.tokens -= cost\n            return True\n\n        return False\n"
+   },
+   "final_files_sha256": "2173f1699d9d49060db9727c552ff5addfa6dcda19546ffbd65cc512cc0e8cb6",
+   "infra_retries": 0,
+   "latency_ms": 134785.3,
+   "max_context_tokens": 3137,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T09-token-bucket",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 3137,
+   "ttft_ms": 1080.7
+  },
+  {
+   "attempts": 2,
+   "final_files": {
+    "db.py": "import sqlite3\n\n\ndef init_v1(conn):\n    conn.execute(\"CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)\")\n    conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n    conn.execute(\"INSERT INTO schema_version VALUES (1)\")\n    conn.commit()\n\n\ndef version(conn):\n    return conn.execute(\"SELECT version FROM schema_version\").fetchone()[0]\n\n\ndef migrate(conn):\n    def has_email_domain():\n        try:\n            conn.execute(\"SELECT email_domain FROM users LIMIT 0\")\n            return True\n        except sqlite3.OperationalError:\n            return False\n\n    try:\n        schema_rows = conn.execute(\"SELECT version FROM schema_version\").fetchall()\n    except sqlite3.OperationalError:\n        try:\n            conn.execute(\"CREATE TABLE schema_version (version INTEGER)\")\n        except sqlite3.OperationalError:\n            pass\n        schema_rows = []\n\n    if len(schema_rows) == 1 and schema_rows[0][0] == 2 and has_email_domain():\n        return\n\n    try:\n        conn.execute(\"ALTER TABLE users ADD COLUMN email_domain TEXT\")\n    except sqlite3.OperationalError:\n        pass\n\n    try:\n        rows = conn.execute(\"SELECT id, email, email_domain FROM users\").fetchall()\n    except sqlite3.OperationalError:\n        rows = []\n\n    for user_id, email, current_domain in rows:\n        if current_domain is not None:\n            continue\n\n        if email is None:\n            continue\n\n        if isinstance(email, bytes):\n            email = email.decode(\"utf-8\", \"ignore\")\n        else:\n            email = str(email)\n\n        if \"@\" not in email:\n            continue\n\n        domain = email.rsplit(\"@\", 1)[1].lower()\n\n        if user_id is None:\n            conn.execute(\"UPDATE users SET email_domain = ? WHERE id IS NULL\", (domain,))\n        else:\n            conn.execute(\"UPDATE users SET email_domain = ? WHERE id = ?\", (domain, user_id))\n\n    conn.execute(\"DELETE FROM schema_version\")\n    conn.execute(\"INSERT INTO schema_version VALUES (2)\")\n    conn.commit()\n"
+   },
+   "final_files_sha256": "d20584cf8700f5d71565f00fd9b8382eec7b4afe11f48f7dd929fe43eb2ba074",
+   "infra_retries": 0,
+   "latency_ms": 481824.7,
+   "max_context_tokens": 5737,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T10-sqlite-migration",
+   "terminations": [
+    "stop",
+    "stop"
+   ],
+   "tokens": 10841,
+   "ttft_ms": 1048.6
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "tests/test_lru.py": "from lru import LRUCache\n\n\ndef test_capacity_validation_rejects_nonpositive_capacity():\n    for capacity in (0, -1, -100):\n        try:\n            LRUCache(capacity)\n        except ValueError as exc:\n            assert isinstance(exc, ValueError)\n        else:\n            assert False\n\n\ndef test_capacity_one_is_allowed():\n    cache = LRUCache(1)\n    assert len(cache) == 0\n\n\ndef test_len_is_zero_for_empty_cache():\n    cache = LRUCache(3)\n    assert len(cache) == 0\n\n\ndef test_get_miss_returns_none():\n    cache = LRUCache(2)\n    assert cache.get(\"missing\") is None\n\n\ndef test_get_miss_does_not_change_length():\n    cache = LRUCache(2)\n    cache.get(\"missing\")\n    assert len(cache) == 0\n\n\ndef test_get_miss_does_not_affect_eviction_order():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.get(\"missing\")\n    cache.put(\"c\", 3)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n    assert len(cache) == 2\n\n\ndef test_get_hit_returns_stored_value():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert cache.get(\"a\") == 1\n\n\ndef test_get_hit_preserves_value_identity():\n    sentinel = object()\n    cache = LRUCache(2)\n    cache.put(\"a\", sentinel)\n    assert cache.get(\"a\") is sentinel\n\n\ndef test_get_hit_marks_key_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") == 1\n    cache.put(\"c\", 3)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert len(cache) == 2\n\n\ndef test_get_hit_with_none_value_still_marks_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(\"a\", None)\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") is None\n    cache.put(\"c\", 3)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") is None\n    assert cache.get(\"c\") == 3\n    assert len(cache) == 2\n\n\ndef test_put_inserts_new_key():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    assert len(cache) == 1\n    assert cache.get(\"a\") == 1\n\n\ndef test_put_updates_existing_key_without_changing_length():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    assert len(cache) == 1\n    assert cache.get(\"a\") == 2\n\n\ndef test_put_update_marks_key_most_recently_used():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"a\", 3)\n    cache.put(\"c\", 4)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 3\n    assert cache.get(\"c\") == 4\n    assert len(cache) == 2\n\n\ndef test_put_update_at_capacity_does_not_evict():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"a\", 3)\n    assert len(cache) == 2\n    assert cache.get(\"a\") == 3\n    assert cache.get(\"b\") == 2\n\n\ndef test_put_evicts_least_recently_used_when_capacity_exceeded():\n    cache = LRUCache(2)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n    assert len(cache) == 2\n\n\ndef test_eviction_keeps_length_at_capacity():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.put(\"d\", 4)\n    assert len(cache) == 3\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n\n\ndef test_get_changes_eviction_order():\n    cache = LRUCache(3)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"c\", 3)\n    cache.get(\"a\")\n    cache.put(\"d\", 4)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 1\n    assert cache.get(\"c\") == 3\n    assert cache.get(\"d\") == 4\n    assert len(cache) == 3\n\n\ndef test_capacity_one_replaces_previous_key():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    assert cache.get(\"a\") == 1\n    cache.put(\"b\", 2)\n    assert cache.get(\"a\") is None\n    assert cache.get(\"b\") == 2\n    assert len(cache) == 1\n\n\ndef test_capacity_one_update_does_not_evict():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    cache.put(\"a\", 2)\n    assert len(cache) == 1\n    assert cache.get(\"a\") == 2\n\n\ndef test_evicted_key_can_be_reinserted():\n    cache = LRUCache(1)\n    cache.put(\"a\", 1)\n    cache.put(\"b\", 2)\n    cache.put(\"a\", 3)\n    assert cache.get(\"b\") is None\n    assert cache.get(\"a\") == 3\n    assert len(cache) == 1\n\n\ndef test_multiple_insertions_keep_only_most_recent_keys():\n    cache = LRUCache(2)\n    for i in range(5):\n        cache.put(i, i)\n    assert len(cache) == 2\n    assert cache.get(0) is None\n    assert cache.get(1) is None\n    assert cache.get(2) is None\n    assert cache.get(3) == 3\n    assert cache.get(4) == 4\n\n\ndef test_mixed_operations_long_sequence():\n    cache = LRUCache(3)\n\n    cache.put(\"a\", \"a1\")\n    cache.put(\"b\", \"b1\")\n    cache.put(\"c\", \"c1\")\n\n    assert cache.get(\"b\") == \"b1\"\n    assert cache.get(\"a\") == \"a1\"\n\n    cache.put(\"d\", \"d1\")\n    assert cache.get(\"c\") is None\n    assert cache.get(\"b\") == \"b1\"\n\n    cache.put(\"e\", \"e1\")\n    assert cache.get(\"a\") is None\n    assert cache.get(\"d\") == \"d1\"\n\n    cache.put(\"b\", \"b2\")\n    assert cache.get(\"e\") == \"e1\"\n\n    cache.put(\"f\", \"f1\")\n    assert cache.get(\"d\") is None\n    assert cache.get(\"b\") == \"b2\"\n    assert cache.get(\"e\") == \"e1\"\n    assert cache.get(\"f\") == \"f1\"\n    assert len(cache) == 3\n\n\ndef test_nonstring_hashable_keys_work():\n    cache = LRUCache(2)\n    cache.put(1, \"one\")\n    cache.put((1, 2), \"tuple\")\n    cache.put(None, \"none\")\n    assert len(cache) == 2\n    assert cache.get(1) is None\n    assert cache.get((1, 2)) == \"tuple\"\n    assert cache.get(None) == \"none\"\n"
+   },
+   "final_files_sha256": "564199b251f02087be89783b265c074ca4f2bb14c7a70c2a29c95fa245cb5910",
+   "infra_retries": 0,
+   "latency_ms": 321192.2,
+   "max_context_tokens": 6508,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T11-test-generation",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 6508,
+   "ttft_ms": 979.1
+  },
+  {
+   "attempts": 1,
+   "final_files": {
+    "config.py": "def get_path(cfg, path, default=None):\n    \"\"\"Fetch a nested value by dotted path, e.g. get_path(cfg, \"db.pool.size\").\n\n    Numeric parts index into lists (\"servers.0.host\"). Return `default` when any part is missing, a list index\n    is out of range, or an intermediate value is not a dict/list. A value that exists and is None is returned\n    as None (not `default`). An empty path returns `cfg` itself. Never raises for missing data.\n    \"\"\"\n    if path == \"\":\n        return cfg\n\n    try:\n        parts = path.split(\".\")\n    except AttributeError:\n        return default\n\n    cur = cfg\n    for part in parts:\n        if isinstance(cur, dict):\n            if part in cur:\n                cur = cur[part]\n            else:\n                return default\n        elif isinstance(cur, list):\n            if not part.isdigit():\n                return default\n            try:\n                cur = cur[int(part)]\n            except IndexError:\n                return default\n        else:\n            return default\n\n    return cur\n"
+   },
+   "final_files_sha256": "6f6c44f346d3565090bdb2e385adfdd16bd5a79e5b4af3c705ce1b86985b2535",
+   "infra_retries": 0,
+   "latency_ms": 230204.2,
+   "max_context_tokens": 4998,
+   "outcome": "pass",
+   "repeat": 1,
+   "task_id": "T12-nested-config",
+   "terminations": [
+    "stop"
+   ],
+   "tokens": 4998,
+   "ttft_ms": 1147.4
+  }
+ ]
+}

@@ -1,0 +1,52 @@
+{
+  "prompt": "Text Recognition:",
+  "text": "\nACME SUPPLY CO.\n\nINVOICE TOTAL: 42.00",
+  "elapsed_s": 0.3,
+  "usage": {
+    "completion_tokens": 23,
+    "prompt_tokens": 299,
+    "total_tokens": 322,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "timings": {
+    "cache_n": 0,
+    "prompt_n": 299,
+    "prompt_ms": 183.103,
+    "prompt_per_token_ms": 0.6123846153846154,
+    "prompt_per_second": 1632.9606833312398,
+    "predicted_n": 23,
+    "predicted_ms": 98.625,
+    "predicted_per_token_ms": 4.482954545454546,
+    "predicted_per_second": 223.06717363751585
+  },
+  "pass": true
+}
+{
+  "prompt": "Text Recognition:",
+  "text": "\nACME SUPPLY CO.\n\nINVOICE TOTAL: 42.00",
+  "elapsed_s": 0.11,
+  "usage": {
+    "completion_tokens": 23,
+    "prompt_tokens": 299,
+    "total_tokens": 322,
+    "prompt_tokens_details": {
+      "cached_tokens": 298
+    }
+  },
+  "timings": {
+    "cache_n": 298,
+    "prompt_n": 1,
+    "prompt_ms": 4.856,
+    "prompt_per_token_ms": 4.856,
+    "prompt_per_second": 205.9308072487644,
+    "predicted_n": 23,
+    "predicted_ms": 96.668,
+    "predicted_per_token_ms": 4.394,
+    "predicted_per_second": 227.58306781975418
+  },
+  "pass": true
+}
+GTT
+/sys/class/drm/card1/device/mem_info_gtt_used 41787265024

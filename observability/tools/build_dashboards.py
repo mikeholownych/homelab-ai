@@ -199,8 +199,8 @@ def host() -> dict:
     b.timeseries("Energy per generated token, idle included (J)", "Card energy over 15 minutes divided by tokens generated, idle time included, so it falls as utilisation rises.",
                  [("(aihost:joules_per_generated_token_incl_idle:rate15m) or (sum by (worker_id) (0 * aihost_worker_info))", "{{worker_id}}")], unit="joule", no_data_text="0 (idle)")
     b.timeseries("Temperature: sensors vs limit", "Package, VRAM, PCIe, and memory controller sensors with kernel-reported critical limits.",
-                 [('aihost_gpu_temperature_celsius{sensor=~"pkg|vram|pcie|mctrl"}', "{{sensor}} gpu{{gpu}}"),
-                  ('aihost_gpu_temperature_limit_celsius{sensor=~"pkg|vram"}', "limit {{sensor}} gpu{{gpu}}")], unit="celsius")
+                 [('aihost_gpu_temperature_celsius{sensor=~"pkg|vram|pcie|mctrl|edge"}', "{{sensor}} gpu{{gpu}}"),
+                  ('aihost_gpu_temperature_limit_celsius{sensor=~"pkg|vram|edge"}', "limit {{sensor}} gpu{{gpu}}")], unit="celsius")
     b.timeseries("Graphics tile frequency", "Actual graphics tile frequency.", [("aihost_gpu_actual_frequency_hertz", "gpu{{gpu}} {{gt}}")], unit="hertz", w=8)
     b.timeseries("Hardware throttle triggers", "Hardware frequency throttle triggers from graphics tile registers (thermal and power limit throttling).",
                  [("aihost_gpu_throttle_reason_thermal", "thermal throttle gpu{{gpu}}"), ("aihost_gpu_throttle_reason_power", "power throttle gpu{{gpu}}")], unit="short", min_=0, max_=1, w=8)

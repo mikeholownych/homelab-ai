@@ -1,0 +1,29 @@
+{
+  "id": "orch_tools",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are an orchestrator. Use tools when needed. Do not invent tool results."
+    },
+    {
+      "role": "user",
+      "content": "What is 17*19? Use the calculator tool, then answer with only the integer."
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "calculator",
+        "description": "Evaluate a basic arithmetic expression",
+        "parameters": {
+          "type": "object",
+          "properties": {"expression": {"type": "string"}},
+          "required": ["expression"]
+        }
+      }
+    }
+  ],
+  "tool_result": {"expression": "17*19", "value": 323},
+  "expect_final_contains": "323"
+}

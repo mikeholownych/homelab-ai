@@ -1,0 +1,69 @@
+{
+  "base": "http://127.0.0.1:8190",
+  "model": "qwen3.8-27b-smoke",
+  "chat": {
+    "ok": true,
+    "content": "pong",
+    "reasoning_len": 114,
+    "seconds": 3.01,
+    "timings": {
+      "cache_n": 0,
+      "prompt_n": 57,
+      "prompt_ms": 451.468,
+      "prompt_per_token_ms": 7.920491228070175,
+      "prompt_per_second": 126.25479546723133,
+      "predicted_n": 33,
+      "predicted_ms": 2551.415,
+      "predicted_per_token_ms": 79.73171875,
+      "predicted_per_second": 12.542059994160104
+    }
+  },
+  "tools": {
+    "first_finish": "tool_calls",
+    "tool_calls": [
+      {
+        "type": "function",
+        "function": {
+          "name": "calculator",
+          "arguments": "{\"expression\":\"17*19\"}"
+        },
+        "id": "jtOaSVu4PJuVkmvSQMdzuq8oU2GE9TVX"
+      }
+    ],
+    "seconds_1": 6.94,
+    "final": "323",
+    "seconds_2": 1.48,
+    "schema_valid": true,
+    "pass": true
+  },
+  "long_ctx": {
+    "approx_prompt_chars": 175990,
+    "ttft_s": 149.39,
+    "chunks": 64,
+    "total_s": 155.31
+  },
+  "short_stream": {
+    "ttft_s": 0.57,
+    "chunks": 283,
+    "total_s": 24.33
+  },
+  "short_timings": {
+    "cache_n": 57,
+    "prompt_n": 4,
+    "prompt_ms": 117.44,
+    "prompt_per_token_ms": 29.36,
+    "prompt_per_second": 34.059945504087196,
+    "predicted_n": 300,
+    "predicted_ms": 23745.248,
+    "predicted_per_token_ms": 79.41554515050167,
+    "predicted_per_second": 12.59199314321754
+  },
+  "usage": {
+    "completion_tokens": 300,
+    "prompt_tokens": 61,
+    "total_tokens": 361,
+    "prompt_tokens_details": {
+      "cached_tokens": 57
+    }
+  }
+}

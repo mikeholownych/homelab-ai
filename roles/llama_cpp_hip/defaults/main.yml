@@ -22,7 +22,8 @@ llama_cpp_hip_api_key_required: false
 # Per-worker key file: <config_root>/<worker_key>/worker-api-key (owned by the runtime account, mode 0400, generated
 # on first converge and preserved afterwards; the same pattern as llama_cpp_container's worker-api-key).
 llama_cpp_hip_config_root: /etc/local-ai/llama-hip
-llama_cpp_hip_default_args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1"]
+# --metrics is required so the gateway can republish engine_stats for vllm-top (same as llama_cpp_container).
+llama_cpp_hip_default_args: ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1", "--metrics"]
 # name -> {service_name, container_name, port, context, model_file, [model_source], [args], [env]}
 #   model_source: absolute path of an already-downloaded model; it is hard-linked into llama_cpp_hip_model_dir
 #                 (same filesystem, no extra space, and valid inside the container mount).

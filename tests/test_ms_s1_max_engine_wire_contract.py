@@ -53,10 +53,11 @@ def test_winner_pins_match_bakeoff_recommendation():
     workers = hv["llama_cpp_hip_workers"]
     assert len(workers) == 1
     worker = next(iter(workers.values()))
-    assert worker["model_file"] == "Qwen3-Coder-30B-A3B-Instruct-Q8_0.gguf"
+    assert worker["model_file"] == "qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf"
+    assert worker["served_name"] == "Qwen3.8-27B-UD-Q4_K_M"
     assert worker["port"] == 8101
     assert worker["context"] == 65536
-    assert worker["args"] == ["-ngl", "99", "-fa", "on", "--jinja", "-np", "4"]
+    assert worker["args"] == ["-ngl", "99", "-fa", "on", "--jinja", "-np", "1", "--metrics"]
 
 def test_hip_role_is_disabled_by_default_and_fail_closed():
     defaults = load("roles/llama_cpp_hip/defaults/main.yml")
