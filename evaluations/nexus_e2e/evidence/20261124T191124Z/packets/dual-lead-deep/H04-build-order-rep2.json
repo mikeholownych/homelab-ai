@@ -1,0 +1,223 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H04-build-order",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 596.3,
+    "model_secs": 304.3,
+    "tokens": 11581,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 304.3,
+      "prompt_tokens": 569,
+      "completion_tokens": 4778
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "cycle-detection-starts-from-min-remaining-not-guaranteed-cycle-entry",
+        "file": "graph.py",
+        "claim": "The cycle extraction starts from `min(remaining)`, which may be a node outside the cycle that depends on the cycle. Although the code later trims the path to the repeated node, this only works if the traversal enters the unique cycle. If the graph contains multiple cycles or a node in `remaining` can reach a non-cycle SCC, the code may raise a CycleError for a non-cycle path or fail to identify the actual cycle. The docstring says inputs with cycles contain exactly one cycle, but hidden tests may still include multiple cycles or malformed graphs where this assumption is violated.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-detection-can-crash-on-empty-min-generator",
+        "file": "graph.py",
+        "claim": "In the cycle-detection loop, `next_node = min(dep for dep in unique_deps[current] if dep in remaining)` can raise `ValueError` if `current` has no dependency in `remaining`. This can happen if `remaining` is nonempty due to inconsistent indegree bookkeeping or if the graph is malformed (e.g., a node in `remaining` has all dependencies already processed but was not pushed because of duplicate/invalid edge handling). The code assumes every remaining node has at least one remaining dependency, which is not defensively checked.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-error-message-join-fails-for-non-string-targets",
+        "file": "graph.py",
+        "claim": "`CycleError.__init__` calls `\" -> \".join(cycle)`, which fails if cycle elements are not strings. The docstring says targets are `str`, but hidden tests may use other comparable/hashable target types (e.g., integers) or mixed types. The implementation should not assume string joinability for the exception message.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "lexicographic-order-not-guaranteed-for-all-topological-orders",
+        "file": "graph.py",
+        "claim": "The Kahn implementation with a min-heap chooses the lexicographically smallest currently ready node, but this does not always produce the lexicographically smallest topological order among all valid orders when the goal is global lexicographic minimality. The docstring says the order is unique because ties are broken by lexicographically smallest ready target, so this is likely acceptable, but if hidden tests expect the globally lexicographically smallest topological order, this greedy algorithm can fail.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "deps-values-consumed-once-breaks-reusable-iterables",
+        "file": "graph.py",
+        "claim": "The code iterates each `target_deps` exactly once and stores a set. This is fine for normal iterables, but if `deps` values are one-shot iterators and the caller expects `deps` to remain usable after the call, the original iterable is consumed. The docstring says `deps` must not be modified, but consuming an iterator inside the mapping can be considered observable mutation of the input's values.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-rotation-does-not-verify-dependency-direction",
+        "file": "graph.py",
+        "claim": "The code rotates the detected cycle to start at the lexicographically smallest node, but it does not verify that the resulting sequence satisfies the required dependency direction (`each element depends on the next one`). If the traversal or cycle extraction is wrong due to multiple cycles or malformed input, the raised cycle may be invalid.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "missing-validation-for-self-loop-plus-other-cycle",
+        "file": "graph.py",
+        "claim": "The docstring says inputs with cycles contain exactly one cycle, but the code does not enforce or detect multiple cycles. If hidden tests include multiple cycles, the code may raise a CycleError for an arbitrary reachable cycle rather than a well-defined one, violating uniqueness expectations.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "heap-ready-initialization-uses-set-order",
+        "file": "graph.py",
+        "claim": "`ready = [node for node in nodes if indegree[node] == 0]` iterates over a set, so initial heap construction depends on arbitrary set iteration order. Although `heapify` should make the heap valid, if target types are not totally ordered or have inconsistent comparisons, heap behavior may be nondeterministic or raise errors. For strings this is fine, but it is not robust to non-string targets.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-error-exception-class-not-exported-or-documented",
+        "file": "graph.py",
+        "claim": "The code defines `CycleError` locally in `graph.py`, but if tests expect to catch a specific exception type from a different module or expect `build_order` to raise a built-in exception, this may fail. The docstring only says raise `CycleError(cycle)`, but the exact class identity may matter.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "indegree-counts-unique-deps-not-original-duplicates",
+        "file": "graph.py",
+        "claim": "The code deduplicates dependencies per target and counts indegree using unique dependencies. This is correct for topological ordering, but if hidden tests expect duplicate dependencies to affect readiness or cycle reporting in some way, this behavior may differ. The docstring says duplicates allowed, so deduplication is likely intended, but it is an assumption.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 10,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 287.9
+      }
+    ]
+  },
+  "file_digests": {
+    "graph.py": "ad2c16a834bdf5a9fdc211a35c2e2e5d396d3ad4a4e622fec15e50893567ae09"
+  }
+}

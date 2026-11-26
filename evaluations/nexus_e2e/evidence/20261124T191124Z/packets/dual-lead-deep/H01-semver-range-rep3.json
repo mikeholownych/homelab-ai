@@ -1,0 +1,207 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H01-semver-range",
+  "rep": 3,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 618.8,
+    "model_secs": 353.8,
+    "tokens": 12859,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 353.8,
+      "prompt_tokens": 852,
+      "completion_tokens": 5510
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "comparator-capture-group-mismatch",
+        "file": "semver.py",
+        "claim": "_parse_comparator assumes match.group(2) is the full version string, but _COMPARATOR_RE's capture-group numbering depends on the nested groups inside _VERSION_PATTERN. In the current regex construction, group(2) is not reliably the full version token, so comparator parsing can raise ValueError or parse the wrong substring.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "prerelease-rule-too-permissive",
+        "file": "semver.py",
+        "claim": "_satisfies_set permits a prerelease version to satisfy a comparator set if any comparator has the same major/minor/patch and a prerelease, even when that comparator's operator is not intended to admit prerelease matching. For example, a range like '<1.2.3-rc.0' can incorrectly admit prerelease versions with the same core if comparator satisfaction and the prerelease gate both pass, violating the semver prerelease-range rule.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "tilde-upper-bound-prerelease",
+        "file": "semver.py",
+        "claim": "_upper_bound_for_tilde ignores the named comparator's prerelease when computing the upper bound. For tilde ranges with prerelease comparators, this can allow versions that should be excluded by semver range semantics, e.g. prerelease ordering and upper-bound interaction are not handled.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "caret-upper-bound-prerelease",
+        "file": "semver.py",
+        "claim": "_upper_bound_for_caret ignores the named comparator's prerelease when computing the upper bound. This can produce incorrect caret-range satisfaction for prerelease comparators because the upper bound is not adjusted according to semver caret rules involving prerelease versions.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-empty-after-whitespace",
+        "file": "semver.py",
+        "claim": "_parse_range treats a range containing only whitespace as invalid, but semver range parsing may require treating an empty/whitespace-only range as an error or as a specific empty-range behavior. The current implementation raises ValueError for empty comparator sets, which may not match the docstring's specified behavior.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "unicode-digit-prerelease",
+        "file": "semver.py",
+        "claim": "_parse_version classifies prerelease identifiers using identifier.isdigit(), which accepts Unicode digits, while the regex only permits ASCII digits. This can cause inconsistent parsing if non-ASCII digits somehow appear in a prerelease identifier.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "comparator-operator-precedence",
+        "file": "semver.py",
+        "claim": "_COMPARATOR_RE's operator alternation lists '=' before '>=' and '<='. Although regex backtracking may recover, this ordering is fragile and can misparse or fail on tokens where the shorter operator matches first and the version pattern cannot match the remainder.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "missing-docstring-compliance",
+        "file": "semver.py",
+        "claim": "The implementation does not visibly enforce or document the exact docstring-specified behavior for invalid versions/ranges, prerelease matching, caret/tilde bounds, or comparator-set semantics. Hidden tests may expect specific error types, messages, or return values that are not guaranteed by this code.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 8,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 260.6
+      }
+    ]
+  },
+  "file_digests": {
+    "semver.py": "275fe52a836327211be93ec3c617571351d5ddc9bab29f5e4f90b5889cebafec"
+  }
+}

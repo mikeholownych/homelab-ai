@@ -1,0 +1,223 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H02-cron-next",
+  "rep": 3,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 595.0,
+    "model_secs": 318.1,
+    "tokens": 11993,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 318.1,
+      "prompt_tokens": 795,
+      "completion_tokens": 4974
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "dom-dow-restricted-*/1",
+        "file": "cron.py",
+        "claim": "The code treats only the literal string \"*\" as unrestricted for day-of-month and day-of-week. A field like \"*/1\" is considered restricted, so expressions such as \"0 0 */1 * 1\" can match every day instead of only Mondays if the docstring requires semantic unrestrictedness for all-days fields.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "after-second-truncation",
+        "file": "cron.py",
+        "claim": "The start time is computed by truncating `after` to the minute and adding one minute. If `after` has nonzero seconds, this can skip valid matches in the same minute only when the cron minute equals the truncated minute, but it also changes the effective search boundary from strictly-after to strictly-after-next-minute. For example, `after=12:00:30` with minute field `0` is handled correctly, but `after=12:00:30` with minute field `0` and hour field `12` should not match 12:00, while `after=12:00:00` with minute field `0` also should not match; however, if the docstring specifies strictly after including seconds, the truncation can incorrectly exclude or include candidates depending on seconds.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "limit-boundary",
+        "file": "cron.py",
+        "claim": "The search limit is `after + timedelta(days=3000)`, but the start is `after.replace(second=0, microsecond=0) + timedelta(minutes=1)`. If `after` has seconds/microseconds, the effective searched interval can be slightly less than 3000 days from the original `after`, and a candidate exactly at `after + 3000 days` may be excluded when it should be included under a strict 3000-day window.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "dow-7-range",
+        "file": "cron.py",
+        "claim": "Day-of-week parsing accepts 7 and maps it to Sunday, but it also accepts ranges like `0-7`. If the docstring or hidden tests expect standard cron to reject `7` in ranges or to normalize `7` before range expansion, this implementation may accept invalid expressions.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "step-single-value",
+        "file": "cron.py",
+        "claim": "For a single value with a step, e.g. `5/10`, the code expands it to `5,15,25,...` up to the field maximum. Some cron dialects treat `5/10` as invalid or as only `5`; if the docstring specifies standard cron behavior, this may be incorrect.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "empty-field-after-split",
+        "file": "cron.py",
+        "claim": "`expr.split()` collapses multiple spaces and ignores empty fields, so malformed expressions with intentional empty fields may be accepted as valid 5-field expressions when they should be rejected.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "non-integer-step-text",
+        "file": "cron.py",
+        "claim": "Step validation uses `isdigit()`, which accepts Unicode digits and may accept non-ASCII numeric strings that `int()` can parse, potentially allowing invalid cron fields if the docstring requires ASCII-only digits.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-step-zero",
+        "file": "cron.py",
+        "claim": "The code rejects step < 1 after parsing, but `isdigit()` accepts `0`; this raises ValueError, which may be acceptable, but if the docstring expects a specific error type or message, this may not match.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "month-dom-dow-order",
+        "file": "cron.py",
+        "claim": "The code assumes the standard 5-field order minute hour day-of-month month day-of-week. If the docstring specifies a different order or supports 6-field seconds, this is incorrect.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "no-docstring-compliance",
+        "file": "cron.py",
+        "claim": "The implementation does not include or enforce the docstring's exact behavior for invalid expressions, boundary conditions, or day-of-month/day-of-week interaction; without matching the docstring, hidden tests may fail.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 10,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 272.6
+      }
+    ]
+  },
+  "file_digests": {
+    "cron.py": "6a1fd59c54c7f7479649cdc846420639739a590b806d04f0972105208edf7147"
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H08-glob",
+  "rep": 1,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 1408.8,
+    "model_secs": 1159.7,
+    "tokens": 32147,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 371.2,
+      "prompt_tokens": 898,
+      "completion_tokens": 5768
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 386.4,
+      "prompt_tokens": 2679,
+      "completion_tokens": 5840
+    },
+    {
+      "attempt": 3,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 402.1,
+      "prompt_tokens": 4532,
+      "completion_tokens": 5933
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "empty-pattern-empty-path",
+        "file": "globber.py",
+        "claim": "glob_match(\"\", \"\") returns False because _parse_pattern always creates one empty pattern segment, while an empty pattern should match an empty path according to whole-path matching semantics.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "star-empty-path",
+        "file": "globber.py",
+        "claim": "glob_match(\"*\", \"\") returns False because the empty path is represented as zero path segments, but the docstring says `*` matches zero or more characters other than `/`, so it should match the empty path.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "escaped-slash-path-splitting",
+        "file": "globber.py",
+        "claim": "Escaped slashes in patterns are parsed as literal `/` characters inside a segment, but path is always split on every `/`, so patterns like `a\\/b` cannot match paths containing a literal slash as intended by `\\x` matching x literally.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "invalid-range-handling",
+        "file": "globber.py",
+        "claim": "_parse_char_class silently treats reversed ranges such as `[z-a]` as literal characters instead of either rejecting them or following a specified range rule; the docstring only defines ranges like `a-z` and does not specify this fallback behavior.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "char-class-end-duplicate-error",
+        "file": "globber.py",
+        "claim": "_parse_pattern calls _parse_char_class and then _char_class_end, duplicating character-class scanning and error handling; this is not a correctness defect by itself but makes the parser fragile and can diverge if the two scanners ever disagree.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 5,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 3,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 242.2
+      }
+    ]
+  },
+  "file_digests": {
+    "globber.py": "96d37fe21086e66e283482be6bfe124fdb2911a764f231a34d30e15646f4a95b"
+  }
+}

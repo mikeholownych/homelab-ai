@@ -1,0 +1,73 @@
+{
+  "arm": "cand-glm47-flash",
+  "alias": "candidate/glm47-flash",
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H02-cron-next",
+      "H03-json-patch",
+      "H07-sqlite-rebuild",
+      "H08-glob"
+    ]
+  },
+  "reps": 1,
+  "tasks": 4,
+  "n_trials": 4,
+  "accepted_rate": 0.0,
+  "accepted_per_rep": [
+    0
+  ],
+  "first_attempt_rate": 0.0,
+  "median_secs_to_accepted": null,
+  "mean_secs_per_task": 573.4,
+  "mean_tokens_per_task": 21258,
+  "per_task_pass": {
+    "H02-cron-next": "0/1",
+    "H03-json-patch": "0/1",
+    "H07-sqlite-rebuild": "0/1",
+    "H08-glob": "0/1"
+  },
+  "always_fail": [
+    "H02-cron-next",
+    "H03-json-patch",
+    "H07-sqlite-rebuild",
+    "H08-glob"
+  ],
+  "flaky": [],
+  "serving": {
+    "before": {
+      "alias": "candidate/glm47-flash",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "candidate-glm47-flash",
+      "pool": "candidate-glm47",
+      "model_id": "GLM-4.7-Flash-Q4_K_M",
+      "artifact_digest": "sha256:29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "candidate/glm47-flash",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "candidate-glm47-flash",
+      "pool": "candidate-glm47",
+      "model_id": "GLM-4.7-Flash-Q4_K_M",
+      "artifact_digest": "sha256:29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    }
+  }
+}

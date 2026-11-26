@@ -1,0 +1,209 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-deep-lead-20261124T191124Z",
+  "arm": "dual-deep-lead",
+  "task_id": "H08-glob",
+  "rep": 3,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "reviewer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 1254.9,
+    "model_secs": 943.9,
+    "tokens": 32304,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 307.1,
+      "prompt_tokens": 896,
+      "completion_tokens": 5847
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 314.7,
+      "prompt_tokens": 2673,
+      "completion_tokens": 5868
+    },
+    {
+      "attempt": 3,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 322.1,
+      "prompt_tokens": 4517,
+      "completion_tokens": 5897
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "globber.py",
+        "claim": "parse_segment can raise TypeError instead of ValueError for bracket expressions with consecutive ranges such as \"[a-b-c]\", because first is set to None after a range and then compared with end when another '-' is encountered.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "globber.py",
+        "claim": "split_pattern and parse_segment disagree on bracket parsing: split_pattern treats the first character after '[' or '[!' as an ordinary member, while parse_segment treats it as the start of a possible range, so patterns like \"[a-]\" or \"[-a]\" can be accepted by split_pattern but parsed inconsistently or incorrectly by parse_segment.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "globber.py",
+        "claim": "match_segment's middle-part search is not guaranteed to be fast for many stars because it repeatedly calls match_part from every candidate position, which can degrade to quadratic or worse behavior for adversarial patterns and paths.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "globber.py",
+        "claim": "Escaped slashes are treated as literal '/' characters inside a single pattern segment, but path segments cannot contain '/', so patterns such as \"a\\/b\" will never match \"a/b\" even though the docstring says backslash-escaped characters match literally.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "5",
+        "file": "globber.py",
+        "claim": "The implementation does not validate or normalize empty path segments produced by leading, trailing, or repeated slashes, so behavior for paths like \"/a\", \"a/\", or \"a//b\" is unspecified and may incorrectly match or reject patterns.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "6",
+        "file": "globber.py",
+        "claim": "parse_segment allows ranges between arbitrary characters, not just the documented 'a-z' style ranges, so patterns such as \"[0-9]\" or \"[A-Z]\" may behave differently from the spec if only alphabetic ranges are intended.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 6,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/deep",
+        "attempts": 3,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/lead",
+        "wall_secs": 302.8
+      }
+    ]
+  },
+  "file_digests": {
+    "globber.py": "e614eb86f73bfaf0f9332ce479dca73ea0b46332834a213468555e2cde709fa1"
+  }
+}

@@ -23,6 +23,7 @@ CORPUS = os.environ.get("ENGX_CORPUS", "base")
 TASKS = CORPORA[CORPUS]
 # Thinking models spend output tokens on reasoning before the files; 4096 truncates them.
 MAX_TOKENS = int(os.environ.get("ENGX_MAX_TOKENS", "4096"))
+TEMPERATURE = float(os.environ.get("ENGX_TEMPERATURE", "0"))
 OUT_DIR = os.environ.get("ENGX_OUT", os.path.join(os.path.dirname(os.path.abspath(__file__)), "results"))
 
 
@@ -288,7 +289,7 @@ def run_task(task, base, headers, model, max_attempts):
     rec = {"id": task["id"], "discipline": task["discipline"], "success": False, "attempts": 0, "model_secs": 0.0, "tokens": 0, "history": []}
     t_start = time.monotonic()
     for attempt in range(1, max_attempts + 1):
-        body = {"model": model, "messages": messages, "max_tokens": MAX_TOKENS, "temperature": 0}
+        body = {"model": model, "messages": messages, "max_tokens": MAX_TOKENS, "temperature": TEMPERATURE}
         if os.environ.get("NOTHINK"): body["chat_template_kwargs"] = {"enable_thinking": False}
         t0 = time.monotonic()
         try:
@@ -327,7 +328,7 @@ def run_meta(model, base, tasks, max_attempts, only):
     return {"model": model, "base_url": base, "corpus": CORPUS, "corpus_digest": corpus_digest(tasks), "max_tokens": MAX_TOKENS,
             "max_attempts": max_attempts, "only": only, "condition": os.environ.get("ENGX_CONDITION"),
             "client_thinking_disabled": bool(os.environ.get("NOTHINK")), "reasoning_budget": REASONING_BUDGET,
-            "reasoning_budget_message": REASONING_BUDGET_MESSAGE or None, "temperature": 0}
+            "reasoning_budget_message": REASONING_BUDGET_MESSAGE or None, "temperature": TEMPERATURE}
 
 
 def run(label, base, keyfile, model, max_attempts=3, only=None):

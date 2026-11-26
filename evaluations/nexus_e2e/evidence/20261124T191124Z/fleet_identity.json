@@ -1,0 +1,143 @@
+{
+  "schema": "nexus-e2e-fleet-identity/v1",
+  "captured_at": "2026-11-24T19:11:24Z",
+  "gateway": "https://10.0.8.5:8443",
+  "pins": {
+    "lead": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "serving": [
+        {
+          "worker_id": "b0-live-llama-worker1",
+          "pool": "lead",
+          "role": "production",
+          "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+          "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+          "engine": "llama.cpp",
+          "engine_version": "b0-unknown",
+          "quantization": "Q4_K - Medium",
+          "hardware_class": "intel-arc-pro-b65-32g",
+          "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+          "context_limit": 65536,
+          "topology": "tp1",
+          "inventory_source": "inventory/production/host_vars/ai-5820-01.yml"
+        }
+      ]
+    },
+    "deep": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "serving": [
+        {
+          "worker_id": "b0-live-llama-deep-worker2",
+          "pool": "deep",
+          "role": "production",
+          "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+          "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+          "engine": "llama.cpp",
+          "engine_version": "b0-unknown",
+          "quantization": "IQ1_M - 1.75 bpw",
+          "hardware_class": "intel-arc-pro-b65-32g",
+          "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+          "context_limit": 65536,
+          "topology": "tp1",
+          "inventory_source": "inventory/production/host_vars/ai-5820-01.yml"
+        }
+      ]
+    },
+    "rocm": {
+      "alias": "engineering/interactive-rocm",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "serving": [
+        {
+          "worker_id": "ms-s1-hip-qwen38-27b",
+          "pool": "rocm",
+          "role": "production",
+          "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+          "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+          "engine": "llama.cpp",
+          "engine_version": "b12464-d3c3e242c",
+          "quantization": "Q4_K - Medium",
+          "hardware_class": "amd-strix-halo-gfx1151",
+          "runtime_image_digest": "sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+          "context_limit": 65536,
+          "topology": "tp1",
+          "inventory_source": "inventory/production/host_vars/ai-ms-s1-max-01.yml"
+        }
+      ]
+    },
+    "auto": {
+      "alias": "engineering/auto",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "serving": [
+        {
+          "worker_id": "b0-live-llama-worker1",
+          "pool": "lead",
+          "role": "production",
+          "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+          "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+          "engine": "llama.cpp",
+          "engine_version": "b0-unknown",
+          "quantization": "Q4_K - Medium",
+          "hardware_class": "intel-arc-pro-b65-32g",
+          "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+          "context_limit": 65536,
+          "topology": "tp1",
+          "inventory_source": "inventory/production/host_vars/ai-5820-01.yml"
+        },
+        {
+          "worker_id": "b0-live-llama-deep-worker2",
+          "pool": "deep",
+          "role": "production",
+          "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+          "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+          "engine": "llama.cpp",
+          "engine_version": "b0-unknown",
+          "quantization": "IQ1_M - 1.75 bpw",
+          "hardware_class": "intel-arc-pro-b65-32g",
+          "runtime_image_digest": "sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9",
+          "context_limit": 65536,
+          "topology": "tp1",
+          "inventory_source": "inventory/production/host_vars/ai-5820-01.yml"
+        },
+        {
+          "worker_id": "ms-s1-hip-qwen38-27b",
+          "pool": "rocm",
+          "role": "production",
+          "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+          "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+          "engine": "llama.cpp",
+          "engine_version": "b12464-d3c3e242c",
+          "quantization": "Q4_K - Medium",
+          "hardware_class": "amd-strix-halo-gfx1151",
+          "runtime_image_digest": "sha256:9c44da4d33fa3e1250ec910d3af7b7acd1154baef3fe0efda53d91ae4a9f4184",
+          "context_limit": 65536,
+          "topology": "tp1",
+          "inventory_source": "inventory/production/host_vars/ai-ms-s1-max-01.yml"
+        }
+      ]
+    }
+  },
+  "constraints": {
+    "lead_rocm_same_artifact": true,
+    "lead_artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+    "rocm_artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+    "note": "lead\u2261rocm weights \u2192 weak for model-diverse review; still useful for capacity/hardware/runtime diversity."
+  }
+}

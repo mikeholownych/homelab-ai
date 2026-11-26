@@ -1,0 +1,272 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H07-sqlite-rebuild",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 2,
+  "metrics": {
+    "wall_secs": 895.7,
+    "model_secs": 600.2,
+    "tokens": 18112,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 297.7,
+      "prompt_tokens": 746,
+      "completion_tokens": 4663
+    },
+    {
+      "attempt": 2,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 302.5,
+      "prompt_tokens": 1551,
+      "completion_tokens": 4680
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "shop.py",
+        "claim": "The migration drops the legacy_flag column but does not preserve any information that may be needed to reconstruct or validate order_items references if legacy_flag was semantically meaningful; however the task only requires keeping order items, so this is not necessarily a defect.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "shop.py",
+        "claim": "The code uses `conn.in_transaction` and then `conn.commit()` before starting a manual `BEGIN` transaction. If the connection is already inside a transaction, committing it may change caller-visible transaction state and is not required by the task; this can interfere with callers that expect migrate to preserve transaction nesting.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "shop.py",
+        "claim": "The code executes `PRAGMA foreign_keys=OFF` before the migration and then restores it in a finally block. If an exception occurs after `BEGIN` but before `ROLLBACK`, the finally block may execute `PRAGMA foreign_keys=...` while a transaction is still active, which can fail or leave the connection in an inconsistent state.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "shop.py",
+        "claim": "The code uses `CREATE TEMP TABLE _orders_v1_backup AS SELECT ...`. SQLite does not support the `CREATE TEMP TABLE name AS SELECT ...` form in all versions; the portable form is `CREATE TEMPORARY TABLE name AS SELECT ...` or creating a temporary table and inserting rows. This can cause a syntax error.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "5",
+        "file": "shop.py",
+        "claim": "The code drops the old `orders` table and recreates it. This can break or invalidate the existing `order_items` foreign-key relationship and its `ON DELETE CASCADE` behavior because SQLite foreign-key references are tied to the table definition; recreating the table may not preserve the cascade semantics required by the task.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "6",
+        "file": "shop.py",
+        "claim": "The code does not verify that `schema_version` contains exactly one row before updating it. If the database is malformed or has multiple rows, `UPDATE schema_version SET version = 2` may update multiple rows or fail to satisfy the requirement that the single row be set to 2.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "7",
+        "file": "shop.py",
+        "claim": "The code does not ensure that `amount_cents` is computed using the shortest decimal representation of the stored float in all cases. It uses `repr(float(amount))`, which is correct for Python floats, but if SQLite returns a Decimal or other numeric type, the conversion may not match the required shortest decimal representation.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "8",
+        "file": "shop.py",
+        "claim": "The code uses `ROUND_HALF_UP` from Python's decimal module, which rounds half away from zero for positive and negative values, but the task explicitly requires half away from zero. This is correct, but the code does not guard against NaN or infinity values that may be present in the REAL column; those would cause Decimal conversion errors or invalid integer results.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "9",
+        "file": "shop.py",
+        "claim": "The code does not preserve the original `orders` table's column order if SQLite's `CREATE TABLE` statement is accepted but the existing table had a different column order. The task requires exactly `id`, `customer_id`, `amount_cents`; the code does create that order, but it does not validate that the original table had the expected shape before migration.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "10",
+        "file": "shop.py",
+        "claim": "The code does not check whether `idx_orders_customer` already exists before creating it. If the index already exists, `CREATE INDEX` will fail and abort the migration.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "11",
+        "file": "shop.py",
+        "claim": "The code does not ensure that `PRAGMA foreign_key_check` is clean after migration. If any `order_items.order_id` references an order that was not preserved, or if the recreated table changes FK semantics, the check may fail.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "12",
+        "file": "shop.py",
+        "claim": "The code does not handle the case where `migrate` is called on a v2 database with a missing or malformed `schema_version` table. It calls `version(conn)` first, which will raise an exception instead of doing nothing if the table is absent.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "13",
+        "file": "shop.py",
+        "claim": "The code does not preserve the original `orders` table's `NOT NULL` constraint on `amount` when converting to `amount_cents`. The new table declares `amount_cents INTEGER NOT NULL`, which is correct, but if the original `amount` was NULL, the migration will fail instead of preserving the row.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "14",
+        "file": "shop.py",
+        "claim": "The code does not ensure that the `order_items` table's `ON DELETE CASCADE` clause remains attached to the recreated `orders` table. SQLite does not automatically reattach cascade behavior when a referenced table is recreated.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "15",
+        "file": "shop.py",
+        "claim": "The code does not restore the original foreign_keys setting if the `finally` block itself raises an exception while a transaction is active. This can leave the connection with the wrong foreign_keys setting.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 15,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 2,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 290.3
+      }
+    ]
+  },
+  "file_digests": {
+    "shop.py": "bc2e445955d1300b028c6e5201b8460afbcc43f4e1405544cdfff3f61220d9d7"
+  }
+}

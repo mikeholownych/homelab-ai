@@ -122,6 +122,7 @@ def execute(args) -> int:
                 "baseline_playbook": args.baseline_playbook,
                 "fault_point": args.fault_point,
                 "allow_restore_fault": args.allow_restore_fault,
+                "limit": args.limit or "",
                 "ansible": str(executable), "timeout": args.timeout,
                 "ansible_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),
                 "experiment_outcome": "not_completed", "events": [],
@@ -131,7 +132,8 @@ def execute(args) -> int:
                 raise RuntimeError("no recovery record exists")
             record = old
             if (record["source"] != str(root) or record["inventory"] != args.inventory
-                    or record["lock"] != str(lock_path) or record["identity"] != current):
+                    or record["lock"] != str(lock_path) or record["identity"] != current
+                    or (args.limit and (record.get("limit") or "") != args.limit)):
                 raise RuntimeError("source/inventory/lock identity differs from the recorded run")
             if record["phase"] in TERMINAL:
                 return 0
@@ -157,6 +159,8 @@ def execute(args) -> int:
                 variables["candidate_drill_fail_restore"] = (
                     record.get("allow_restore_fault", False) and (state / "restore-fault").exists())
             command = [record["ansible"], "-i", str(inventory), str(path), "-e", json.dumps(variables)]
+            if record.get("limit"):
+                command += ["-l", record["limit"]]
             # Ansible inherits ownership. Killing this wrapper alone cannot
             # release the lock while its Ansible child continues mutating state.
             # Give every command its own process group for bounded timeout cleanup.
@@ -245,6 +249,7 @@ def parser():
     result.add_argument("--baseline-playbook")
     result.add_argument("--fault-point", choices=["none", "after-workers", "after-swap"], default="none")
     result.add_argument("--allow-restore-fault", action="store_true")
+    result.add_argument("--limit", default="")
     result.add_argument("--ansible", default="ansible-playbook")
     result.add_argument("--timeout", type=int, default=1800)
     return result

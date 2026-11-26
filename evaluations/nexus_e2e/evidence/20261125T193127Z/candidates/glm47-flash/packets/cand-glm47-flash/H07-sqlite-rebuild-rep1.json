@@ -1,0 +1,100 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "cand-glm47-flash-20261126T040547Z",
+  "arm": "cand-glm47-flash",
+  "task_id": "H07-sqlite-rebuild",
+  "rep": 1,
+  "accepted": false,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": false,
+    "stage": "visible",
+    "summary": "F\n=================================== FAILURES ===================================\n__________________________________ test_basic __________________________________\ntests/test_shop.py:11: in test_basic\n    shop.migrate(conn)\nshop.py:42: in migrate\n    conn.execute(\"\"\"\nE   sqlite3.OperationalError: no such function: repr\n!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!\n1 failed in 0.06s"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H02-cron-next",
+      "H03-json-patch",
+      "H07-sqlite-rebuild",
+      "H08-glob"
+    ]
+  },
+  "serving": {
+    "alias": "candidate/glm47-flash",
+    "before": {
+      "alias": "candidate/glm47-flash",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "candidate-glm47-flash",
+      "pool": "candidate-glm47",
+      "model_id": "GLM-4.7-Flash-Q4_K_M",
+      "artifact_digest": "sha256:29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "candidate/glm47-flash",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "candidate-glm47-flash",
+      "pool": "candidate-glm47",
+      "model_id": "GLM-4.7-Flash-Q4_K_M",
+      "artifact_digest": "sha256:29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 348.7,
+    "model_secs": 345.7,
+    "tokens": 13614
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 166.8,
+      "prompt_tokens": 652,
+      "completion_tokens": 4595,
+      "finish": "stop"
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 51.1,
+      "prompt_tokens": 1484,
+      "completion_tokens": 1455,
+      "finish": "stop"
+    },
+    {
+      "attempt": 3,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 127.9,
+      "prompt_tokens": 2073,
+      "completion_tokens": 3355,
+      "finish": "stop"
+    }
+  ],
+  "review": null
+}

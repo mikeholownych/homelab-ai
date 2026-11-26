@@ -1,0 +1,128 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "bon3-lead-20261125T193127Z",
+  "arm": "bon3-lead",
+  "task_id": "H08-glob",
+  "rep": 1,
+  "accepted": false,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": false,
+    "stage": "bon-select",
+    "summary": "none_passed"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 1,
+    "max_tokens": 8192,
+    "temperature": 0.2,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 1219.9,
+    "tokens": 21410,
+    "n_run": 3,
+    "n_requested": 3
+  },
+  "history": [
+    {
+      "sample": 1,
+      "success": false,
+      "attempts": 1,
+      "tokens": 7122,
+      "wall_secs": 402.7,
+      "history": [
+        {
+          "attempt": 1,
+          "ok": false,
+          "stage": "visible",
+          "termination": "stop",
+          "wall_secs": 401.7
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "success": false,
+      "attempts": 1,
+      "tokens": 7116,
+      "wall_secs": 406.9,
+      "history": [
+        {
+          "attempt": 1,
+          "ok": false,
+          "stage": "visible",
+          "termination": "stop",
+          "wall_secs": 405.9
+        }
+      ]
+    },
+    {
+      "sample": 3,
+      "success": false,
+      "attempts": 1,
+      "tokens": 7172,
+      "wall_secs": 407.0,
+      "history": [
+        {
+          "attempt": 1,
+          "ok": false,
+          "stage": "hidden",
+          "termination": "stop",
+          "wall_secs": 405.1
+        }
+      ]
+    }
+  ],
+  "review": null,
+  "oracle_coverage": false,
+  "selection_reason": "none_passed",
+  "selected_sample": 3
+}

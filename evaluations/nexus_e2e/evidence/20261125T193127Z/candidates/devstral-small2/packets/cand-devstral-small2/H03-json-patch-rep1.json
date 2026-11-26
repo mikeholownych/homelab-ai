@@ -1,0 +1,100 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "cand-devstral-small2-20261126T033746Z",
+  "arm": "cand-devstral-small2",
+  "task_id": "H03-json-patch",
+  "rep": 1,
+  "accepted": false,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": false,
+    "stage": "hidden",
+    "summary": "E   AssertionError: assert False\nE    +  where False = fails({'a': [1, 2, 3]}, [{'op': 'add', 'path': '/a/01', 'value': 9}])"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H02-cron-next",
+      "H03-json-patch",
+      "H07-sqlite-rebuild",
+      "H08-glob"
+    ]
+  },
+  "serving": {
+    "alias": "candidate/devstral-small2",
+    "before": {
+      "alias": "candidate/devstral-small2",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "candidate-devstral-small2",
+      "pool": "candidate-devstral",
+      "model_id": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M",
+      "artifact_digest": "sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "candidate/devstral-small2",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "candidate-devstral-small2",
+      "pool": "candidate-devstral",
+      "model_id": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M",
+      "artifact_digest": "sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 238.9,
+    "model_secs": 233.2,
+    "tokens": 15443
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 73.9,
+      "prompt_tokens": 904,
+      "completion_tokens": 2047,
+      "finish": "stop"
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 78.6,
+      "prompt_tokens": 2999,
+      "completion_tokens": 2140,
+      "finish": "stop"
+    },
+    {
+      "attempt": 3,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 80.8,
+      "prompt_tokens": 5213,
+      "completion_tokens": 2140,
+      "finish": "stop"
+    }
+  ],
+  "review": null
+}

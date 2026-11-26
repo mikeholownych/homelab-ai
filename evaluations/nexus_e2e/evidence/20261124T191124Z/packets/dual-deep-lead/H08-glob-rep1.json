@@ -1,0 +1,241 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-deep-lead-20261124T191124Z",
+  "arm": "dual-deep-lead",
+  "task_id": "H08-glob",
+  "rep": 1,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "reviewer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 1246.2,
+    "model_secs": 906.3,
+    "tokens": 31939,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 296.0,
+      "prompt_tokens": 899,
+      "completion_tokens": 5633
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 302.7,
+      "prompt_tokens": 2857,
+      "completion_tokens": 5634
+    },
+    {
+      "attempt": 3,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 307.6,
+      "prompt_tokens": 4436,
+      "completion_tokens": 5652
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "globber.py",
+        "claim": "split_pattern_segments treats a backslash before '/' as an escaped slash and does not split there, but compile_segment then treats that backslash as an escape for the following '/' and emits a literal '/' token; this can make a pattern segment contain a literal '/' and violate the spec that segments are separated by unescaped '/' outside sets.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "globber.py",
+        "claim": "split_pattern_segments preserves backslashes inside character classes, but compile_segment's class parser does not treat backslash specially and may interpret sequences like '\\\\-z' as a range or literal backslash in ways that are not clearly specified; more importantly, a backslash immediately before the closing ']' inside a class is not handled as a literal member and can cause incorrect class termination or membership.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "globber.py",
+        "claim": "compile_segment's range detection uses 'i + 2 < n' and 'segment[i + 2] != \"]\"', which incorrectly treats a dash followed by the closing bracket as a literal dash only when the dash is the last character before ']', but it can misparse ranges where the end character is ']' in other contexts and does not explicitly enforce that '-' first or last is literal in all cases.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "globber.py",
+        "claim": "compile_segment silently converts an invalid range with start > end into three literal members instead of raising or handling it according to the spec; this may accept patterns that should be invalid or produce unexpected matches.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "5",
+        "file": "globber.py",
+        "claim": "match_segment only remembers the most recent star and backtracks only that star; this can be incorrect for patterns with multiple non-consecutive stars where an earlier star must be re-expanded after a later star has already consumed text, potentially causing false negatives.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "6",
+        "file": "globber.py",
+        "claim": "The top-level DP treats a pattern segment of exactly '**' as matching zero or more whole path segments, but it does not correctly handle patterns with leading or trailing slashes or empty path segments in all cases; for example, pattern '/a' or 'a/' may not match the intended relative paths because path.split('/') and the DP alignment do not normalize empty segments consistently.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "7",
+        "file": "globber.py",
+        "claim": "The DP for non-'**' segments only advances from dp[j] to new_dp[j+1] when j < len(path_segments), so a pattern with more segments than the path can never match, but it also does not allow a final empty pattern segment to match an empty trailing path segment unless the path string explicitly ends with '/', which may be inconsistent with whole-path matching expectations.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "8",
+        "file": "globber.py",
+        "claim": "split_pattern_segments raises ValueError for an unterminated '[' only after scanning to the end of the entire pattern, so an unterminated class that contains an unescaped '/' is not detected at the '/' boundary and may be mis-split or produce a different error than specified.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "9",
+        "file": "globber.py",
+        "claim": "compile_segment collapses consecutive '*' tokens into a single star, which is semantically equivalent for a single segment but conflicts with the docstring's explicit statement that elsewhere '**' is just two '*' and may hide pattern-length or edge-case expectations in hidden tests.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "10",
+        "file": "globber.py",
+        "claim": "match_class rejects '/' for negated classes, which matches the spec, but it does so before checking membership; if a hidden test expects [!...] to match '/' when '/' is not in the set (a common glob interpretation), this will fail.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 10,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/deep",
+        "attempts": 3,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/lead",
+        "wall_secs": 332.7
+      }
+    ]
+  },
+  "file_digests": {
+    "globber.py": "7b82f2e00730d9a0498caaf126e064ff0ed69b81c773607d4b4305e578ec4b27"
+  }
+}

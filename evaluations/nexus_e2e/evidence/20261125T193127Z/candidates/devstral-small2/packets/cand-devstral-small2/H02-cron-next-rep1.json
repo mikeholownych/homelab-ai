@@ -1,0 +1,100 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "cand-devstral-small2-20261126T033746Z",
+  "arm": "cand-devstral-small2",
+  "task_id": "H02-cron-next",
+  "rep": 1,
+  "accepted": false,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": false,
+    "stage": "hidden",
+    "summary": "E   AssertionError: assert datetime.datetime(2026, 10, 6, 10, 15) == datetime.datetime(2026, 10, 6, 10, 30)\nE    +  where datetime.datetime(2026, 10, 6, 10, 15) = next_fire('0-10/5,30 * * * *', datetime.datetime(2026, 10, 6, 10, 10))\nE    +    where datetime.datetime(2026, 10, 6, 10, 10) = dt(2026, 10, 6, 10, 10)\nE    +  and   datetime.datetime(2026, 10, 6, 10, 30) = dt(2026, 10, 6, 10, 30)"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H02-cron-next",
+      "H03-json-patch",
+      "H07-sqlite-rebuild",
+      "H08-glob"
+    ]
+  },
+  "serving": {
+    "alias": "candidate/devstral-small2",
+    "before": {
+      "alias": "candidate/devstral-small2",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "candidate-devstral-small2",
+      "pool": "candidate-devstral",
+      "model_id": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M",
+      "artifact_digest": "sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "candidate/devstral-small2",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "candidate-devstral-small2",
+      "pool": "candidate-devstral",
+      "model_id": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M",
+      "artifact_digest": "sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 128.0,
+    "model_secs": 123.3,
+    "tokens": 10207
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 41.0,
+      "prompt_tokens": 796,
+      "completion_tokens": 1151,
+      "finish": "stop"
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 40.7,
+      "prompt_tokens": 2321,
+      "completion_tokens": 1120,
+      "finish": "stop"
+    },
+    {
+      "attempt": 3,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 41.7,
+      "prompt_tokens": 3690,
+      "completion_tokens": 1129,
+      "finish": "stop"
+    }
+  ],
+  "review": null
+}

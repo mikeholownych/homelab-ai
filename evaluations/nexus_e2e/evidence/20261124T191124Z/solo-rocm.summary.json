@@ -1,0 +1,86 @@
+{
+  "arm": "solo-rocm",
+  "alias": "engineering/interactive-rocm",
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "reps": 3,
+  "tasks": 10,
+  "n_trials": 30,
+  "accepted_rate": 86.7,
+  "accepted_per_rep": [
+    9,
+    8,
+    9
+  ],
+  "first_attempt_rate": 66.7,
+  "median_secs_to_accepted": 80.1,
+  "mean_secs_per_task": 185.0,
+  "mean_tokens_per_task": 4850,
+  "per_task_pass": {
+    "H01-semver-range": "3/3",
+    "H02-cron-next": "2/3",
+    "H03-json-patch": "3/3",
+    "H04-build-order": "3/3",
+    "H05-retry": "3/3",
+    "H06-allocate": "3/3",
+    "H07-sqlite-rebuild": "3/3",
+    "H08-glob": "0/3",
+    "H09-ledger-root-cause": "3/3",
+    "H10-perf-report": "3/3"
+  },
+  "always_fail": [
+    "H08-glob"
+  ],
+  "flaky": [
+    "H02-cron-next"
+  ],
+  "serving": {
+    "before": {
+      "alias": "engineering/interactive-rocm",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "ms-s1-hip-qwen38-27b",
+      "pool": "rocm",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b12464-d3c3e242c",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/interactive-rocm",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "ms-s1-hip-qwen38-27b",
+      "pool": "rocm",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b12464-d3c3e242c",
+      "quantization": "Q4_K - Medium"
+    }
+  }
+}

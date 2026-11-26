@@ -1,0 +1,223 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-deep-lead-20261124T191124Z",
+  "arm": "dual-deep-lead",
+  "task_id": "H01-semver-range",
+  "rep": 1,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "reviewer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 599.4,
+    "model_secs": 271.8,
+    "tokens": 12266,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 271.8,
+      "prompt_tokens": 852,
+      "completion_tokens": 5182
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "semver.py",
+        "claim": "parse_version rejects valid SemVer build metadata (e.g. '1.2.3+build'), so satisfies('1.2.3+build', '1.2.3') raises ValueError instead of matching.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "semver.py",
+        "claim": "parse_comparator does not accept whitespace between the operator and version (e.g. '>= 1.0.0'), causing satisfies('1.0.0', '>= 1.0.0') to raise ValueError.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "semver.py",
+        "claim": "satisfies does not support wildcard/partial range tokens such as '*', 'x', 'X', '1.x', or '1.2.x', so common range inputs raise ValueError instead of matching.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "semver.py",
+        "claim": "satisfies does not support hyphen ranges such as '1.2.3 - 2.3.4', so such ranges raise ValueError instead of being interpreted as inclusive ranges.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "5",
+        "file": "semver.py",
+        "claim": "satisfies treats an empty range string as invalid and raises ValueError; if the docstring/spec expects empty ranges to match nothing or be valid, this is incorrect.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "6",
+        "file": "semver.py",
+        "claim": "parse_comparator accepts a bare '=' operator but does not normalize or validate redundant/invalid comparator syntax such as '==1.0.0' beyond relying on parse_version failure; behavior for invalid comparator tokens is inconsistent and may raise ValueError from parse_version rather than a clear comparator error.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "7",
+        "file": "semver.py",
+        "claim": "compare_versions compares alphanumeric prerelease identifiers using Python string ordering, which is Unicode code point order; if the spec requires ASCII-only SemVer identifier ordering or rejects non-ASCII identifiers, this can produce incorrect comparisons for non-ASCII prerelease labels.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "8",
+        "file": "semver.py",
+        "claim": "satisfies allows a prerelease version if any comparator in the set has a prerelease with the same major.minor.patch, even when that comparator is not the one constraining the prerelease ordering (e.g. '>=1.0.0-alpha <1.0.0-beta' with '1.0.0-alpha' is fine, but mixed sets like '>=1.0.0-alpha <1.0.0' can allow prereleases in ways that may not match the intended docstring semantics).",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "9",
+        "file": "semver.py",
+        "claim": "parse_version uses str.isdigit() on prerelease parts; although the regex restricts to ASCII, the code path is unnecessarily dependent on Python digit semantics and could be fragile if the regex is later broadened.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "10",
+        "file": "semver.py",
+        "claim": "satisfies splits range parts on any whitespace, so ranges with intentional internal spacing around operators or hyphen ranges are not handled and may be misparsed or rejected.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 10,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/deep",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/lead",
+        "wall_secs": 322.1
+      }
+    ]
+  },
+  "file_digests": {
+    "semver.py": "ea9337cb738f6f5be1dfeef8e09993892cad7ec3d399ab16573511a2c270eec8"
+  }
+}

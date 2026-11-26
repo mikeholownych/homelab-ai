@@ -1,0 +1,17 @@
+{
+  "corpus": "engx-hard",
+  "digest": "a2e49329628243ed",
+  "tasks": [
+    "H01-semver-range",
+    "H02-cron-next",
+    "H03-json-patch",
+    "H04-build-order",
+    "H05-retry",
+    "H06-allocate",
+    "H07-sqlite-rebuild",
+    "H08-glob",
+    "H09-ledger-root-cause",
+    "H10-perf-report"
+  ],
+  "n": 10
+}
