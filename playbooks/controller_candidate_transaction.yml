@@ -41,6 +41,10 @@
           - "{{ candidate_transaction_experiment_playbook | default('') }}"
           - --baseline-playbook
           - "{{ candidate_transaction_baseline_playbook | default('') }}"
+          - --limit
+          - "{{ candidate_transaction_limit | default('') }}"
+          - --timeout
+          - "{{ candidate_transaction_timeout | default(1800) | string }}"
           - --ansible
           - "{{ candidate_transaction_ansible | default('ansible-playbook') }}"
       changed_when: true

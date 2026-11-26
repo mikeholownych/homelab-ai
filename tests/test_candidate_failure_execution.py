@@ -115,6 +115,30 @@ class CandidateFailureExecution(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assert_restored()
 
+    def test_non_reasoning_candidate_swap_and_restoration(self):
+        self.variables["llama_cpp_container_candidate_profiles"]["fixture"]["reasoning_budget"] = 0
+        # Capture orchestrator_gateway_model_aliases alongside workers in the role double.
+        gw_task = self.root / "roles/orchestrator_gateway/tasks/main.yml"
+        gw_task.write_text(gw_task.read_text() + (
+            "- name: Record aliases\n"
+            "  ansible.builtin.copy:\n"
+            "    dest: '{{ fixture_state }}/aliases.json'\n"
+            "    content: '{{ orchestrator_gateway_model_aliases | to_json }}'\n"
+            "    mode: '0600'\n"
+        ))
+        result = self.run_play()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        workers = self.read("llama_cpp_container")
+        self.assertIsNone(workers["candidate-fixture"]["reasoning_budget"])
+        gw_workers = {w["worker_id"]: w for w in self.read("orchestrator_gateway")}
+        self.assertIsNone(gw_workers["candidate-fixture"]["reasoning_budget"])
+        aliases = self.read("aliases")
+        self.assertEqual(aliases["candidate/fixture"]["reasoning"],
+                         {"mode": "off", "budget": 0, "answer_allowance": 8192})
+        result = self.run_play(candidate_state="absent")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_restored()
+
     def test_role_failures_restore_and_preserve_failure_status(self):
         for role in ("llama_cpp_container", "orchestrator_gateway"):
             with self.subTest(role=role):

@@ -1,0 +1,223 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-deep-lead-20261124T191124Z",
+  "arm": "dual-deep-lead",
+  "task_id": "H03-json-patch",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "reviewer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 676.7,
+    "model_secs": 328.6,
+    "tokens": 14676,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 328.6,
+      "prompt_tokens": 904,
+      "completion_tokens": 6244
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "jsonpatch.py",
+        "claim": "move_at allows moving a value into a location that is not a proper descendant but still aliases the moved container after insertion, violating the no-shared-mutable-object guarantee for the returned document in cases such as moving an object into one of its own ancestor containers when the ancestor is a list and the add operation inserts the same container reference into itself.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "jsonpatch.py",
+        "claim": "copy_at can create internal aliasing when the source value is copied into a location inside the source container because add_at mutates the original source container in work while the copied value is a separate deep copy, but the resulting document may contain the original source container and the inserted copy in a way that is not specified and can violate expected JSON Patch copy semantics for list insertion into the same list.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "jsonpatch.py",
+        "claim": "json_equal treats booleans with 'a is b', which is correct for Python bool singletons but does not handle non-bool numeric types that compare equal to booleans in other contexts; more importantly, it does not explicitly reject equality between bool and float/int when the bool is the second argument in all cases due to short-circuiting, which can be fragile if extended to non-singleton boolean-like objects.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "jsonpatch.py",
+        "claim": "parse_pointer accepts a path consisting only of '/' and produces an empty token, which is valid for object keys but should be rejected for list targets; however, the code defers this to get_value/add_at/remove_at, which is correct, but it also accepts paths with empty tokens in intermediate positions for lists and only fails later, which can mask malformed pointer errors and may allow operations to mutate work before raising PatchError in some edge cases.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "5",
+        "file": "jsonpatch.py",
+        "claim": "add_at, remove_at, and replace_at mutate the work document before all validation of the final token is complete in some branches, so although the original doc is not modified, the all-or-nothing guarantee is weakened because partial mutations can occur before a later error is raised, and any side effects from non-JSON mutable values in doc could be exposed.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "6",
+        "file": "jsonpatch.py",
+        "claim": "deep_copy only copies dict and list containers and returns all other values by reference; if doc or ops contain mutable non-JSON objects (e.g., sets, custom mutable objects), the result can share those mutable objects with doc or ops, violating the stated no-shared-mutable-object requirement beyond dict/list.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "7",
+        "file": "jsonpatch.py",
+        "claim": "valid_list_index rejects leading zeros but does not reject extremely large numeric tokens before converting to int; while Python can handle large ints, this can cause unnecessary memory/CPU use and is not strictly necessary for JSON Pointer validation, and it may behave inconsistently with environments that limit integer size.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "8",
+        "file": "jsonpatch.py",
+        "claim": "move_at checks for proper descendant using only token prefix equality, which is correct for JSON Pointer semantics, but it does not account for list index shifts caused by the remove step when path and from are in the same list; the docstring says remove then add, but some JSON Patch implementations require the add index to be interpreted relative to the pre-removal document, so this can produce unexpected results for moves within lists.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "9",
+        "file": "jsonpatch.py",
+        "claim": "replace_at for non-root paths performs two separate get_value calls (full path and parent path), which can be inconsistent if the document is mutated between calls; although no mutation occurs between them in this code, the duplicated traversal is inefficient and can hide errors if the parent is a scalar but the full path somehow resolves, leading to incorrect error handling.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "10",
+        "file": "jsonpatch.py",
+        "claim": "test_at deep-copies op['value'] even though it is only used for equality testing; this is unnecessary and can be expensive, but more importantly, if op['value'] contains non-JSON mutable objects, deep_copy will not copy them and json_equal may compare by identity or equality in ways that do not match JSON equality semantics.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 10,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/deep",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/lead",
+        "wall_secs": 343.6
+      }
+    ]
+  },
+  "file_digests": {
+    "jsonpatch.py": "5b23905306f1572863846461e50858e0ee06c6c8ec50f0ececec6bf7ba486a32"
+  }
+}

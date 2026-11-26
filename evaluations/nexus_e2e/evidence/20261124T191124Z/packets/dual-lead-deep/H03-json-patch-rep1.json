@@ -1,0 +1,232 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H03-json-patch",
+  "rep": 1,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 2,
+  "metrics": {
+    "wall_secs": 1136.0,
+    "model_secs": 859.1,
+    "tokens": 24914,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 421.5,
+      "prompt_tokens": 904,
+      "completion_tokens": 6518
+    },
+    {
+      "attempt": 2,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 437.6,
+      "prompt_tokens": 3370,
+      "completion_tokens": 6520
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "unicode-list-index",
+        "file": "jsonpatch.py",
+        "claim": "_parse_list_index uses token.isdigit() and int(token), which can accept non-ASCII Unicode decimal digits, violating the required base-10 ASCII index rule.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "move-source-mutation-before-existence",
+        "file": "jsonpatch.py",
+        "claim": "For move, _is_proper_descendant is checked before verifying that the source path exists, so invalid moves whose target is inside a nonexistent source raise the wrong PatchError reason before the required source-existence check.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "move-remove-root-ambiguity",
+        "file": "jsonpatch.py",
+        "claim": "move from \"\" to a non-root path calls _remove with an empty token list, which raises PatchError, but the docstring does not explicitly define whether moving the whole document is allowed; this may conflict with expected RFC-like move semantics if root move is intended to be valid.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "deep-copy-non-json-mutable",
+        "file": "jsonpatch.py",
+        "claim": "_deep_copy only recursively copies dict and list; for other mutable objects it relies on copy.deepcopy, which may not guarantee the required no-shared-mutable-object property for non-JSON mutable values or objects with custom copy behavior.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "json-equal-non-json-fallback",
+        "file": "jsonpatch.py",
+        "claim": "_json_equal falls back to a == b for non-JSON types, which can incorrectly treat non-JSON objects as equal or unequal outside the specified JSON equality semantics.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "pointer-empty-token",
+        "file": "jsonpatch.py",
+        "claim": "_parse_pointer accepts empty tokens between slashes, producing empty string keys; this is valid JSON Pointer syntax, but the implementation does not explicitly reject or normalize it, which may be inconsistent with hidden tests expecting stricter path validation.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "move-ancestor-after-remove",
+        "file": "jsonpatch.py",
+        "claim": "For move where the target is an ancestor of the source, the code removes the source first and then adds at the ancestor path; if the ancestor path was only valid because the source existed, this can produce a different intermediate state than a strict remove-then-add interpretation expects.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "copy-from-nonexistent",
+        "file": "jsonpatch.py",
+        "claim": "copy does not explicitly check that the source path exists before deep copying; it relies on _get_existing, but if _get_existing returns a mutable object from result, _deep_copy may not fully isolate it from the result before insertion.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "add-parent-existence",
+        "file": "jsonpatch.py",
+        "claim": "_add uses _get_parent for the parent path, which requires every intermediate token to exist, but for add to a list the final token may be \"-\" or an index equal to len; this is handled, but if the parent path itself is a list and the final token is \"-\", _get_parent does not validate that the parent list is addressable, potentially allowing add under a nonexistent list element.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "test-root-noncontainer",
+        "file": "jsonpatch.py",
+        "claim": "test at path \"\" calls _get_existing(result, []) and returns the whole document even if the document is a non-container; this may be acceptable, but hidden tests may expect test on a non-container root to fail or require a container.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 10,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 2,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 270.2
+      }
+    ]
+  },
+  "file_digests": {
+    "jsonpatch.py": "c6a651c6e36e94256967d8e5fa852dfca113476e2e3b9ac1b53a2abf96f45371"
+  }
+}

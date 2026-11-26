@@ -1,0 +1,175 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-deep-lead-20261124T191124Z",
+  "arm": "dual-deep-lead",
+  "task_id": "H10-perf-report",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "reviewer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 544.1,
+    "model_secs": 237.2,
+    "tokens": 10748,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 237.2,
+      "prompt_tokens": 1077,
+      "completion_tokens": 4523
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "report.py",
+        "claim": "top_k changes error handling for non-integer k: values like 2.5 or float('nan') are accepted and produce a list (ceil-like or all items), whereas integer-only slicing semantics would raise TypeError; this is a behavior change beyond the specified k <= 0 case.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "report.py",
+        "claim": "top_k uses a full O(n log n) sort over all unique users; for 200,000 all-unique users this may be close to or exceed a strict 'well under a second' budget on slower CI/production hardware, so the performance requirement is not robustly guaranteed.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "report.py",
+        "claim": "merge_ranges uses O(n log n) sorting for all ranges; for 200,000 ranges this may be close to or exceed a strict 'well under a second' budget on slower CI/production hardware, so the performance requirement is not robustly guaranteed.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "report.py",
+        "claim": "merge_ranges assumes numeric endpoints because it computes out[-1][1] + 1; if hidden tests supply comparable non-numeric endpoints (e.g. strings or custom objects) that satisfy a <= b, it raises TypeError instead of preserving original behavior or raising the specified ValueError.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 4,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/deep",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/lead",
+        "wall_secs": 286.4
+      }
+    ]
+  },
+  "file_digests": {
+    "report.py": "6fb97cd7c6c378f1a65925d1e0a6e2f231015968bf7e5674d648e1eac73123d5"
+  }
+}

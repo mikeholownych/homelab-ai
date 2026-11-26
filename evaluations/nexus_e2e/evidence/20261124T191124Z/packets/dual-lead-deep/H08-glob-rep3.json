@@ -1,0 +1,216 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H08-glob",
+  "rep": 3,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 2,
+  "metrics": {
+    "wall_secs": 1091.4,
+    "model_secs": 817.8,
+    "tokens": 23576,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 387.2,
+      "prompt_tokens": 899,
+      "completion_tokens": 6004
+    },
+    {
+      "attempt": 2,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 430.6,
+      "prompt_tokens": 2852,
+      "completion_tokens": 6472
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "range-first-dash",
+        "file": "globber.py",
+        "claim": "In `_parse_pattern`, a leading `-` inside a character class is treated as the start of a range instead of a literal member. For example, `[-a]` is parsed as the range `--a`, but the docstring says a `-` first in the set is literal.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-after-negation-dash",
+        "file": "globber.py",
+        "claim": "The same leading-dash bug applies after `[!`; for example `[!-a]` is parsed as a negated range `--a` instead of a negated set containing literal `-` and `a`.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "invalid-range-error",
+        "file": "globber.py",
+        "claim": "`_parse_pattern` raises `ValueError` for reversed ranges such as `[z-a]`, but the docstring only specifies `ValueError` for an unterminated `[` and does not specify invalid-range behavior.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "doublestar-both-slashes-semantics",
+        "file": "globber.py",
+        "claim": "In `_match_tokens`, a `doublestar` token with both `has_leading` and `has_trailing` true is handled only by the `has_trailing` branch, ignoring the leading-slash requirement. This makes collapsed patterns like `/**/` behave like `**/` rather than a `**` segment between slashes.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "doublestar-empty-segments",
+        "file": "globber.py",
+        "claim": "The `doublestar` matcher consumes `/` as an empty segment in several branches, allowing patterns such as `a/**/b` to match paths with consecutive slashes like `a//b`. The docstring describes whole path segments, not empty segments.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "doublestar-alone-segment-consumption",
+        "file": "globber.py",
+        "claim": "For a standalone `**` token, the matcher consumes a segment by advancing to the next `/` and then recursing on the same `**` token without explicitly requiring the separator. This can accept malformed segment boundaries and empty segments in ways not specified by the docstring.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "class-range-order",
+        "file": "globber.py",
+        "claim": "`_class_matches` assumes range members are stored as `(start, end)` with `start < end`, but the parser can create ranges from characters where the intended literal dash rules are not respected, leading to incorrect membership checks.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "escaped-slash-collapse",
+        "file": "globber.py",
+        "claim": "`_collapse_doublestar_segments` treats only unescaped slash tokens as segment boundaries, but escaped slash tokens are represented as `(\"slash\", True)`. This is mostly correct, but the collapse logic also assumes adjacent slash tokens are always removable, which can change matching for patterns with escaped slashes around `**`.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 8,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 2,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 262.2
+      }
+    ]
+  },
+  "file_digests": {
+    "globber.py": "5bffee85af7b3092a06ae99df1c17a9e7fef0bc4796aa2b3f7753e27f4018c5a"
+  }
+}

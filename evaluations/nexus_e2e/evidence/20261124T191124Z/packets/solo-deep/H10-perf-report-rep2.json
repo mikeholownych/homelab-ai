@@ -1,0 +1,86 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "solo-deep-20261124T191124Z",
+  "arm": "solo-deep",
+  "task_id": "H10-perf-report",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 243.0,
+    "model_secs": 238.6,
+    "tokens": 5611
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 238.6,
+      "prompt_tokens": 1077,
+      "completion_tokens": 4534,
+      "finish": "stop"
+    }
+  ],
+  "review": null
+}

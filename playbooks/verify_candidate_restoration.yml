@@ -25,7 +25,10 @@
           - -c
           - "{{ lookup('file', playbook_dir ~ '/../evaluations/engx/verify_production_recovery.py') }}"
         stdin: >-
-          {{ {'workers': llama_cpp_container_workers, 'gateway_port': orchestrator_gateway_port,
+          {{ {'workers': llama_cpp_container_workers,
+              'expected_gateway_workers': orchestrator_gateway_production_worker_count
+                                          | default(llama_cpp_container_workers | length) | int,
+              'gateway_port': orchestrator_gateway_port,
               'gateway_release': orchestrator_gateway_release_dir,
               'replaced_service': llama_cpp_container_workers[
                 llama_cpp_container_candidate_profiles[candidate].replaces].service_name,

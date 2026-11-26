@@ -1,0 +1,191 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H10-perf-report",
+  "rep": 3,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 560.5,
+    "model_secs": 291.9,
+    "tokens": 11000,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 291.9,
+      "prompt_tokens": 1076,
+      "completion_tokens": 4552
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "top_k-negative-k-sorts-before-return",
+        "file": "report.py",
+        "claim": "top_k sorts all totals before checking whether k <= 0. If the original implementation returned [] before sorting, this changes observable behavior when sorting would raise an error (e.g. incomparable user keys with equal totals) or when k is non-int but falsy/invalid. Error handling and side-effect timing are not preserved.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "top_k-non-int-k-behavior-change",
+        "file": "report.py",
+        "claim": "top_k treats non-int k differently from normal list slicing. For example, k=2.5 would return 3 items in this implementation, while a slice-based original would raise TypeError. Likewise, k=None would return all items in a slice-based original but raises TypeError here. This changes behavior for non-int k values.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "top_k-mutable-points-input-mutation",
+        "file": "report.py",
+        "claim": "top_k can mutate input objects when repeated users have mutable point values. For scores = [('a', [1]), ('a', [2])], totals['a'] initially references the first input list, and totals['a'] += points mutates that input list. This violates the requirement not to modify inputs.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "merge_ranges-error-message-unknown",
+        "file": "report.py",
+        "claim": "merge_ranges raises ValueError('bad range'). If the original error message differs, this changes error handling behavior. Hidden tests may assert the exact exception message.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "merge_ranges-validation-order",
+        "file": "report.py",
+        "claim": "merge_ranges validates ranges while iterating before sorting. If the original implementation sorted first and then validated, the first ValueError raised could differ for inputs with multiple invalid ranges. This may change error handling behavior.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "merge_ranges-non-integer-range-mutation",
+        "file": "report.py",
+        "claim": "merge_ranges assumes integer ranges and uses last_end + 1. For non-integer comparable values such as strings, this can raise TypeError during merging even though the initial a > b check passed. If original behavior handled or rejected such inputs differently, this changes behavior.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 6,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 248.7
+      }
+    ]
+  },
+  "file_digests": {
+    "report.py": "ba9976917ecf10e7c904437784aceaaa7bad341e83925dc3c23a7b192de7c92b"
+  }
+}

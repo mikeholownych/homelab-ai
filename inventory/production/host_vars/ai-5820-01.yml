@@ -192,7 +192,8 @@ llama_cpp_container_workers:
     image_ref: localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
     env: {GGML_SYCL_ENABLE_XMX_ESIMD: 0}
     # Track L cutover (docs/superpowers/plans/2026-11-22-lead-rocm-capability-mix.md Task 5): Qwen3.8-27B won the
-    # lead bake-off and holds CAIS grant q-coding.routine-412a2b3ad304-85f81041 (reasoning on, budget 4096).
+    # lead bake-off and holds CAIS grants q-coding.routine-412a2b3ad304-85f81041 and
+    # q-coding.complex-412a2b3ad304-b1d7481e (reasoning on, budget 4096).
     # Rollback = Qwen3.6-35B-A3B qwen3.6-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_M.gguf (sha256:ac0e2c11...), budget 8192.
     model_file: qwen3.8-27b/Qwen3.8-27B-UD-Q4_K_M.gguf
     served_name: Qwen3.8-27B-UD-Q4_K_M
@@ -455,7 +456,8 @@ orchestrator_gateway_workers:
     context_limit: 65536
     max_concurrency: 1
     resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
-    evidence_ids: [eng-hard-b-q38-27b-q4km, q-coding.routine-412a2b3ad304-85f81041]
+    evidence_ids: [eng-hard-b-q38-27b-q4km, q-coding.routine-412a2b3ad304-85f81041,
+                   q-coding.complex-412a2b3ad304-b1d7481e]
     registry_version: 1
     measured_at: "2026-11-22T20:49:03+00:00"
     valid_until: "2026-12-31T00:00:00+00:00"
@@ -738,6 +740,98 @@ llama_cpp_container_candidate_profiles:
       registry_version: 1
       measured_at: "2026-10-07T12:21:00+00:00"
       valid_until: "2026-12-31T00:00:00+00:00"
+      endpoint: http://127.0.0.1:8002
+
+  # Quality-levers bake-off (docs/superpowers/specs/2026-11-25-local-coding-quality-levers-design.md):
+  # non-Qwen peers already on disk under /var/lib/local-ai/models/gguf/. Qualify via candidate
+  # transaction only; do not promote without CAIS engx evidence.
+  devstral-small2:
+    replaces: worker1
+    replaces_gateway_worker_id: b0-live-llama-worker1
+    reasoning_budget: 0
+    worker:
+      worker_id: candidate-devstral-small2
+      service_name: aihost-llama-candidate-devstral-small2.service
+      container_name: llama-candidate-devstral-small2
+      gpu: 0
+      port: 8002
+      config_dir: /etc/local-ai/llama/candidate/devstral-small2
+      model_file: Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf
+      image_ref: localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+      env: {GGML_SYCL_ENABLE_XMX_ESIMD: 0}
+      served_name: Devstral-Small-2-24B-Instruct-2512-Q4_K_M
+      context: 65536
+      cpuset_cpus: "0,1,4,5"
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+             "--lazy-mode", "on"]
+    gateway_worker:
+      worker_id: candidate-devstral-small2
+      credential_name: candidate-devstral-small2-token
+      credential_source: /etc/local-ai/llama/candidate/devstral-small2/worker-api-key
+      token_file: candidate-devstral-small2-token
+      pool: candidate-devstral
+      engine: llama.cpp
+      port: 8002
+      public_model_id: candidate/devstral-small2
+      model_id: Devstral-Small-2-24B-Instruct-2512-Q4_K_M
+      revision: gguf-d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496
+      artifact_digest: sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496
+      runtime_image_digest: sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+      hardware_class: intel-arc-pro-b65-32g
+      topology: llama-cpp-sycl
+      gpu_assignment: ["0"]
+      capabilities: [navigation, coding, structured_output, tool_call_proposal]
+      context_limit: 65536
+      max_concurrency: 1
+      resource_envelope: {memory_reserve_gib: 8, memory_available_floor_gib: 8}
+      evidence_ids: [quality-levers-on-disk-2026-11-25]
+      registry_version: 1
+      measured_at: "2026-11-25T19:30:00+00:00"
+      valid_until: "2027-03-31T00:00:00+00:00"
+      endpoint: http://127.0.0.1:8002
+
+  glm47-flash:
+    replaces: worker1
+    replaces_gateway_worker_id: b0-live-llama-worker1
+    reasoning_budget: 4096
+    worker:
+      worker_id: candidate-glm47-flash
+      service_name: aihost-llama-candidate-glm47-flash.service
+      container_name: llama-candidate-glm47-flash
+      gpu: 0
+      port: 8002
+      config_dir: /etc/local-ai/llama/candidate/glm47-flash
+      model_file: glm-4.7-flash/GLM-4.7-Flash-Q4_K_M.gguf
+      image_ref: localhost/sycl-research/llama@sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+      env: {GGML_SYCL_ENABLE_XMX_ESIMD: 0}
+      served_name: GLM-4.7-Flash-Q4_K_M
+      context: 65536
+      cpuset_cpus: "0,1,4,5"
+      args: ["-ngl", "99", "--jinja", "-np", "1", "-fa", "on", "-b", "4096", "-ub", "2048", "--metrics",
+             "--lazy-mode", "on"]
+    gateway_worker:
+      worker_id: candidate-glm47-flash
+      credential_name: candidate-glm47-flash-token
+      credential_source: /etc/local-ai/llama/candidate/glm47-flash/worker-api-key
+      token_file: candidate-glm47-flash-token
+      pool: candidate-glm47
+      engine: llama.cpp
+      port: 8002
+      public_model_id: candidate/glm47-flash
+      model_id: GLM-4.7-Flash-Q4_K_M
+      revision: gguf-29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174
+      artifact_digest: sha256:29837ed2c0fc5f51981adf8ac8083fcf80743c598381f13e9f06cbad0498b174
+      runtime_image_digest: sha256:6cd97c37c443c47f095424ef443c9a3eaa0bad3cbf9dbbc5f3136b3256c163e9
+      hardware_class: intel-arc-pro-b65-32g
+      topology: llama-cpp-sycl
+      gpu_assignment: ["0"]
+      capabilities: [navigation, coding, structured_output, tool_call_proposal]
+      context_limit: 65536
+      max_concurrency: 1
+      evidence_ids: [quality-levers-on-disk-2026-11-25]
+      registry_version: 1
+      measured_at: "2026-11-25T19:30:00+00:00"
+      valid_until: "2027-03-31T00:00:00+00:00"
       endpoint: http://127.0.0.1:8002
 
 cluster:

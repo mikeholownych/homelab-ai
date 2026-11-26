@@ -1,0 +1,106 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "solo-deep-20261124T191124Z",
+  "arm": "solo-deep",
+  "task_id": "H02-cron-next",
+  "rep": 3,
+  "accepted": false,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": false,
+    "stage": "hidden",
+    "summary": "E   AssertionError: assert datetime.datetime(2026, 11, 13, 12, 0) == datetime.datetime(2026, 10, 9, 12, 0)\nE    +  where datetime.datetime(2026, 11, 13, 12, 0) = next_fire('0 12 13 * 5', datetime.datetime(2026, 10, 6, 0, 0))\nE    +    where datetime.datetime(2026, 10, 6, 0, 0) = dt(2026, 10, 6)\nE    +  and   datetime.datetime(2026, 10, 9, 12, 0) = dt(2026, 10, 9, 12, 0)"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 853.3,
+    "model_secs": 848.7,
+    "tokens": 22835
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 277.4,
+      "prompt_tokens": 795,
+      "completion_tokens": 5297,
+      "finish": "stop"
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 283.6,
+      "prompt_tokens": 2331,
+      "completion_tokens": 5317,
+      "finish": "stop"
+    },
+    {
+      "attempt": 3,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 287.6,
+      "prompt_tokens": 3778,
+      "completion_tokens": 5317,
+      "finish": "stop"
+    }
+  ],
+  "review": null
+}

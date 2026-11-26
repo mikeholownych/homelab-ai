@@ -1,0 +1,208 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H08-glob",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 2,
+  "metrics": {
+    "wall_secs": 1093.8,
+    "model_secs": 838.2,
+    "tokens": 23910,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 457.2,
+      "prompt_tokens": 897,
+      "completion_tokens": 7050
+    },
+    {
+      "attempt": 2,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 380.9,
+      "prompt_tokens": 3882,
+      "completion_tokens": 5656
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "empty-pattern-empty-path",
+        "file": "globber.py",
+        "claim": "An empty pattern does not match an empty path because _parse_pattern always creates one empty normal segment, and glob_match requires one path segment for it.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "character-class-ranges",
+        "file": "globber.py",
+        "claim": "Character class ranges are parsed incorrectly: when '-' is encountered, the code uses '-' itself as the range start instead of the previous character, so `[a-z]` adds characters from '-' through 'z' rather than 'a' through 'z'.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "reversed-ranges",
+        "file": "globber.py",
+        "claim": "Reversed character ranges such as `[z-a]` are not handled according to the documented range semantics; the parser still creates a range starting from '-' because it does not track the previous set character.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-end-bracket",
+        "file": "globber.py",
+        "claim": "A range whose end character is ']' is not parsed as a literal '-' followed by a closing bracket in all cases because the range branch only checks that the next character is not ']' but does not correctly preserve the previous character as the range start.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "class-first-dash",
+        "file": "globber.py",
+        "claim": "The parser's `first` flag is updated after every character, but range parsing does not retain the previous character, so the documented rule that a '-' first or last in the set is literal is not reliably implemented for ranges.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "doublestar-segment-detection",
+        "file": "globber.py",
+        "claim": "A pattern segment is recognized as `**` only when the token list is exactly two unescaped star tokens; this is correct for literal stars, but it means any segment containing escaped characters that visually form `**` is treated as normal, which may be intended but is not explicitly covered by the parser's segment-splitting logic.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "unused-variable",
+        "file": "globber.py",
+        "claim": "The variable `m = len(segments)` is computed but never used, indicating dead code and a likely incomplete implementation.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 7,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 2,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 249.5
+      }
+    ]
+  },
+  "file_digests": {
+    "globber.py": "d5ad38e7af47fe7d766a35623dc8d241eac6a2c32e57daa4e9c61eddff8f158e"
+  }
+}

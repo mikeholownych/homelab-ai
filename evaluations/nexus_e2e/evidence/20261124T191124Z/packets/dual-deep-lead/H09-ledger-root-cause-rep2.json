@@ -1,0 +1,184 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-deep-lead-20261124T191124Z",
+  "arm": "dual-deep-lead",
+  "task_id": "H09-ledger-root-cause",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "reviewer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "alias": "engineering/deep",
+    "before": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "after": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 572.6,
+    "model_secs": 270.6,
+    "tokens": 12251,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 270.6,
+      "prompt_tokens": 1215,
+      "completion_tokens": 5144
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "1",
+        "file": "ledger.py",
+        "claim": "apply() can mutate balances before a transfer is fully validated: it debits the source account and then credits the target, so if the credit path raises or if future validation is added after the debit, the ledger can be left partially updated instead of atomically unchanged.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "2",
+        "file": "ledger.py",
+        "claim": "apply() checks transfer sufficiency using self._bal.get(ev.account, self.ZERO) and then calls _debit(), which repeats the check; this duplicated logic is fragile and can diverge if one path is changed, making the atomicity and no-negative-balance guarantees harder to maintain.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "3",
+        "file": "ledger.py",
+        "claim": "balance() returns the shared class-level Decimal instance self.ZERO for unknown accounts; while Decimal is immutable, returning a shared object is an unnecessary aliasing risk and can be confusing if future code mutates or compares identity.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "4",
+        "file": "events.py",
+        "claim": "parse_event accepts amount strings with leading zeros such as \"000.01\" or \"001\"; the docstring only says digits optionally followed by one or two decimal places, but hidden tests may expect canonical decimal strings or may treat leading zeros as malformed.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "5",
+        "file": "events.py",
+        "claim": "parse_event does not reject non-string numeric types for amount beyond the isinstance check, but it also does not normalize or validate that the string is a finite decimal in a way that prevents extremely long digit strings; Decimal can handle them, but this may be an unintended acceptance of malformed or abusive input.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 5,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/deep",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/lead",
+        "wall_secs": 294.5
+      }
+    ]
+  },
+  "file_digests": {
+    "events.py": "1ed06a80d99fff4c00dee1347f8d3e27c9bf6f847fed2d30cf9207a2bca19faa",
+    "ledger.py": "1a5e7fb951e1e7ae15b85c202a462ecf2cba94a9bde8e7a6a296afb9c956266f"
+  }
+}

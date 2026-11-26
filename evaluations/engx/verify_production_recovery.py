@@ -33,8 +33,9 @@ def main():
                                           "aihost-llama-candidate*.service"], text=True)
     assert not any(" running " in line or " activating " in line for line in candidates.splitlines()), candidates
     health = request("/health?strict=true")
-    assert health["scheduler"]["available_workers"] == len(inputs["workers"]), health["scheduler"]
-    assert health["scheduler"]["configured_workers"] == len(inputs["workers"])
+    expected_workers = int(inputs.get("expected_gateway_workers", len(inputs["workers"])))
+    assert health["scheduler"]["available_workers"] == expected_workers, health["scheduler"]
+    assert health["scheduler"]["configured_workers"] == expected_workers
     registry_digest = hashlib.sha256(Path("/etc/local-ai/orchestrator/clients.json").read_bytes()).hexdigest()
     gateway = subprocess.check_output(["systemctl", "show", "aihost-orchestrator-gateway.service",
                                        "--property=ActiveState,WorkingDirectory"], text=True)

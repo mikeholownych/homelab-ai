@@ -1,0 +1,208 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H04-build-order",
+  "rep": 1,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 2,
+  "metrics": {
+    "wall_secs": 895.2,
+    "model_secs": 633.9,
+    "tokens": 17997,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 315.9,
+      "prompt_tokens": 569,
+      "completion_tokens": 4924
+    },
+    {
+      "attempt": 2,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 318.0,
+      "prompt_tokens": 1796,
+      "completion_tokens": 4893
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "cycle-extraction-can-fail-on-non-cycle-remaining-nodes",
+        "file": "graph.py",
+        "claim": "After Kahn processing, the code assumes the remaining unprocessed nodes are exactly the cycle nodes. If hidden tests include graphs with cycles plus nodes that remain unprocessed but are not on the cycle (e.g. nodes reachable from a cycle with outgoing edges to other remaining nodes), the peel step may leave non-cycle nodes in `unprocessed`. Then `start = min(unprocessed)` may not be on the cycle, and the cycle walk can fail or produce an invalid cycle.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-extraction-empty-generator",
+        "file": "graph.py",
+        "claim": "The cycle extraction uses `min(dep for dep in dependency_sets[current] if dep in unprocessed)` without checking that such a dependency exists. If `unprocessed` contains a node with no dependency in `unprocessed` (which can happen if the peel step does not fully reduce to the cycle), this raises `ValueError` instead of `CycleError`.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-not-guaranteed-lexicographically-smallest-start",
+        "file": "graph.py",
+        "claim": "The cycle is started at `min(unprocessed)`, but if `unprocessed` includes non-cycle nodes, the returned cycle may not start with the lexicographically smallest target on the actual cycle. This violates the docstring requirement.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-traversal-can-loop-before-returning-to-start",
+        "file": "graph.py",
+        "claim": "The cycle walk always chooses the lexicographically smallest remaining dependency. If the remaining graph contains multiple cycles or non-cycle nodes with dependencies, this traversal can enter a cycle that does not return to `start`, or can loop indefinitely without appending `start`, causing an infinite loop or incorrect cycle output.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-error-cycle-may-not-be-simple",
+        "file": "graph.py",
+        "claim": "The cycle extraction does not detect repeated nodes other than the final return to `start`. If the traversal revisits a node before returning to `start`, the raised `CycleError` cycle may contain a repeated intermediate target and not represent a simple cycle as specified.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "peel-queue-stale-entries",
+        "file": "graph.py",
+        "claim": "The peel queue can contain stale entries because nodes are pushed when `dependent_count` becomes zero, but `dependent_count` can later be decremented below zero if a node is processed multiple times or if stale queue entries are not guarded correctly. The code only checks `target not in unprocessed`, not whether `dependent_count[target] == 0`, so it may remove nodes incorrectly.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "cycle-error-message-not-specified",
+        "file": "graph.py",
+        "claim": "The `CycleError` message format is invented and not specified by the docstring. If hidden tests assert on the exception message, this implementation may fail.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 7,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 2,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 255.1
+      }
+    ]
+  },
+  "file_digests": {
+    "graph.py": "b2ceeaa7dd63c9064aa233942af7360f006ae17e82d1062cfbaa296c23777e00"
+  }
+}

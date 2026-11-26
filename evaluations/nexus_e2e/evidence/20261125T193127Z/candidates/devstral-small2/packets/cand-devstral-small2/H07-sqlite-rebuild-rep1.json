@@ -1,0 +1,100 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "cand-devstral-small2-20261126T033746Z",
+  "arm": "cand-devstral-small2",
+  "task_id": "H07-sqlite-rebuild",
+  "rep": 1,
+  "accepted": false,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": false,
+    "stage": "hidden",
+    "summary": "E   AssertionError: [(1, 1, 1234), (2, 1, 101), (3, 2, 31), (4, 2, -101), (5, None, 1999), (6, 1, 500), ...]\nE   assert [(1, 1, 1234)... 1, 500), ...] == [(1, 1, 1234)... 1, 500), ...]\nE     \nE     At index 2 diff: (3, 2, 31) != (3, 2, 30)\nE     Use -v to get more diff"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H02-cron-next",
+      "H03-json-patch",
+      "H07-sqlite-rebuild",
+      "H08-glob"
+    ]
+  },
+  "serving": {
+    "alias": "candidate/devstral-small2",
+    "before": {
+      "alias": "candidate/devstral-small2",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "candidate-devstral-small2",
+      "pool": "candidate-devstral",
+      "model_id": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M",
+      "artifact_digest": "sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "candidate/devstral-small2",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 0,
+        "mode": "off"
+      },
+      "worker_id": "candidate-devstral-small2",
+      "pool": "candidate-devstral",
+      "model_id": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M",
+      "artifact_digest": "sha256:d14ba9edee1bb4c4996a726deb81e49ae81800a3216f0774634238c380aee496",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 3,
+  "metrics": {
+    "wall_secs": 70.2,
+    "model_secs": 66.3,
+    "tokens": 6242
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": false,
+      "stage": "visible",
+      "termination": "stop",
+      "wall_secs": 21.9,
+      "prompt_tokens": 722,
+      "completion_tokens": 591,
+      "finish": "stop"
+    },
+    {
+      "attempt": 2,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 22.1,
+      "prompt_tokens": 1455,
+      "completion_tokens": 611,
+      "finish": "stop"
+    },
+    {
+      "attempt": 3,
+      "ok": false,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 22.3,
+      "prompt_tokens": 2252,
+      "completion_tokens": 611,
+      "finish": "stop"
+    }
+  ],
+  "review": null
+}

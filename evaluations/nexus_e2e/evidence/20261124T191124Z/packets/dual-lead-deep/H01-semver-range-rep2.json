@@ -1,0 +1,231 @@
+{
+  "schema": "nexus-e2e-evidence-packet/v1",
+  "run_id": "dual-lead-deep-20261124T191124Z",
+  "arm": "dual-lead-deep",
+  "task_id": "H01-semver-range",
+  "rep": 2,
+  "accepted": true,
+  "oracle": {
+    "kind": "engx-hidden",
+    "pass": true,
+    "stage": "hidden",
+    "summary": "all hidden tests pass"
+  },
+  "corpus": {
+    "id": "engx-hard",
+    "digest": "a2e49329628243ed",
+    "max_attempts": 3,
+    "max_tokens": 8192,
+    "temperature": 0,
+    "task_ids": [
+      "H01-semver-range",
+      "H02-cron-next",
+      "H03-json-patch",
+      "H04-build-order",
+      "H05-retry",
+      "H06-allocate",
+      "H07-sqlite-rebuild",
+      "H08-glob",
+      "H09-ledger-root-cause",
+      "H10-perf-report"
+    ]
+  },
+  "serving": {
+    "implementer": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "reviewer": {
+      "alias": "engineering/deep",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-deep-worker2",
+      "pool": "deep",
+      "model_id": "Qwen3.8-Flash-Next-GSQ-RCO-IQ1_M",
+      "artifact_digest": "sha256:935587187e4b734ef8bbdf37ce19c897cc63830f59135715c7d1458c12faf6a2",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "IQ1_M - 1.75 bpw"
+    },
+    "alias": "engineering/lead",
+    "before": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "after": {
+      "alias": "engineering/lead",
+      "context_length": 65536,
+      "reasoning": {
+        "budget": 4096,
+        "mode": "on"
+      },
+      "worker_id": "b0-live-llama-worker1",
+      "pool": "lead",
+      "model_id": "Qwen3.8-27B-UD-Q4_K_M",
+      "artifact_digest": "sha256:322e194ff79741c7baa497c240f677f54b201b0efab44ca8e50f122b39123482",
+      "engine": "llama.cpp",
+      "engine_version": "b0-unknown",
+      "quantization": "Q4_K - Medium"
+    },
+    "identity_stable": true
+  },
+  "attempts": 1,
+  "metrics": {
+    "wall_secs": 640.1,
+    "model_secs": 352.9,
+    "tokens": 13097,
+    "worker_calls": 2
+  },
+  "history": [
+    {
+      "attempt": 1,
+      "ok": true,
+      "stage": "hidden",
+      "termination": "stop",
+      "wall_secs": 352.9,
+      "prompt_tokens": 852,
+      "completion_tokens": 5494
+    }
+  ],
+  "review": {
+    "ran": true,
+    "clean": true,
+    "escape": false,
+    "regression": false,
+    "repair_ran": false,
+    "findings": [
+      {
+        "id": "caret-upper-bound-prerelease",
+        "file": "semver.py",
+        "claim": "Caret ranges with prerelease comparator versions use an upper bound that ignores prerelease semantics and can incorrectly exclude valid prerelease versions. For example, `^1.2.3-alpha` should allow prerelease versions up to but below `2.0.0`, but the code compares against `(2,0,0,None)` and prerelease versions are ordered below release versions, so valid prerelease versions may fail.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "tilde-upper-bound-prerelease",
+        "file": "semver.py",
+        "claim": "Tilde ranges with prerelease comparator versions use an upper bound that ignores prerelease semantics and can incorrectly exclude valid prerelease versions. For example, `~1.2.3-alpha` should allow prerelease versions below `1.3.0`, but the code compares against `(1,3,0,None)` and prerelease versions are ordered below release versions, so valid prerelease versions may fail.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "prerelease-range-rule-too-strict",
+        "file": "semver.py",
+        "claim": "The prerelease matching rule requires a comparator with the exact same major/minor/patch as the tested prerelease version. This rejects valid semver range cases where a prerelease version is matched by a range containing a prerelease comparator at a different patch level, such as `1.2.3-alpha` satisfying `>=1.2.2-alpha <1.2.4`.",
+        "severity": "high",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-empty-string",
+        "file": "semver.py",
+        "claim": "An empty range string is rejected, but semver range syntax commonly treats an empty range as matching all versions. If the docstring specifies that behavior, this implementation is incorrect.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-whitespace-only",
+        "file": "semver.py",
+        "claim": "A range containing only whitespace is rejected, but semver range syntax commonly treats whitespace-only ranges as matching all versions. If the docstring specifies that behavior, this implementation is incorrect.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "comparator-operator-spacing",
+        "file": "semver.py",
+        "claim": "Comparators with whitespace between the operator and version, such as `>= 1.2.3`, are rejected because `_COMPARATOR_RE` requires the operator and version to be adjacent. Semver range syntax commonly allows this spacing.",
+        "severity": "medium",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "version-pattern-leading-zeros",
+        "file": "semver.py",
+        "claim": "The version pattern rejects numeric identifiers with leading zeros, but if the docstring or tests expect semver-like parsing that tolerates leading zeros in major/minor/patch, this implementation is too strict.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "prerelease-identifier-hyphen-only",
+        "file": "semver.py",
+        "claim": "The prerelease identifier pattern accepts identifiers consisting only of hyphens, such as `-`, which may not be valid under the specified semver grammar if identifiers must contain at least one alphanumeric character.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "unicode-digit-comparison",
+        "file": "semver.py",
+        "claim": "`_is_numeric_identifier` uses `str.isdigit()`, which can return true for non-ASCII Unicode digits. Although the regex only parses ASCII digits, this helper is unsafe if reused or if inputs bypass the regex.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "range-split-||-without-spaces",
+        "file": "semver.py",
+        "claim": "Range parsing splits on `||` without requiring surrounding whitespace, but semver range syntax may require whitespace around `||`. If the docstring specifies strict whitespace requirements, this implementation accepts invalid ranges.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      },
+      {
+        "id": "comparator-regex-operator-precedence",
+        "file": "semver.py",
+        "claim": "The comparator regex operator alternation `>=|<=|=|>|<|\\^|~` is ordered so that `>=` and `<=` are matched before `>` and `<`, which is correct, but the optional operator group can also match an empty string before a version starting with digits. This is not a defect by itself, but it makes the regex fragile if the version pattern is changed.",
+        "severity": "low",
+        "status": "dropped",
+        "investigation": "no deterministic repro; dropped (not repaired)"
+      }
+    ],
+    "supported": 0,
+    "refuted": 0,
+    "dropped": 11,
+    "calls": [
+      {
+        "role": "implement",
+        "alias": "engineering/lead",
+        "attempts": 1,
+        "success": true
+      },
+      {
+        "role": "review",
+        "alias": "engineering/deep",
+        "wall_secs": 275.0
+      }
+    ]
+  },
+  "file_digests": {
+    "semver.py": "3cb560136360f8b3cd208cf99b671ed4870c365c51e0b3a46ad53910e25dc08c"
+  }
+}

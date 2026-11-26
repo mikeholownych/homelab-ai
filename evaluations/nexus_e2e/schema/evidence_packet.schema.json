@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aihost.local/schemas/nexus-e2e-evidence-packet/v1",
+  "title": "NexusE2EEvidencePacket",
+  "type": "object",
+  "required": [
+    "schema",
+    "run_id",
+    "arm",
+    "task_id",
+    "rep",
+    "accepted",
+    "oracle",
+    "corpus",
+    "serving",
+    "attempts",
+    "metrics"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "schema": {
+      "const": "nexus-e2e-evidence-packet/v1"
+    },
+    "run_id": { "type": "string", "minLength": 1 },
+    "arm": {
+      "type": "string",
+      "enum": [
+        "solo-deep",
+        "solo-lead",
+        "solo-rocm",
+        "dual-deep-lead",
+        "dual-lead-deep",
+        "triple",
+        "cand-devstral-small2",
+        "cand-glm47-flash"
+      ]
+    },
+    "task_id": { "type": "string" },
+    "rep": { "type": "integer", "minimum": 1 },
+    "accepted": {
+      "type": "boolean",
+      "description": "True only when oracle.pass and packet is complete. Never model self-grade."
+    },
+    "oracle": {
+      "type": "object",
+      "required": ["kind", "pass"],
+      "properties": {
+        "kind": { "type": "string", "enum": ["engx-hidden", "nexus-verifier"] },
+        "pass": { "type": "boolean" },
+        "stage": { "type": ["string", "null"] },
+        "summary": { "type": ["string", "null"] }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "required": ["id", "digest"],
+      "properties": {
+        "id": { "type": "string" },
+        "digest": { "type": "string" },
+        "max_attempts": { "type": "integer" },
+        "max_tokens": { "type": "integer" },
+        "temperature": { "type": "number" }
+      }
+    },
+    "serving": {
+      "type": "object",
+      "required": ["alias", "before", "after"],
+      "properties": {
+        "alias": { "type": "string" },
+        "before": { "type": "object" },
+        "after": { "type": "object" },
+        "identity_stable": { "type": "boolean" }
+      }
+    },
+    "attempts": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "wall_secs": { "type": ["number", "null"] },
+        "model_secs": { "type": ["number", "null"] },
+        "tokens": { "type": ["integer", "null"] }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "review": {
+      "type": ["object", "null"],
+      "description": "Stage 2+ only; findings are investigated, never voted."
+    }
+  }
+}

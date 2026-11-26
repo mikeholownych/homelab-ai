@@ -1,0 +1,910 @@
+{
+  "schema": "nexus-e2e-complementarity/v1",
+  "arms": [
+    {
+      "arm": "solo-lead",
+      "source": "evaluations/nexus_e2e/evidence/20261124T191124Z/solo-lead.json",
+      "tasks": 10,
+      "n_trials": 30,
+      "accepted": 29,
+      "accepted_rate": 96.7,
+      "per_task": {
+        "H01-semver-range": "3/3",
+        "H02-cron-next": "3/3",
+        "H03-json-patch": "2/3",
+        "H04-build-order": "3/3",
+        "H05-retry": "3/3",
+        "H06-allocate": "3/3",
+        "H07-sqlite-rebuild": "3/3",
+        "H08-glob": "3/3",
+        "H09-ledger-root-cause": "3/3",
+        "H10-perf-report": "3/3"
+      }
+    },
+    {
+      "arm": "solo-deep",
+      "source": "evaluations/nexus_e2e/evidence/20261124T191124Z/solo-deep.json",
+      "tasks": 10,
+      "n_trials": 30,
+      "accepted": 26,
+      "accepted_rate": 86.7,
+      "per_task": {
+        "H01-semver-range": "3/3",
+        "H02-cron-next": "2/3",
+        "H03-json-patch": "3/3",
+        "H04-build-order": "3/3",
+        "H05-retry": "3/3",
+        "H06-allocate": "3/3",
+        "H07-sqlite-rebuild": "0/3",
+        "H08-glob": "3/3",
+        "H09-ledger-root-cause": "3/3",
+        "H10-perf-report": "3/3"
+      }
+    },
+    {
+      "arm": "solo-rocm",
+      "source": "evaluations/nexus_e2e/evidence/20261124T191124Z/solo-rocm.json",
+      "tasks": 10,
+      "n_trials": 30,
+      "accepted": 26,
+      "accepted_rate": 86.7,
+      "per_task": {
+        "H01-semver-range": "3/3",
+        "H02-cron-next": "2/3",
+        "H03-json-patch": "3/3",
+        "H04-build-order": "3/3",
+        "H05-retry": "3/3",
+        "H06-allocate": "3/3",
+        "H07-sqlite-rebuild": "3/3",
+        "H08-glob": "0/3",
+        "H09-ledger-root-cause": "3/3",
+        "H10-perf-report": "3/3"
+      }
+    },
+    {
+      "arm": "solo-lead-1",
+      "source": "evaluations/nexus_e2e/evidence/20261125T193127Z/solo-lead.json",
+      "tasks": 10,
+      "n_trials": 10,
+      "accepted": 8,
+      "accepted_rate": 80.0,
+      "per_task": {
+        "H01-semver-range": "1/1",
+        "H02-cron-next": "1/1",
+        "H03-json-patch": "0/1",
+        "H04-build-order": "1/1",
+        "H05-retry": "1/1",
+        "H06-allocate": "1/1",
+        "H07-sqlite-rebuild": "1/1",
+        "H08-glob": "0/1",
+        "H09-ledger-root-cause": "1/1",
+        "H10-perf-report": "1/1"
+      }
+    },
+    {
+      "arm": "bon3-lead",
+      "source": "evaluations/nexus_e2e/evidence/20261125T193127Z/bon3-lead.json",
+      "tasks": 10,
+      "n_trials": 10,
+      "accepted": 9,
+      "accepted_rate": 90.0,
+      "per_task": {
+        "H01-semver-range": "1/1",
+        "H02-cron-next": "1/1",
+        "H03-json-patch": "1/1",
+        "H04-build-order": "1/1",
+        "H05-retry": "1/1",
+        "H06-allocate": "1/1",
+        "H07-sqlite-rebuild": "1/1",
+        "H08-glob": "0/1",
+        "H09-ledger-root-cause": "1/1",
+        "H10-perf-report": "1/1"
+      }
+    },
+    {
+      "arm": "cand-devstral-small2",
+      "source": "evaluations/nexus_e2e/evidence/20261125T193127Z/candidates/devstral-small2/cand-devstral-small2.json",
+      "tasks": 4,
+      "n_trials": 4,
+      "accepted": 0,
+      "accepted_rate": 0.0,
+      "per_task": {
+        "H02-cron-next": "0/1",
+        "H03-json-patch": "0/1",
+        "H07-sqlite-rebuild": "0/1",
+        "H08-glob": "0/1"
+      }
+    },
+    {
+      "arm": "cand-glm47-flash",
+      "source": "evaluations/nexus_e2e/evidence/20261125T193127Z/candidates/glm47-flash/cand-glm47-flash.json",
+      "tasks": 4,
+      "n_trials": 4,
+      "accepted": 0,
+      "accepted_rate": 0.0,
+      "per_task": {
+        "H02-cron-next": "0/1",
+        "H03-json-patch": "0/1",
+        "H07-sqlite-rebuild": "0/1",
+        "H08-glob": "0/1"
+      }
+    }
+  ],
+  "pairwise_trials": [
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "solo-deep",
+      "n_shared": 30,
+      "both_pass": 25,
+      "only_a": 4,
+      "only_b": 1,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 96.7,
+      "arm_b_shared_rate": 86.7,
+      "only_a_keys": [
+        "H02-cron-next#rep3",
+        "H07-sqlite-rebuild#rep1",
+        "H07-sqlite-rebuild#rep2",
+        "H07-sqlite-rebuild#rep3"
+      ],
+      "only_b_keys": [
+        "H03-json-patch#rep3"
+      ],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "solo-rocm",
+      "n_shared": 30,
+      "both_pass": 25,
+      "only_a": 4,
+      "only_b": 1,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 96.7,
+      "arm_b_shared_rate": 86.7,
+      "only_a_keys": [
+        "H02-cron-next#rep2",
+        "H08-glob#rep1",
+        "H08-glob#rep2",
+        "H08-glob#rep3"
+      ],
+      "only_b_keys": [
+        "H03-json-patch#rep3"
+      ],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "solo-lead-1",
+      "n_shared": 10,
+      "both_pass": 8,
+      "only_a": 2,
+      "only_b": 0,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 100.0,
+      "arm_b_shared_rate": 80.0,
+      "only_a_keys": [
+        "H03-json-patch#rep1",
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "bon3-lead",
+      "n_shared": 10,
+      "both_pass": 9,
+      "only_a": 1,
+      "only_b": 0,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 100.0,
+      "arm_b_shared_rate": 90.0,
+      "only_a_keys": [
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "cand-devstral-small2",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 4,
+      "only_b": 0,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 100.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1",
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "cand-glm47-flash",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 4,
+      "only_b": 0,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 100.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1",
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "solo-rocm",
+      "n_shared": 30,
+      "both_pass": 22,
+      "only_a": 4,
+      "only_b": 4,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 86.7,
+      "arm_b_shared_rate": 86.7,
+      "only_a_keys": [
+        "H02-cron-next#rep2",
+        "H08-glob#rep1",
+        "H08-glob#rep2",
+        "H08-glob#rep3"
+      ],
+      "only_b_keys": [
+        "H02-cron-next#rep3",
+        "H07-sqlite-rebuild#rep1",
+        "H07-sqlite-rebuild#rep2",
+        "H07-sqlite-rebuild#rep3"
+      ],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "solo-lead-1",
+      "n_shared": 10,
+      "both_pass": 7,
+      "only_a": 2,
+      "only_b": 1,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 90.0,
+      "arm_b_shared_rate": 80.0,
+      "only_a_keys": [
+        "H03-json-patch#rep1",
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "bon3-lead",
+      "n_shared": 10,
+      "both_pass": 8,
+      "only_a": 1,
+      "only_b": 1,
+      "both_fail": 0,
+      "beta": 0.0,
+      "union_pass_rate": 100.0,
+      "arm_a_shared_rate": 90.0,
+      "arm_b_shared_rate": 90.0,
+      "only_a_keys": [
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "both_fail_keys": []
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "cand-devstral-small2",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 3,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.25,
+      "union_pass_rate": 75.0,
+      "arm_a_shared_rate": 75.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H07-sqlite-rebuild#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "cand-glm47-flash",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 3,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.25,
+      "union_pass_rate": 75.0,
+      "arm_a_shared_rate": 75.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H08-glob#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H07-sqlite-rebuild#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "solo-lead-1",
+      "n_shared": 10,
+      "both_pass": 8,
+      "only_a": 1,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.1,
+      "union_pass_rate": 90.0,
+      "arm_a_shared_rate": 90.0,
+      "arm_b_shared_rate": 80.0,
+      "only_a_keys": [
+        "H03-json-patch#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "bon3-lead",
+      "n_shared": 10,
+      "both_pass": 9,
+      "only_a": 0,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.1,
+      "union_pass_rate": 90.0,
+      "arm_a_shared_rate": 90.0,
+      "arm_b_shared_rate": 90.0,
+      "only_a_keys": [],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "cand-devstral-small2",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 3,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.25,
+      "union_pass_rate": 75.0,
+      "arm_a_shared_rate": 75.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "cand-glm47-flash",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 3,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.25,
+      "union_pass_rate": 75.0,
+      "arm_a_shared_rate": 75.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-lead-1",
+      "arm_b": "bon3-lead",
+      "n_shared": 10,
+      "both_pass": 8,
+      "only_a": 0,
+      "only_b": 1,
+      "both_fail": 1,
+      "beta": 0.1,
+      "union_pass_rate": 90.0,
+      "arm_a_shared_rate": 80.0,
+      "arm_b_shared_rate": 90.0,
+      "only_a_keys": [],
+      "only_b_keys": [
+        "H03-json-patch#rep1"
+      ],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-lead-1",
+      "arm_b": "cand-devstral-small2",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 2,
+      "only_b": 0,
+      "both_fail": 2,
+      "beta": 0.5,
+      "union_pass_rate": 50.0,
+      "arm_a_shared_rate": 50.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H03-json-patch#rep1",
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "solo-lead-1",
+      "arm_b": "cand-glm47-flash",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 2,
+      "only_b": 0,
+      "both_fail": 2,
+      "beta": 0.5,
+      "union_pass_rate": 50.0,
+      "arm_a_shared_rate": 50.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H03-json-patch#rep1",
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "bon3-lead",
+      "arm_b": "cand-devstral-small2",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 3,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.25,
+      "union_pass_rate": 75.0,
+      "arm_a_shared_rate": 75.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "bon3-lead",
+      "arm_b": "cand-glm47-flash",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 3,
+      "only_b": 0,
+      "both_fail": 1,
+      "beta": 0.25,
+      "union_pass_rate": 75.0,
+      "arm_a_shared_rate": 75.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1"
+      ],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H08-glob#rep1"
+      ]
+    },
+    {
+      "arm_a": "cand-devstral-small2",
+      "arm_b": "cand-glm47-flash",
+      "n_shared": 4,
+      "both_pass": 0,
+      "only_a": 0,
+      "only_b": 0,
+      "both_fail": 4,
+      "beta": 1.0,
+      "union_pass_rate": 0.0,
+      "arm_a_shared_rate": 0.0,
+      "arm_b_shared_rate": 0.0,
+      "only_a_keys": [],
+      "only_b_keys": [],
+      "both_fail_keys": [
+        "H02-cron-next#rep1",
+        "H03-json-patch#rep1",
+        "H07-sqlite-rebuild#rep1",
+        "H08-glob#rep1"
+      ]
+    }
+  ],
+  "pairwise_tasks_any_rep": [
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "solo-deep",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 9,
+      "only_a_ever": [
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "solo-rocm",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 9,
+      "only_a_ever": [
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "solo-lead-1",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 8,
+      "only_a_ever": [
+        "H03-json-patch",
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "bon3-lead",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 9,
+      "only_a_ever": [
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "cand-devstral-small2",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild",
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-lead",
+      "arm_b": "cand-glm47-flash",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild",
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "solo-rocm",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 8,
+      "only_a_ever": [
+        "H08-glob"
+      ],
+      "only_b_ever": [
+        "H07-sqlite-rebuild"
+      ],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "solo-lead-1",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 7,
+      "only_a_ever": [
+        "H03-json-patch",
+        "H08-glob"
+      ],
+      "only_b_ever": [
+        "H07-sqlite-rebuild"
+      ],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "bon3-lead",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 8,
+      "only_a_ever": [
+        "H08-glob"
+      ],
+      "only_b_ever": [
+        "H07-sqlite-rebuild"
+      ],
+      "neither_ever": [],
+      "task_beta": 0.0,
+      "task_union_rate": 100.0
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "cand-devstral-small2",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H07-sqlite-rebuild"
+      ],
+      "task_beta": 0.25,
+      "task_union_rate": 75.0
+    },
+    {
+      "arm_a": "solo-deep",
+      "arm_b": "cand-glm47-flash",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H08-glob"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H07-sqlite-rebuild"
+      ],
+      "task_beta": 0.25,
+      "task_union_rate": 75.0
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "solo-lead-1",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 8,
+      "only_a_ever": [
+        "H03-json-patch"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.1,
+      "task_union_rate": 90.0
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "bon3-lead",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 9,
+      "only_a_ever": [],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.1,
+      "task_union_rate": 90.0
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "cand-devstral-small2",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.25,
+      "task_union_rate": 75.0
+    },
+    {
+      "arm_a": "solo-rocm",
+      "arm_b": "cand-glm47-flash",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.25,
+      "task_union_rate": 75.0
+    },
+    {
+      "arm_a": "solo-lead-1",
+      "arm_b": "bon3-lead",
+      "n_shared_tasks": 10,
+      "both_ever_pass": 8,
+      "only_a_ever": [],
+      "only_b_ever": [
+        "H03-json-patch"
+      ],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.1,
+      "task_union_rate": 90.0
+    },
+    {
+      "arm_a": "solo-lead-1",
+      "arm_b": "cand-devstral-small2",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H03-json-patch",
+        "H08-glob"
+      ],
+      "task_beta": 0.5,
+      "task_union_rate": 50.0
+    },
+    {
+      "arm_a": "solo-lead-1",
+      "arm_b": "cand-glm47-flash",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H03-json-patch",
+        "H08-glob"
+      ],
+      "task_beta": 0.5,
+      "task_union_rate": 50.0
+    },
+    {
+      "arm_a": "bon3-lead",
+      "arm_b": "cand-devstral-small2",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.25,
+      "task_union_rate": 75.0
+    },
+    {
+      "arm_a": "bon3-lead",
+      "arm_b": "cand-glm47-flash",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild"
+      ],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H08-glob"
+      ],
+      "task_beta": 0.25,
+      "task_union_rate": 75.0
+    },
+    {
+      "arm_a": "cand-devstral-small2",
+      "arm_b": "cand-glm47-flash",
+      "n_shared_tasks": 4,
+      "both_ever_pass": 0,
+      "only_a_ever": [],
+      "only_b_ever": [],
+      "neither_ever": [
+        "H02-cron-next",
+        "H03-json-patch",
+        "H07-sqlite-rebuild",
+        "H08-glob"
+      ],
+      "task_beta": 1.0,
+      "task_union_rate": 0.0
+    }
+  ]
+}
