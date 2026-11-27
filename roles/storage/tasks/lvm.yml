@@ -167,7 +167,7 @@
     path: "{{ storage_lvm.mount_path }}"
     src: "UUID={{ storage_lvm_uuid.stdout | trim }}"
     fstype: "{{ storage_lvm.fstype }}"
-    opts: defaults
+    opts: "{{ storage_lvm.mount_opts | default(storage_lvm_default_mount_opts) }}"
     state: mounted
   when:
     - storage_manage_runtime | bool
@@ -180,6 +180,7 @@
     mode: "{{ omit }}"
   loop:
     - "{{ storage_lvm.mount_path }}/models"
+    - "{{ storage_lvm.mount_path }}/models/experts"
     - "{{ storage_lvm.mount_path }}/cache"
     - "{{ storage_lvm.mount_path }}/evidence"
   when:

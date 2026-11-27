@@ -16,6 +16,18 @@ os_tuning_install_discovery_packages: true
 os_tuning_discovery_packages:
   - numactl
 
+# Optional NVMe MoE streaming build & diagnostic dependencies (Ubuntu 26.04).
+os_tuning_install_nvme_streaming_packages: false
+os_tuning_nvme_streaming_packages:
+  - nvme-cli
+  - fio
+  - liburing-dev
+  - cmake
+  - ninja-build
+  - pkg-config
+  - libvulkan-dev
+  - vulkan-tools
+
 # Install locations for role helpers.
 os_tuning_install_dir: /usr/local/libexec
 os_tuning_collector_path: /usr/local/libexec/local-ai-collect-tuning
@@ -43,6 +55,7 @@ os_tuning_allowed_sysctl_keys:
   - vm.dirty_ratio
   - vm.dirty_background_ratio
   - vm.zone_reclaim_mode
+  - vm.vfs_cache_pressure
 os_tuning_allowed_boot_parameter_patterns:
   - '^transparent_hugepage=(always|madvise|never)$'
   - '^transparent_hugepage_defrag=(always|defer|defer\+madvise|madvise|never)$'

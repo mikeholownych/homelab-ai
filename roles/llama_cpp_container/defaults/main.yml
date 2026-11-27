@@ -48,3 +48,8 @@ llama_cpp_container_candidate_profiles: {}
 # false to remove --slot-save-path at the next unit change.
 llama_cpp_container_slot_persistence: true
 llama_cpp_container_slot_dir: "{{ llama_cpp_container_home }}/slots"
+
+# Optional cgroup v2 memory guardrails for large NVMe MoE streaming workers.
+# Set per-worker memory_high / memory_max (e.g., "44G" / "52G") or enable defaults
+# below to cap OS page cache growth and prevent host OOM kills on 64 GiB systems.
+llama_cpp_container_nvme_expert_dir: /var/lib/local-ai/models/experts

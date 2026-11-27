@@ -31,6 +31,8 @@ _LLAMA = {
     "prompt_tokens_cached_total": ("llamacpp:prompt_tokens_cached_total",),
     "prompt_seconds_total": ("llamacpp:prompt_seconds_total",),
     "generation_seconds_total": ("llamacpp:tokens_predicted_seconds_total",),
+    "nvme_io_wait_ratio": ("homelab_ai_nvme_io_wait_ratio",),
+    "nvme_stream_bandwidth_bytes_per_sec": ("homelab_ai_nvme_stream_bandwidth_bytes_per_sec",),
 }
 _MAPS = {"vllm": _VLLM, "llama.cpp": _LLAMA}
 

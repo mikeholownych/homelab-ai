@@ -11,7 +11,12 @@
     mode: "0644"
   when:
     - os_tuning_apply_mutations | bool
-    - tuning_io.scheduler is not none or tuning_io.read_ahead_kb is not none
+    - >-
+      tuning_io.scheduler is not none
+      or tuning_io.read_ahead_kb is not none
+      or (tuning_io.nr_requests | default(none)) is not none
+      or (tuning_io.rq_affinity | default(none)) is not none
+      or (tuning_io.add_random | default(none)) is not none
   register: os_tuning_udev_rule
   notify: Reload udev rules for tuning
   vars:
@@ -24,7 +29,11 @@
     state: absent
   when:
     - os_tuning_apply_mutations | bool
-    - tuning_io.scheduler is none and tuning_io.read_ahead_kb is none
+    - tuning_io.scheduler is none
+    - tuning_io.read_ahead_kb is none
+    - (tuning_io.nr_requests | default(none)) is none
+    - (tuning_io.rq_affinity | default(none)) is none
+    - (tuning_io.add_random | default(none)) is none
   vars:
     tuning_io: "{{ os_tuning_config.os_tuning.io }}"
   tags: [tuning, io]
@@ -72,6 +81,72 @@
     - not ansible_check_mode
     - tuning_io.read_ahead_kb is not none
     - os_tuning_io_drifted_readahead | length > 0
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]
+
+- name: Apply runtime NVMe queue depth (nr_requests) on drifted devices
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > \"$2\""
+      - nvme-nr-requests-apply
+      - "{{ tuning_io.nr_requests }}"
+      - "/sys/block/{{ item }}/queue/nr_requests"
+  loop: "{{ os_tuning_io_drifted_nr_requests | default([]) }}"
+  loop_control:
+    label: "{{ item }}={{ tuning_io.nr_requests }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - (tuning_io.nr_requests | default(none)) is not none
+    - (os_tuning_io_drifted_nr_requests | default([])) | length > 0
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]
+
+- name: Apply runtime NVMe completion affinity (rq_affinity) on drifted devices
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > \"$2\""
+      - nvme-rq-affinity-apply
+      - "{{ tuning_io.rq_affinity }}"
+      - "/sys/block/{{ item }}/queue/rq_affinity"
+  loop: "{{ os_tuning_io_drifted_rq_affinity | default([]) }}"
+  loop_control:
+    label: "{{ item }}={{ tuning_io.rq_affinity }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - (tuning_io.rq_affinity | default(none)) is not none
+    - (os_tuning_io_drifted_rq_affinity | default([])) | length > 0
+  vars:
+    tuning_io: "{{ os_tuning_config.os_tuning.io }}"
+  tags: [tuning, io]
+
+- name: Apply runtime NVMe entropy sampling (add_random) on drifted devices
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -ec
+      - "printf '%s\\n' \"$1\" > \"$2\""
+      - nvme-add-random-apply
+      - "{{ tuning_io.add_random }}"
+      - "/sys/block/{{ item }}/queue/add_random"
+  loop: "{{ os_tuning_io_drifted_add_random | default([]) }}"
+  loop_control:
+    label: "{{ item }}={{ tuning_io.add_random }}"
+  changed_when: true
+  when:
+    - os_tuning_apply_mutations | bool
+    - not ansible_check_mode
+    - (tuning_io.add_random | default(none)) is not none
+    - (os_tuning_io_drifted_add_random | default([])) | length > 0
   vars:
     tuning_io: "{{ os_tuning_config.os_tuning.io }}"
   tags: [tuning, io]

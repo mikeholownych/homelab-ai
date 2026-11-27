@@ -165,6 +165,24 @@ def inference() -> dict:
     b.timeseries("Prompt complexity tier distribution (/s)", "Inference request rate segmented by evaluated prompt complexity tier (simple, medium, complex).",
                  [('(sum by (tier) (rate(aihost_requests_by_complexity_tier_total[5m]))) or label_replace(vector(0), "tier", "idle", "", "")', "tier: {{tier}}")], unit="reqps", stack=True, no_data_text="0 (idle)")
 
+    b.row("NVMe MoE Expert Streaming")
+    b.timeseries("MoE expert cache hit ratio (5m)", "Share of routed MoE expert lookups served from VRAM/RAM cache without an NVMe direct read.",
+                 [(f"(aihost:moe_expert_cache_hit_ratio:rate5m{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}} {{model}}")],
+                 unit="percentunit", min_=0, max_=1, no_data_text="0 (bypass / idle)")
+    b.timeseries("MoE expert cache hits vs misses (/s)", "Rate of Tier-0/Tier-1 expert cache hits versus Tier-2 NVMe direct-I/O cache misses.",
+                 [(f"(sum by (worker_id, tier) (rate(homelab_ai_moe_expert_cache_hits_total{{{W}}}[5m]))) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "hits {{worker_id}} ({{tier}})"),
+                  (f"(sum by (worker_id) (rate(homelab_ai_moe_expert_cache_misses_total{{{W}}}[5m]))) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "misses {{worker_id}}")],
+                 unit="ops", stack=True, no_data_text="0 (bypass / idle)")
+    b.timeseries("NVMe expert read latency p95 (5m)", "95th percentile direct-I/O read latency for cold routed experts from NVMe.",
+                 [(f"(aihost:nvme_expert_read_latency_seconds:p95_5m{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "p95 {{worker_id}} {{model}}")],
+                 unit="s", no_data_text="0 (bypass / idle)")
+    b.timeseries("NVMe stream bandwidth (bytes/s)", "Rolling effective NVMe expert-streaming read bandwidth per worker.",
+                 [(f"(homelab_ai_nvme_stream_bandwidth_bytes_per_sec{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}} {{model}}")],
+                 unit="Bps", no_data_text="0 (bypass / idle)")
+    b.timeseries("NVMe I/O wait ratio", "Fraction of routed layer execution time blocked on PCIe/NVMe expert I/O (feeds engine stall detection above 0.75).",
+                 [(f"(homelab_ai_nvme_io_wait_ratio{{{W}}}) or (sum by (worker_id) (0 * aihost_worker_info{{{W}}}))", "{{worker_id}} {{model}}")],
+                 unit="percentunit", min_=0, max_=1, no_data_text="0 (bypass / idle)")
+
     b.row("Production Lifecycle")
     b.stat("Evidence chain valid", "Release evidence chain verification state (1 = cryptographically valid, 0 = failed).",
            "min(aihost_evidence_chain_valid)", thresholds=[(None, "red"), (1, "green")])

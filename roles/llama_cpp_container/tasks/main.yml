@@ -4,7 +4,10 @@
     that:
       - llama_cpp_container_digest is match('^sha256:[0-9a-f]{64}$')
       - llama_cpp_container_workers | length > 0
-    fail_msg: llama.cpp workers require an image pinned by sha256 digest and at least one declared worker.
+      - llama_cpp_container_host == '127.0.0.1'
+    fail_msg: >-
+      llama.cpp workers require an image pinned by sha256 digest, at least one declared worker,
+      and strict loopback binding (llama_cpp_container_host == '127.0.0.1') behind orchestrator_gateway.
   when: llama_cpp_container_enabled | bool
 
 # BEGIN immutable candidate image selection

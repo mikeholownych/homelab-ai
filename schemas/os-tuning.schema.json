@@ -212,6 +212,24 @@
               "type": ["integer", "null"],
               "minimum": 0,
               "maximum": 16384
+            },
+            "nr_requests": {
+              "description": "NVMe queue depth (queue/nr_requests) for high-QD random MoE expert reads.",
+              "type": ["integer", "null"],
+              "minimum": 64,
+              "maximum": 4096
+            },
+            "rq_affinity": {
+              "description": "NVMe completion affinity (2 = complete on submitting CPU for low-latency direct I/O).",
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 2
+            },
+            "add_random": {
+              "description": "Disable entropy sampling on NVMe I/O completions (0) to eliminate hot-path lock contention.",
+              "type": ["integer", "null"],
+              "minimum": 0,
+              "maximum": 1
             }
           }
         },

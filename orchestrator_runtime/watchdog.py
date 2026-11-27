@@ -13,21 +13,53 @@ from dataclasses import dataclass, field
 
 
 class StallTracker:
-    """Per worker: how long has the engine been running work without any progress counter moving."""
+    """Per worker: how long has the engine been running work without progress or stalled on PCIe/NVMe I/O."""
 
     def __init__(self) -> None:
         self._state: dict[str, tuple[float, float]] = {}  # worker -> (progress value, time it last changed)
+        self._io_stall_since: dict[str, float] = {}  # worker -> time sustained PCIe/NVMe I/O wait began
 
-    def update(self, worker_id: str, now: float, running: float | None, progress: float | None) -> float:
-        """Seconds stalled. Unknown readings, an idle engine, or any progress reset the clock: never a guessed stall."""
+    def update(
+        self,
+        worker_id: str,
+        now: float,
+        running: float | None,
+        progress: float | None,
+        *,
+        nvme_io_wait_ratio: float | None = None,
+        nvme_io_wait_threshold: float = 0.75,
+        nvme_read_latency_s: float | None = None,
+        nvme_read_latency_threshold_s: float = 0.05,
+    ) -> float:
+        """Seconds stalled.
+
+        Combines token-progress stall detection with sustained PCIe/NVMe I/O wait stalls while
+        requests are running. Unknown readings or an idle engine reset both clocks cleanly.
+        """
         if running is None or progress is None or running <= 0:
             self._state.pop(worker_id, None)
+            self._io_stall_since.pop(worker_id, None)
             return 0.0
+
         last = self._state.get(worker_id)
         if last is None or progress != last[0]:
             self._state[worker_id] = (progress, now)
-            return 0.0
-        return max(0.0, now - last[1])
+            progress_stall_s = 0.0
+        else:
+            progress_stall_s = max(0.0, now - last[1])
+
+        io_stalled = (
+            (nvme_io_wait_ratio is not None and nvme_io_wait_ratio >= nvme_io_wait_threshold)
+            or (nvme_read_latency_s is not None and nvme_read_latency_s >= nvme_read_latency_threshold_s)
+        )
+        if io_stalled:
+            since = self._io_stall_since.setdefault(worker_id, now)
+            io_stall_s = max(0.0, now - since)
+        else:
+            self._io_stall_since.pop(worker_id, None)
+            io_stall_s = 0.0
+
+        return max(progress_stall_s, io_stall_s)
 
     def unresponsive(self, worker_id: str, now: float) -> float:
         """The engine accepted the connection but did not answer in time (a wedged main loop answers /metrics no better than
@@ -40,6 +72,7 @@ class StallTracker:
 
     def forget(self, worker_id: str) -> None:
         self._state.pop(worker_id, None)
+        self._io_stall_since.pop(worker_id, None)
 
 
 class Action(str, enum.Enum):

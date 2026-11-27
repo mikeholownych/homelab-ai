@@ -488,6 +488,15 @@ class HealthManager:
                 metric.set(float(value), **labels)
             else:
                 metric.remove(**labels)
+        # Re-export NVMe MoE streaming gauges when reported by the worker engine.
+        model_label = str(worker_record.get("model_id") or worker_record.get("public_model_id") or "unknown")
+        nvme_labels = {"worker_id": worker_record["worker_id"], "model": model_label}
+        bw = stats.get("nvme_stream_bandwidth_bytes_per_sec")
+        if isinstance(bw, (int, float)) and not isinstance(bw, bool):
+            self.metrics.nvme_stream_bandwidth_bytes_per_sec.set(float(bw), **nvme_labels)
+        io_wait = stats.get("nvme_io_wait_ratio")
+        if isinstance(io_wait, (int, float)) and not isinstance(io_wait, bool):
+            self.metrics.nvme_io_wait_ratio.set(float(io_wait), **nvme_labels)
 
     @staticmethod
     def _is_timeout(exc: BaseException) -> bool:
@@ -511,12 +520,20 @@ class HealthManager:
     _PROGRESS_KEYS = ("prompt_tokens_in_flight", "generation_tokens_in_flight", "prompt_tokens_total", "generation_tokens_total")
 
     def _export_stall(self, worker_id: str, stats: dict[str, Any], labels: dict[str, str]) -> None:
-        """Watchdog input: how long the engine has been running work without any progress counter moving."""
+        """Watchdog input: how long the engine has been running work without progress or stalled on PCIe/NVMe I/O."""
         values = [stats.get(k) for k in self._PROGRESS_KEYS]
         known = [float(v) for v in values if isinstance(v, (int, float)) and not isinstance(v, bool)]
         running = stats.get("requests_running")
         running = float(running) if isinstance(running, (int, float)) and not isinstance(running, bool) else None
-        stalled = self._stalls.update(worker_id, time.monotonic(), running, sum(known) if known else None)
+        raw_io_wait = stats.get("nvme_io_wait_ratio")
+        io_wait = float(raw_io_wait) if isinstance(raw_io_wait, (int, float)) and not isinstance(raw_io_wait, bool) else None
+        stalled = self._stalls.update(
+            worker_id,
+            time.monotonic(),
+            running,
+            sum(known) if known else None,
+            nvme_io_wait_ratio=io_wait,
+        )
         self.metrics.engine_stalled_seconds.set(stalled, **labels)
 
     def _retire_engine_metrics(self, worker_record: dict[str, Any]) -> None:

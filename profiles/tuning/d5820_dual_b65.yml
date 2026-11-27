@@ -2,11 +2,12 @@
 schema_version: "1.0.0"
 profile_name: d5820_dual_b65
 state: accepted
-revision: "r1"
+revision: "r2"
 description: >-
   Validated performance tuning profile for Dell Precision 5820 Tower with dual
   Intel Arc Pro B65 GPUs. Establishes fixed performance CPU governor, performance
-  EPP, Transparent Huge Pages enabled, and low swappiness for predictable inference latency.
+  EPP, Transparent Huge Pages enabled, low swappiness, and NVMe direct-I/O queue
+  tuning for random 4K/64K MoE expert reads.
 parent_baseline: baseline
 benchmark_refs: []
 os_tuning:
@@ -34,8 +35,11 @@ os_tuning:
     size_kib: null
     count: 0
   io:
-    scheduler: null
-    read_ahead_kb: null
+    scheduler: none
+    read_ahead_kb: 16
+    nr_requests: 1024
+    rq_affinity: 2
+    add_random: 0
   irq:
     affinity_enabled: false
     managed_irq_policy: default

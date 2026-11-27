@@ -1,8 +1,23 @@
 # Managed by Ansible (os_tuning role). NVMe I/O policy from the active tuning
 # profile. Applies at device add time; scheduled reconciliation corrects drift.
-ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*"{% if os_tuning_config.os_tuning.io.scheduler is not none %}, \
-  ATTR{queue/scheduler}="{{ os_tuning_config.os_tuning.io.scheduler }}"{% endif %}
-{% if os_tuning_config.os_tuning.io.read_ahead_kb is not none %}
+{% set io = os_tuning_config.os_tuning.io %}
+{% if io.scheduler is not none %}
 ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", \
-  ATTR{queue/read_ahead_kb}="{{ os_tuning_config.os_tuning.io.read_ahead_kb }}"
+  ATTR{queue/scheduler}="{{ io.scheduler }}"
+{% endif %}
+{% if io.read_ahead_kb is not none %}
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", \
+  ATTR{queue/read_ahead_kb}="{{ io.read_ahead_kb }}"
+{% endif %}
+{% if (io.nr_requests | default(none)) is not none %}
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", \
+  ATTR{queue/nr_requests}="{{ io.nr_requests }}"
+{% endif %}
+{% if (io.rq_affinity | default(none)) is not none %}
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", \
+  ATTR{queue/rq_affinity}="{{ io.rq_affinity }}"
+{% endif %}
+{% if (io.add_random | default(none)) is not none %}
+ACTION=="add|change", SUBSYSTEM=="block", KERNEL=="nvme*n*", \
+  ATTR{queue/add_random}="{{ io.add_random }}"
 {% endif %}
