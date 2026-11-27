@@ -11,6 +11,20 @@ from .evidence import EvidenceStore, SyslogEvidenceStreamer
 from .guardrails import GuardrailResult, GuardrailScanner, GuardrailViolation
 from .health import HealthManager, WorkerHealthState
 from .metrics import Counter, Gauge, Histogram, MetricsRegistry
+from .nvme_moe import (
+    ExpertCache,
+    GpuDeviceInfo,
+    HardwareSnapshot,
+    HostMemoryArbiter,
+    MoEModelIndex,
+    NVMeMoEStreamEngine,
+    PlacementPlan,
+    SecurityBindError,
+    index_gguf_model,
+    plan_model_placement,
+    probe_nvme_random_read,
+    validate_loopback_bind,
+)
 from .routing import RouteConfigError, RouteDecision, Router, RouteRule
 from .runtime import (
     CapabilityRegistry,
@@ -66,19 +80,31 @@ __all__ = [
     "CapabilityRegistry",
     "Counter",
     "EvidenceStore",
+    "ExpertCache",
     "Gauge",
+    "GpuDeviceInfo",
     "GraphScheduler",
+    "HardwareSnapshot",
     "HealthManager",
     "Histogram",
+    "HostMemoryArbiter",
     "InMemoryAdapter",
     "MetricsRegistry",
+    "MoEModelIndex",
+    "NVMeMoEStreamEngine",
     "OpenAIProviderAdapter",
     "OrchestratorRuntime",
+    "PlacementPlan",
     "ProviderError",
     "RequestTelemetryBuffer",
     "RequestTelemetryRecord",
+    "SecurityBindError",
     "TaskGraph",
     "TelemetryService",
     "WorkerHealthState",
     "WorkerRecord",
+    "index_gguf_model",
+    "plan_model_placement",
+    "probe_nvme_random_read",
+    "validate_loopback_bind",
 ]

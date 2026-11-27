@@ -689,6 +689,41 @@ class MetricsRegistry:
             (0.00005, 0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.05),
         )
 
+        # ---------------------------------------------------------------------
+        # 10. NVMe-backed MoE expert streaming (docs/architecture/nvme-moe-streaming-spec.md)
+        # ---------------------------------------------------------------------
+        self.moe_expert_cache_hits_total = self._register_counter(
+            "homelab_ai_moe_expert_cache_hits_total",
+            "Cumulative routed MoE expert lookups served from VRAM or RAM cache without an NVMe read.",
+            ("worker_id", "tier", "model"),
+        )
+        self.moe_expert_cache_misses_total = self._register_counter(
+            "homelab_ai_moe_expert_cache_misses_total",
+            "Cumulative routed MoE expert lookups requiring a Tier-2 NVMe direct read.",
+            ("worker_id", "model"),
+        )
+        self.nvme_expert_read_latency_seconds = self._register_histogram(
+            "homelab_ai_nvme_expert_read_latency_seconds",
+            "Distribution of Tier-2 NVMe direct-I/O read latencies for cold routed MoE experts.",
+            ("worker_id", "role", "model"),
+            (0.0001, 0.00025, 0.0005, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
+        )
+        self.nvme_stream_bandwidth_bytes_per_sec = self._register_gauge(
+            "homelab_ai_nvme_stream_bandwidth_bytes_per_sec",
+            "Rolling effective NVMe MoE expert streaming read throughput in bytes per second.",
+            ("worker_id", "model"),
+        )
+        self.nvme_io_wait_ratio = self._register_gauge(
+            "homelab_ai_nvme_io_wait_ratio",
+            "Fraction (0..1) of routed layer execution wall time spent blocked on PCIe/NVMe expert I/O.",
+            ("worker_id", "model"),
+        )
+        self.moe_streaming_mode = self._register_gauge(
+            "homelab_ai_moe_streaming_mode",
+            "Active three-tier placement mode (1 = active mode: bypass_vram, bypass_ram, nvme_stream, dense_spill).",
+            ("worker_id", "mode", "model"),
+        )
+
     def _register_counter(self, name: str, help_text: str, label_names: tuple[str, ...] = ()) -> Counter:
         counter = Counter(name, help_text, label_names)
         self._metrics.append(counter)

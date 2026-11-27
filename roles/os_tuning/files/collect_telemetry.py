@@ -292,6 +292,9 @@ def collect_io():
                     else scheduler_content
                 ),
                 "read_ahead_kb": read_int(queue / "read_ahead_kb"),
+                "nr_requests": read_int(queue / "nr_requests"),
+                "rq_affinity": read_int(queue / "rq_affinity"),
+                "add_random": read_int(queue / "add_random"),
             }
     except OSError as error:
         devices = {"status": UNAVAILABLE, "reason": f"{type(error).__name__}"}

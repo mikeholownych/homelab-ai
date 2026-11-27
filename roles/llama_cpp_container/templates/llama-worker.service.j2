@@ -24,6 +24,9 @@ ExecStart=/usr/bin/podman run --rm --name {{ llama_worker.container_name }} \
 {% endfor %}
   -v /dev/dri/by-path:/dev/dri/by-path:ro \
   -v {{ llama_cpp_container_model_dir }}:/models:ro \
+{% if llama_worker.nvme_expert_dir is defined and llama_worker.nvme_expert_dir %}
+  -v {{ llama_worker.nvme_expert_dir }}:/experts:ro \
+{% endif %}
 {% if llama_cpp_container_slot_persistence is sameas true %}
   -v {{ llama_cpp_container_slot_dir }}/{{ llama_worker.worker_id }}:/slots:rw \
 {% endif %}
@@ -49,6 +52,16 @@ LimitNOFILE=65536
 LimitMEMLOCK=infinity
 {% if llama_worker.cpuset_cpus is defined and llama_worker.cpuset_cpus %}
 CPUAffinity={{ llama_worker.cpuset_cpus | replace(',', ' ') }}
+{% endif %}
+{% if (llama_worker.memory_high is defined and llama_worker.memory_high) or (llama_worker.memory_max is defined and llama_worker.memory_max) %}
+MemoryAccounting=yes
+{% if llama_worker.memory_high is defined and llama_worker.memory_high %}
+MemoryHigh={{ llama_worker.memory_high }}
+{% endif %}
+{% if llama_worker.memory_max is defined and llama_worker.memory_max %}
+MemoryMax={{ llama_worker.memory_max }}
+{% endif %}
+MemorySwapMax={{ llama_worker.memory_swap_max | default('0') }}
 {% endif %}
 Delegate=yes
 ProtectSystem=strict

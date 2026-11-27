@@ -72,7 +72,7 @@ def _exprs_in_dashboards() -> list[tuple[str, str]]:
 
 
 def _referenced(expr: str) -> set[str]:
-    return set(re.findall(r"\b(?:aihost|node)[_:][A-Za-z0-9_:]*", expr))
+    return set(re.findall(r"\b(?:aihost|node|homelab_ai)[_:][A-Za-z0-9_:]*", expr))
 
 
 def test_every_referenced_metric_exists_and_is_actually_emitted():

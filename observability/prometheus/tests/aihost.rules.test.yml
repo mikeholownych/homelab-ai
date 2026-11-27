@@ -298,3 +298,37 @@ tests:
         exp_alerts:
           - exp_labels: {severity: warning, worker_id: w1}
             exp_annotations: {summary: "Anomalous rate of slow consumer disconnects on worker 'w1'"}
+
+  - name: MoE expert cache hit ratio combines VRAM and RAM hits over total hits plus misses
+    interval: 1m
+    input_series:
+      - series: 'homelab_ai_moe_expert_cache_hits_total{worker_id="w1",tier="vram",model="moe-177b"}'
+        values: '0+60x20'
+      - series: 'homelab_ai_moe_expert_cache_hits_total{worker_id="w1",tier="ram",model="moe-177b"}'
+        values: '0+20x20'
+      - series: 'homelab_ai_moe_expert_cache_misses_total{worker_id="w1",model="moe-177b"}'
+        values: '0+20x20'
+    promql_expr_test:
+      - expr: aihost:moe_expert_cache_hit_ratio:rate5m
+        eval_time: 10m
+        exp_samples:
+          - labels: 'aihost:moe_expert_cache_hit_ratio:rate5m{worker_id="w1",model="moe-177b"}'
+            value: 0.8
+
+  - name: NVMe I/O wait high alert fires when sustained above 0.75 for 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'homelab_ai_nvme_io_wait_ratio{worker_id="w1",model="moe-177b"}'
+        values: '0.2 0.85x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: AihostNvmeIoWaitHigh
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: AihostNvmeIoWaitHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, worker_id: w1, model: moe-177b}
+            exp_annotations:
+              summary: >-
+                NVMe expert streaming I/O wait ratio exceeded 75% on worker 'w1'
+                (decode stalled on storage)

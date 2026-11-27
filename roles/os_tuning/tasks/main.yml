@@ -35,6 +35,15 @@
     - os_tuning_apply_mutations | bool
   tags: [tuning, baseline]
 
+- name: Install NVMe MoE streaming build and diagnostic packages when enabled
+  ansible.builtin.apt:
+    name: "{{ os_tuning_nvme_streaming_packages }}"
+    state: present
+  when:
+    - os_tuning_install_nvme_streaming_packages | bool
+    - os_tuning_apply_mutations | bool
+  tags: [tuning, io]
+
 - name: Compute managed sysctl mapping from the profile
   ansible.builtin.set_fact:
     os_tuning_managed_sysctl: "{{ profile_memory | combine(profile_extra) }}"
@@ -104,6 +113,24 @@
          | selectattr('value.read_ahead_kb', 'number')
          | rejectattr('value.read_ahead_kb', 'equalto', io.read_ahead_kb)
          | map(attribute='key') | list if io.read_ahead_kb is not none else [] }}
+    os_tuning_io_drifted_nr_requests: >-
+      {{ observed_queues | dict2items
+         | selectattr('value.nr_requests', 'defined')
+         | selectattr('value.nr_requests', 'number')
+         | rejectattr('value.nr_requests', 'equalto', io.nr_requests)
+         | map(attribute='key') | list if (io.nr_requests | default(none)) is not none else [] }}
+    os_tuning_io_drifted_rq_affinity: >-
+      {{ observed_queues | dict2items
+         | selectattr('value.rq_affinity', 'defined')
+         | selectattr('value.rq_affinity', 'number')
+         | rejectattr('value.rq_affinity', 'equalto', io.rq_affinity)
+         | map(attribute='key') | list if (io.rq_affinity | default(none)) is not none else [] }}
+    os_tuning_io_drifted_add_random: >-
+      {{ observed_queues | dict2items
+         | selectattr('value.add_random', 'defined')
+         | selectattr('value.add_random', 'number')
+         | rejectattr('value.add_random', 'equalto', io.add_random)
+         | map(attribute='key') | list if (io.add_random | default(none)) is not none else [] }}
   vars:
     observed_queues: "{{ os_tuning_observed.io.nvme_queues | default({}) }}"
     io: "{{ os_tuning_config.os_tuning.io }}"

@@ -94,6 +94,31 @@ groups:
       - record: aihost:llama_worker_major_faults:rate5m
         expr: rate(aihost_llama_worker_major_faults_total[5m])
 
+      # ---- NVMe MoE expert streaming --------------------------------------------------------------------
+      - record: aihost:moe_expert_cache_hit_ratio:rate5m
+        # Share of routed MoE expert lookups satisfied from VRAM/RAM without an NVMe direct read.
+        expr: >-
+          (
+            sum by (worker_id, model) (rate(homelab_ai_moe_expert_cache_hits_total[5m]))
+            or (0 * sum by (worker_id, model) (rate(homelab_ai_moe_expert_cache_misses_total[5m])))
+          )
+          / (
+            (
+              (
+                sum by (worker_id, model) (rate(homelab_ai_moe_expert_cache_hits_total[5m]))
+                or (0 * sum by (worker_id, model) (rate(homelab_ai_moe_expert_cache_misses_total[5m])))
+              )
+              + (
+                sum by (worker_id, model) (rate(homelab_ai_moe_expert_cache_misses_total[5m]))
+                or (0 * sum by (worker_id, model) (rate(homelab_ai_moe_expert_cache_hits_total[5m])))
+              )
+            ) > 0
+          )
+      - record: aihost:nvme_expert_read_latency_seconds:p95_5m
+        expr: >-
+          histogram_quantile(0.95,
+            sum by (worker_id, model, le) (rate(homelab_ai_nvme_expert_read_latency_seconds_bucket[5m])))
+
   - name: aihost_alerts
     rules:
       - alert: AihostGatewayDown
@@ -191,3 +216,17 @@ groups:
         labels: {severity: warning}
         annotations:
           summary: "Anomalous rate of slow consumer disconnects on worker '{{ $labels.worker_id }}'"
+      - alert: AihostNvmeExpertReadLatencyHigh
+        expr: aihost:nvme_expert_read_latency_seconds:p95_5m > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: "p95 NVMe routed expert direct-read latency exceeded 50 ms on worker '{{ $labels.worker_id }}'"
+      - alert: AihostNvmeIoWaitHigh
+        expr: homelab_ai_nvme_io_wait_ratio > 0.75
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: >-
+            NVMe expert streaming I/O wait ratio exceeded 75% on worker '{{ $labels.worker_id }}'
+            (decode stalled on storage)

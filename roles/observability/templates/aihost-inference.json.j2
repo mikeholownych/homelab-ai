@@ -1691,6 +1691,299 @@
       },
       "id": 34,
       "panels": [],
+      "title": "NVMe MoE Expert Streaming",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Share of routed MoE expert lookups served from VRAM/RAM cache without an NVMe direct read.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "max": 1,
+          "min": 0,
+          "noDataText": "0 (bypass / idle)",
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 102
+      },
+      "id": 35,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(aihost:moe_expert_cache_hit_ratio:rate5m{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
+          "legendFormat": "{{worker_id}} {{model}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "MoE expert cache hit ratio (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Rate of Tier-0/Tier-1 expert cache hits versus Tier-2 NVMe direct-I/O cache misses.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 25,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          },
+          "noDataText": "0 (bypass / idle)",
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 102
+      },
+      "id": 36,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(sum by (worker_id, tier) (rate(homelab_ai_moe_expert_cache_hits_total{worker_id=~\"$worker\"}[5m]))) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
+          "legendFormat": "hits {{worker_id}} ({{tier}})",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(sum by (worker_id) (rate(homelab_ai_moe_expert_cache_misses_total{worker_id=~\"$worker\"}[5m]))) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
+          "legendFormat": "misses {{worker_id}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "MoE expert cache hits vs misses (/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "95th percentile direct-I/O read latency for cold routed experts from NVMe.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "noDataText": "0 (bypass / idle)",
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 110
+      },
+      "id": 37,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(aihost:nvme_expert_read_latency_seconds:p95_5m{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
+          "legendFormat": "p95 {{worker_id}} {{model}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "NVMe expert read latency p95 (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Rolling effective NVMe expert-streaming read bandwidth per worker.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "noDataText": "0 (bypass / idle)",
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 110
+      },
+      "id": 38,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(homelab_ai_nvme_stream_bandwidth_bytes_per_sec{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
+          "legendFormat": "{{worker_id}} {{model}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "NVMe stream bandwidth (bytes/s)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "description": "Fraction of routed layer execution time blocked on PCIe/NVMe expert I/O (feeds engine stall detection above 0.75).",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "fillOpacity": 8,
+            "lineWidth": 1,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "max": 1,
+          "min": 0,
+          "noDataText": "0 (bypass / idle)",
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 118
+      },
+      "id": 39,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "editorMode": "code",
+          "expr": "(homelab_ai_nvme_io_wait_ratio{worker_id=~\"$worker\"}) or (sum by (worker_id) (0 * aihost_worker_info{worker_id=~\"$worker\"}))",
+          "legendFormat": "{{worker_id}} {{model}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "NVMe I/O wait ratio",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 126
+      },
+      "id": 40,
+      "panels": [],
       "title": "Production Lifecycle",
       "type": "row"
     },
@@ -1723,9 +2016,9 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 102
+        "y": 127
       },
-      "id": 35,
+      "id": 41,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1782,9 +2075,9 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 102
+        "y": 127
       },
-      "id": 36,
+      "id": 42,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1840,9 +2133,9 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 102
+        "y": 127
       },
-      "id": 37,
+      "id": 43,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
@@ -1899,9 +2192,9 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 102
+        "y": 127
       },
-      "id": 38,
+      "id": 44,
       "options": {
         "colorMode": "value",
         "reduceOptions": {
